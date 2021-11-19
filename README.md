@@ -31,7 +31,8 @@ Grateful for the libraries directly used
 * ... etc
 * 
 ### Environment settings
-* LAMBDA_DATA_PATH = Folder where the parquets DB is saved -> 
+* LAMBDA_PARQUET_TICK_DB= Folder where the parquets DB is saved 
+* LAMBDA_DATA_PATH = Old Folder where the DB was saved 
 * LAMBDA_OUTPUT_PATH = base path where the ml models will be saved
 * LAMBDA_INPUT_PATH = base path where the configuration of algorithms will be read automatically, soon
 
