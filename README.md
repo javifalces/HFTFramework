@@ -11,10 +11,25 @@ Python
 ## [PYTHON]
 To get backtest results compare , optimize parameters -> Algo trading strategies are just and enumeration business logic must be in java
 
+Grateful for the libraries directly used
+
+* [mlfinlab](https://hudsonthames.org/mlfinlab/)
+* Pandas
+* Numpy
+* seaborn
+* ...etc
+
 ## [JAVA]
 
 Where the algorithm logics , backtest and execution happens
 
+Grateful for the libraries directly used
+
+* [Binance API](https://github.com/binance-exchange/binance-java-api)
+* [JavaLOB](https://github.com/DrAshBooth/JavaLOB)
+* Apache commons
+* ... etc
+* 
 ### Environment settings
 * LAMBDA_DATA_PATH = Folder where the parquets DB is saved -> 
 * LAMBDA_OUTPUT_PATH = base path where the ml models will be saved
