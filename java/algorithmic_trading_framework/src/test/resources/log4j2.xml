@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration monitorInterval="60" status="off">
+    <properties>
+        <!-- time-stamp unique to execution instance -->
+        <property name="timestamp">${date:yyMMdd_HHmmss}</property>
+        <property name="log.appName">AvellanedaStoikov</property>
+        <property name="log.path">LOG</property>
+        <!-- max number of files -->
+        <property name="numFiles">100</property>
+        <property name="log.fileSize">500 MB</property>
+
+        <property name="log.level">info</property>
+        <property name="log.output">file</property>
+    </properties>
+
+    <appenders>
+        <Console name="console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} %-5p [%t] %c{1} - %m%n"/>
+        </Console>
+
+        <RollingFile name="file" fileName="${sys:log.path}/${sys:log.appName}_${timestamp}.log"
+                     filePattern="${sys:log.path}/${sys:log.appName}_${timestamp}.log.%d{yyMMdd_HHmmss}">
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} %-5p [%t] %c{1} - %m%n"/>
+
+            <Policies>
+                <SizeBasedTriggeringPolicy size="${sys:log.fileSize}"/>
+            </Policies>
+            <DefaultRolloverStrategy max="${numFiles}"/>
+        </RollingFile>
+
+        <!--<RollingFile name="backtest-file" fileName="${sys:log.path}/backtest_${timestamp}.log"-->
+        <!--filePattern="${sys:log.path}/backtest_${timestamp}.log.%d{yyMMdd_HHmmss}">-->
+        <!--<PatternLayout pattern="%d{HH:mm:ss.SSS} %-5p [%t] %c{1} - %m%n"/>-->
+
+        <!--<Policies>-->
+        <!--<SizeBasedTriggeringPolicy size="${sys:log.fileSize}"/>-->
+        <!--</Policies>-->
+        <!--<DefaultRolloverStrategy max="${numFiles}"/>-->
+        <!--</RollingFile>-->
+
+    </appenders>
+
+    <loggers>
+        <!-- trace, debug, info, warn, error, fatal -->
+        <!--<root level="${sys:log.level}">-->
+        <!--<appender-ref ref="${sys:log.output}" />-->
+        <!--</root>-->
+
+        <!--<AsyncLogger name="com.lambda.investing.algorithmic_trading" level="debug">-->
+        <!--<AppenderRef ref="file"/>-->
+        <!--</AsyncLogger>-->
+        <!--<Logger name="com.lambda.investing.algorithmic_trading" level="debug" >-->
+        <!--<AppenderRef ref="file"/>-->
+        <!--</Logger>-->
+
+        <!--<Logger name="com.lambda.investing.backtest_engine" level="debug">-->
+        <!--<AppenderRef ref="backtest-file"/>-->
+        <!--</Logger>-->
+        <!--<Logger name="com.lambda.investing.trading_engine_connector" level="debug">-->
+        <!--<AppenderRef ref="backtest-file"/>-->
+        <!--</Logger>-->
+        <!--Console info output-->
+        <root level="debug">
+            <appender-ref ref="console"/>
+        </root>
+
+
+    </loggers>
+</configuration>
