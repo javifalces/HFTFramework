@@ -4,8 +4,8 @@ import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
 import com.google.common.collect.Maps;
 import com.google.common.primitives.Doubles;
-import com.lambda.investing.algorithmic_trading.avellaneda_stoikov_dqn.Dl4jMemoryReplayModel;
 import com.lambda.investing.algorithmic_trading.avellaneda_stoikov_dqn.MemoryReplayModel;
+import com.lambda.investing.algorithmic_trading.reinforcement_learning.TrainNNUtils;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.action.AbstractAction;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.q_learn.exploration_policy.EpsilonGreedyExploration;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.state.AbstractState;
@@ -18,24 +18,26 @@ import org.apache.logging.log4j.Logger;
 import java.io.*;
 import java.util.*;
 
+import static com.lambda.investing.algorithmic_trading.reinforcement_learning.TrainNNUtils.getColumnsArray;
+
 @Getter @Setter public class DeepQLearning extends QLearning {
 
 	public static boolean USE_AS_QLEARN = false;
 
-	public static boolean TRAIN_FROM_FILE_MODEL = false;
+
 	private static Comparator<double[]> ARRAY_COMPARATOR = Doubles.lexicographicalComparator();
 	protected static Logger logger = LogManager.getLogger(DeepQLearning.class);
 	public static double DEFAULT_PREDICTION_ACTION_SCORE = 0;
 	private BiMap<StateRow, Integer> indexToStateCache;
 
 	private static int MAX_MEMORY_SIZE = (int) 1E6;
-	private double epsilon;
-	private Random r = new Random();
+	protected double epsilon;
+	protected Random r = new Random();
 	private AbstractState state;
-	private AbstractAction action;
+	protected AbstractAction action;
 	private int memoryReplayIndex, maxMemorySize, memoryReplaySize;
 	private StateRow[] stateRowSet;
-	private MemoryReplayModel predictModel, targetModel;
+	protected MemoryReplayModel predictModel, targetModel;
 	private boolean isRNN;
 	private double[] defaultActionPredictScore;
 
@@ -80,54 +82,6 @@ import java.util.*;
 
 	}
 
-	public static boolean trainOnData(String memoryPath, int actionColumns, int stateColumns, String outputModelPath,
-			double learningRateNN, double momentumNesterov, int nEpoch, int batchSize, int maxBatchSize, double l2,
-			double l1, int trainingStats, boolean isRNN, boolean isHyperParameterTuning, int rnnHorizon)
-			throws IOException {
-		if (USE_AS_QLEARN) {
-			System.out.println("not training using as QLearn!");
-			return true;
-		}
-		File file = new File(memoryPath);
-		if (!file.exists()) {
-			System.err.println(memoryPath + " not exist to train");
-			return false;
-		}
-		double[][] memoryData = loadCSV(memoryPath, stateColumns);
-		//check load dimension
-		int columnsRead = memoryData[0].length;
-		assert columnsRead == (stateColumns * 2) + actionColumns;
-
-		if (batchSize <= 0 && memoryData != null) {
-			batchSize = Math.min(512, memoryData.length / 2);
-		}
-
-		Dl4jMemoryReplayModel memoryReplayModel = new Dl4jMemoryReplayModel(outputModelPath, learningRateNN,
-				momentumNesterov, nEpoch, batchSize, maxBatchSize, l2, l1, TRAIN_FROM_FILE_MODEL, isRNN);
-
-		if (trainingStats != 0) {
-			memoryReplayModel.setTrainingStats(true);
-		}
-		if (isHyperParameterTuning) {
-			System.out.println("Hyperparameter tuning detected!  activate EARLY_STOPPING and disable training stats");
-			Dl4jMemoryReplayModel.HYPERPARAMETER_TUNING = true;
-			Dl4jMemoryReplayModel.EARLY_STOPPING = true;
-			memoryReplayModel.setTrainingStats(false);
-		}
-
-		double[][] x = getColumnsArray(memoryData, 0, stateColumns);
-		double[][] y = getColumnsArray(memoryData, stateColumns, stateColumns + actionColumns);
-		logger.info("starting training model with {} epoch on {} batch", nEpoch, batchSize);
-		//		System.out.println("training on data with   rows:"+x.length+"  columns:"+x[0].length+"  epochs:"+nEpoch+"  batchSize:"+batchSize+"  maxBatchSize:"+maxBatchSize);
-		long start = System.currentTimeMillis();
-		memoryReplayModel.train(x, y);
-		long elapsed = (System.currentTimeMillis() - start) / (1000 * 60);
-		logger.info("trained finished on {} minutes ,saving model {}", elapsed, outputModelPath);
-		memoryReplayModel.saveModel();
-		return true;
-
-	}
-
 	public void setPredictModel(MemoryReplayModel predictModel) {
 		this.predictModel = predictModel;
 	}
@@ -136,7 +90,7 @@ import java.util.*;
 		this.targetModel = targetModel;
 	}
 
-	private int getStateColumns() {
+	protected int getStateColumns() {
 		return state.getNumberOfColumns();
 	}
 
@@ -176,64 +130,7 @@ import java.util.*;
 		}
 	}
 
-	private static double[][] loadCSV(String filepath, int columnsStates) throws IOException {
-		//only used on trainOnData
-		File file = new File(filepath);
-		if (!file.exists()) {
-			logger.warn("memory not found {}-> start empty", filepath);
-			return null;
-		}
 
-		BufferedReader csvReader = new BufferedReader(new FileReader(filepath));
-		// we don't know the amount of data ahead of time so we use lists
-
-		Map<Integer, List<Double>> colMap = new HashMap<>();
-		String row;
-		int rowsTotal = 0;
-
-		while ((row = csvReader.readLine()) != null) {
-			String[] data = row.split(CSV_SEPARATOR);
-			double[] stateRow = new double[columnsStates];
-			for (int column = 0; column < data.length; column++) {
-				List<Double> columnList = colMap.getOrDefault(column, new ArrayList<>());
-				double value = Double.parseDouble(data[column]);
-				columnList.add(value);
-				colMap.put(column, columnList);
-
-				if (column < stateRow.length) {
-					stateRow[column] = value;
-				}
-
-			}
-
-			rowsTotal++;
-		}
-		csvReader.close();
-		int columnsTotal = colMap.size();
-
-		//transform colMap into array
-		double[][] loadedQvalues = new double[rowsTotal][columnsTotal];//states rows , actions columns
-		int rowsFilled = 0;
-		for (int column : colMap.keySet()) {
-			List<Double> rows = colMap.get(column);
-			int rowIter = 0;
-			for (double rowVal : rows) {
-				loadedQvalues[rowIter][column] = rowVal;
-				rowsFilled = rowIter;
-				rowIter++;
-
-			}
-		}
-
-		//		loadedQvalues=ArrayUtils.subarray(loadedQvalues, 0, rowsTotal);
-
-		System.out.println(
-				String.format("loaded a memory replay of %d/%d rows-states   and %d states-actions-next-states",
-						rowsFilled, loadedQvalues.length, loadedQvalues[0].length));
-
-		return loadedQvalues;
-
-	}
 
 	public void loadMemory(String filepath) throws IOException {
 		File file = new File(filepath);
@@ -354,49 +251,44 @@ import java.util.*;
 	}
 
 	/**
-	 * PREDICT Network
+	 * PREDICT Network used to choose actions (dqn) and current q value
 	 *
 	 * @param state
 	 * @return
 	 */
-	public double[] getPredict(double[] state) {
+	public double[] getPredictOutput(double[] state) {
 		if (USE_AS_QLEARN) {
 			//get direclty from memory replay
 			return getRewards(state);
 		}
 		double[] output = this.predictModel.predict(state);
 		return output;
-		//		if (output==null){
-		//			if (defaultActionPredictScore==null){
-		//				defaultActionPredictScore = new double[getActions()];
-		//				Arrays.fill(defaultActionPredictScore, DEFAULT_PREDICTION_ACTION_SCORE);
-		//			}
-		//			output = defaultActionPredictScore.clone();
-		//			return output;
-		//		}else{
-		//			return output;
-		//		}
 	}
 
 	/**
-	 * TARGET network
+	 * TARGET network used in q value formula to stimate next state action q value
 	 *
 	 * @param state
 	 * @return
 	 */
-	public double getPredictNextStateBestReward(double[] state) {
+	public double[] getTargetOutput(double[] state) {
 		if (USE_AS_QLEARN) {
 			//get direclty from memory replay
-			double[] actions = getRewards(state);
-			double bestScore = Double.NaN;
-			if (actions != null) {
-				bestScore = Doubles.max(actions);
-			}
-			return bestScore;
-
+			return getRewards(state);
 		}
+		double[] actionArr = this.targetModel.predict(state);
+		return actionArr;
+	}
+
+	/**
+	 * from TARGET network
+	 *
+	 * @param state
+	 * @return
+	 */
+	public double getTargetNextStateBestReward(double[] state) {
 		try {
-			double[] actionArr = this.targetModel.predict(state);
+			double[] actionArr = getTargetOutput(state);
 			if (actionArr == null) {
 				return Double.NaN;
 			}
@@ -412,7 +304,7 @@ import java.util.*;
 
 	public int GetAction(AbstractState lastState) {
 		double[] currentState = lastState.getCurrentStateRounded();
-		double[] actionScoreEstimation = getPredict(currentState);
+		double[] actionScoreEstimation = getPredictOutput(currentState);
 
 		int greedyAction = -1;
 		int index = 0;
@@ -561,6 +453,35 @@ import java.util.*;
 		return stateArr;
 	}
 
+	protected double calculateQValue(double reward, double currentQValue, double predictedQValue) {
+		//bellman equation -> dynamic
+		//		Q_(i+1) (s,a)=Predict(s,a)*(1-α)+α[R(s,a)+γ_d (Target⁡(s^',a^' )]
+		return currentQValue * (1.0 - learningRate) + (learningRate * (reward + discountFactor * predictedQValue));
+	}
+
+	/**
+	 * From predict network
+	 *
+	 * @param state
+	 * @param action
+	 * @return
+	 */
+	protected Double getQValue(double[] state, int action) {
+		if (USE_AS_QLEARN) {
+			//get direclty from memory replay
+			double[] actions = getRewards(state);
+			if (actions != null) {
+				return actions[action];
+			}
+			return DEFAULT_PREDICTION_ACTION_SCORE;
+		}
+		double[] targetQValue = getPredictOutput(state);//from predict
+		if (targetQValue != null) {
+			return targetQValue[action];
+		}
+		return null;
+	}
+
 	public void updateState(double[] previousStateArr, int action, double reward, AbstractState nextState) {
 		boolean isNewRow = true;
 		int indexOfState = stateExistRow(previousStateArr);
@@ -578,7 +499,7 @@ import java.util.*;
 			actionArr = ArrayUtils.subarray(memoryReplay[indexOfState], state.getNumberOfColumns(),
 					state.getNumberOfColumns() + this.action.getNumberActions());
 		}
-		double maxNextExpectedReward = getPredictNextStateBestReward(
+		double maxNextExpectedReward = getTargetNextStateBestReward(
 				nextState.getCurrentStateRounded());//from target network
 
 		if (Double.isNaN(maxNextExpectedReward)) {
@@ -590,10 +511,10 @@ import java.util.*;
 		// previous state's action estimations
 		try {
 			double qValue = reward;
-			if (actionArr[action] != DEFAULT_PREDICTION_ACTION_SCORE) {
+			Double currentQValue = getQValue(previousStateArr, action);//from predict
+			if (currentQValue != null) {
 				// update expexted summary reward of the previous state using Bellman Dynamic equation
-				qValue = actionArr[action] * (1.0 - learningRate) + (learningRate * (reward
-						+ discountFactor * maxNextExpectedReward));
+				qValue = calculateQValue(reward, currentQValue, maxNextExpectedReward);
 				actionArr[action] = qValue;
 			}
 			actionArr[action] = qValue;
@@ -641,42 +562,12 @@ import java.util.*;
 
 	}
 
-	public static double[][] getColumnsArray(double[][] input, int firstColumn, int lastColumn) {
-		double[][] output = new double[input.length][lastColumn - firstColumn];
-		for (int row = 0; row < input.length; row++) {
-			for (int column = firstColumn; column < lastColumn; column++) {
-				// index starts from 0
-				output[row][column - firstColumn] = input[row][column];
-			}
 
-		}
-		return output;
-	}
 
-	private double[][] getArrayValid() {
+	protected double[][] getArrayValid() {
 		double[][] validArr = ArrayUtils
 				.subarray(memoryReplay, 0, getNextIndexMemoryReplay());//we are going to clean it
-
-		double[][] targetRaw = getColumnsArray(validArr, getStateColumns(),
-				getStateColumns() + action.getNumberActions());
-
-		//clean validArr where all targets are ==
-		double[][] outputArr = validArr.clone();
-		int rowsDeleted = 0;
-		for (int row = 0; row < targetRaw.length; row++) {
-			double sumRewardsState = 0.0;
-			for (int column = 0; column < targetRaw[row].length; column++) {
-				sumRewardsState += targetRaw[row][column];
-			}
-			if (sumRewardsState == DEFAULT_PREDICTION_ACTION_SCORE) {
-				int indexToDelete = row - rowsDeleted;
-				outputArr = ArrayUtils.remove(outputArr, indexToDelete);
-				rowsDeleted++;
-			}
-		}
-
-		return outputArr;
-
+		return TrainNNUtils.getArrayValid(validArr, getStateColumns(), action.getNumberActions());
 	}
 
 	public double[][] getInputTrain() {
@@ -685,75 +576,8 @@ import java.util.*;
 		return getColumnsArray(validArr, 0, getStateColumns());
 	}
 
-	public static int argmax(double[] array) {
-		double max = array[0];
-		int re = 0;
-		for (int i = 1; i < array.length; i++) {
-			if (array[i] > max) {
-				max = array[i];
-				re = i;
-			}
-		}
-		return re;
-	}
 
-	public static int argmin(double[] array) {
-		double min = array[0];
-		int re = 0;
-		for (int i = 1; i < array.length; i++) {
-			if (array[i] < min) {
-				min = array[i];
-				re = i;
-			}
-		}
-		return re;
-	}
 
-	private double[][] getTargetClassification(double[][] targetArr) {
-		double[][] targetArrOutput = new double[targetArr.length][targetArr[0].length];
-		for (int row = 0; row < targetArr.length; row++) {
-			double bestColumn = Doubles.max(targetArr[row]);
-			int bestAction = argmax(targetArr[row]);
-
-			double worstColumn = Doubles.min(targetArr[row]);
-			int worstAction = argmin(targetArr[row]);
-
-			boolean bestIsPositive = true;
-			boolean worstIsNegative = true;
-			int numberOfColumns = targetArr[row].length;
-			if (bestColumn == DEFAULT_PREDICTION_ACTION_SCORE) {
-				bestIsPositive = false;
-			}
-			if (worstColumn == DEFAULT_PREDICTION_ACTION_SCORE) {
-				worstIsNegative = false;
-			}
-
-			for (int column = 0; column < targetArr[row].length; column++) {
-				if (bestIsPositive) {
-					if (targetArr[row][column] == bestColumn) {
-						targetArrOutput[row][column] = 1.0;
-					} else {
-						//maintain negative values
-						targetArrOutput[row][column] = targetArr[row][column];
-					}
-				} else {
-					if (targetArr[row][column] == bestColumn) {
-						targetArrOutput[row][column] = 1.0 / (double) (numberOfColumns);
-					} else {
-						//maintain negative values
-						targetArrOutput[row][column] = targetArr[row][column];
-					}
-				}
-			}
-
-			if (worstIsNegative) {
-				targetArrOutput[row][worstAction] = -1.0;
-			}
-
-		}
-		return targetArrOutput;
-
-	}
 
 	public double[][] getTargetTrain() {
 		double[][] validArr = getArrayValid();
