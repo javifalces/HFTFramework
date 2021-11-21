@@ -62,23 +62,23 @@ import static org.deeplearning4j.util.ModelSerializer.writeModel;
  */
 public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 
-	public static double[] LEARNING_RATES_HYPERPARAMETER = new double[] { 0.001, 0.01, 0.1 };
-	public static double[] HIDDEN_SIZE_NODES_MULTIPLIER_HYPERPARAMETER = new double[] { 2, 1, 0.5 };
-	public static int[] EPOCHS_HYPERPARAMETER = new int[] { 250, 500, 750 };
-	public static double[] L1_HYPERPARAMETER = new double[] { 0.0, 0.1, 0.01 };
-	public static double[] L2_HYPERPARAMETER = new double[] { 0.0, 0.1, 0.01 };
+	public static double[] LEARNING_RATES_HYPERPARAMETER = new double[] { 0.00001, 0.0001, 0.001, 0.01 };
+	public static double[] HIDDEN_SIZE_NODES_MULTIPLIER_HYPERPARAMETER = new double[] { 2 };
+	public static int[] EPOCHS_HYPERPARAMETER = new int[] { 100 };
+	public static double[] L1_HYPERPARAMETER = new double[] { 0.0, 0.1, 0.01, 0.001 };
+	public static double[] L2_HYPERPARAMETER = new double[] { 0.0, 0.1, 0.01, 0.001 };
+	public static double[] MOMENTUM_HYPERPARAMETER = new double[] { 0.5, 0.8 };
 	public static boolean HYPERPARAMETER_TUNING = false;
 
 	//	https://deeplearning4j.konduit.ai/models/layers
 	public static boolean EARLY_STOPPING = true;
 
-	private static int SEED = 42;
-	private static int EARLY_STOPPING_TOLERANCE_DECIMALS = 2;
+	protected static int EARLY_STOPPING_TOLERANCE_DECIMALS = 3;
 	protected Logger logger = LogManager.getLogger(Dl4jMemoryReplayModel.class);
 	private String modelPath;
 
 	private double learningRate, momentumNesterov;
-	private int nEpoch = 100;
+	protected int nEpoch = 100;
 
 	private int batchSize, maxBatchSize;
 	private double l2, l1;
@@ -89,8 +89,8 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 	private boolean isTrained = false;
 	private boolean trainingStats = false;
 	ScoreIterationListener scoreIterationListener = new ScoreIterationListener(10);
-	private boolean isRNN = false;
-	private long seed;
+	protected boolean isRNN = false;
+	protected long seed;
 	private int hiddenSizeNodesMultiplier = 2;
 
 	public void setTrainingStats(boolean trainingStats) {
@@ -215,7 +215,7 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 
 				//output layer
 						layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.MSE).weightInit(weightInit)
-						.activation(Activation.TANH).weightInit(weightInit).nIn(numHiddenNodes).nOut(numOutputs).
+						.activation(Activation.IDENTITY).weightInit(weightInit).nIn(numHiddenNodes).nOut(numOutputs).
 								build()).build();
 		//The above code snippet will cause any network training (i.e., calls to MultiLayerNetwork.fit() methods) to use truncated BPTT with segments of length 100 steps.
 		return conf;
@@ -241,7 +241,7 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 				//						new DenseLayer.Builder().nIn(numHiddenNodes).nOut(numHiddenNodes).weightInit(weightInit)
 				//								.activation(Activation.SIGMOID).build()).
 				//output layer
-						layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.MSE).activation(Activation.TANH)
+						layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.MSE).activation(Activation.IDENTITY)
 						.weightInit(weightInit).weightInit(weightInit).nIn(numHiddenNodes).nOut(numOutputs).build())
 
 				.build();
@@ -264,6 +264,19 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 		model.init();
 
 		return model;
+	}
+
+	protected EarlyStoppingConfiguration getEarlyStoppingConfiguration(DataSetIterator testDataIterator) {
+		EarlyStoppingConfiguration earlyStoppingConfiguration = new EarlyStoppingConfiguration.Builder()
+				.iterationTerminationConditions(new MaxTimeIterationTerminationCondition(5, TimeUnit.MINUTES))
+				.epochTerminationConditions(new MaxEpochsTerminationCondition(nEpoch)).scoreCalculator(
+						//								new DataSetLossCalculator(testDataIterator,true),
+						new RegressionScoreCalculatorRounded(RegressionEvaluation.Metric.RMSE, testDataIterator,
+								EARLY_STOPPING_TOLERANCE_DECIMALS))
+				//						.modelSaver(new LocalFileModelSaver(this.modelPath))
+				.evaluateEveryNEpochs(5).
+						build();
+		return earlyStoppingConfiguration;
 	}
 
 	@Override public void train(double[][] input, double[][] target) {
@@ -313,6 +326,7 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 				System.out.println("not enough data! not training " + allData.numExamples() + " samples");
 				return;
 			}
+			EarlyStoppingConfiguration earlyStoppingConfiguration = null;
 			if (EARLY_STOPPING) {
 				System.out.println("starting training nn with early stop " + allData.numExamples() + " samples");
 				allData.shuffle(seed);//// mix before split
@@ -332,54 +346,52 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 
 				int batchSizeTempTest = Math.min(this.batchSize, testSizeData);
 				int batchSizeTempTrain = Math.min(this.batchSize, trainSizeData);
-				if (!isRNN) {
-					System.out.println("training on data with   rows:" + input.length + "  columns:" + input[0].length
-							+ "  epochs:" + nEpoch + "  batchSizeTempTrain:" + batchSizeTempTrain
-							+ "  batchSizeTempTest:" + batchSizeTempTest + "  trainSizeData:" + trainSizeData
-							+ " testSizeData:" + testSizeData);
-				} else {
-					System.out.println(
-							"training RNN on data with  rows:" + input.length + "  columns:" + input[0].length
-									+ "  epochs:" + nEpoch + "  batchSizeTempTrain:" + batchSizeTempTrain
-									+ "  batchSizeTempTest:" + batchSizeTempTest + "  trainSizeData:" + trainSizeData
-									+ " testSizeData:" + testSizeData);
-				}
-
 				DataSetIterator testDataIterator = new MiniBatchFileDataSetIterator(testData, batchSizeTempTest);
 				DataSetIterator trainDataIterator = new MiniBatchFileDataSetIterator(trainingData, batchSizeTempTrain);
 				//				trainDataIterator.setPreProcessor((DataSetPreProcessor) dataNormalization);
 				//				testDataIterator.setPreProcessor((DataSetPreProcessor) dataNormalization);
 
-				EarlyStoppingConfiguration earlyStoppingConfiguration = new EarlyStoppingConfiguration.Builder()
-						.iterationTerminationConditions(new MaxTimeIterationTerminationCondition(5, TimeUnit.MINUTES))
-						.epochTerminationConditions(new MaxEpochsTerminationCondition(nEpoch)).scoreCalculator(
-								//								new DataSetLossCalculator(testDataIterator,true),
-								new RegressionScoreCalculatorRounded(RegressionEvaluation.Metric.RMSE, testDataIterator,
-										EARLY_STOPPING_TOLERANCE_DECIMALS))
-						//						.modelSaver(new LocalFileModelSaver(this.modelPath))
-						.evaluateEveryNEpochs(5).
-								build();
-				if (HYPERPARAMETER_TUNING) {
-					hyperparameterTuning(input, target, earlyStoppingConfiguration, trainDataIterator);
-				} else {
-					EarlyStoppingTrainer trainer = new EarlyStoppingTrainer(earlyStoppingConfiguration, this.model,
-							trainDataIterator);
+				earlyStoppingConfiguration = getEarlyStoppingConfiguration(testDataIterator);
+				if (earlyStoppingConfiguration != null) {
 
-					EarlyStoppingResult<MultiLayerNetwork> result = trainer.fit();
-					System.out.println("Termination reason: " + result.getTerminationReason());
-					System.out.println("Termination details: " + result.getTerminationDetails());
-					System.out.println("Total epochs: " + result.getTotalEpochs());
-					System.out.println("Best epoch number: " + result.getBestModelEpoch());
-					System.out.println("Score at best epoch: " + result.getBestModelScore());
-					logger.info("Termination reason: " + result.getTerminationReason());
-					logger.info("Termination details: " + result.getTerminationDetails());
-					logger.info("Total epochs: " + result.getTotalEpochs());
-					logger.info("Best epoch number: " + result.getBestModelEpoch());
-					logger.info("Score at best epoch: " + result.getBestModelScore());
-					this.model = result.getBestModel();
+					if (!isRNN) {
+						System.out.println(
+								"training on data with   rows:" + input.length + "  columns:" + input[0].length
+										+ "  epochs:" + nEpoch + "  batchSizeTempTrain:" + batchSizeTempTrain
+										+ "  batchSizeTempTest:" + batchSizeTempTest + "  trainSizeData:"
+										+ trainSizeData + " testSizeData:" + testSizeData);
+					} else {
+						System.out.println(
+								"training RNN on data with  rows:" + input.length + "  columns:" + input[0].length
+										+ "  epochs:" + nEpoch + "  batchSizeTempTrain:" + batchSizeTempTrain
+										+ "  batchSizeTempTest:" + batchSizeTempTest + "  trainSizeData:"
+										+ trainSizeData + " testSizeData:" + testSizeData);
+					}
+
+					if (HYPERPARAMETER_TUNING) {
+						hyperparameterTuning(input, target, earlyStoppingConfiguration, trainDataIterator);
+					} else {
+						EarlyStoppingTrainer trainer = new EarlyStoppingTrainer(earlyStoppingConfiguration, this.model,
+								trainDataIterator);
+
+						EarlyStoppingResult<MultiLayerNetwork> result = trainer.fit();
+						System.out.println("Termination reason: " + result.getTerminationReason());
+						System.out.println("Termination details: " + result.getTerminationDetails());
+						System.out.println("Total epochs: " + result.getTotalEpochs());
+						System.out.println("Best epoch number: " + result.getBestModelEpoch());
+						System.out.println("Score at best epoch: " + result.getBestModelScore());
+						logger.info("Termination reason: " + result.getTerminationReason());
+						logger.info("Termination details: " + result.getTerminationDetails());
+						logger.info("Total epochs: " + result.getTotalEpochs());
+						logger.info("Best epoch number: " + result.getBestModelEpoch());
+						logger.info("Score at best epoch: " + result.getBestModelScore());
+						this.model = result.getBestModel();
+					}
+					isTrained = true;
 				}
-				isTrained = true;
-			} else {
+			}
+
+			if (earlyStoppingConfiguration == null) {
 				//normalize before
 				System.out.println("starting training nn " + allData.numExamples() + " samples");
 				dataNormalization = new NormalizerStandardize();
@@ -388,10 +400,15 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 
 				int sizeData = allData.numExamples();
 				int batchSizeTemp = Math.min(this.batchSize, sizeData);
-
-				System.out.println(
-						"training on data with   rows:" + input.length + "  columns:" + input[0].length + "  epochs:"
-								+ nEpoch + "  batchSize:" + batchSizeTemp + "  maxBatchSize:" + maxBatchSize);
+				if (isRNN) {
+					System.out.println(
+							"training RNN on data with  rows:" + input.length + "  columns:" + input[0].length
+									+ "  epochs:" + nEpoch + "  batchSize:" + batchSize + "  maxBatchSize:"
+									+ maxBatchSize);
+				} else {
+					System.out.println("training on data with   rows:" + input.length + "  columns:" + input[0].length
+							+ "  epochs:" + nEpoch + "  batchSize:" + batchSizeTemp + "  maxBatchSize:" + maxBatchSize);
+				}
 
 				DataSetIterator trainIter = new MiniBatchFileDataSetIterator(allData, batchSizeTemp);
 				trainIter.setPreProcessor((DataSetPreProcessor) dataNormalization);//normalize it
@@ -424,68 +441,75 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 		double bestL1 = 0.;
 		double bestL2 = 0;
 		int bestEpoch = 0;
+		double bestMomentum = 0.0;
 		int iterations = 3;
 		System.out.println("Hyperparameter tuning NN starting");
 		long startTime = System.currentTimeMillis();
 
 		//two stages
 		int totalCases = LEARNING_RATES_HYPERPARAMETER.length * HIDDEN_SIZE_NODES_MULTIPLIER_HYPERPARAMETER.length
-				* EPOCHS_HYPERPARAMETER.length + L1_HYPERPARAMETER.length * L2_HYPERPARAMETER.length;
+				* EPOCHS_HYPERPARAMETER.length
+				+ L1_HYPERPARAMETER.length * L2_HYPERPARAMETER.length * MOMENTUM_HYPERPARAMETER.length;
 		int counter = 0;
 		for (int epoch : EPOCHS_HYPERPARAMETER) {
 			for (double learningRate : LEARNING_RATES_HYPERPARAMETER) {
 				for (double hiddenSizeNodesMultiplier : HIDDEN_SIZE_NODES_MULTIPLIER_HYPERPARAMETER) {
-					double totalScore = 0;
-					EarlyStoppingResult<MultiLayerNetwork> result = null;
-					for (int iteration = 0; iteration < iterations; iteration++) {
-						System.out.print(Configuration.formatLog(
-								"[{}/{}] starting training epoch:{} learningRate:{} hiddenSizeNodesMultiplier:{} l1:{} l2:{}",
-								counter, totalCases, epoch, learningRate, hiddenSizeNodesMultiplier, l1, l2));
+					for (double momentumNesterov : MOMENTUM_HYPERPARAMETER) {
+						double totalScore = 0;
+						EarlyStoppingResult<MultiLayerNetwork> result = null;
+						for (int iteration = 0; iteration < iterations; iteration++) {
+							System.out.print(Configuration.formatLog(
+									"[{}/{}] starting training epoch:{} learningRate:{} hiddenSizeNodesMultiplier:{} momentumNesterov:{} l1:{} l2:{}",
+									counter, totalCases, epoch, learningRate, hiddenSizeNodesMultiplier,
+									momentumNesterov, l1, l2));
 
-						int hiddenNodesTemp = (int) (hiddenNodes * hiddenSizeNodesMultiplier);
-						this.seed = (int) System.currentTimeMillis();
-						MultiLayerNetwork modelTemp = createModel(numInput, hiddenNodesTemp, numOutput, learningRate,
-								momentumNesterov, l1, l2);
-						//epoch substitution
-						List<EpochTerminationCondition> epochTerminationConditionList = new ArrayList<>();
-						epochTerminationConditionList.add(new MaxEpochsTerminationCondition(epoch));
-						earlyStoppingConfiguration.setEpochTerminationConditions(epochTerminationConditionList);
+							int hiddenNodesTemp = (int) (hiddenNodes * hiddenSizeNodesMultiplier);
+							this.seed = (int) System.currentTimeMillis();
+							MultiLayerNetwork modelTemp = createModel(numInput, hiddenNodesTemp, numOutput,
+									learningRate, momentumNesterov, l1, l2);
+							//epoch substitution
+							List<EpochTerminationCondition> epochTerminationConditionList = new ArrayList<>();
+							epochTerminationConditionList.add(new MaxEpochsTerminationCondition(epoch));
+							earlyStoppingConfiguration.setEpochTerminationConditions(epochTerminationConditionList);
 
-						EarlyStoppingTrainer trainer = new EarlyStoppingTrainer(earlyStoppingConfiguration, modelTemp,
-								trainDataIterator);
+							EarlyStoppingTrainer trainer = new EarlyStoppingTrainer(earlyStoppingConfiguration,
+									modelTemp, trainDataIterator);
 
-						result = trainer.fit();
-						double score = result.getBestModelScore();
-						System.out.println(
-								"->finished	Score " + score + " at epoch " + result.getBestModelEpoch() + "/"
-										+ result.getTotalEpochs());
+							result = trainer.fit();
+							double score = result.getBestModelScore();
+							System.out.println(
+									"->finished	Score " + score + " at epoch " + result.getBestModelEpoch() + "/"
+											+ result.getTotalEpochs());
 
-						logger.info("Hyperparameter learningRate:{}   hiddenSizeNodesMultiplier:{}   l1:{}   l2:{}",
-								learningRate, hiddenSizeNodesMultiplier, l1, l2);
-						logger.info("Termination reason: " + result.getTerminationReason());
-						logger.info("Termination details: " + result.getTerminationDetails());
-						logger.info("Total epochs: " + result.getTotalEpochs());
-						logger.info("Best epoch number: " + result.getBestModelEpoch());
-						logger.info("Score at best epoch: " + result.getBestModelScore());
-						totalScore += score;
-					}
-					double score = totalScore / iterations;
-
-					if (bestScore == -6666 || score < bestScore) {
-						if (counter > 0) {
-							System.out.println(Configuration.formatLog(
-									"[{}/{}] bestFound score={} bestEpochNumber:{}/{} learningRate:{} hiddenSizeNodesMultiplier:{} l1:{} l2:{}",
-									counter, totalCases, score, result.getBestModelEpoch(), result.getTotalEpochs(),
-									learningRate, hiddenSizeNodesMultiplier, l1, l2));
-
+							logger.info(
+									"Hyperparameter learningRate:{}   hiddenSizeNodesMultiplier:{}  momentumNesterov:{} l1:{}   l2:{}",
+									learningRate, hiddenSizeNodesMultiplier, momentumNesterov, l1, l2);
+							logger.info("Termination reason: " + result.getTerminationReason());
+							logger.info("Termination details: " + result.getTerminationDetails());
+							logger.info("Total epochs: " + result.getTotalEpochs());
+							logger.info("Best epoch number: " + result.getBestModelEpoch());
+							logger.info("Score at best epoch: " + result.getBestModelScore());
+							totalScore += score;
 						}
-						bestEpoch = epoch;
-						bestScore = score;
-						bestModel = result.getBestModel();
-						bestLearningRate = learningRate;
-						bestHiddenSizeNodesMultiplier = hiddenSizeNodesMultiplier;
+						double score = totalScore / iterations;
+
+						if (bestScore == -6666 || score < bestScore) {
+							if (counter > 0) {
+								System.out.println(Configuration.formatLog(
+										"[{}/{}] bestFound score={} bestEpochNumber:{}/{} learningRate:{} hiddenSizeNodesMultiplier:{} momentumNesterov:{} l1:{} l2:{}",
+										counter, totalCases, score, result.getBestModelEpoch(), result.getTotalEpochs(),
+										learningRate, hiddenSizeNodesMultiplier, momentumNesterov, l1, l2));
+
+							}
+							bestMomentum = momentumNesterov;
+							bestEpoch = epoch;
+							bestScore = score;
+							bestModel = result.getBestModel();
+							bestLearningRate = learningRate;
+							bestHiddenSizeNodesMultiplier = hiddenSizeNodesMultiplier;
+						}
+						counter++;
 					}
-					counter++;
 				}
 			}
 		}
@@ -499,16 +523,18 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 				for (int iteration = 0; iteration < iterations; iteration++) {
 
 					System.out.print(Configuration.formatLog(
-							"[{}/{}] starting training learningRate:{} hiddenSizeNodesMultiplier:{} l1:{} l2:{}",
-							counter, totalCases, bestLearningRate, bestHiddenSizeNodesMultiplier, l1, l2));
+							"[{}/{}] starting training learningRate:{} hiddenSizeNodesMultiplier:{} momentumNesterov:{} l1:{} l2:{}",
+							counter, totalCases, bestLearningRate, bestHiddenSizeNodesMultiplier, bestMomentum, l1,
+							l2));
 					System.out.print(Configuration.formatLog(
-							"[{}/{}] starting training epoch:{} learningRate:{} hiddenSizeNodesMultiplier:{} l1:{} l2:{}",
-							counter, totalCases, bestEpoch, bestLearningRate, bestHiddenSizeNodesMultiplier, l1, l2));
+							"[{}/{}] starting training epoch:{} learningRate:{} hiddenSizeNodesMultiplier:{} momentumNesterov:{} l1:{} l2:{}",
+							counter, totalCases, bestEpoch, bestLearningRate, bestHiddenSizeNodesMultiplier,
+							bestMomentum, l1, l2));
 
 					int hiddenNodesTemp = (int) (hiddenNodes * bestHiddenSizeNodesMultiplier);
 					this.seed = (int) System.currentTimeMillis();
 					MultiLayerNetwork modelTemp = createModel(numInput, hiddenNodesTemp, numOutput, bestLearningRate,
-							momentumNesterov, l1, l2);
+							bestMomentum, l1, l2);
 
 					EarlyStoppingTrainer trainer = new EarlyStoppingTrainer(earlyStoppingConfiguration, modelTemp,
 							trainDataIterator);
@@ -519,8 +545,9 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 							"->finished	Score " + score + " at epoch " + result.getBestModelEpoch() + "/" + result
 									.getTotalEpochs());
 
-					logger.info("Hyperparameter learningRate:{}   hiddenSizeNodesMultiplier:{}   l1:{}   l2:{}",
-							bestLearningRate, bestHiddenSizeNodesMultiplier, l1, l2);
+					logger.info(
+							"Hyperparameter learningRate:{}   hiddenSizeNodesMultiplier:{} momentumNesterov:{}  l1:{}   l2:{}",
+							bestLearningRate, bestHiddenSizeNodesMultiplier, bestMomentum, l1, l2);
 
 					logger.info("Termination reason: " + result.getTerminationReason());
 					logger.info("Termination details: " + result.getTerminationDetails());
@@ -533,9 +560,9 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 				if (bestScore == -6666 || bestScore2 < bestScore) {
 					if (counter > 0) {
 						System.out.println(Configuration.formatLog(
-								"[{}/{}] bestFound score={} bestEpochNumber:{}/{} learningRate:{} hiddenSizeNodesMultiplier:{} l1:{} l2:{}",
+								"[{}/{}] bestFound score={} bestEpochNumber:{}/{} learningRate:{} hiddenSizeNodesMultiplier:{} momentumNesterov:{} l1:{} l2:{}",
 								counter, totalCases, bestScore2, result.getBestModelEpoch(), result.getTotalEpochs(),
-								bestLearningRate, bestHiddenSizeNodesMultiplier, l1, l2));
+								bestLearningRate, bestHiddenSizeNodesMultiplier, bestMomentum, l1, l2));
 					}
 					bestScore = bestScore2;
 					bestModel = result.getBestModel();
@@ -549,9 +576,9 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 
 		long elapsedSeconds = (System.currentTimeMillis() - startTime) / 1000;
 		String message = Configuration.formatLog(
-				"Hyperparameter tuning finished in {} seconds with {} iterations  with score={}  with epochs={} learningRate={} and hiddenNodesSizeMultiplier={}  l1={}  l2={}",
+				"Hyperparameter tuning finished in {} seconds with {} iterations  with score={}  with epochs={} learningRate={} and hiddenNodesSizeMultiplier={} momentumNesterov:{}   l1={}  l2={}",
 				elapsedSeconds, iterations, bestScore, bestEpoch, bestLearningRate, bestHiddenSizeNodesMultiplier,
-				bestL1, bestL2);
+				bestMomentum, bestL1, bestL2);
 		logger.info(message);
 		System.out.println(message);
 		this.model = bestModel;
