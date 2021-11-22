@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
 import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.Algorithm;
+import com.lambda.investing.algorithmic_trading.reinforcement_learning.TrainType;
 import com.lambda.investing.backtest_engine.BacktestConfiguration;
 import com.lambda.investing.backtest_engine.ordinary.OrdinaryBacktest;
 import com.lambda.investing.market_data_connector.MarketDataConnectorPublisherListener;
@@ -27,7 +28,7 @@ import java.nio.file.Paths;
 import java.text.ParseException;
 import java.util.*;
 
-import static com.lambda.investing.algorithmic_trading.reinforcement_learning.q_learn.DeepQLearning.trainOnData;
+import static com.lambda.investing.algorithmic_trading.reinforcement_learning.TrainNNUtils.*;
 
 public class App {
 
@@ -142,19 +143,26 @@ public class App {
 			if (trainInputConfiguration.getMemoryPath() != null
 					&& trainInputConfiguration.getOutputModelPath() != null) {
 				logger.info("trainInputConfiguration detected! -> training");
-				System.out.println("training model");
+				logger.info(args[0]);
+				TrainType trainType = DEFAULT_TRAIN_TYPE;
+
+				if (trainInputConfiguration.getTrainType() != null) {
+					trainType = trainInputConfiguration.getTrainType();
+
+				}
+				System.out.println(trainType + " training model");
 				System.out.println("-----");
 				System.out.println(args[0]);
 				System.out.println("-----");
 
-				trainOnData(trainInputConfiguration.getMemoryPath(), trainInputConfiguration.getActionColumns(),
-						trainInputConfiguration.getStateColumns(), trainInputConfiguration.getOutputModelPath(),
-						trainInputConfiguration.getLearningRate(), trainInputConfiguration.getMomentumNesterov(),
-						trainInputConfiguration.getNEpoch(), trainInputConfiguration.getBatchSize(),
-						trainInputConfiguration.getMaxBatchSize(), trainInputConfiguration.getL2(),
-						trainInputConfiguration.getL1(), trainInputConfiguration.getTrainingStats(),
-						trainInputConfiguration.isRNN(), trainInputConfiguration.isHyperparameterTuning(),
-						trainInputConfiguration.getRnnHorizon());
+				trainOnData(trainType, trainInputConfiguration.getMemoryPath(),
+						trainInputConfiguration.getActionColumns(), trainInputConfiguration.getStateColumns(),
+						trainInputConfiguration.getOutputModelPath(), trainInputConfiguration.getLearningRate(),
+						trainInputConfiguration.getMomentumNesterov(), trainInputConfiguration.getNEpoch(),
+						trainInputConfiguration.getBatchSize(), trainInputConfiguration.getMaxBatchSize(),
+						trainInputConfiguration.getL2(), trainInputConfiguration.getL1(),
+						trainInputConfiguration.getTrainingStats(), trainInputConfiguration.isRNN(),
+						trainInputConfiguration.isHyperparameterTuning(), trainInputConfiguration.getRnnHorizon());
 
 				logger.info("finished training -> " + trainInputConfiguration.getOutputModelPath());
 

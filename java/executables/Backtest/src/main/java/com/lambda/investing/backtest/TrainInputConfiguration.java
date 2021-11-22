@@ -1,5 +1,6 @@
 package com.lambda.investing.backtest;
 
+import com.lambda.investing.algorithmic_trading.reinforcement_learning.TrainType;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -18,6 +19,7 @@ import lombok.Setter;
 	private int maxBatchSize = 5000;
 	private boolean hyperparameterTuning = false;
 	private int rnnHorizon = -1;
+	private TrainType trainType = null;
 
 	public TrainInputConfiguration() {
 	}

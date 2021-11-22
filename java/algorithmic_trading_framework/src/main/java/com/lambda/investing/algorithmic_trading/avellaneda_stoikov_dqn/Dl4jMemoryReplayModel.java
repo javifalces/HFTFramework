@@ -158,8 +158,8 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 				logger.info("loaded model {}", this.modelPath);
 				logger.info("loaded in {} seconds , model {}", elapsed, this.modelPath);
 			} catch (IOException e) {
-				System.err.println(String.format("cant load model %s", this.modelPath));
-				logger.error("cant load model ", e);
+				System.err.println(String.format("cant load model %s -> GPU memory?", this.modelPath));
+				logger.error("cant load model %s => GPU memory?", this.modelPath, e.getMessage());
 			}
 		}
 

@@ -130,7 +130,16 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 		}
 	}
 
-
+	private Integer[] getRandomPositions(int maxSize) {
+		Integer[] output = new Integer[maxSize];
+		for (int i = 0; i < output.length; i++) {
+			output[i] = i;
+		}
+		List<Integer> outputList = Arrays.asList(output);
+		Collections.shuffle(outputList);
+		output = outputList.toArray(output);
+		return output;
+	}
 
 	public void loadMemory(String filepath) throws IOException {
 		File file = new File(filepath);
@@ -141,10 +150,19 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 		BufferedReader csvReader = new BufferedReader(new FileReader(filepath));
 		// we don't know the amount of data ahead of time so we use lists
 
-		Map<Integer, List<Double>> colMap = new HashMap<>();
+		///Shuffle rows reading
+		int numberOfRows = 0;
 		String row;
-		int rowsTotal = 0;
+		while ((row = csvReader.readLine()) != null) {
+			numberOfRows++;
+		}
+		Integer[] randomPositions = getRandomPositions(numberOfRows);
+		csvReader.close();
 
+		//read the csv in order
+		Map<Integer, List<Double>> colMap = new HashMap<>();
+		int rowsTotal = 0;
+		csvReader = new BufferedReader(new FileReader(filepath));
 		while ((row = csvReader.readLine()) != null) {
 			String[] data = row.split(CSV_SEPARATOR);
 			double[] stateRow = new double[state.getNumberOfColumns()];
@@ -160,15 +178,20 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 
 			}
 			try {
-				stateRowSet[rowsTotal] = new StateRow(stateRow);
-				indexToStateCache.put(stateRowSet[rowsTotal], rowsTotal);
+				//randomize position on reading due to binary search sorted
+				int randomPos = randomPositions[rowsTotal];
+
+				stateRowSet[randomPos] = new StateRow(stateRow);
+				indexToStateCache.put(stateRowSet[randomPos], randomPos);
+
 			} catch (IndexOutOfBoundsException e) {
 				logger.warn("IndexOutOfBoundsException loading memory -> loading first {} rows -> set as index ,size",
 						rowsTotal);
 				memoryReplayIndex = -1;
 				break;
 			} catch (IllegalArgumentException ex) {
-				logger.warn("IllegalArgumentException   value already present , loading memory -> skip row", ex);
+				logger.warn("IllegalArgumentException   value already present , loading memory {} -> skip row {}",
+						filepath, ex.getMessage());
 				continue;
 			}
 			memoryReplaySize = rowsTotal;//starts at 0
@@ -453,7 +476,8 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 		return stateArr;
 	}
 
-	protected double calculateQValue(double reward, double currentQValue, double predictedQValue) {
+	protected double calculateQValue(double[] previousStateArr, double reward, double currentQValue,
+			double predictedQValue) {
 		//bellman equation -> dynamic
 		//		Q_(i+1) (s,a)=Predict(s,a)*(1-α)+α[R(s,a)+γ_d (Target⁡(s^',a^' )]
 		return currentQValue * (1.0 - learningRate) + (learningRate * (reward + discountFactor * predictedQValue));
@@ -514,7 +538,7 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 			Double currentQValue = getQValue(previousStateArr, action);//from predict
 			if (currentQValue != null) {
 				// update expexted summary reward of the previous state using Bellman Dynamic equation
-				qValue = calculateQValue(reward, currentQValue, maxNextExpectedReward);
+				qValue = calculateQValue(previousStateArr, reward, currentQValue, maxNextExpectedReward);
 				actionArr[action] = qValue;
 			}
 			actionArr[action] = qValue;
