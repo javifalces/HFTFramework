@@ -95,14 +95,14 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 	}
 
 	public void saveMemory(String filepath) throws IOException {
-		if (memoryReplayIndex <= 0) {
+		if (memoryReplaySize <= 0) {
 			logger.warn("no data in DeepQlearning memoryReplay to save!");
 			return;
 		}
 		File file = new File(filepath);
 		file.getParentFile().mkdirs();
 		StringBuilder outputString = new StringBuilder();
-		for (int row = 0; row < memoryReplayIndex; row++) {
+		for (int row = 0; row < memoryReplaySize; row++) {
 			for (int column = 0; column < memoryReplay[row].length; column++) {
 				outputString.append(memoryReplay[row][column]);
 				outputString.append(CSV_SEPARATOR);
@@ -476,10 +476,17 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 		return stateArr;
 	}
 
+	/**
+	 * bellman equation -> dynamic Q_(i+1) (s,a)=Predict(s,a)*(1-α)+α[R(s,a)+γ_d (Target⁡(s^',a^' )]
+	 *
+	 * @param previousStateArr
+	 * @param reward
+	 * @param currentQValue
+	 * @param predictedQValue
+	 * @return updated q value
+	 */
 	protected double calculateQValue(double[] previousStateArr, double reward, double currentQValue,
 			double predictedQValue) {
-		//bellman equation -> dynamic
-		//		Q_(i+1) (s,a)=Predict(s,a)*(1-α)+α[R(s,a)+γ_d (Target⁡(s^',a^' )]
 		return currentQValue * (1.0 - learningRate) + (learningRate * (reward + discountFactor * predictedQValue));
 	}
 
