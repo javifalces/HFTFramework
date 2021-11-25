@@ -1,14 +1,13 @@
 package com.lambda.investing;
 
 import org.slf4j.helpers.MessageFormatter;
-
 import java.text.SimpleDateFormat;
 
 public class Configuration {
 
 	//backtest engine
 	public static int BACKTEST_THREADS_PUBLISHING_MARKETDATA = 0;//used to publish from parquet and csv file!
-	public static int BACKTEST_THREADS_PUBLISHING_EXECUTION_REPORTS = 2;//publishing on backtest engine
+	public static int BACKTEST_THREADS_PUBLISHING_EXECUTION_REPORTS = 1;//publishing on backtest engine
 	public static int BACKTEST_THREADS_LISTENING_ORDER_REQUEST = 2;//listening threads on backtest
 
 	//algos engine
