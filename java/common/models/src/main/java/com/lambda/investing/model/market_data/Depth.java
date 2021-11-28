@@ -192,7 +192,6 @@ public class Depth extends CSVable implements Cloneable {
 				.append(",timestamp,ask0,ask1,ask2,ask3,ask4,ask_quantity0,ask_quantity1,ask_quantity2,ask_quantity3,ask_quantity4,bid0,bid1,bid2,bid3,bid4,bid_quantity0,bid_quantity1,bid_quantity2,bid_quantity3,bid_quantity4");
 
 	}
-
 	public String toCSV(boolean withHeader) {
 		if (!this.isDepthFilled()) {
 			return null;
@@ -359,14 +358,29 @@ public class Depth extends CSVable implements Cloneable {
 		return getImbalance();
 	}
 
+	/**
+	 * \mbox{Microprice}_t = \frac{V_t^b P_t^a + V_t^a P_t^b}{V_t^b + V_t^a},
+	 * <p>
+	 * https://www.quantstart.com/articles/high-frequency-trading-ii-limit-order-book/
+	 * [1] Cartea, A., Sebastian, J. and Penalva, J. (2015) Algorithmic and High-Frequency Trading. Cambridge University Press
+	 * <p>
+	 * For example, if the volume of limit orders posted at the best bid price is significantly larger than the volume of limit orders at the best ask price, the microprice will be pushed towards the ask price.
+	 *
+	 * @return
+	 */
 	public double getMicroPrice() {
 		//only on the first level
 		double sumQty = getBestAskQty() + getBestBidQty();
 
-		double out = ((getBestAsk() * getBestAskQty()) / sumQty) + ((getBestBid() * getBestBidQty()) / sumQty);
+		double out = ((getBestBid() * getBestAskQty()) / sumQty) + ((getBestAsk() * getBestBidQty()) / sumQty);
 		return out;
 	}
 
+	/**
+	 * Cartea et al. (2015), and define the order (-1,1)
+	 *
+	 * @return
+	 */
 	public double getImbalance() {
 		double bidVolTotal = 0.;
 		double askVolTotal = 0.;
@@ -387,6 +401,52 @@ public class Depth extends CSVable implements Cloneable {
 			return 0.0;
 		}
 		return (bidVolTotal - askVolTotal) / (bidVolTotal + askVolTotal);
+	}
+
+	public double getTotalVolume() {
+		double bidVolTotal = 0.;
+		double askVolTotal = 0.;
+		for (int level = 0; level < getLevels(); level++) {
+			try {
+				bidVolTotal += bidsQuantities[level];
+			} catch (IndexOutOfBoundsException e) {
+
+			}
+
+			try {
+				askVolTotal += asksQuantities[level];
+			} catch (IndexOutOfBoundsException e) {
+
+			}
+		}
+		if ((bidVolTotal + askVolTotal) == 0) {
+			return 0.0;
+		}
+		return bidVolTotal + askVolTotal;
+	}
+
+	public double getBidVolume() {
+		double bidVolTotal = 0.;
+		for (int level = 0; level < getLevels(); level++) {
+			try {
+				bidVolTotal += bidsQuantities[level];
+			} catch (IndexOutOfBoundsException e) {
+
+			}
+		}
+		return bidVolTotal;
+	}
+
+	public double getAskVolume() {
+		double askVolTotal = 0.;
+		for (int level = 0; level < getLevels(); level++) {
+			try {
+				askVolTotal += asksQuantities[level];
+			} catch (IndexOutOfBoundsException e) {
+
+			}
+		}
+		return askVolTotal;
 	}
 
 	@Override public Object clone() throws CloneNotSupportedException {

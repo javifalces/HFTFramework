@@ -53,7 +53,7 @@ import java.util.*;
 
 @Getter @Setter public class QLearning {
 
-	protected static String CSV_SEPARATOR = ",";
+	public static String CSV_SEPARATOR = ",";
 	protected Logger logger = LogManager.getLogger(QLearning.class);
 	// amount of possible states
 	private int states;

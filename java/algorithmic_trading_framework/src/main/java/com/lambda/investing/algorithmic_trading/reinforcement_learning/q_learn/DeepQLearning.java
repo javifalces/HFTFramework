@@ -22,8 +22,8 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 
 @Getter @Setter public class DeepQLearning extends QLearning {
 
+	protected static boolean SHUFFLE_LOADING_ROWS = false;
 	public static boolean USE_AS_QLEARN = false;
-
 
 	private static Comparator<double[]> ARRAY_COMPARATOR = Doubles.lexicographicalComparator();
 	protected static Logger logger = LogManager.getLogger(DeepQLearning.class);
@@ -55,7 +55,7 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 		if (maxMemorySize <= 0) {
 			maxMemorySize = MAX_MEMORY_SIZE;
 		}
-		this.indexToStateCache = Maps.synchronizedBiMap(HashBiMap.create());
+		this.indexToStateCache = Maps.synchronizedBiMap(HashBiMap.create(this.maxMemorySize));
 		this.isRNN = isRNN;
 		this.maxMemorySize = maxMemorySize;
 		this.state = state;
@@ -153,8 +153,19 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 		///Shuffle rows reading
 		int numberOfRows = 0;
 		String row;
-		while ((row = csvReader.readLine()) != null) {
-			numberOfRows++;
+		try {
+			while ((row = csvReader.readLine()) != null) {
+				numberOfRows++;
+			}
+		} catch (IOException ex) {
+			logger.error("error reading row {} on {}", numberOfRows, filepath, ex);
+		}
+		if (numberOfRows > maxMemorySize) {
+			logger.info("extending memory size to {}", numberOfRows);
+			maxMemorySize = numberOfRows;
+			this.indexToStateCache = Maps.synchronizedBiMap(HashBiMap.create(this.maxMemorySize));
+			this.stateRowSet = new StateRow[this.maxMemorySize];
+
 		}
 		Integer[] randomPositions = getRandomPositions(numberOfRows);
 		csvReader.close();
@@ -163,40 +174,47 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 		Map<Integer, List<Double>> colMap = new HashMap<>();
 		int rowsTotal = 0;
 		csvReader = new BufferedReader(new FileReader(filepath));
-		while ((row = csvReader.readLine()) != null) {
-			String[] data = row.split(CSV_SEPARATOR);
-			double[] stateRow = new double[state.getNumberOfColumns()];
-			for (int column = 0; column < data.length; column++) {
-				List<Double> columnList = colMap.getOrDefault(column, new ArrayList<>());
-				double value = Double.parseDouble(data[column]);
-				columnList.add(value);
-				colMap.put(column, columnList);
+		try {
+			while ((row = csvReader.readLine()) != null) {
+				String[] data = row.split(CSV_SEPARATOR);
+				double[] stateRow = new double[state.getNumberOfColumns()];
+				for (int column = 0; column < data.length; column++) {
+					List<Double> columnList = colMap.getOrDefault(column, new ArrayList<>());
+					double value = Double.parseDouble(data[column]);
+					columnList.add(value);
+					colMap.put(column, columnList);
 
-				if (column < stateRow.length) {
-					stateRow[column] = value;
+					if (column < stateRow.length) {
+						stateRow[column] = value;
+					}
+
 				}
+				try {
+					int randomPos = rowsTotal;
+					if (SHUFFLE_LOADING_ROWS) {
+						//randomize position on reading due to binary search sorted
+						randomPos = randomPositions[rowsTotal];
+					}
 
+					stateRowSet[randomPos] = new StateRow(stateRow);
+					indexToStateCache.put(stateRowSet[randomPos], randomPos);
+
+				} catch (IndexOutOfBoundsException e) {
+					logger.warn(
+							"IndexOutOfBoundsException loading memory -> loading first {} rows -> set as index ,size",
+							rowsTotal);
+					continue;
+				} catch (IllegalArgumentException ex) {
+					logger.warn("IllegalArgumentException   value already present , loading memory {} -> skip row {}",
+							filepath, ex.getMessage());
+					continue;
+				}
+				memoryReplaySize = rowsTotal;//starts at 0
+				memoryReplayIndex = rowsTotal;
+				rowsTotal++;
 			}
-			try {
-				//randomize position on reading due to binary search sorted
-				int randomPos = randomPositions[rowsTotal];
-
-				stateRowSet[randomPos] = new StateRow(stateRow);
-				indexToStateCache.put(stateRowSet[randomPos], randomPos);
-
-			} catch (IndexOutOfBoundsException e) {
-				logger.warn("IndexOutOfBoundsException loading memory -> loading first {} rows -> set as index ,size",
-						rowsTotal);
-				memoryReplayIndex = -1;
-				break;
-			} catch (IllegalArgumentException ex) {
-				logger.warn("IllegalArgumentException   value already present , loading memory {} -> skip row {}",
-						filepath, ex.getMessage());
-				continue;
-			}
-			memoryReplaySize = rowsTotal;//starts at 0
-			memoryReplayIndex = rowsTotal;
-			rowsTotal++;
+		} catch (IOException e) {
+			logger.error("error reading row {} on {}", numberOfRows, filepath, e);
 		}
 		csvReader.close();
 		int columnsTotal = colMap.size();
@@ -593,8 +611,6 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 
 	}
 
-
-
 	protected double[][] getArrayValid() {
 		double[][] validArr = ArrayUtils
 				.subarray(memoryReplay, 0, getNextIndexMemoryReplay());//we are going to clean it
@@ -606,9 +622,6 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 		logger.info("training input array of {} rows and {} columns", validArr.length, getStateColumns());
 		return getColumnsArray(validArr, 0, getStateColumns());
 	}
-
-
-
 
 	public double[][] getTargetTrain() {
 		double[][] validArr = getArrayValid();

@@ -3,7 +3,6 @@ package com.lambda.investing.algorithmic_trading.avellaneda_stoikov_dqn;
 import com.google.common.primitives.Doubles;
 import com.lambda.investing.Configuration;
 
-import org.apache.kerby.config.Conf;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -16,6 +15,7 @@ import org.deeplearning4j.earlystopping.termination.MaxEpochsTerminationConditio
 import org.deeplearning4j.earlystopping.termination.MaxTimeIterationTerminationCondition;
 import org.deeplearning4j.earlystopping.trainer.EarlyStoppingTrainer;
 import org.deeplearning4j.nn.api.OptimizationAlgorithm;
+import org.deeplearning4j.nn.conf.BackpropType;
 import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
 
@@ -41,6 +41,8 @@ import org.nd4j.linalg.dataset.api.preprocessor.DataNormalization;
 import org.nd4j.linalg.dataset.api.preprocessor.Normalizer;
 import org.nd4j.linalg.dataset.api.preprocessor.NormalizerStandardize;
 import org.nd4j.linalg.factory.Nd4j;
+import org.nd4j.linalg.learning.config.Adam;
+import org.nd4j.linalg.learning.config.IUpdater;
 import org.nd4j.linalg.learning.config.Nesterovs;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
 //import sun.security.provider.ConfigFile;
@@ -62,6 +64,7 @@ import static org.deeplearning4j.util.ModelSerializer.writeModel;
  */
 public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 
+	private static int MAX_BATCH_SIZE = 5000;
 	public static double[] LEARNING_RATES_HYPERPARAMETER = new double[] { 0.00001, 0.0001, 0.001, 0.01 };
 	public static double[] HIDDEN_SIZE_NODES_MULTIPLIER_HYPERPARAMETER = new double[] { 2 };
 	public static int[] EPOCHS_HYPERPARAMETER = new int[] { 100 };
@@ -69,15 +72,18 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 	public static double[] L2_HYPERPARAMETER = new double[] { 0.0, 0.1, 0.01, 0.001 };
 	public static double[] MOMENTUM_HYPERPARAMETER = new double[] { 0.5, 0.8 };
 	public static boolean HYPERPARAMETER_TUNING = false;
-
+	private static int COUNTER_RE_TRAIN = 0;
+	private int maxMinutesTraining = 5;
+	private int defaultMaxMinutesTraining = maxMinutesTraining;
 	//	https://deeplearning4j.konduit.ai/models/layers
 	public static boolean EARLY_STOPPING = true;
+	public static boolean CLEAN_NN_IF_EXIST = false;
 
 	protected static int EARLY_STOPPING_TOLERANCE_DECIMALS = 3;
 	protected Logger logger = LogManager.getLogger(Dl4jMemoryReplayModel.class);
 	private String modelPath;
 
-	private double learningRate, momentumNesterov;
+	protected double learningRate, momentumNesterov;
 	protected int nEpoch = 100;
 
 	private int batchSize, maxBatchSize;
@@ -191,16 +197,25 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 		return batchSize;
 	}
 
+	protected IUpdater getUpdater(double momentumNesterov, double learningRate) {
+		if (momentumNesterov != 0) {
+			return new Nesterovs(learningRate, momentumNesterov);
+		} else {
+			return new Adam.Builder().learningRate(learningRate).build();
+		}
+	}
+
 	private MultiLayerConfiguration createRNNModel(int numInputs, int numHiddenNodes, int numOutputs,
 			double learningRate, double momentumNesterov, double l1, double l2) {
 
 		// https://deeplearning4j.konduit.ai/models/recurrent
+		if (momentumNesterov == 0) {
 
+		}
 		WeightInit weightInit = WeightInit.XAVIER;//a form of Gaussian distribution (WeightInit.XAVIER),
 		MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder().seed(seed)
 				.optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-				.updater(new Nesterovs(learningRate, momentumNesterov)).l2(l2).l1(l1)
-				//				.updater((new Adam.Builder().learningRate(learningRate)).build())
+				.updater(getUpdater(momentumNesterov, learningRate)).l2(l2).l1(l1)
 
 				//input layer
 				.list().layer(0, new DenseLayer.Builder().nIn(numInputs).nOut(numHiddenNodes).weightInit(weightInit)
@@ -226,7 +241,7 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 		WeightInit weightInit = WeightInit.XAVIER;//a form of Gaussian distribution (WeightInit.XAVIER),
 		MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder().seed(seed)
 				.optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
-				.updater(new Nesterovs(learningRate, momentumNesterov)).l2(l2).l1(l1)
+				.updater(getUpdater(momentumNesterov, learningRate)).l2(l2).l1(l1)
 				//				.updater((new Adam.Builder().learningRate(learningRate)).build()).l2(l2).l1(l1)
 
 				//input layer
@@ -260,6 +275,8 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 			conf = createFeedForwardModel(numInputs, numHiddenNodes, numOutputs, learningRate, momentumNesterov, l1,
 					l2);
 		}
+		conf.setBackpropType(BackpropType.Standard);
+
 		MultiLayerNetwork model = new MultiLayerNetwork(conf);
 		model.init();
 
@@ -268,7 +285,8 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 
 	protected EarlyStoppingConfiguration getEarlyStoppingConfiguration(DataSetIterator testDataIterator) {
 		EarlyStoppingConfiguration earlyStoppingConfiguration = new EarlyStoppingConfiguration.Builder()
-				.iterationTerminationConditions(new MaxTimeIterationTerminationCondition(5, TimeUnit.MINUTES))
+				.iterationTerminationConditions(
+						new MaxTimeIterationTerminationCondition(maxMinutesTraining, TimeUnit.MINUTES))
 				.epochTerminationConditions(new MaxEpochsTerminationCondition(nEpoch)).scoreCalculator(
 						//								new DataSetLossCalculator(testDataIterator,true),
 						new RegressionScoreCalculatorRounded(RegressionEvaluation.Metric.RMSE, testDataIterator,
@@ -308,8 +326,10 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 
 			} else {
 				//clear the model
-				System.out.println("clear previous nn");
-				this.model.clear();
+				if (CLEAN_NN_IF_EXIST) {
+					System.out.println("clear previous nn");
+					this.model.clear();
+				}
 			}
 
 			model.addListeners(scoreIterationListener);  //Print score every 10 parameter updates
@@ -327,6 +347,7 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 				return;
 			}
 			EarlyStoppingConfiguration earlyStoppingConfiguration = null;
+			double defaultLearningRate = learningRate;
 			if (EARLY_STOPPING) {
 				System.out.println("starting training nn with early stop " + allData.numExamples() + " samples");
 				allData.shuffle(seed);//// mix before split
@@ -344,8 +365,9 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 				int trainSizeData = trainingData.numExamples();
 				int testSizeData = testData.numExamples();//(int) (sizeData*(1-fractionTrainSplit));
 
-				int batchSizeTempTest = Math.min(this.batchSize, testSizeData);
-				int batchSizeTempTrain = Math.min(this.batchSize, trainSizeData);
+				int batchSizeTempTest = Math.min(this.batchSize, MAX_BATCH_SIZE);//at least 500 iterations per epoch
+				int batchSizeTempTrain = (int) Math
+						.min(this.batchSize, MAX_BATCH_SIZE);        //at least 500 iterations per epoch
 				DataSetIterator testDataIterator = new MiniBatchFileDataSetIterator(testData, batchSizeTempTest);
 				DataSetIterator trainDataIterator = new MiniBatchFileDataSetIterator(trainingData, batchSizeTempTrain);
 				//				trainDataIterator.setPreProcessor((DataSetPreProcessor) dataNormalization);
@@ -385,6 +407,64 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 						logger.info("Total epochs: " + result.getTotalEpochs());
 						logger.info("Best epoch number: " + result.getBestModelEpoch());
 						logger.info("Score at best epoch: " + result.getBestModelScore());
+
+						//check learning rate
+						if (result.getBestModelEpoch() == 0 || result.getBestModelEpoch() == nEpoch) {
+							if (result.getBestModelEpoch() == 0) {
+								learningRate /= 10.0;
+							} else {
+								learningRate *= 10.0;
+							}
+
+							COUNTER_RE_TRAIN++;
+							System.err.println(
+									"WARNING training with best score at 0 => retrain with less/more learningRate="
+											+ learningRate);
+							logger.warn("training with best score at 0 => retrain with less/more learningRate={}",
+									learningRate);
+							if (COUNTER_RE_TRAIN < 5) {
+								train(input, target);
+								return;
+							} else {
+								System.err.println(
+										"ERROR training cant find good fit on earlyStopping after some attempts reducing learningRate="
+												+ learningRate + " restore it to " + defaultLearningRate);
+								logger.error(
+										"ERROR training cant find good fit on earlyStopping after some attempts reducing learningRate={} restore it to {}",
+										learningRate, defaultLearningRate);
+								learningRate = defaultLearningRate;
+							}
+
+						}
+						COUNTER_RE_TRAIN = 0;
+
+						//check time
+						//						if (result.getTotalEpochs() - 5 < result.getBestModelEpoch()) {
+						//							//underfit
+						//							maxMinutesTraining++;
+						//							COUNTER_RE_TRAIN++;
+						//							System.err.println("WARNING training with best epoch very close to total epoch=" + result
+						//									.getBestModelEpoch());
+						//							logger.warn("WARNING training with best epoch very close to total epoch={}",
+						//									result.getBestModelEpoch());
+						//							if (COUNTER_RE_TRAIN < 5) {
+						//								train(input, target);
+						//								return;
+						//							} else {
+						//								System.err.println(
+						//										"ERROR training cant find good fit on earlyStopping after some attempts increasing maxMinutesTraining="
+						//												+ maxMinutesTraining + " restore it to " + defaultMaxMinutesTraining);
+						//								logger.error(
+						//										"ERROR training cant find good fit on earlyStopping after some attempts increasing maxMinutesTraining="
+						//												+ maxMinutesTraining + " restore it to " + defaultMaxMinutesTraining);;
+						//								maxMinutesTraining = defaultMaxMinutesTraining;
+						//							}
+						//
+						//
+						//						}
+						//						COUNTER_RE_TRAIN = 0;
+
+						//get the best model
 						this.model = result.getBestModel();
 					}
 					isTrained = true;
@@ -399,7 +479,7 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 				//				((NormalizerStandardize) dataNormalization).transform(allData);
 
 				int sizeData = allData.numExamples();
-				int batchSizeTemp = Math.min(this.batchSize, sizeData);
+				int batchSizeTemp = Math.min(this.batchSize, MAX_BATCH_SIZE);//at least 500 iterations per epoch
 				if (isRNN) {
 					System.out.println(
 							"training RNN on data with  rows:" + input.length + "  columns:" + input[0].length
