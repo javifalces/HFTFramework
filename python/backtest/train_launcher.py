@@ -60,15 +60,24 @@ class TrainLauncher(threading.Thread):
         print('%s finished with code %d' % (self.id, ret))
         # remove input file
         self.state = TrainLauncherState.finished
-        if ret==0:
+        if ret == 0:
             os.remove(filename)
+
 
 def clean_javacpp():
     from pathlib import Path
     home = str(Path.home())
-    java_cpp = home+os.sep+rf'.javacpp\cache'
+    java_cpp = home + os.sep + rf'.javacpp\cache'
     print('cleaning java_cpp: %s' % java_cpp)
     os.remove(java_cpp)
+
+
+def clean_gpu_memory():
+    # print(rf"cleaning gpu memory")
+    from numba import cuda
+    device = cuda.get_current_device()
+    device.reset()
+
 
 class TrainLauncherController:
     def __init__(self, train_launcher: TrainLauncher):

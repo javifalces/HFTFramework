@@ -5,6 +5,7 @@ import shutil
 import numpy as np
 import time
 
+from backtest.dqn_algorithm import DQNAlgorithm
 from numpy import genfromtxt, savetxt
 
 from backtest.algorithm import Algorithm
@@ -23,6 +24,8 @@ import pandas as pd
 from backtest.iterations_period_time import IterationsPeriodTime
 from backtest.parameter_tuning.ga_configuration import GAConfiguration
 from backtest.score_enum import ScoreEnum
+from backtest.train_launcher import clean_gpu_memory
+from configuration import LAMBDA_OUTPUT_PATH
 
 DEFAULT_PARAMETERS = {
     # DQN parameters
@@ -84,17 +87,17 @@ DEFAULT_PARAMETERS = {
 PRIVATE_COLUMNS = 2
 
 
-
-class AvellanedaDQN(Algorithm):
+class AvellanedaDQN(DQNAlgorithm):
     NAME = AlgorithmEnum.avellaneda_dqn
 
     def __init__(self, algorithm_info: str, parameters: dict = DEFAULT_PARAMETERS):
         super().__init__(
             algorithm_info=algorithm_info, parameters=parameters
         )
-        self.is_filtered_states=False
-        if 'stateColumnsFilter' in parameters.keys() and parameters['stateColumnsFilter'] is not None and len(parameters['stateColumnsFilter'])>0:
-            self.is_filtered_states=True
+        self.is_filtered_states = False
+        if 'stateColumnsFilter' in parameters.keys() and parameters['stateColumnsFilter'] is not None and len(
+                parameters['stateColumnsFilter']) > 0:
+            self.is_filtered_states = True
 
 
 
@@ -164,26 +167,28 @@ class AvellanedaDQN(Algorithm):
         skew_actions=self.parameters['skewPricePctAction']
         risk_aversion_actions=self.parameters['riskAversionAction']
         windows_actions=self.parameters['windowsTickAction']
-        actions=[]
-        counter=0
+        actions = []
+        counter = 0
         for action in skew_actions:
             for risk_aversion in risk_aversion_actions:
                 for windows_action in windows_actions:
-                    actions.append('action_%d_reward'%counter)
-                    counter+=1
+                    actions.append('action_%d_reward' % counter)
+                    counter += 1
         return actions
 
+    def get_memory_replay_df(self, memory_replay_file: str = None, state_columns: list = None) -> pd.DataFrame:
+        if memory_replay_file is None:
+            memory_replay_file = LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename()
 
-    def get_memory_replay_df(self,memory_replay_file:str,state_columns:list=None)->pd.DataFrame:
         if state_columns is None:
             if self.is_filtered_states:
-                #add private
-                private_horizon_ticks=self.parameters['horizonTicksPrivateState']
-                state_columns_temp=[]
-                for private_state_horizon in range(private_horizon_ticks-1,-1,-1):
-                    state_columns_temp.append('inventory_%d'%private_state_horizon)
-                for private_state_horizon in range(private_horizon_ticks-1,-1,-1):
-                    state_columns_temp.append('score_%d'%private_state_horizon)
+                # add private
+                private_horizon_ticks = self.parameters['horizonTicksPrivateState']
+                state_columns_temp = []
+                for private_state_horizon in range(private_horizon_ticks - 1, -1, -1):
+                    state_columns_temp.append('inventory_%d' % private_state_horizon)
+                for private_state_horizon in range(private_horizon_ticks - 1, -1, -1):
+                    state_columns_temp.append('score_%d' % private_state_horizon)
                 state_columns_temp += self.parameters['stateColumnsFilter']
                 state_columns=state_columns_temp
                 # sort_ordered=self._get_default_state_columns()
@@ -231,6 +236,7 @@ class AvellanedaDQN(Algorithm):
             iterations: int,
             algos_per_iteration: int,
             simultaneous_algos: int = 1,
+            clean_initial_experience: bool = False,
     ) -> list:
 
         backtest_configuration = BacktestConfiguration(
@@ -293,12 +299,21 @@ class AvellanedaDQN(Algorithm):
                 )
                 backtest_launchers.append(backtest_launcher)
 
-            if iteration == 0 and os.path.isdir(backtest_launchers[0].output_path):
+            if iteration == 0 and clean_initial_experience and os.path.isdir(backtest_launchers[0].output_path):
                 # clean it
                 print('cleaning experience on training  path %s' % backtest_launchers[0].output_path)
                 self.clean_experience(output_path=backtest_launchers[0].output_path)
                 print('cleaning models on training  path %s' % backtest_launchers[0].output_path)
                 self.clean_model(output_path=backtest_launchers[0].output_path)
+
+            if not clean_initial_experience and iteration == 0:
+                # copy original into different instances
+                original_file = LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename()
+                print(f'copy {original_file}  on {algos_per_iteration} algos')
+                for algos_it in range(algos_per_iteration):
+                    target_file = LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename(
+                        algorithm_number=algos_it + 1)
+                    shutil.copy(original_file, target_file)
 
             # in case number of states/actions changes
             self.clean_permutation_cache(output_path=backtest_launchers[0].output_path)
@@ -380,7 +395,7 @@ class AvellanedaDQN(Algorithm):
         if trainingTargetIterationPeriod is not None:
             parameters['trainingTargetIterationPeriod'] = trainingTargetIterationPeriod
 
-        algorithm_name = self.get_test_name(NAME=self.NAME, algorithm_number=algorithm_number)
+        algorithm_name = self.get_test_name(name=self.NAME, algorithm_number=algorithm_number)
         print('testing on algorithm %s' % algorithm_name)
         algorithm_configurationQ = AlgorithmConfiguration(
             algorithm_name=algorithm_name, parameters=parameters
@@ -479,94 +494,18 @@ class AvellanedaDQN(Algorithm):
             clean_initial_generation_experience=clean_initial_generation_experience
         )
 
-    def merge_q_matrix(self, backtest_launchers: list) -> list:
-        import numpy as np
-        base_path_search = backtest_launchers[0].output_path
-        csv_files = glob.glob(base_path_search + os.sep + '*.csv')
 
-        algorithm_names = []
 
-        for backtest_launcher in backtest_launchers:
-            algorithm_names.append(backtest_launcher.id)
 
-        csv_files_out = []
-        for csv_file in csv_files:
-            if 'permutation' in csv_file:
-                continue
-            for algorithm_name in algorithm_names:
-                if self._is_memory_file(csv_file, algorithm_name=algorithm_name):
-                    csv_files_out.append(csv_file)
-        csv_files_out = list(set(csv_files_out))
-        print(
-            'combining %d memory_replay for %d launchers from %s'
-            % (len(csv_files_out), len(backtest_launchers), base_path_search)
-        )
-        # assert len(csv_files_out) == len(backtest_launchers)
-        output_array = None
-        for csv_file_out in csv_files_out:
-            try:
-                my_data = genfromtxt(csv_file_out, delimiter=',')
-                print("combining %d rows from %s" % (len(my_data), csv_file_out))
-                if len(my_data) == 0 or len(my_data[0][:]) == 0:
-                    print('has no valid data ,ignore %s' % csv_file_out)
-                    continue
-
-            except Exception as e:
-                print('error loading memory %s-> skip it  %s' % (csv_file_out, e.args))
-                continue
-            my_data = my_data[:, :]  # remove last column of nan
-            if output_array is None:
-                output_array = my_data
-            else:
-                output_array = np.append(output_array.T, my_data.T, axis=1).T
-        if output_array is None:
-            print('cant combine %d files or no data t combine at %s!' % (len(csv_files_out), base_path_search))
-            return
-        df = pd.DataFrame(output_array)
-
-        number_state_columns = self.get_number_of_state_columns(self.parameters)
-        number_of_actions = self.get_number_of_action_columns(parameters=self.parameters)
-
-        df_state_columns = list(df.columns)[:number_state_columns]
-        df_next_state_columns = list(df.columns)[-number_state_columns:]
-        df_reward_columns = list(df.columns)[number_state_columns:-number_state_columns]
-        # check everyting is fine!
-        assert len(df_reward_columns) == number_of_actions
-        assert len(df_state_columns) == number_state_columns
-        assert len(df_next_state_columns) == number_state_columns
-
-        # change rewards==0 to nan
-        df[df_reward_columns] = df[df_reward_columns].replace(0, np.nan)
-
-        # group states discarting nan
-        df = df.groupby(df_state_columns, dropna=True).max()  # combine in the same state rows!
-        df.fillna(0, inplace=True)
-
-        max_batch_size = self.parameters['maxBatchSize']
-
-        # add the q matrix for normal algo name
-        if len(csv_files_out) > 0:
-            first_algorithm = '%s' % (
-                self.algorithm_info
-            )
-            base_output_path = os.sep.join(csv_files_out[0].split(os.sep)[:-1])
-            csv_files_out.append(base_output_path + os.sep + 'memoryReplay_%s.csv' % first_algorithm)
-        print("saving %d rows in %d files\n\t-%s" % (len(output_array), len(csv_files_out),('\n\t-'.join(csv_files_out))))
-
-        # Override it randomize
-        for csv_file_out in csv_files_out:
-            if len(df) > max_batch_size:
-                df = df.sample(max_batch_size)
-            output_array = df.reset_index().values
-
-            savetxt(csv_file_out, output_array, delimiter=',', fmt='%.18e')
-
-        return csv_files_out
     def set_parameters(self, parameters: dict):
         super().set_parameters(parameters)
-        if 'stateColumnsFilter' in parameters.keys() and parameters['stateColumnsFilter'] is not None and len(parameters['stateColumnsFilter'])>0:
-            self.is_filtered_states=True
+        if 'stateColumnsFilter' in parameters.keys() and parameters['stateColumnsFilter'] is not None and len(
+                parameters['stateColumnsFilter']) > 0:
+            self.is_filtered_states = True
 
+    def get_memory_replay_filename(self, algorithm_number: int = None):
+        # memoryReplay_DQNRSISideQuoting_eurusd_darwinex_test.csv
+        return rf"memoryReplay_{self.get_test_name(name=self.NAME, algorithm_number=algorithm_number)}.csv"
 
 
 if __name__ == '__main__':
