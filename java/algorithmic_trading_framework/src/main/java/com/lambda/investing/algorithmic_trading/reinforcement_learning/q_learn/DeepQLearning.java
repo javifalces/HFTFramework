@@ -586,21 +586,6 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 		}
 	}
 
-	//	protected Double getQValue(double[] state, int action) {
-	//		if (asQLearn) {
-	//			//get direclty from memory replay
-	//			double[] actions = getRewards(state);
-	//			if (actions != null) {
-	//				return actions[action];
-	//			}
-	//			return DEFAULT_PREDICTION_ACTION_SCORE;
-	//		}
-	//		double[] targetQValue = getPredictOutput(state);//from predict
-	//		if (targetQValue != null) {
-	//			return targetQValue[action];
-	//		}
-	//		return null;
-	//	}
 
 	public void updateState(Date currentTime, double[] previousStateRoundedArr, int action, double reward,
 			AbstractState nextState) {
@@ -829,12 +814,22 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 		learnLogic(currentTime, state, nextState, action, reward);
 	}
 
+	/**
+	 * Get array of states and action rewards complete
+	 *
+	 * @return
+	 */
 	protected double[][] getArrayValid() {
 		double[][] validArr = ArrayUtils
 				.subarray(memoryReplay, 0, getNextIndexMemoryReplay());//we are going to clean it
 		return TrainNNUtils.getArrayValid(validArr, getStateColumns(), action.getNumberActions(), false);
 	}
 
+	/**
+	 * Get train states of valid saved
+	 *
+	 * @return
+	 */
 	public double[][] getInputTrain() {
 		double[][] validArr = getArrayValid();
 		logger.info("training input array of {} rows and {} columns", validArr.length, getStateColumns());
@@ -845,6 +840,14 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 		return getColumnsArray(allMemory, 0, getStateColumns());
 	}
 
+	/**
+	 * We get the value to train
+	 *
+	 * @param states
+	 * @param nextStates
+	 * @param rewardArr
+	 * @return
+	 */
 	protected double[][] getTargetTrainValues(double[][] states, double[][] nextStates, double[][] rewardArr) {
 		assert states[0].length == getStateColumns();
 		assert nextStates[0].length == getStateColumns();
@@ -868,15 +871,15 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 				qTarget = reward;
 			}
 
-			int actionChosen = -1;
+			List<Integer> actionChosen = new ArrayList<>();
 			for (int column = 0; column < qTarget.length; column++) {
 				if (Double.isFinite(reward[column]) && reward[column] != DEFAULT_PREDICTION_ACTION_SCORE) {
 					qTarget[column] = reward[column];
-					actionChosen = column;
+					actionChosen.add(column);
 				}
 			}
-			if (actionChosen < 0) {
-				logger.warn("actionChosen cant be found to train on new QValue -> not correction row");
+			if (actionChosen.size() == 0) {
+				logger.warn("actionChosen can't be found to train on new QValue -> not correction row");
 			}
 
 			double discount = discountFactor;
@@ -887,7 +890,7 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 			}
 
 			for (int column = 0; column < qTarget.length; column++) {
-				if (column == actionChosen) {
+				if (actionChosen.contains(column)) {
 					target[row][column] = reward[column] + discount * bestNextReward;
 				} else {
 					target[row][column] = qTarget[column];
