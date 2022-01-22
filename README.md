@@ -6,12 +6,19 @@ Data for backtesting should be in parquets like in data folder and has to be con
 Framework and algorithms are all in the java code but backtest can be called from python and different tools and utilities from python can be used on the backtest
 results , like parameter tuning or plot the pnl and parameters.
 
-*This code is part of a bigger private repository with more algos and more connectors. If you see something wrong or is not compiling , please contact me by email*
-
 Market connectors can have a persistance layer to save market data in parquets that can be used in backtesting.
 Open to suggestions/changes/modifications
 
-Python
+
+*This code is part of a bigger private repository with more algos and more connectors. If you see something wrong or is not compiling , please contact me by email*
+
+### [Alpha AS]
+IS my research where and Avellaneda Stoikov market making implementation is going to be manage by RL.
+RL is going to configure the different Avellaneda stoikov parameters dinamically based on market state.
+![Alpha AS](fig/AlphaAvellaneda functional.JPG?raw=true "Alpha AS")
+
+
+
 
 ## [JAVA]
 Where the algorithm logics , backtest and execution happens
@@ -60,7 +67,4 @@ Grateful for the libraries directly used
 * ...etc
 
 
-### [Alpha AS]
-IS my research where and Avellaneda Stoikov market making implementation is going to be manage by RL.
-RL is going to configure the different Avellaneda stoikov parameters dinamically based on market state.
-![Alpha AS](fig/AlphaAvellaneda functional?raw=true "Alpha AS")
+
