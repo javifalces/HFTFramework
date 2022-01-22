@@ -23,9 +23,10 @@ import pandas as pd
 
 from backtest.iterations_period_time import IterationsPeriodTime
 from backtest.parameter_tuning.ga_configuration import GAConfiguration
+from backtest.pnl_utils import get_score
 from backtest.score_enum import ScoreEnum
 from backtest.train_launcher import clean_gpu_memory
-from configuration import LAMBDA_OUTPUT_PATH
+from configuration import LAMBDA_OUTPUT_PATH, BACKTEST_OUTPUT_PATH
 
 DEFAULT_PARAMETERS = {
     # DQN parameters
@@ -63,17 +64,16 @@ DEFAULT_PARAMETERS = {
 
     "discountFactor": 0.75,  # next state prediction reward discount
     "learningRate": 0.85,  # 0.25 in phd? new values reward multiplier
-    "momentumNesterov": 0.5,  # # speed to change learning rate
-    "learningRateNN": 0.01,  # # between 0.01 to 0.1
-
+    "momentumNesterov": 0.0,  # # speed to change learning rate
+    "learningRateNN": 0.0001,  # # between 0.01 to 0.1
 
     # Avellaneda default
     "risk_aversion": (0.6),
     "position_multiplier": (335),
-    "calculateTt":1,#if 1 reserve price effect will be less affected by position with the session time
+    "calculateTt": 1,  # if 1 reserve price effect will be less affected by position with the session time
     "window_tick": (25),
     "minutes_change_k": (1),
-    "quantity": (0.0001), #1/quantity
+    "quantity": (0.0001),  # 1/quantity
     "k_default": (-1),
     "spread_multiplier": (5.0),
     "first_hour": (7),
@@ -379,7 +379,7 @@ class AvellanedaDQN(DQNAlgorithm):
             start_date: datetime.datetime,
             end_date: datetime,
             instrument_pk: str,
-            explore_prob: float = 0.2,
+            explore_prob: float = None,
             trainingPredictIterationPeriod: int = None,  # -1 offline train at the end
             trainingTargetIterationPeriod: int = None,  # -1 offline train at the end
             algorithm_number: int = 0,
@@ -388,7 +388,12 @@ class AvellanedaDQN(DQNAlgorithm):
         backtest_configuration = BacktestConfiguration(
             start_date=start_date, end_date=end_date, instrument_pk=instrument_pk
         )
-        parameters = self.get_parameters(explore_prob=explore_prob)
+
+        if explore_prob is not None:
+            parameters = self.get_parameters(explore_prob=explore_prob)
+        else:
+            parameters = self.get_parameters(explore_prob=self.parameters['epsilon'])
+
         if trainingPredictIterationPeriod is not None:
             parameters['trainingPredictIterationPeriod'] = trainingPredictIterationPeriod
 
@@ -511,28 +516,26 @@ class AvellanedaDQN(DQNAlgorithm):
 if __name__ == '__main__':
     avellaneda_dqn = AvellanedaDQN(algorithm_info='test_main_dqn')
 
-
     parameters_base_pt = DEFAULT_PARAMETERS
-    parameters_base_pt['epoch']=500
+    parameters_base_pt['epoch'] = 30
     parameters_base_pt['maxBatchSize'] = 5000
+    parameters_base_pt['batchSize'] = 128
     parameters_base_pt['stateColumnsFilter'] = []
     parameters_base_pt['isRNN'] = False
 
-
     avellaneda_dqn.set_parameters(parameters=parameters_base_pt)
+
     # print('Starting training')
     # output_train = avellaneda_dqn.train(
     #     instrument_pk='btcusdt_binance',
     #     start_date=datetime.datetime(year=2020, day=8, month=12, hour=10),
     #     end_date=datetime.datetime(year=2020, day=8, month=12, hour=14),
     #     iterations=3,
-    #     algos_per_iteration=2,
-    #     simultaneous_algos=2,
+    #     # algos_per_iteration=1,
+    #     # simultaneous_algos=1,
     # )
-    #
+
     # name_output = avellaneda_dqn.NAME + '_' + avellaneda_dqn.algorithm_info + '_0'
-
-
 
     # backtest_result_train = output_train[0][name_output]
     # # memory_replay_file = r'E:\Usuario\Coding\Python\market_making_fw\python_lambda\output\memoryReplay_AvellanedaDQN_test_main_dqn_0.csv'
@@ -543,25 +546,51 @@ if __name__ == '__main__':
     # backtest_result_train = output_train[-1][name_output]
     # avellaneda_dqn.plot_trade_results(raw_trade_pnl_df=backtest_result_train,title='train final')
 
-
-
     print('Starting testing')
-    iteration=10
-    while iteration>0:
+
+    results = []
+    scores = []
+    avellaneda_dqn.clean_model(output_path=BACKTEST_OUTPUT_PATH)
+    iterations = 0
+    explore_prob = 1.0
+    while (True):
+
+        parameters = avellaneda_dqn.get_parameters(explore_prob=explore_prob)
+        avellaneda_dqn.set_parameters(parameters)
+        if iterations == 0:
+            clean_experience = True
+        else:
+            clean_experience = False
+        print(rf"starting training with explore_prob = {avellaneda_dqn.parameters['epsilon']}")
         output_test = avellaneda_dqn.test(
             instrument_pk='btcusdt_binance',
             start_date=datetime.datetime(year=2020, day=9, month=12, hour=7),
-            end_date=datetime.datetime(year=2020, day=9, month=12, hour=19),
+            end_date=datetime.datetime(year=2020, day=9, month=12, hour=9),
             trainingPredictIterationPeriod=IterationsPeriodTime.END_OF_SESSION,
-            trainingTargetIterationPeriod=IterationsPeriodTime.END_OF_SESSION
+            trainingTargetIterationPeriod=IterationsPeriodTime.END_OF_SESSION,
+            clean_experience=clean_experience
         )
+        # name_output = avellaneda_dqn.NAME + '_' + avellaneda_dqn.algorithm_info + '_0'
+        name_output = avellaneda_dqn.get_test_name(name=avellaneda_dqn.NAME, algorithm_number=0)
+        backtest_df = output_test[name_output]
 
+        score = get_score(backtest_df=backtest_df, score_enum=ScoreEnum.realized_pnl,
+                          equity_column_score=ScoreEnum.realized_pnl)
+
+        results.append(backtest_df)
+        scores.append(score)
 
         import matplotlib.pyplot as plt
-        name_output = avellaneda_dqn.NAME + '_' + avellaneda_dqn.algorithm_info + '_0'
 
-        avellaneda_dqn.plot_trade_results(raw_trade_pnl_df=output_test[name_output],title='test')
+        avellaneda_dqn.plot_trade_results(raw_trade_pnl_df=output_test[name_output], title='test %d' % iterations)
         plt.show()
+
         avellaneda_dqn.plot_params(raw_trade_pnl_df=output_test[name_output])
         plt.show()
-        iteration-=1
+
+        pd.Series(scores).plot()
+        plt.title(f'scores evolution {explore_prob} {iterations} ')
+        plt.show()
+        iterations += 1
+        explore_prob -= 0.05
+        explore_prob = max(explore_prob, 0.05)

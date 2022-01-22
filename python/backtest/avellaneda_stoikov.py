@@ -49,13 +49,13 @@ class AvellanedaStoikov(Algorithm):
 
 
     def train(
-        self,
-        start_date: datetime.datetime,
-        end_date: datetime,
-        instrument_pk: str,
-        iterations: int,
-        algos_per_iteration: int,
-        simultaneous_algos: int = 1,
+            self,
+            start_date: datetime.datetime,
+            end_date: datetime,
+            instrument_pk: str,
+            iterations: int,
+            algos_per_iteration: int,
+            simultaneous_algos: int = 1,
     ) -> list:
         # makes no sense
 
@@ -102,18 +102,18 @@ class AvellanedaStoikov(Algorithm):
         return output_list
 
     def test(
-        self,
-        start_date: datetime.datetime,
-        end_date: datetime,
-        instrument_pk: str,
-        algorithm_number: int = 0,
-        clean_experience: bool = False,
+            self,
+            start_date: datetime.datetime,
+            end_date: datetime,
+            instrument_pk: str,
+            algorithm_number: int = 0,
+            clean_experience: bool = False,
     ) -> dict:
         backtest_configuration = BacktestConfiguration(
             start_date=start_date, end_date=end_date, instrument_pk=instrument_pk
         )
         parameters = self.get_parameters()
-        algorithm_name = self.get_test_name(NAME=self.NAME, algorithm_number=algorithm_number)
+        algorithm_name = self.get_test_name(name=self.NAME, algorithm_number=algorithm_number)
 
         algorithm_configurationQ = AlgorithmConfiguration(
             algorithm_name=algorithm_name, parameters=parameters
@@ -141,16 +141,16 @@ class AvellanedaStoikov(Algorithm):
         return output_dict
 
     def parameter_tuning(
-        self,
-        start_date: datetime.datetime,
-        end_date: datetime,
-        instrument_pk: str,
-        parameters_min: dict,
-        parameters_max: dict,
-        max_simultaneous: int,
-        generations: int,
-        ga_configuration: Type[GAConfiguration],
-        parameters_base: dict = DEFAULT_PARAMETERS,
+            self,
+            start_date: datetime.datetime,
+            end_date: datetime,
+            instrument_pk: str,
+            parameters_min: dict,
+            parameters_max: dict,
+            max_simultaneous: int,
+            generations: int,
+            ga_configuration: Type[GAConfiguration],
+            parameters_base: dict = DEFAULT_PARAMETERS,
     ) -> (dict, pd.DataFrame):
 
         return super().parameter_tuning(

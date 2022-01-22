@@ -1,0 +1,1 @@
+del LOG\*.log /a /s /q /f

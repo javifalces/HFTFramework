@@ -39,24 +39,32 @@ DEFAULT_PARAMETERS = {
     "quantity": (0.0001),
     "first_hour": (7),
     "last_hour": (19),
-    "l1":0.,
-    "l2":0.,
-    "stateColumnsFilter": []
+    "l1": 0.,
+    "l2": 0.,
+
+    "stateColumnsFilter": [],
+    "numberDecimalsState": 3,
+    "horizonTicksMarketState": 1,
+    "binaryStateOutputs": 0,
+    "periodsTAStates": [9, 13, 21],
 }
+
 
 class StateType:
     market_state = "MARKET_STATE"
     ta_state = "TA_STATE"
 
+
 DEFAULT_TA_INDICATORS_PERIODS = [3, 5, 7, 9, 11, 13, 15, 17, 21]
+DEFAULT_TA_INDICATORS_PERIODS_BINARY = [9]
 DEFAULT_MARKET_HORIZON_SAVE = 15
 '''
 TAKE CARE dont mess up the order with java!!
 '''
 
 
-def ga_ta_state_columns(periods=DEFAULT_TA_INDICATORS_PERIODS,
-                        market_horizon_save: int = DEFAULT_MARKET_HORIZON_SAVE) -> list:
+def ga_ta_state_columns(periods: list = DEFAULT_TA_INDICATORS_PERIODS,
+                        market_horizon_save: int = DEFAULT_MARKET_HORIZON_SAVE, binary_outputs: bool = False) -> list:
     single_state_columns = ["hour_of_the_day_utc", "minutes_from_start", "volume_from_start"]
     ta_prefixes = [
         "microprice",
@@ -77,6 +85,20 @@ def ga_ta_state_columns(periods=DEFAULT_TA_INDICATORS_PERIODS,
     market_ta_prefixes = [
         "bid_price_", "ask_price_", "bid_qty_", "ask_qty_", "spread_", "imbalance_", "microprice_"
     ]
+
+    if binary_outputs:
+        # single_state_columns = []
+        ta_prefixes = [
+            "microprice",
+            "vpin",
+            "rsi",
+            "sma",
+            "ema",
+            "max",
+            "min",
+        ]
+        single_state_columns = ["hour_of_the_day_utc"]
+
     states = []
     # candles
     ta_periods = periods
@@ -86,10 +108,11 @@ def ga_ta_state_columns(periods=DEFAULT_TA_INDICATORS_PERIODS,
             states.append(column_name)
 
     # market
-    for market_prefix in market_ta_prefixes:
-        for market_horizon in range(market_horizon_save):
-            column_name = f"{market_prefix}_{market_horizon}"
-            states.append(column_name)
+    if market_horizon_save > 0:
+        for market_prefix in market_ta_prefixes:
+            for market_horizon in range(market_horizon_save):
+                column_name = f"{market_prefix}_{market_horizon}"
+                states.append(column_name)
 
     return states + single_state_columns
 
@@ -100,6 +123,9 @@ class DQNAlgorithm(Algorithm):
         standart = "standard"
         custom_actor_critic = "custom_actor_critic"
 
+    STATE_LIST_PARAMETERS = ['stateColumnsFilter', 'periodsTAStates']
+    DEFAULT_PREDICTION_ACTION_SCORE = 0.0
+    DUMP_DF_WORKERS = 25
     REMOVE_PRIVATE_STATES = False  # same as in java to get same states!
     DISABLE_LAST_CLOSE = False
     PRIVATE_COLUMNS = 2
@@ -120,7 +146,7 @@ class DQNAlgorithm(Algorithm):
 
     def get_parameters(self, explore_prob: float) -> dict:
         parameters = copy.copy(self.parameters)
-        explore_prob = max(explore_prob, 0.05)
+        explore_prob = max(explore_prob, 0.0)
         parameters['epsilon'] = explore_prob
         return parameters
 
@@ -132,10 +158,27 @@ class DQNAlgorithm(Algorithm):
             return self._get_market_state_columns()
 
         if self.state_type == StateType.ta_state:
-            return self._get_ta_state_columns()
+            is_binary = False
+            if "binaryStateOutputs" in self.parameters.keys():
+                is_binary = self.parameters["binaryStateOutputs"] > 0
 
-    def _get_ta_state_columns(self):
-        return ga_ta_state_columns()
+            horizonTicksMarketState = DEFAULT_MARKET_HORIZON_SAVE
+            if "horizonTicksMarketState" in self.parameters.keys():
+                horizonTicksMarketState = self.parameters["horizonTicksMarketState"]
+
+            periods = DEFAULT_TA_INDICATORS_PERIODS
+            if is_binary:
+                periods = DEFAULT_TA_INDICATORS_PERIODS_BINARY
+            if "periodsTAStates" in self.parameters.keys():
+                periods = self.parameters["periodsTAStates"]
+            return self._get_ta_state_columns(binary_outputs=is_binary, market_horizon_save=horizonTicksMarketState,
+                                              periods=periods)
+
+    def _get_ta_state_columns(self, binary_outputs: bool = False,
+                              market_horizon_save: int = DEFAULT_MARKET_HORIZON_SAVE,
+                              periods: list = DEFAULT_TA_INDICATORS_PERIODS):
+        return ga_ta_state_columns(binary_outputs=binary_outputs, market_horizon_save=market_horizon_save,
+                                   periods=periods)
 
     def _get_market_state_columns(self):
         MARKET_MIDPRICE_RELATIVE = True
@@ -196,7 +239,7 @@ class DQNAlgorithm(Algorithm):
         columns_states = private_states + market__depth_states + market__trade_states + candle_states
         return columns_states
 
-    def _get_action_columns(self):
+    def _get_action_columns(self) -> list:
         raise NotImplementedError
 
     def get_memory_replay_df(self, memory_replay_file: str = None, state_columns: list = None) -> pd.DataFrame:
@@ -276,65 +319,41 @@ class DQNAlgorithm(Algorithm):
     def get_number_of_action_columns(self, parameters: dict) -> int:
         raise NotImplementedError
 
-    def merge_q_matrix(self, backtest_launchers: list, algos_per_iteration: int = None,
-                       include_original: bool = False) -> list:
-        import numpy as np
-        # base_path_search = backtest_launchers[0].output_path
-        base_path_search = LAMBDA_OUTPUT_PATH
-        csv_files = glob.glob(LAMBDA_OUTPUT_PATH + os.sep + '*.csv')
+    def get_rewards(self, memory_replay_file: str = None, state_columns: list = None) -> pd.DataFrame:
+        memory_df = self.get_memory_replay_df(memory_replay_file=memory_replay_file, state_columns=state_columns)
+        number_state_columns = self.get_number_of_state_columns(self.parameters)
+        number_of_actions = self.get_number_of_action_columns(parameters=self.parameters)
+        # df_state_columns = list(memory_df.columns)[:number_state_columns]
+        # df_next_state_columns = list(memory_df.columns)[-number_state_columns:]
+        df_reward_columns = list(memory_df.columns)[number_state_columns:-number_state_columns]
+        rewards = memory_df[df_reward_columns]
+        assert number_of_actions == rewards.shape[1]
+        return rewards
 
-        algorithm_names = []
+    def get_states(self, memory_replay_file: str = None, state_columns: list = None) -> pd.DataFrame:
+        memory_df = self.get_memory_replay_df(memory_replay_file=memory_replay_file, state_columns=state_columns)
+        number_state_columns = self.get_number_of_state_columns(self.parameters)
+        # number_of_actions = self.get_number_of_action_columns(parameters=self.parameters)
+        df_state_columns = list(memory_df.columns)[:number_state_columns]
+        # df_next_state_columns = list(memory_df.columns)[-number_state_columns:]
+        df_reward_columns = list(memory_df.columns)[number_state_columns:-number_state_columns]
+        states = memory_df[df_state_columns]
+        return states
 
-        for backtest_launcher in backtest_launchers:
-            algorithm_names.append(backtest_launcher.id)
-
-        csv_files_out = []
-        for csv_file in csv_files:
-            if 'permutation' in csv_file:
-                continue
-
-            for algorithm_name in algorithm_names:
-                if self._is_memory_file(csv_file, algorithm_name=algorithm_name):
-                    if algos_per_iteration is not None:
-                        number_algo = self.get_iteration_number_filename(csv_file)
-                        if number_algo > algos_per_iteration:
-                            continue
-
-                    csv_files_out.append(csv_file)
-        if include_original:
-            csv_files_out.append(LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename())
-
-        csv_files_out = list(set(csv_files_out))
-        print(
-            'combining %d memory_replay for %d launchers from %s'
-            % (len(csv_files_out), len(backtest_launchers), base_path_search)
-        )
-        # assert len(csv_files_out) == len(backtest_launchers)
+    @staticmethod
+    def merge_array_matrix(array_list: list, number_state_columns: int, number_of_actions: int) -> pd.DataFrame:
         output_array = None
-        for csv_file_out in csv_files_out:
-            try:
-                my_data = genfromtxt(csv_file_out, delimiter=',')
-                print("combining %d rows from %s" % (len(my_data), csv_file_out))
-                if len(my_data) == 0 or len(my_data[0][:]) == 0:
-                    print('has no valid data ,ignore %s' % csv_file_out)
-                    continue
-
-            except Exception as e:
-                print('error loading memory %s-> skip it  %s' % (csv_file_out, e.args))
-                continue
+        for my_data in array_list:
             my_data = my_data[:, :]  # remove last column of nan
             if output_array is None:
                 output_array = my_data
             else:
                 output_array = np.append(output_array.T, my_data.T, axis=1).T
+
         if output_array is None:
-            print('cant combine %d files or no data t combine at %s!' % (len(csv_files_out), base_path_search))
-            return
+            return None
+
         df = pd.DataFrame(output_array)
-
-        number_state_columns = self.get_number_of_state_columns(self.parameters)
-        number_of_actions = self.get_number_of_action_columns(parameters=self.parameters)
-
         df_state_columns = list(df.columns)[:number_state_columns]
         df_next_state_columns = list(df.columns)[-number_state_columns:]
         df_reward_columns = list(df.columns)[number_state_columns:-number_state_columns]
@@ -349,28 +368,119 @@ class DQNAlgorithm(Algorithm):
             print(e)
             raise e
         # change rewards==0 to nan
-        df[df_reward_columns] = df[df_reward_columns].replace(0, np.nan)
+        df[df_reward_columns] = df[df_reward_columns].replace(DQNAlgorithm.DEFAULT_PREDICTION_ACTION_SCORE, np.nan)
+        df = df.groupby(df_state_columns, dropna=False).max()  # combine in the same state rows! where nan are as 0.0
+        df.fillna(DQNAlgorithm.DEFAULT_PREDICTION_ACTION_SCORE, inplace=True)
 
-        # group states discarting nan
-        df = df.groupby(df_state_columns, dropna=True).max()  # combine in the same state rows!
-        df.fillna(0, inplace=True)
+        return df
+
+    def merge_q_matrix(self, backtest_launchers: list, algos_per_iteration: int = None,
+                       include_original: bool = False) -> list:
+        import numpy as np
+        # base_path_search = backtest_launchers[0].output_path
+        base_path_search = LAMBDA_OUTPUT_PATH
+        csv_files = glob.glob(LAMBDA_OUTPUT_PATH + os.sep + '*.csv')
+
+        algorithm_names = []
+
+        for backtest_launcher in backtest_launchers:
+            algorithm_names.append(backtest_launcher.id)
+
+        csv_files_out = []
+        if algos_per_iteration > 1:
+            for csv_file in csv_files:
+                if 'permutation' in csv_file:
+                    continue
+                for algorithm_name in algorithm_names:
+                    if self._is_memory_file(csv_file, algorithm_name=algorithm_name):
+                        if algos_per_iteration is not None:
+                            number_algo = self.get_iteration_number_filename(csv_file)
+                            if number_algo > algos_per_iteration:
+                                continue
+                        csv_files_out.append(csv_file)
+            if include_original:
+                csv_files_out.append(LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename())
+        else:
+            csv_files_out.append(LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename())
+            print(rf"only one algo=> no merge using  {self.get_memory_replay_filename()}")
+            return csv_files_out
+
+        csv_files_out = list(set(csv_files_out))
+        print(
+            'combining %d memory_replay for %d launchers from %s'
+            % (len(csv_files_out), len(backtest_launchers), base_path_search)
+        )
+        # assert len(csv_files_out) == len(backtest_launchers)
+        array_list = []
+        for csv_file_out in csv_files_out:
+            try:
+                my_data = genfromtxt(csv_file_out, delimiter=',')
+                print("combining %d rows from %s" % (len(my_data), csv_file_out))
+                if len(my_data) == 0 or len(my_data[0][:]) == 0:
+                    print('has no valid data ,ignore %s' % csv_file_out)
+                    continue
+                array_list.append(my_data)
+
+            except Exception as e:
+                print('error loading memory %s-> skip it  %s' % (csv_file_out, e.args))
+                continue
+        number_state_columns = self.get_number_of_state_columns(self.parameters)
+        number_of_actions = self.get_number_of_action_columns(parameters=self.parameters)
+        df = DQNAlgorithm.merge_array_matrix(array_list, number_state_columns, number_of_actions)
+        if df is None:
+            print('cant combine %d files or no data t combine at %s!' % (len(csv_files_out), base_path_search))
+            return csv_files_out
 
         max_batch_size = self.parameters['maxBatchSize']
 
         # add the q matrix for normal algo name
         csv_files_out.append(LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename())
-        print("saving %d rows in %d files" % (len(df), len(csv_files_out)))
 
         # Override it randomize
-        for csv_file_out in csv_files_out:
-            if len(df) > max_batch_size:
-                df = df.sample(max_batch_size)
-            # shuffle to save merge -> lost of time sequence
-            output_array = df.sample(frac=1).reset_index().values
+        print("saving %d rows in %d files : %s" % (len(df), len(csv_files_out), ','.join(csv_files_out)))
+        self.dump_df_to_files(df, csv_files_out, max_batch_size)
 
-            savetxt(csv_file_out, output_array, delimiter=',', fmt='%.18e')
-
+        # print("saving %d rows in %d files in %d workers" % (len(df), len(csv_files_out), DQNAlgorithm.DUMP_DF_WORKERS))
+        # self.dump_df_to_files_multi(df, csv_files_out, max_batch_size, num_threads=DQNAlgorithm.DUMP_DF_WORKERS)
         return csv_files_out
+
+    def dump_df_to_files(self, df, csv_files_out, max_batch_size):
+        for csv_file_out in csv_files_out:
+            DQNAlgorithm._execute_dump_df(df, csv_file_out, max_batch_size)
+
+    @staticmethod
+    def _execute_dump_df(df, csv_file_out, max_batch_size):
+        if len(df) > max_batch_size:
+            print(
+                rf"trying to save df with {len(df)} rows into {max_batch_size} max_batch_size memory -> save random sample")
+            df = df.sample(max_batch_size)
+            # shuffle to save merge -> lost of time sequence
+        output_array = df.sample(frac=1).reset_index().values
+        savetxt(csv_file_out, output_array, delimiter=',', fmt=Algorithm.FORMAT_SAVE_NUMBERS)
+
+    def dump_df_to_files_multi(self, df, csv_files_out, max_batch_size, num_threads):
+        from factor_investing.util.paralellization_util import process_jobs_joblib
+        jobs = []
+
+        class WritingClass:
+            def __init__(self, df, csv_file_out, max_batch_size):
+                self.df = df
+                self.csv_file_out = csv_file_out
+                self.max_batch_size = max_batch_size
+
+            def run(self):
+                DQNAlgorithm._execute_dump_df(self.df, self.csv_file_out, self.max_batch_size)
+
+            def __reduce__(self):
+                return (self.__class__, (self.df, self.csv_file_out, self.max_batch_size))
+
+        for csv_file_out in csv_files_out:
+            writing_class_obj_item = WritingClass(df, csv_file_out, max_batch_size)
+            job = {"func": writing_class_obj_item.run}
+            jobs.append(job)
+
+        num_threads = min(num_threads, len(jobs))
+        process_jobs_joblib(jobs=jobs, num_threads=num_threads)
 
     def get_memory_replay_filename(self, algorithm_number: int = None):
         # memoryReplay_DQNRSISideQuoting_eurusd_darwinex_test.csv
@@ -384,11 +494,35 @@ class DQNAlgorithm(Algorithm):
         # target_model_DQNRSISideQuoting_eurusd_darwinex.model
         return rf"target_model_{self.get_test_name(name=self.NAME, algorithm_number=algorithm_number)}.model"
 
-    def get_memory_size(self, memory_replay_file: str = None, algorithm_number: int = None) -> int:
-        memory_df = self.get_memory_replay_df(memory_replay_file=memory_replay_file)
+    def get_memory_size(self, memory_replay_file: str = None, algorithm_number: int = None,
+                        with_rewards: bool = False) -> int:
+        try:
+            memory_df = self.get_memory_replay_df(memory_replay_file=memory_replay_file)
+        except Exception as e:
+            print(rf"error reading memory {e.args} -> set as None")
+            memory_df = None
+
         if memory_df is None:
             return 0
-        return len(memory_df)
+
+        if not with_rewards:
+            output = len(memory_df)
+        else:
+            number_of_actions = self.get_number_of_action_columns(parameters=self.parameters)
+            rewards = self.get_rewards(memory_replay_file=memory_replay_file)
+            rewards.replace(self.DEFAULT_PREDICTION_ACTION_SCORE, np.nan, inplace=True)
+            sum_rewards = rewards.sum(axis=1, min_count=number_of_actions / 2)
+            sum_rewards_dropna = sum_rewards.dropna()
+            output = len(sum_rewards_dropna)
+        return output
+
+    def _is_memory_size_enough(self):
+        memory_size_with_rewards = self.get_memory_size(with_rewards=True)
+        memory_size = self.get_memory_size(with_rewards=False)
+        if memory_size_with_rewards < self.get_max_batch_size() / 2 or memory_size < self.get_max_batch_size():
+            return False
+        else:
+            return True
 
     def fill_memory(
             self,
@@ -398,7 +532,7 @@ class DQNAlgorithm(Algorithm):
             algos_per_iteration: int,
             simultaneous_algos: int = 1,
             clean_initial_experience: bool = False,
-            max_iterations=50,
+            max_iterations: int = -1,
     ):
 
         backtest_configuration = BacktestConfiguration(
@@ -408,17 +542,25 @@ class DQNAlgorithm(Algorithm):
         max_batch_size = self.get_max_batch_size()
         clean_gpu_memory()
         iteration = 0
-        if not clean_initial_experience and self.get_memory_size() >= self.get_max_batch_size():
-            print(rf"already filled memory  {self.get_memory_size()}/{self.get_max_batch_size()} rows")
+        if not clean_initial_experience and self._is_memory_size_enough():
+            print(
+                rf"already filled memory  {self.get_memory_size(with_rewards=True)}[{self.get_memory_size()}]/{self.get_max_batch_size()} rows")
             return
-
+        if max_iterations > 0:
+            print(f"start filling memory max_iterations:{max_iterations}")
         while (True):
-            if iteration > max_iterations:
+            if max_iterations > 0 and iteration > max_iterations:
                 print(f"iteration {iteration}>{max_iterations} max_iterations")
                 return
             print("------------------------")
-            print("fill_memory iteration %d memorySize %d/%d" % (
-                iteration, self.get_memory_size(), self.get_max_batch_size()))
+            if max_iterations > 0:
+                print("fill_memory iteration %d/%d memorySize %d[%d]/%d" % (
+                    iteration, max_iterations, self.get_memory_size(with_rewards=True), self.get_memory_size(),
+                    self.get_max_batch_size()))
+            else:
+                print("fill_memory iteration %d memorySize %d[%d]/%d" % (
+                    iteration, self.get_memory_size(with_rewards=True), self.get_memory_size(),
+                    self.get_max_batch_size()))
             print("------------------------")
             backtest_launchers = []
             is_finished = False
@@ -437,6 +579,8 @@ class DQNAlgorithm(Algorithm):
                     )
 
                 if simultaneous_algos > 1:
+                    # print(rf"disable training on filling memory because simultaneous_algos {simultaneous_algos} >1")
+
                     parameters['trainingPredictIterationPeriod'] = IterationsPeriodTime.OFF
                     parameters['trainingTargetIterationPeriod'] = IterationsPeriodTime.OFF
 
@@ -487,21 +631,24 @@ class DQNAlgorithm(Algorithm):
                     memory_replay_out = LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename()
                     if memory_files[0] != memory_replay_out:
                         print(
-                            'copying  %s memory_replay to  %s'
-                            % (memory_files[0], memory_replay_out)
+                            'copying  %s  %d rows memory_replay to  %s'
+                            % (memory_files[0], self.get_memory_size(memory_replay_file=memory_files[0]),
+                               memory_replay_out)
                         )
                         shutil.copy(memory_files[0], memory_replay_out)
             # check size of experience
-            memory_size = self.get_memory_size()
-            if memory_size < self.get_max_batch_size():
+            memory_size_with_rewards = self.get_memory_size(with_rewards=True)
+            memory_size = self.get_memory_size(with_rewards=False)
+            if not self._is_memory_size_enough():
                 print(
-                    rf"memory_df small {memory_size}<max_batch_size {self.get_max_batch_size()} =>iteration again")
+                    rf"memory_df small  with rewards {memory_size_with_rewards}[{memory_size}] <max_batch_size {self.get_max_batch_size()} =>iteration again")
                 iteration += 1
             else:
                 memory_backup = LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename() + ".backup"
                 memory_replay_out = LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename()
                 shutil.copy(memory_replay_out, memory_backup)
-                print(f"fill_memory finished with {memory_size} rows -> backup memory on {memory_backup}")
+                print(
+                    f"fill_memory finished with {memory_size_with_rewards}[{memory_size}] rows -> backup memory on {memory_backup}")
                 return
 
     def train(
@@ -512,27 +659,41 @@ class DQNAlgorithm(Algorithm):
             iterations: int,
             algos_per_iteration: int,
             simultaneous_algos: int = 1,
-            score_early_stopping: ScoreEnum = ScoreEnum.falcma_ratio,  # in case of iterations<0
+            score_early_stopping: ScoreEnum = ScoreEnum.realized_pnl,  # in case of iterations<0
             patience: int = -1,
             clean_initial_experience: bool = False,
-            train_each_iteration: bool = True,
+            train_each_iteration: bool = False,
             min_iterations: int = None,
             force_explore_prob: float = None,
-            fill_memory_before: bool = True
+            plot_training: bool = True,
+            plot_training_iterations: int = 0,
+            fill_memory_max_iterations: int = None
 
     ) -> list:
+
         max_batch_size = self.parameters['maxBatchSize']
         memory_size = self.get_memory_size()
-        if fill_memory_before and (clean_initial_experience or memory_size < max_batch_size):
-            self.fill_memory(start_date=start_date, end_date=end_date, instrument_pk=instrument_pk,
-                             algos_per_iteration=algos_per_iteration,
-                             simultaneous_algos=simultaneous_algos,
-                             clean_initial_experience=clean_initial_experience
-                             )
-            print("finished fill memory=> set training to one worker only")
-            algos_per_iteration = 1
-            simultaneous_algos = 1
+        if clean_initial_experience or not self._is_memory_size_enough():
+
+            if fill_memory_max_iterations is None:
+                fill_memory_max_iterations = (len(self._get_action_columns()) * 5) / algos_per_iteration
+
+            if fill_memory_max_iterations > 0:
+                print(
+                    rf"fill_memory before training clean_initial_experience:{clean_initial_experience} {self.get_memory_size(with_rewards=True)}[{memory_size}]/{max_batch_size} ")
+
+                self.fill_memory(start_date=start_date, end_date=end_date, instrument_pk=instrument_pk,
+                                 algos_per_iteration=algos_per_iteration,
+                                 simultaneous_algos=simultaneous_algos,
+                                 clean_initial_experience=clean_initial_experience,
+                                 max_iterations=fill_memory_max_iterations
+                                 )
+                print("finished fill memory=> set training to one worker only")
             clean_initial_experience = False
+
+        # training has to be sequential!
+        algos_per_iteration = 1
+        simultaneous_algos = 1
 
         backtest_configuration = BacktestConfiguration(
             start_date=start_date, end_date=end_date, instrument_pk=instrument_pk
@@ -556,7 +717,7 @@ class DQNAlgorithm(Algorithm):
         output_list = []
         memory_files = []
         range_iterations = iterations
-        if iterations < 0 and patience >= 0:
+        if iterations <= 0 and patience >= 0:
             print('no finish until early stopping')
             range_iterations = 2000
 
@@ -568,7 +729,8 @@ class DQNAlgorithm(Algorithm):
         patience_counter = 0
         keep_same_iteration = False
         iterations_discount = 0
-
+        scores = {}
+        rewards = {}
         for iteration in range(range_iterations):
 
             clean_gpu_memory()
@@ -587,16 +749,16 @@ class DQNAlgorithm(Algorithm):
                             explore_prob = 0.1 - (iterations_discount - 10) / 100
                     else:
                         explore_prob = 1 - iterations_discount / iterations
-                    #maintain
+                    # maintain
                     if force_explore_prob is not None:
-                        explore_prob=force_explore_prob
+                        explore_prob = force_explore_prob
 
                     keep_same_iteration = False
                 if iterations <= 0 and explore_prob <= 0.01:
                     print("limit number of iterations reached on early stopping explore_prob<=0.01-> break")
                     is_finished = True
                     break
-                explore_prob = max(0.01, explore_prob)
+                explore_prob = max(0.0, explore_prob)
                 parameters = self.get_parameters(
                     explore_prob=explore_prob
                 )
@@ -606,9 +768,11 @@ class DQNAlgorithm(Algorithm):
                 algorithm_name = self.get_test_name(name=self.NAME)
                 if algos_per_iteration > 1:
                     algorithm_name = self.get_test_name(name=self.NAME, algorithm_number=algorithm_number)
+                    parameters['trainingPredictIterationPeriod'] = IterationsPeriodTime.OFF
+                    parameters['trainingTargetIterationPeriod'] = IterationsPeriodTime.OFF
 
-                parameters['trainingPredictIterationPeriod'] = IterationsPeriodTime.OFF
-                parameters['trainingTargetIterationPeriod'] = IterationsPeriodTime.OFF
+                # parameters['trainingPredictIterationPeriod'] = IterationsPeriodTime.END_OF_SESSION
+                # parameters['trainingTargetIterationPeriod'] = IterationsPeriodTime.END_OF_SESSION
 
                 print('training on algorithm %s  explore_prob:%.2f' % (algorithm_name, explore_prob))
                 algorithm_configurationQ = AlgorithmConfiguration(
@@ -670,8 +834,9 @@ class DQNAlgorithm(Algorithm):
                 memory_replay_out = LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename()
                 if memory_replay_out != memory_files[0]:
                     print(
-                        'copying  %s memory_replay to  %s'
-                        % (memory_files[0], memory_replay_out)
+                        'copying  %s %d rows memory_replay to  %s'
+                        % (memory_files[0], self.get_memory_size(memory_replay_file=memory_files[0]),
+                           memory_replay_out)
                     )
                     shutil.copy(memory_files[0], memory_replay_out)
 
@@ -691,13 +856,16 @@ class DQNAlgorithm(Algorithm):
             ### get best score of algos
             best_score = -9999.
             scores_iteration = []
+            rewards_iteration = []
             for algo_key in output_dict.keys():
                 try:
                     backtest_df = output_dict[algo_key]
                     score = get_score(backtest_df=backtest_df, score_enum=score_early_stopping,
                                       equity_column_score=ScoreEnum.realized_pnl)
+                    reward = backtest_df['reward'].mean()
                     if np.isfinite(score):
                         scores_iteration.append(score)
+                        rewards_iteration.append(reward)
                         equity_curve = backtest_df[get_score_enum_csv_column(ScoreEnum.realized_pnl)]
                         returns = equity_curve.pct_change(periods=1).replace([0.0, np.nan, np.inf, -np.inf],
                                                                              np.nan).dropna()
@@ -709,12 +877,15 @@ class DQNAlgorithm(Algorithm):
                             f"{algo_key} algo with not finite score! {score} len backtest_df={len(backtest_df)} -> skip it")
                 except Exception as e:
                     print(rf"error getting score of {algo_key} {str(e)}->skip it")
+            reward_mean = np.mean(rewards_iteration)
+            best_score = np.mean(scores_iteration)
 
-            best_score = np.median(scores_iteration)
-
-            if "useAsQLearn" in self.parameters.keys() and self.parameters["useAsQLearn"]==1:
+            if "useAsQLearn" in self.parameters.keys() and self.parameters["useAsQLearn"] == 1:
                 print("useAsQLearn detected=> not train")
-                train_each_iteration=False#dont need to train anything
+                train_each_iteration = False  # dont need to train anything
+
+            if algos_per_iteration == 1:
+                train_each_iteration = False
 
             # train nn
             if train_each_iteration and len(memory_files) > 0:
@@ -762,28 +933,40 @@ class DQNAlgorithm(Algorithm):
 
 
             else:
-                if (len(memory_files)):
+                if train_each_iteration and len(memory_files) == 0:
                     print(f"can't train if no data available or no train each period-> next")
 
             ### check patience
             print("-------------\n\n")
             print(f'best score {score_early_stopping} on iteration {iteration} is {best_score}')
-            if prev_best_score is not None:
-                if best_score <= prev_best_score:
-                    patience_counter += 1
-                    keep_same_iteration = True  # this explore_prob will not count
-                    print(
-                        f'prev_best_score {prev_best_score} >={best_score} current best scores -> patience_counter++ keep_same_iteration {patience_counter}/{patience}')
-                else:
-                    patience_counter = 0
-                    iterations_discount += 1
-                    keep_same_iteration = False
-                    print(
-                        f'best_score {best_score} >{prev_best_score} prev_best_score -> {patience_counter}/{patience}')
-                    prev_best_score = best_score
-            else:
-                prev_best_score = best_score
+
+            if (iterations > 0):
                 iterations_discount += 1
+                keep_same_iteration = False
+            else:
+                if prev_best_score is not None:
+                    if best_score <= prev_best_score:
+                        patience_counter += 1
+                        keep_same_iteration = True  # this explore_prob will not count
+                        print(
+                            f'prev_best_score {prev_best_score} >={best_score} current best scores -> patience_counter++ keep_same_iteration {patience_counter}/{patience}')
+                    else:
+                        patience_counter = 0
+                        iterations_discount += 1
+                        keep_same_iteration = False
+                        print(
+                            f'best_score {best_score} >{prev_best_score} prev_best_score -> {patience_counter}/{patience}')
+                        prev_best_score = best_score
+                else:
+                    prev_best_score = best_score
+                    iterations_discount += 1
+            rewards[iteration] = reward_mean
+            scores[iteration] = best_score
+            if plot_training_iterations is not None and plot_training_iterations > 0 and iterations_discount - 1 > 0 and (
+                    iterations_discount - 1) % plot_training_iterations == 0:
+                fig = self.plot_training_results(score_early_stopping, scores, rewards,
+                                                 title='training iteration %d' % (iteration))
+
             print("-------------\n\n")
             is_min_iterations_done = True
             if min_iterations is not None and iteration < min_iterations:
@@ -805,7 +988,52 @@ class DQNAlgorithm(Algorithm):
                                     )
         output_list.append(last_train_dict)
 
+        if plot_training:
+            fig = self.plot_training_results(score_early_stopping, scores, rewards)
         return output_list
+
+    @staticmethod
+    def plot_training_results(score_enum: ScoreEnum, scores: dict, rewards: dict, title=None, figsize=None):
+        import seaborn as sns
+        sns.set_theme()
+        import matplotlib.pyplot as plt
+        plt.close()
+        df = pd.DataFrame(scores.values(), columns=['score'])
+
+        if figsize is None:
+            figsize = (20, 12)
+        fig, axs = plt.subplots(figsize=figsize, nrows=2)
+        color = 'black'
+        color_mean = 'lightgray'
+        alpha = 0.9
+        lw = 0.5
+
+        ax = axs[0]
+        ax.plot(df['score'], color=color, lw=lw, alpha=alpha)
+        window = int(min(5, len(df['score']) / 2))
+        ax.plot(df['score'].rolling(window=window).mean(), color=color_mean, lw=lw - 0.1, alpha=alpha)
+        ax.legend(['score', 'mean_score'])
+        ax.grid(axis='y', ls='--', alpha=0.7)
+        ax.set_ylabel(score_enum)
+        ax.set_xlabel('iteration')
+
+        if title is None:
+            title = 'training'
+
+        ax.set_title(title)
+
+        df_rewards = pd.DataFrame(rewards.values(), columns=['reward'])
+        ax = axs[1]
+        ax.plot(df_rewards['reward'], color=color, lw=lw, alpha=alpha)
+        window = int(min(5, len(df_rewards['reward']) / 2))
+        ax.plot(df_rewards['reward'].rolling(window=window).mean(), color=color_mean, lw=lw - 0.1, alpha=alpha)
+        ax.legend(['reward', 'mean_reward'])
+        ax.grid(axis='y', ls='--', alpha=0.7)
+        ax.set_ylabel('reward')
+        ax.set_xlabel('iteration')
+
+        plt.show()
+        return fig
 
     def test(
             self,
