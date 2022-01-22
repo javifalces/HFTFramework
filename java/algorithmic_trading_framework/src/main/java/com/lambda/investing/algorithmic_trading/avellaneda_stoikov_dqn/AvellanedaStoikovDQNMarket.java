@@ -3,6 +3,8 @@ package com.lambda.investing.algorithmic_trading.avellaneda_stoikov_dqn;
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
 import com.lambda.investing.algorithmic_trading.IterationsPeriodTime;
 import com.lambda.investing.algorithmic_trading.avellaneda_stoikov_q_learn.AvellanedaStoikovQLearn;
+import com.lambda.investing.algorithmic_trading.reinforcement_learning.Dl4jMemoryReplayModel;
+import com.lambda.investing.algorithmic_trading.reinforcement_learning.MemoryReplayModel;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.q_learn.DeepQLearning;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.q_learn.IExplorationPolicy;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.q_learn.exploration_policy.EpsilonGreedyExploration;
@@ -95,7 +97,7 @@ public class AvellanedaStoikovDQNMarket extends AvellanedaStoikovQLearn {
 		try {
 			memoryReplay = new DeepQLearning(this.state, this.avellanedaAction, explorationPolicy,
 					predictionModel.getMaxBatchSize(), this.predictionModel, this.targetModel, isRNN, discountFactor,
-					learningRate);
+					learningRate, this.trainingPredictIterationPeriod, this.trainingTargetIterationPeriod);
 
 			if (seed != 0) {
 				memoryReplay.setSeed(seed);
@@ -205,68 +207,18 @@ public class AvellanedaStoikovDQNMarket extends AvellanedaStoikovQLearn {
 
 	}
 
-	public void updateMemoryReplay(double[] lastStateArr, int lastStatePosition, int lastAction, double rewardDelta,
-			AbstractState newState) {
+	public void updateMemoryReplay(double[] lastStateRoundedArr, int lastStatePosition, int lastAction,
+			double rewardDelta, AbstractState newState) {
 		if (memoryReplay == null) {
 			logger.error("trying to update null memoryReplay!!");
 			return;
 		}
 
-		memoryReplay.updateState(lastStateArr, lastActionQ, rewardDelta, this.state);
-	}
-
-	public void checkAndTrain() {
-		//predict
-		if (this.trainingPredictIterationPeriod > 0 && (iterations % this.trainingPredictIterationPeriod) == 0) {
-			System.out.println("training prediction model on " + iterations + " iteration");
-			logger.info("training prediction model on {} iteration", iterations);
-			trainPrediction();
-
-			if (!targetModel.isTrained()) {
-				//copy first if not exist
-				trainTarget();
-			}
-		}
-
-		if (IterationsPeriodTime.isPeriodicalPeriod(this.trainingPredictIterationPeriod)) {
-			IterationsPeriodTime periodTime = IterationsPeriodTime.valueOf(this.trainingPredictIterationPeriod);
-			if (lastDateTrainPredict != null && periodTime.hasPassed(lastDateTrainPredict, getCurrentTime())) {
-				//train it
-				System.out.println("training prediction model on " + getCurrentTime() + " time");
-				logger.info("training prediction model on {} time", getCurrentTime());
-				lastDateTrainPredict = getCurrentTime();
-				trainPrediction();
-				if (!targetModel.isTrained()) {
-					//copy first if not exist
-					trainTarget();
-				}
-
-			}
-		}
-
-		//target
-		if (trainingTargetIterationPeriod > 0 && (iterations % this.trainingTargetIterationPeriod) == 0) {
-			System.out.println("training target model on " + iterations + " iteration=> copy it");
-			logger.info("training target model on {} iterations-> copy it", iterations);
-			trainTarget();
-		}
-
-		if (IterationsPeriodTime.isPeriodicalPeriod(trainingTargetIterationPeriod)) {
-			IterationsPeriodTime periodTime = IterationsPeriodTime.valueOf(trainingTargetIterationPeriod);
-			if (lastDateTrainTarget != null && periodTime.hasPassed(lastDateTrainTarget, getCurrentTime())) {
-				//train it
-				System.out.println("training target model on " + getCurrentTime() + " time");
-				logger.info("training target model on {} time-> copy it", getCurrentTime());
-				lastDateTrainTarget = getCurrentTime();
-				trainTarget();
-			}
-		}
-
+		memoryReplay.updateState(getCurrentTime(), lastStateRoundedArr, lastActionQ, rewardDelta, this.state);
 	}
 
 	public int getNextAction(AbstractState state) {
 		iterations++;
-		checkAndTrain();
 		if (lastDateTrainPredict == null) {
 			lastDateTrainPredict = this.getCurrentTime();//initial
 			System.out.println("set initial lastDateTrainPredict to " + lastDateTrainPredict + " time");
@@ -288,11 +240,11 @@ public class AvellanedaStoikovDQNMarket extends AvellanedaStoikovQLearn {
 		assert input.length == target.length;
 		this.predictionModel.train(input, target);
 		memoryReplay.setPredictModel(this.predictionModel);
+
 	}
 
 	private void trainTarget() {
-		this.targetModel = this.predictionModel.cloneIt();
-		this.targetModel.setModelPath(getTargetModelPath());
+		this.targetModel = this.predictionModel.cloneIt(targetModel.getModelPath());
 		this.targetModel.saveModel();
 		memoryReplay.setTargetModel(this.targetModel);
 
@@ -310,6 +262,10 @@ public class AvellanedaStoikovDQNMarket extends AvellanedaStoikovQLearn {
 					trainPrediction();
 					trainTarget();
 				}
+				//force last save
+				if (memoryReplay instanceof DeepQLearning) {
+					((DeepQLearning) memoryReplay).commandStopReceived();
+				}
 
 				logger.info("saving memoryReplay of {} rows  into {}", this.memoryReplay.getMemoryReplaySize(),
 						getMemoryPath());
@@ -323,6 +279,8 @@ public class AvellanedaStoikovDQNMarket extends AvellanedaStoikovQLearn {
 			actionHistoricalArray = actionHistoricalList.toArray(new Integer[actionHistoricalList.size()]);
 
 			logger.info("historical action List\n{}", ArrayUtils.toStringArray(actionHistoricalArray));
+
+			logger.info("exploreActionsPct={}", memoryReplay.getExplorePct());
 			//			logger.info("training model...");
 			//			trainPrediction();
 			//			trainTarget();

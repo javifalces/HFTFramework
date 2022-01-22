@@ -1,12 +1,11 @@
-package com.lambda.investing.algorithmic_trading.avellaneda_stoikov_dqn;
+package com.lambda.investing.algorithmic_trading.reinforcement_learning;
 
 import com.google.common.primitives.Doubles;
 import com.lambda.investing.Configuration;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
 import org.deeplearning4j.core.storage.StatsStorage;
+import org.deeplearning4j.datasets.iterator.impl.ListDataSetIterator;
 import org.deeplearning4j.earlystopping.EarlyStoppingConfiguration;
 import org.deeplearning4j.earlystopping.EarlyStoppingResult;
 import org.deeplearning4j.earlystopping.scorecalc.RegressionScoreCalculator;
@@ -18,12 +17,13 @@ import org.deeplearning4j.nn.api.OptimizationAlgorithm;
 import org.deeplearning4j.nn.conf.BackpropType;
 import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
-
 import org.deeplearning4j.nn.conf.layers.DenseLayer;
-import org.deeplearning4j.nn.conf.layers.LSTM;
 import org.deeplearning4j.nn.conf.layers.OutputLayer;
+import org.deeplearning4j.nn.gradient.Gradient;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.deeplearning4j.nn.weights.WeightInit;
+import org.deeplearning4j.nn.workspace.LayerWorkspaceMgr;
+import org.deeplearning4j.optimize.api.TrainingListener;
 import org.deeplearning4j.optimize.listeners.ScoreIterationListener;
 import org.deeplearning4j.ui.api.UIServer;
 import org.deeplearning4j.ui.model.stats.StatsListener;
@@ -31,6 +31,8 @@ import org.deeplearning4j.ui.model.storage.InMemoryStatsStorage;
 import org.nd4j.common.primitives.Pair;
 import org.nd4j.evaluation.regression.RegressionEvaluation;
 import org.nd4j.linalg.activations.Activation;
+import org.nd4j.linalg.activations.IActivation;
+import org.nd4j.linalg.activations.impl.ActivationIdentity;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.DataSet;
 import org.nd4j.linalg.dataset.MiniBatchFileDataSetIterator;
@@ -44,16 +46,14 @@ import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.learning.config.Adam;
 import org.nd4j.linalg.learning.config.IUpdater;
 import org.nd4j.linalg.learning.config.Nesterovs;
-import org.nd4j.linalg.lossfunctions.LossFunctions;
-//import sun.security.provider.ConfigFile;
+import org.nd4j.linalg.lossfunctions.ILossFunction;
+import org.nd4j.linalg.lossfunctions.impl.LossMSE;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
-import static org.deeplearning4j.util.ModelSerializer.restoreComputationGraphAndNormalizer;
 import static org.deeplearning4j.util.ModelSerializer.restoreMultiLayerNetworkAndNormalizer;
 import static org.deeplearning4j.util.ModelSerializer.writeModel;
 
@@ -64,6 +64,7 @@ import static org.deeplearning4j.util.ModelSerializer.writeModel;
  */
 public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 
+	public static boolean CHECK_BEST_EARLY = false;
 	private static int MAX_BATCH_SIZE = 5000;
 	public static double[] LEARNING_RATES_HYPERPARAMETER = new double[] { 0.00001, 0.0001, 0.001, 0.01 };
 	public static double[] HIDDEN_SIZE_NODES_MULTIPLIER_HYPERPARAMETER = new double[] { 2 };
@@ -73,10 +74,10 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 	public static double[] MOMENTUM_HYPERPARAMETER = new double[] { 0.5, 0.8 };
 	public static boolean HYPERPARAMETER_TUNING = false;
 	private static int COUNTER_RE_TRAIN = 0;
-	private int maxMinutesTraining = 5;
+	private int maxMinutesTraining = 15;
 	private int defaultMaxMinutesTraining = maxMinutesTraining;
 	//	https://deeplearning4j.konduit.ai/models/layers
-	public static boolean EARLY_STOPPING = true;
+	public static boolean EARLY_STOPPING = false;//automatize learningRate to avoid overfitting or underfitting
 	public static boolean CLEAN_NN_IF_EXIST = false;
 
 	protected static int EARLY_STOPPING_TOLERANCE_DECIMALS = 3;
@@ -90,14 +91,18 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 	private double l2, l1;
 
 	private Normalizer dataNormalization;
-	private MultiLayerNetwork model = null;
+	protected MultiLayerNetwork model = null;
 
-	private boolean isTrained = false;
-	private boolean trainingStats = false;
+	protected boolean isTrained = false;
+	protected boolean trainingStats = false;
 	ScoreIterationListener scoreIterationListener = new ScoreIterationListener(10);
 	protected boolean isRNN = false;
 	protected long seed;
-	private int hiddenSizeNodesMultiplier = 2;
+	protected int hiddenSizeNodesMultiplier = 2;
+
+	protected ILossFunction lossFunction = new LossMSE();
+	protected IActivation activationFunction = new ActivationIdentity();
+	;
 
 	public void setTrainingStats(boolean trainingStats) {
 		this.trainingStats = trainingStats;
@@ -122,6 +127,14 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 		this.seed = seed;
 	}
 
+	@Override public long getSeed() {
+		return seed;
+	}
+
+	@Override public int getEpoch() {
+		return nEpoch;
+	}
+
 	public Dl4jMemoryReplayModel(String modelPath, double learningRate, double momentumNesterov, int nEpoch,
 			int batchSize, int maxBatchSize, double l2, double l1, boolean loadModel, boolean isRNN) {
 		this.modelPath = modelPath;
@@ -138,8 +151,20 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 		}
 	}
 
+	public void setBatchSize(int batchSize) {
+		this.batchSize = batchSize;
+	}
+
+	public void setMaxBatchSize(int maxBatchSize) {
+		this.maxBatchSize = maxBatchSize;
+	}
+
 	public void setModelPath(String modelPath) {
 		this.modelPath = modelPath;
+	}
+
+	@Override public String getModelPath() {
+		return modelPath;
 	}
 
 	public void loadModel() {
@@ -156,10 +181,8 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 				Pair<MultiLayerNetwork, Normalizer> pair = restoreMultiLayerNetworkAndNormalizer(savedModelFile, true);
 				this.model = pair.getFirst();
 				this.dataNormalization = pair.getSecond();
-				this.model = MultiLayerNetwork.load(savedModelFile, true);
-
+				//				this.model = MultiLayerNetwork.load(savedModelFile, true);
 				isTrained = true;
-
 				long elapsed = (System.currentTimeMillis() - start) / (1000);
 				logger.info("loaded model {}", this.modelPath);
 				logger.info("loaded in {} seconds , model {}", elapsed, this.modelPath);
@@ -198,7 +221,7 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 	}
 
 	protected IUpdater getUpdater(double momentumNesterov, double learningRate) {
-		if (momentumNesterov != 0) {
+		if (momentumNesterov > 0) {
 			return new Nesterovs(learningRate, momentumNesterov);
 		} else {
 			return new Adam.Builder().learningRate(learningRate).build();
@@ -212,25 +235,27 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 		if (momentumNesterov == 0) {
 
 		}
-		WeightInit weightInit = WeightInit.XAVIER;//a form of Gaussian distribution (WeightInit.XAVIER),
+		int secondLayerNodes = numInputs / 2;
+		WeightInit weightInit = WeightInit.XAVIER_UNIFORM;//a form of Gaussian distribution (WeightInit.XAVIER),
 		MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder().seed(seed)
 				.optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
 				.updater(getUpdater(momentumNesterov, learningRate)).l2(l2).l1(l1)
 
 				//input layer
 				.list().layer(0, new DenseLayer.Builder().nIn(numInputs).nOut(numHiddenNodes).weightInit(weightInit)
-						.activation(Activation.RELU).build()).
+						.activation(Activation.SIGMOID).build()).
 
 				//hidden layer 1
-						layer(1, new LSTM.Builder().nIn(numHiddenNodes).nOut(numHiddenNodes).weightInit(weightInit)
-						.activation(Activation.RELU).build()).
+				//						layer(1, new LSTM.Builder().nIn(numHiddenNodes).nOut(secondLayerNodes).weightInit(weightInit)
+				//						.activation(Activation.SIGMOID).build()).
 				//hidden layer 2
-				//						layer(2, new LSTM.Builder().nIn(numHiddenNodes).nOut(numHiddenNodes).weightInit(weightInit)
+				//						layer(2, new LSTM.Builder().nIn(numHiddenNodes).nOut(numOutputs).weightInit(weightInit)
 				//						.activation(Activation.SIGMOID).build()).
 
 				//output layer
-						layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.MSE).weightInit(weightInit)
-						.activation(Activation.IDENTITY).weightInit(weightInit).nIn(numHiddenNodes).nOut(numOutputs).
+						layer(1,
+						new OutputLayer.Builder(lossFunction).weightInit(weightInit).activation(activationFunction)
+								.weightInit(weightInit).nIn(secondLayerNodes).nOut(numOutputs).
 								build()).build();
 		//The above code snippet will cause any network training (i.e., calls to MultiLayerNetwork.fit() methods) to use truncated BPTT with segments of length 100 steps.
 		return conf;
@@ -238,7 +263,9 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 
 	private MultiLayerConfiguration createFeedForwardModel(int numInputs, int numHiddenNodes, int numOutputs,
 			double learningRate, double momentumNesterov, double l1, double l2) {
-		WeightInit weightInit = WeightInit.XAVIER;//a form of Gaussian distribution (WeightInit.XAVIER),
+		WeightInit weightInit = WeightInit.XAVIER_UNIFORM;//a form of Gaussian distribution (WeightInit.XAVIER),
+		int secondLayerNodes = numInputs / 2;
+
 		MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder().seed(seed)
 				.optimizationAlgo(OptimizationAlgorithm.STOCHASTIC_GRADIENT_DESCENT)
 				.updater(getUpdater(momentumNesterov, learningRate)).l2(l2).l1(l1)
@@ -246,18 +273,19 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 
 				//input layer
 				.list().layer(0, new DenseLayer.Builder().nIn(numInputs).nOut(numHiddenNodes).weightInit(weightInit)
-						.activation(Activation.RELU).build()).
+						.activation(Activation.SIGMOID).build()).
 				//hidden layer 1
-						layer(1,
-						new DenseLayer.Builder().nIn(numHiddenNodes).nOut(numHiddenNodes).weightInit(weightInit)
-								.activation(Activation.RELU).build()).
-				//hidden layer 2
-				//						layer(2,
+				//						layer(1,
 				//						new DenseLayer.Builder().nIn(numHiddenNodes).nOut(numHiddenNodes).weightInit(weightInit)
 				//								.activation(Activation.SIGMOID).build()).
+				//hidden layer 2
+				//						layer(2,
+				//						new DenseLayer.Builder().nIn(secondLayerNodes).nOut(secondLayerNodes).weightInit(weightInit)
+				//								.activation(Activation.RELU).build()).
 				//output layer
-						layer(2, new OutputLayer.Builder(LossFunctions.LossFunction.MSE).activation(Activation.IDENTITY)
-						.weightInit(weightInit).weightInit(weightInit).nIn(numHiddenNodes).nOut(numOutputs).build())
+						layer(1,
+						new OutputLayer.Builder(lossFunction).activation(activationFunction).weightInit(weightInit)
+								.weightInit(weightInit).nIn(numHiddenNodes).nOut(numOutputs).build())
 
 				.build();
 		return conf;
@@ -289,7 +317,7 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 						new MaxTimeIterationTerminationCondition(maxMinutesTraining, TimeUnit.MINUTES))
 				.epochTerminationConditions(new MaxEpochsTerminationCondition(nEpoch)).scoreCalculator(
 						//								new DataSetLossCalculator(testDataIterator,true),
-						new RegressionScoreCalculatorRounded(RegressionEvaluation.Metric.RMSE, testDataIterator,
+						new RegressionScoreCalculatorRounded(RegressionEvaluation.Metric.R2, testDataIterator,
 								EARLY_STOPPING_TOLERANCE_DECIMALS))
 				//						.modelSaver(new LocalFileModelSaver(this.modelPath))
 				.evaluateEveryNEpochs(5).
@@ -297,16 +325,116 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 		return earlyStoppingConfiguration;
 	}
 
-	@Override public void train(double[][] input, double[][] target) {
+	protected Gradient getGradient(double[] input, double[] output, double[] expected) {
+		//TODO
+		////https://github.com/deeplearning4j/rl4j/blob/f6d9ff674c6d8e4c4de812dbd7469d8a01b78e26/rl4j-core/src/main/java/org/deeplearning4j/rl4j/network/ac/ActorCriticSeparate.java#L102
+		INDArray expectedArr = Nd4j.create(expected);//what we should have
+		INDArray outputArr = Nd4j.create(output);
+
+		Pair<Double, INDArray> tuple = lossFunction
+				.computeGradientAndScore(expectedArr, outputArr, activationFunction, this.model.getMask(), true);
+
+		//		return tuple.getRight();
+
+		INDArray inputArr = Nd4j.create(input);
+		model.setInput(inputArr);
+		model.setLabels(expectedArr);
+		model.computeGradientAndScore();
+		Collection<TrainingListener> valueIterationListeners = model.getListeners();
+		if (valueIterationListeners != null && valueIterationListeners.size() > 0) {
+			for (TrainingListener l : valueIterationListeners) {
+				l.onGradientCalculation(model);
+			}
+		}
+
+		return model.gradient();
+
+	}
+
+	protected void backpropGradients(Gradient gradient, int batchSize) {
+		//TODO
+		MultiLayerConfiguration valueConf = model.getLayerWiseConfigurations();
+		int valueIterationCount = valueConf.getIterationCount();
+		int valueEpochCount = valueConf.getEpochCount();
+		model.getUpdater().update(model, gradient, valueIterationCount, valueEpochCount, batchSize,
+				LayerWorkspaceMgr.noWorkspaces());
+		model.params().subi(gradient.gradient());
+		Collection<TrainingListener> valueIterationListeners = model.getListeners();
+		if (valueIterationListeners != null && valueIterationListeners.size() > 0) {
+			for (TrainingListener listener : valueIterationListeners) {
+				listener.iterationDone(model, valueIterationCount, valueEpochCount);
+			}
+		}
+		valueConf.setIterationCount(valueIterationCount + 1);
+
+	}
+
+	/**
+	 * * 	 * # Compute loss
+	 * * 	 * loss = F.mse_loss(Q_expected, Q_targets)
+	 * * 	 * # Minimize the loss
+	 * * 	 * self.optimizer.zero_grad()
+	 * * 	 * loss.backward()
+	 * * 	 * self.optimizer.step()
+	 * * 	 * <p>
+	 * * 	 * # Update target network
+	 * * 	 * self.soft_update(self.qnetwork_local, self.qnetwork_target, TAU)
+	 *
+	 * @param input
+	 * @param expected
+	 */
+	@Override public boolean updateGradient(double[][] input, double[][] output, double[][] expected) {
+		//https://github.com/deeplearning4j/rl4j/blob/f6d9ff674c6d8e4c4de812dbd7469d8a01b78e26/rl4j-core/src/main/java/org/deeplearning4j/rl4j/network/ac/ActorCriticSeparate.java#L102
+		//		double[][] expectedMatrix = new double [][]{expected};
+		//		double[][] targetMatrix = new double [][]{targets};
+		try {
+
+			//apply gradients of output/expected
+			//			for(int row =0;row<input.length;row++) {
+			//				double[] inputRow = input[row];
+			//				double[] outputRow = output[row];
+			//				double[] expectedRow=expected[row];
+			//
+			//				Gradient gradients = getGradient(inputRow,outputRow, expectedRow);
+			//				backpropGradients(gradients, this.batchSize);
+			//			}
+
+			//Train directly from inputs to outputs
+			return this.train(input, expected);
+		} catch (Exception e) {
+			logger.error("uknown error calculating gradient ", e);
+			return false;
+		}
+	}
+
+	protected boolean evalSet(DataSetIterator dataSetIterator) {
+		RegressionEvaluation eval = model.evaluateRegression(dataSetIterator);
+		System.out.println(eval.stats());
+		if (Double.isFinite(eval.averageMeanAbsoluteError())) {
+			isTrained = true;
+		} else {
+			System.out.println(
+					"training was not okey---> please consider shutdown some other java process or clean gpu memory");
+			logger.error("something was wrong training when {} is not finite", eval.averageMeanAbsoluteError());
+			logger.error(eval.stats());
+			return false;
+			//					System.out.println("clear previous nn");
+			//					this.model.clear();
+			//					train(input,target);
+			//					return;
+		}
+		return true;
+	}
+
+	@Override public boolean train(double[][] input, double[][] target) {
 
 		INDArray x = Nd4j.create(input);
 		INDArray y = Nd4j.create(target);
-		final DataSet allData = new DataSet(x, y);
+
+		DataSet allData = new DataSet(x, y);
 
 		try {
-
 			if (this.model == null) {
-
 				int numInput = input[0].length;
 				int numOutput = target[0].length;
 				int hiddenNodes = (numInput + numOutput);
@@ -342,15 +470,23 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 				model.addListeners(new StatsListener(statsStorage));
 				uiServer.attach(statsStorage);
 			}
-			if (allData.numExamples() < 100) {
-				System.out.println("not enough data! not training " + allData.numExamples() + " samples");
-				return;
-			}
+			//			if (allData.numExamples() < 100) {
+			//				System.out.println("not enough data! not training " + allData.numExamples() + " samples");
+			//				logger.info("skipping training with {} samples ",allData.numExamples());
+			//				return;
+			//			}
 			EarlyStoppingConfiguration earlyStoppingConfiguration = null;
 			double defaultLearningRate = learningRate;
+			int defaultEpoch = nEpoch;
+
+			//get maxBatchSizeData shuffled!
+			allData.shuffle(seed);//// mix before split
+			int maxBatchSizeTemp = Math.min(this.maxBatchSize, allData.numExamples());//it doesn't matter here
+			allData = allData.sample(Math.min(this.maxBatchSize, maxBatchSizeTemp));
+
 			if (EARLY_STOPPING) {
 				System.out.println("starting training nn with early stop " + allData.numExamples() + " samples");
-				allData.shuffle(seed);//// mix before split
+
 				double fractionTrainSplit = 0.75; //Use 75% of data for training
 				SplitTestAndTrain testAndTrain = allData.splitTestAndTrain(fractionTrainSplit);
 
@@ -359,8 +495,8 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 
 				dataNormalization = new NormalizerStandardize();
 				((NormalizerStandardize) dataNormalization).fit(trainingData);
-				((NormalizerStandardize) dataNormalization).transform(trainingData);
-				((NormalizerStandardize) dataNormalization).transform(testData);
+				//				((NormalizerStandardize) dataNormalization).transform(trainingData);
+				//				((NormalizerStandardize) dataNormalization).transform(testData);
 
 				int trainSizeData = trainingData.numExamples();
 				int testSizeData = testData.numExamples();//(int) (sizeData*(1-fractionTrainSplit));
@@ -368,10 +504,21 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 				int batchSizeTempTest = Math.min(this.batchSize, MAX_BATCH_SIZE);//at least 500 iterations per epoch
 				int batchSizeTempTrain = (int) Math
 						.min(this.batchSize, MAX_BATCH_SIZE);        //at least 500 iterations per epoch
-				DataSetIterator testDataIterator = new MiniBatchFileDataSetIterator(testData, batchSizeTempTest);
-				DataSetIterator trainDataIterator = new MiniBatchFileDataSetIterator(trainingData, batchSizeTempTrain);
-				//				trainDataIterator.setPreProcessor((DataSetPreProcessor) dataNormalization);
-				//				testDataIterator.setPreProcessor((DataSetPreProcessor) dataNormalization);
+
+				List<DataSet> testDataIteratorlistDs = testData.asList();
+				Collections.shuffle(testDataIteratorlistDs, new Random(seed));
+				DataSetIterator testDataIterator = new ListDataSetIterator<>(testDataIteratorlistDs, batchSizeTempTest);
+
+				List<DataSet> trainDataIteratorlistDs = trainingData.asList();
+				Collections.shuffle(trainDataIteratorlistDs, new Random(seed));
+				DataSetIterator trainDataIterator = new ListDataSetIterator<>(trainDataIteratorlistDs,
+						batchSizeTempTrain);
+
+				//				DataSetIterator testDataIterator = new MiniBatchFileDataSetIterator(testData, batchSizeTempTest);
+				//				DataSetIterator trainDataIterator = new MiniBatchFileDataSetIterator(trainingData, batchSizeTempTrain);
+
+				trainDataIterator.setPreProcessor((DataSetPreProcessor) dataNormalization);
+				testDataIterator.setPreProcessor((DataSetPreProcessor) dataNormalization);
 
 				earlyStoppingConfiguration = getEarlyStoppingConfiguration(testDataIterator);
 				if (earlyStoppingConfiguration != null) {
@@ -407,34 +554,54 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 						logger.info("Total epochs: " + result.getTotalEpochs());
 						logger.info("Best epoch number: " + result.getBestModelEpoch());
 						logger.info("Score at best epoch: " + result.getBestModelScore());
+						System.out.println("------");
+						System.out.println("TRAINING set");
+						evalSet(trainDataIterator);
+						System.out.println("");
+						System.out.println("------");
+						System.out.println("TEST set");
+						evalSet(testDataIterator);
+						System.out.println("------");
 
 						//check learning rate
-						if (result.getBestModelEpoch() == 0 || result.getBestModelEpoch() == nEpoch) {
+						if (CHECK_BEST_EARLY && !trainingStats && (result.getBestModelEpoch() == 0
+								|| result.getBestModelEpoch() >= nEpoch - 5)) {
 							if (result.getBestModelEpoch() == 0) {
 								learningRate /= 10.0;
 							} else {
+								//								nEpoch *= 2;
 								learningRate *= 10.0;
 							}
 
 							COUNTER_RE_TRAIN++;
 							System.err.println(
-									"WARNING training with best score at 0 => retrain with less/more learningRate="
-											+ learningRate);
-							logger.warn("training with best score at 0 => retrain with less/more learningRate={}",
-									learningRate);
+									"WARNING training with best score at 0 => retrain with less learningRate="
+											+ learningRate + " or more epoch=" + nEpoch);
+							logger.warn(
+									"training with best score at 0 => retrain with less learningRate={} more epoch={}",
+									learningRate, nEpoch);
 							if (COUNTER_RE_TRAIN < 5) {
-								train(input, target);
-								return;
+								return train(input, target);
 							} else {
 								System.err.println(
 										"ERROR training cant find good fit on earlyStopping after some attempts reducing learningRate="
-												+ learningRate + " restore it to " + defaultLearningRate);
+												+ learningRate + " restore it to " + defaultLearningRate
+												+ " epoch restore to " + defaultEpoch);
 								logger.error(
-										"ERROR training cant find good fit on earlyStopping after some attempts reducing learningRate={} restore it to {}",
-										learningRate, defaultLearningRate);
+										"ERROR training cant find good fit on earlyStopping after some attempts reducing learningRate={} restore it to {} epoch retore to {}",
+										learningRate, defaultLearningRate, defaultEpoch);
 								learningRate = defaultLearningRate;
+								nEpoch = defaultEpoch;
 							}
 
+						}
+						if (COUNTER_RE_TRAIN > 1) {
+							System.out.println(Configuration
+									.formatLog("**** Please change learningRate to {} for faster training!",
+											learningRate));
+							logger.info(Configuration
+									.formatLog("Please change learningRate to {} for faster training! from {}",
+											learningRate, defaultLearningRate));
 						}
 						COUNTER_RE_TRAIN = 0;
 
@@ -468,43 +635,65 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 						this.model = result.getBestModel();
 					}
 					isTrained = true;
+
 				}
 			}
 
 			if (earlyStoppingConfiguration == null) {
 				//normalize before
-				System.out.println("starting training nn " + allData.numExamples() + " samples");
+				int sizeData = allData.numExamples();
+				System.out.println("starting training nn " + sizeData + " samples");
+
 				dataNormalization = new NormalizerStandardize();
 				((NormalizerStandardize) dataNormalization).fit(allData);
-				//				((NormalizerStandardize) dataNormalization).transform(allData);
 
-				int sizeData = allData.numExamples();
 				int batchSizeTemp = Math.min(this.batchSize, MAX_BATCH_SIZE);//at least 500 iterations per epoch
+				if (sizeData < this.batchSize) {
+					logger.warn("can't train yet! with len {} < batchSize {}!", sizeData, batchSizeTemp);
+					return false;
+				}
 				if (isRNN) {
 					System.out.println(
 							"training RNN on data with  rows:" + input.length + "  columns:" + input[0].length
-									+ "  epochs:" + nEpoch + "  batchSize:" + batchSize + "  maxBatchSize:"
-									+ maxBatchSize);
+									+ "  epochs:" + nEpoch + "  batchSize:" + batchSizeTemp + "  maxBatchSize:"
+									+ maxBatchSizeTemp + " learningRate:" + learningRate + " momentum:"
+									+ momentumNesterov);
 				} else {
 					System.out.println("training on data with   rows:" + input.length + "  columns:" + input[0].length
-							+ "  epochs:" + nEpoch + "  batchSize:" + batchSizeTemp + "  maxBatchSize:" + maxBatchSize);
+							+ "  epochs:" + nEpoch + "  batchSize:" + batchSizeTemp + "  maxBatchSize:"
+							+ maxBatchSizeTemp + "  learningRate:" + learningRate + " momentumNesterov:"
+							+ momentumNesterov);
 				}
 
-				DataSetIterator trainIter = new MiniBatchFileDataSetIterator(allData, batchSizeTemp);
+				DataSetIterator trainIter = null;
+				trainIter = new MiniBatchFileDataSetIterator(allData, batchSizeTemp);
+				//				if (batchSizeTemp <= 1) {
+				//					final List<DataSet> list = allData.batchBy(1);
+				//					trainIter = new ListDataSetIterator<>(list);
+				//				} else {
+				//					trainIter = new MiniBatchFileDataSetIterator(allData, batchSizeTemp);
+				//				}
+
 				trainIter.setPreProcessor((DataSetPreProcessor) dataNormalization);//normalize it
 
 				this.model.fit(trainIter, this.nEpoch);
-				isTrained = true;
+
+				if (!evalSet(trainIter)) {
+					return false;
+				}
 
 			}
 
 		} catch (Exception e) {
-			System.err.println("error training model ");
+			System.err.println("error training model , delete it? " + this.modelPath);
 			e.printStackTrace();
-			logger.error("error training model ", e);
+			logger.error("error training model ,delete it? {}", this.modelPath, e);
+			return false;
 		}
+
 		//persist it
 		saveModel();
+		return true;
 	}
 
 	public void hyperparameterTuning(double[][] input, double[][] target,
@@ -684,7 +873,7 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 	}
 
 	@Override public double[] predict(double[] input) {
-		if (this.model == null || dataNormalization == null) {
+		if (this.model == null || dataNormalization == null || !isTrained) {
 			//			logger.error("to predict you need to fit it first!");
 			return null;
 		}
@@ -697,9 +886,12 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 
 			((NormalizerStandardize) dataNormalization).transform(inputND);
 			INDArray outputNd = this.model.output(inputND);
+			//inverse transform output?
+			//			((NormalizerStandardize) dataNormalization).revertLabels(outputNd);
 
 			output = outputNd.toDoubleVector();
 			if (Double.isNaN(Doubles.max(output))) {
+				logger.warn("{} output of model is NaN when is trained!", this.modelPath);
 				output = null;
 			}
 		} catch (Exception e) {
@@ -709,9 +901,11 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 		return output;
 	}
 
-	@Override public MemoryReplayModel cloneIt() {
+	@Override public MemoryReplayModel cloneIt(String modelPath) {
 		try {
-			return (Dl4jMemoryReplayModel) this.clone();
+			MemoryReplayModel output = (Dl4jMemoryReplayModel) this.clone();
+			output.setModelPath(modelPath);
+			return output;
 		} catch (CloneNotSupportedException e) {
 			logger.error("cant clone Dl4jMemoryReplayModel ", e);
 		}

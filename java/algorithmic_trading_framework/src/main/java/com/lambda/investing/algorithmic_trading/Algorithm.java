@@ -2,6 +2,7 @@ package com.lambda.investing.algorithmic_trading;
 
 import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.hedging.HedgeManager;
+import com.lambda.investing.algorithmic_trading.hedging.HedgeManager;
 import com.lambda.investing.algorithmic_trading.hedging.NoHedgeManager;
 import com.lambda.investing.connector.ThreadUtils;
 import com.lambda.investing.market_data_connector.MarketDataListener;

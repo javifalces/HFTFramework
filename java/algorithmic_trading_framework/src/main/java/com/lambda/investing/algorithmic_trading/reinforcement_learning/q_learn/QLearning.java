@@ -30,7 +30,9 @@ import lombok.Setter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.*;
 
 /**
@@ -68,6 +70,8 @@ import java.util.*;
 	protected double discountFactor = 0.95;
 	// learning rate
 	protected double learningRate = 0.25;
+
+	protected final Object lockSave = new Object();
 
 	/**
 	 * Initializes a new instance of the QLearning class.
@@ -139,6 +143,7 @@ import java.util.*;
 		return explorationPolicy.ChooseAction(memoryReplay[state]);
 	}
 
+
 	/**
 	 * Update Q-function's value for the previous state-action pair.
 	 *
@@ -148,73 +153,76 @@ import java.util.*;
 	 * @param nextState     Next state.
 	 */
 	public void updateState(int previousState, int action, double reward, int nextState) {
-		// next state's action estimations
-		double[] nextActionEstimations = memoryReplay[nextState];
-		// find maximum expected summary reward from the next state
-		double maxNextExpectedReward = nextActionEstimations[0];
+		synchronized (lockSave) {
+			// next state's action estimations
+			double[] nextActionEstimations = memoryReplay[nextState];
+			// find maximum expected summary reward from the next state
+			double maxNextExpectedReward = nextActionEstimations[0];
 
-		for (int i = 1; i < actions; i++) {
-			if (nextActionEstimations[i] > maxNextExpectedReward)
-				maxNextExpectedReward = nextActionEstimations[i];
+			for (int i = 1; i < actions; i++) {
+				if (nextActionEstimations[i] > maxNextExpectedReward)
+					maxNextExpectedReward = nextActionEstimations[i];
+			}
+
+			// previous state's action estimations
+			double[] previousActionEstimations = memoryReplay[previousState];
+			// update expected summary reward of the previous state
+			double prevQValue = previousActionEstimations[action];
+			double newQValue = prevQValue * (1.0 - learningRate) + (learningRate * (reward
+					+ discountFactor * maxNextExpectedReward));
+
+			memoryReplay[previousState][action] = newQValue;
 		}
-
-		// previous state's action estimations
-		double[] previousActionEstimations = memoryReplay[previousState];
-		// update expected summary reward of the previous state
-		double prevQValue = previousActionEstimations[action];
-		double newQValue =
-				prevQValue * (1.0 - learningRate) + (learningRate * (reward + discountFactor * maxNextExpectedReward));
-
-		memoryReplay[previousState][action] = newQValue;
-
 	}
 
 	public void saveMemory(String filepath) throws IOException {
-		FileUtils.persistArray(memoryReplay, filepath, CSV_SEPARATOR);
+		synchronized (lockSave) {
+			FileUtils.persistArray(memoryReplay, filepath, CSV_SEPARATOR);
+		}
 	}
 
 	public void loadMemory(String filepath) throws IOException {
+		synchronized (lockSave) {
+			BufferedReader csvReader = new BufferedReader(new FileReader(filepath));
+			// we don't know the amount of data ahead of time so we use lists
 
-		BufferedReader csvReader = new BufferedReader(new FileReader(filepath));
-		// we don't know the amount of data ahead of time so we use lists
+			Map<Integer, List<Double>> colMap = new HashMap<>();
+			String row;
+			int rowsTotal = 0;
 
-		Map<Integer, List<Double>> colMap = new HashMap<>();
-		String row;
-		int rowsTotal = 0;
-
-		while ((row = csvReader.readLine()) != null) {
-			String[] data = row.split(CSV_SEPARATOR);
-			for (int column = 0; column < data.length; column++) {
-				List<Double> columnList = colMap.getOrDefault(column, new ArrayList<>());
-				columnList.add(Double.parseDouble(data[column]));
-				colMap.put(column, columnList);
+			while ((row = csvReader.readLine()) != null) {
+				String[] data = row.split(CSV_SEPARATOR);
+				for (int column = 0; column < data.length; column++) {
+					List<Double> columnList = colMap.getOrDefault(column, new ArrayList<>());
+					columnList.add(Double.parseDouble(data[column]));
+					colMap.put(column, columnList);
+				}
+				rowsTotal++;
 			}
-			rowsTotal++;
-		}
-		csvReader.close();
-		int columnsTotal = colMap.size();
+			csvReader.close();
+			int columnsTotal = colMap.size();
 
-		//transform colMap into array
-		double[][] loadedQvalues = new double[rowsTotal][columnsTotal];//states rows , actions columns
-		this.states = rowsTotal;
-		this.actions = columnsTotal;
-		for (int column : colMap.keySet()) {
-			List<Double> rows = colMap.get(column);
-			int rowIter = 0;
-			for (double rowVal : rows) {
-				loadedQvalues[rowIter][column] = rowVal;
-				rowIter++;
+			//transform colMap into array
+			double[][] loadedQvalues = new double[rowsTotal][columnsTotal];//states rows , actions columns
+			this.states = rowsTotal;
+			this.actions = columnsTotal;
+			for (int column : colMap.keySet()) {
+				List<Double> rows = colMap.get(column);
+				int rowIter = 0;
+				for (double rowVal : rows) {
+					loadedQvalues[rowIter][column] = rowVal;
+					rowIter++;
+				}
 			}
+
+			this.memoryReplay = loadedQvalues;
+			System.out.println(
+					String.format("loaded a qMatrix of %d rows-states and %d columns-actions", this.memoryReplay.length,
+							this.memoryReplay[0].length));
+
+			logger.info(String.format("loaded a qMatrix of %d rows-states and %d columns-actions from %s",
+					this.memoryReplay.length, this.memoryReplay[0].length, filepath));
 		}
-
-		this.memoryReplay = loadedQvalues;
-		System.out.println(
-				String.format("loaded a qMatrix of %d rows-states and %d columns-actions", this.memoryReplay.length,
-						this.memoryReplay[0].length));
-
-		logger.info(String.format("loaded a qMatrix of %d rows-states and %d columns-actions from %s",
-				this.memoryReplay.length, this.memoryReplay[0].length, filepath));
-
 	}
 
 	private class AutoSaverFile implements Runnable {

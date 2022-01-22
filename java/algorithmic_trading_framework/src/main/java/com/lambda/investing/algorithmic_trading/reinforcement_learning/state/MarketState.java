@@ -1,10 +1,8 @@
 package com.lambda.investing.algorithmic_trading.reinforcement_learning.state;
 
-import com.google.common.primitives.Doubles;
 import com.lambda.investing.algorithmic_trading.PnlSnapshot;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.ScoreEnum;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.ScoreUtils;
-import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.candle.Candle;
 import com.lambda.investing.model.candle.CandleType;
 import com.lambda.investing.model.market_data.Depth;
@@ -14,7 +12,6 @@ import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.curator.shaded.com.google.common.collect.Queues;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Queue;
 
@@ -38,6 +35,7 @@ public class MarketState extends AbstractState {
 			"spread", "midprice", "imbalance", "microprice", "last_close_price", "last_close_qty" };
 
 	private static String[] CANDLE_COLUMNS_PATTERN = new String[] { "open", "high", "low", "close" };
+
 
 	private static String[] CANDLE_INDICATORS = new String[] { "ma", "std", "max", "min" };
 	private double lastCandlesMA, lastCandleStd, lastCandleMax, lastCandleMin = Double.NaN;

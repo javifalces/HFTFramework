@@ -2,18 +2,15 @@ package com.lambda.investing.algorithmic_trading.reinforcement_learning.q_learn;
 
 import com.google.common.primitives.Doubles;
 import com.lambda.investing.Configuration;
-import com.lambda.investing.algorithmic_trading.avellaneda_stoikov_dqn.Dl4jMemoryReplayModel;
-import com.lambda.investing.algorithmic_trading.reinforcement_learning.ScoreEnum;
-import com.lambda.investing.algorithmic_trading.reinforcement_learning.action.SpreadAction;
+import com.lambda.investing.algorithmic_trading.reinforcement_learning.Dl4jMemoryReplayModel;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.q_learn.exploration_policy.EpsilonGreedyExploration;
-import com.lambda.investing.algorithmic_trading.reinforcement_learning.state.DiscreteTAState;
-import com.lambda.investing.model.candle.CandleType;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Date;
 
 public class DeepQLearningTest {
 
@@ -37,11 +34,16 @@ public class DeepQLearningTest {
 
 	DeepQLearning deepQLearning;
 
+	int trainingPredictIterationPeriod = 0;
+	int trainingTargetIterationPeriod = 0;
+	Date currentTime = new Date();
+
 	public DeepQLearningTest() {
 
 		try {
 			deepQLearning = new DeepQLearning(state, testAction, explorationPolicy, 10, predictionModel, targetModel,
-					false, discountFactor, learningRate);
+					false, discountFactor, learningRate, this.trainingPredictIterationPeriod,
+					this.trainingTargetIterationPeriod);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -51,7 +53,8 @@ public class DeepQLearningTest {
 
 		try {
 			deepQLearning = new DeepQLearning(state, testAction, explorationPolicy, 10, predictionModel, targetModel,
-					false, discountFactor, learningRate);
+					false, discountFactor, learningRate, this.trainingPredictIterationPeriod,
+					this.trainingTargetIterationPeriod);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -60,13 +63,13 @@ public class DeepQLearningTest {
 		double reward = 1.0;
 		double[] previousStateArr = new double[] { 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 };
 		state.setCurrentState(previousStateArr);
-		deepQLearning.updateState(previousStateArr, action, reward, state);
+		deepQLearning.updateState(currentTime, previousStateArr, action, reward, state);
 
 		action = 1;
 		reward = 1.0;
 		previousStateArr = new double[] { 2.0, 3.0, 4.0, 5.0, 6.0, 7.0 };
 		state.setCurrentState(previousStateArr);
-		deepQLearning.updateState(previousStateArr, action, reward, state);
+		deepQLearning.updateState(currentTime, previousStateArr, action, reward, state);
 
 	}
 
@@ -84,25 +87,26 @@ public class DeepQLearningTest {
 		int action = 0;
 		double reward = 2.0;
 		state.setCurrentState(previousStateArr);
-		deepQLearning.updateState(previousStateArr, action, reward, state);
+		deepQLearning.updateState(currentTime, previousStateArr, action, reward, state);
 
 		qValue = deepQLearning.getRewards(previousStateArr);
 		bestScore = Doubles.max(qValue);
-		Assert.assertTrue(qValue[0] < reward);
-		Assert.assertTrue(bestScore < reward);
+		Assert.assertTrue(qValue[0] <= reward);
+		Assert.assertTrue(bestScore <= reward);
 
 		action = 0;
 		double reward2 = 8.0;
 		state.setCurrentState(previousStateArr);
-		deepQLearning.updateState(previousStateArr, action, reward2, state);
+		deepQLearning.updateState(currentTime, previousStateArr, action, reward2, state);
 
 		qValue = deepQLearning.getRewards(previousStateArr);
 		bestScore = Doubles.max(qValue);
-		Assert.assertTrue(qValue[0] < reward2);
-		Assert.assertTrue(qValue[0] > reward);
-		Assert.assertTrue(bestScore < reward2);
+		Assert.assertTrue(qValue[0] <= reward2);
+		Assert.assertTrue(qValue[0] >= reward);
+		Assert.assertTrue(bestScore <= reward2);
 
 	}
+
 
 	@Test public void getStateIndex() {
 		double[] previousStateArr = new double[] { 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 };
@@ -119,11 +123,11 @@ public class DeepQLearningTest {
 
 		int action = 0;
 		double reward = 1.0;
-		deepQLearning.updateState(newState, action, reward, state);
+		deepQLearning.updateState(currentTime, newState, action, reward, state);
 		indexOfState = deepQLearning.stateExistRow(newState);
 		Assert.assertTrue(indexOfState == 2);
 
-		deepQLearning.updateState(newState, action, reward, state);
+		deepQLearning.updateState(currentTime, newState, action, reward, state);
 		indexOfState = deepQLearning.stateExistRow(newState);
 		Assert.assertTrue(indexOfState == 2);
 
@@ -137,7 +141,7 @@ public class DeepQLearningTest {
 		Assert.assertEquals(1.0, bestScore, 0.001);
 		int action = 2;
 		double reward = 2.0;
-		deepQLearning.updateState(previousStateArr, action, reward, state);
+		deepQLearning.updateState(currentTime, previousStateArr, action, reward, state);
 
 		double[] qValueUpdated = deepQLearning.getRewards(previousStateArr);
 		double bestScoreFin = Doubles.max(qValueUpdated);
@@ -146,13 +150,13 @@ public class DeepQLearningTest {
 		Assert.assertTrue(bestScoreFin > bestScore);
 
 		double newReward = -6.0;
-		deepQLearning.updateState(previousStateArr, action, newReward, state);
+		deepQLearning.updateState(currentTime, previousStateArr, action, newReward, state);
 		qValueUpdated = deepQLearning.getRewards(previousStateArr);
 
 		double bestScoreFinLess = Doubles.max(qValueUpdated);
 		Assert.assertTrue(newReward < bestScoreFinLess);
 		Assert.assertTrue(qValueUpdated[action] < bestScoreFinLess);
-		Assert.assertTrue(qValueUpdated[action] > newReward);
+		Assert.assertTrue(qValueUpdated[action] >= newReward);
 
 	}
 
@@ -170,7 +174,7 @@ public class DeepQLearningTest {
 			lastStateAdd = new double[] { firstValue, 2.0, 3.0, 4.0, 5.0, 6.0 };
 			int action = 0;
 			double reward = 6.0;
-			deepQLearning.updateState(lastStateAdd, action, reward, state);
+			deepQLearning.updateState(currentTime, lastStateAdd, action, reward, state);
 			indexOfState = deepQLearning.stateExistRow(lastStateAdd);
 			Assert.assertTrue(indexOfState >= 0);
 			Assert.assertTrue(deepQLearning.getMemoryReplaySize() == i + 1);
@@ -193,7 +197,7 @@ public class DeepQLearningTest {
 		double[] newStateOnFirstIndex = new double[] { 1.0, 1.0, 3.0, 4.0, 5.0, 6.0 };
 		int action = 1;
 		double reward = 7.0;
-		deepQLearning.updateState(newStateOnFirstIndex, action, reward, state);
+		deepQLearning.updateState(currentTime, newStateOnFirstIndex, action, reward, state);
 		int numberRowsLater2 = deepQLearning.getMemoryReplaySize();
 		Assert.assertEquals(maxBatchSize, numberRowsLater2);
 		indexOfState = deepQLearning.stateExistRow(previousStateArr);
@@ -212,8 +216,10 @@ public class DeepQLearningTest {
 		this.deepQLearning.saveMemory(memoryPathTemp);
 		DeepQLearning newLoadedDeepQLearning = null;
 		try {
+			DeepQLearning.SHUFFLE_LOADING_ROWS = false;
 			newLoadedDeepQLearning = new DeepQLearning(state, testAction, explorationPolicy, 10, predictionModel,
-					targetModel, false, discountFactor, learningRate);
+					targetModel, false, discountFactor, learningRate, this.trainingPredictIterationPeriod,
+					this.trainingTargetIterationPeriod);
 			double[] previousStateArr = new double[] { 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 };
 			int indexOfState = newLoadedDeepQLearning.stateExistRow(previousStateArr);
 			Assert.assertTrue(indexOfState < 0);
@@ -239,43 +245,48 @@ public class DeepQLearningTest {
 	}
 
 	@Test public void checkNewRow() throws IOException {
-		DeepQLearning.USE_AS_QLEARN = true;
+
 		DeepQLearning newLoadedDeepQLearning = null;
 		try {
+			DeepQLearning.SHUFFLE_LOADING_ROWS = false;
 			newLoadedDeepQLearning = new DeepQLearning(state, testAction, explorationPolicy, 3, predictionModel,
-					targetModel, false, discountFactor, learningRate);
+					targetModel, false, discountFactor, learningRate, this.trainingPredictIterationPeriod,
+					this.trainingTargetIterationPeriod);
+
+			newLoadedDeepQLearning.asQLearn = true;
+
 			double[] previousStateArr = new double[] { 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 };
 			int indexOfState = newLoadedDeepQLearning.stateExistRow(previousStateArr);
 			Assert.assertTrue(indexOfState < 0);
 
-			newLoadedDeepQLearning.updateState(previousStateArr, 0, 1.0, state);
+			newLoadedDeepQLearning.updateState(currentTime, previousStateArr, 0, 1.0, state);
 			Assert.assertEquals(0, newLoadedDeepQLearning.stateExistRow(previousStateArr));
 			Assert.assertTrue(newLoadedDeepQLearning.getMemoryReplayIndex() == 1);
 
 			double[] previousStateArr2 = new double[] { 0.0, 0.0, 1.0, 2.0, 3.0, 6.0 };
-			newLoadedDeepQLearning.updateState(previousStateArr2, 0, 1.0, state);
+			newLoadedDeepQLearning.updateState(currentTime, previousStateArr2, 0, 1.0, state);
 			Assert.assertEquals(0, newLoadedDeepQLearning.stateExistRow(previousStateArr));
 			Assert.assertEquals(1, newLoadedDeepQLearning.stateExistRow(previousStateArr2));
 			Assert.assertTrue(newLoadedDeepQLearning.getMemoryReplayIndex() == 2);
 
 			double[] previousStateArr3 = new double[] { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
-			newLoadedDeepQLearning.updateState(previousStateArr3, 0, 1.0, state);
+			newLoadedDeepQLearning.updateState(currentTime, previousStateArr3, 0, 1.0, state);
 			Assert.assertEquals(0, newLoadedDeepQLearning.stateExistRow(previousStateArr));
 			Assert.assertEquals(1, newLoadedDeepQLearning.stateExistRow(previousStateArr2));
 			Assert.assertEquals(2, newLoadedDeepQLearning.stateExistRow(previousStateArr3));
 			Assert.assertTrue(newLoadedDeepQLearning.getMemoryReplayIndex() == 0);
 
-			newLoadedDeepQLearning.updateState(previousStateArr3, 1, 2.0, state);
+			newLoadedDeepQLearning.updateState(currentTime, previousStateArr3, 1, 2.0, state);
 			Assert.assertEquals(0, newLoadedDeepQLearning.stateExistRow(previousStateArr));
 			Assert.assertEquals(1, newLoadedDeepQLearning.stateExistRow(previousStateArr2));
 			Assert.assertEquals(2, newLoadedDeepQLearning.stateExistRow(previousStateArr3));
 			Assert.assertTrue(newLoadedDeepQLearning.getMemoryReplayIndex() == 0);
-			double[] actionRewards = newLoadedDeepQLearning.getPredict(previousStateArr3);
+			double[] actionRewards = newLoadedDeepQLearning.getPredictOutput(previousStateArr3);
 			Assert.assertEquals(1, actionRewards[0], 0.001);
-			Assert.assertEquals(2, actionRewards[1], 0.001);
+			Assert.assertEquals(2, actionRewards[1], 0.5);
 
 			double[] previousStateArr4 = new double[] { -1.0, -1.0, -1.0, -1.0, -1.0, -1.0 };
-			newLoadedDeepQLearning.updateState(previousStateArr4, 0, 1.0, state);
+			newLoadedDeepQLearning.updateState(currentTime, previousStateArr4, 0, 1.0, state);
 			Assert.assertEquals(-1, newLoadedDeepQLearning.stateExistRow(previousStateArr));
 			Assert.assertEquals(1, newLoadedDeepQLearning.stateExistRow(previousStateArr2));
 			Assert.assertEquals(2, newLoadedDeepQLearning.stateExistRow(previousStateArr3));

@@ -1,6 +1,5 @@
 package com.lambda.investing.algorithmic_trading.avellaneda_stoikov_dqn;
 
-import com.google.common.primitives.Doubles;
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
 import com.lambda.investing.algorithmic_trading.PnlSnapshot;
 import com.lambda.investing.model.candle.Candle;
@@ -10,7 +9,6 @@ import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.messaging.Command;
 import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.Verb;
-import org.apache.commons.lang3.ArrayUtils;
 import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 
 import java.util.Map;

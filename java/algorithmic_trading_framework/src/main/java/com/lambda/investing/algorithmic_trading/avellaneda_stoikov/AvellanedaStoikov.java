@@ -1,6 +1,8 @@
 package com.lambda.investing.algorithmic_trading.avellaneda_stoikov;
 
-import com.lambda.investing.algorithmic_trading.*;
+import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
+import com.lambda.investing.algorithmic_trading.InstrumentManager;
+import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.exception.LambdaTradingException;
 import com.lambda.investing.model.market_data.Depth;
@@ -50,6 +52,7 @@ public class AvellanedaStoikov extends SingleInstrumentAlgorithm {
 	private static boolean CONTROL_MAX_SPREAD_TICKS_DEV = false;//if enable min bid will be midprice-MAX_TICKS_MIDPRICE_PRICE_DEV*PriceTick
 	private static double MAX_TICKS_MIDPRICE_PRICE_DEV = 1E10;
 	private static boolean SYMMETRIC_SPREAD_RESERVE = false;//on backtest will be similar
+
 
 	protected double riskAversion;
 	protected double quantity;

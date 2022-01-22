@@ -5,7 +5,7 @@
     <parent>
         <artifactId>executables</artifactId>
         <groupId>com.lambda.investing</groupId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>0.0.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -17,13 +17,13 @@
         <dependency>
             <groupId>com.lambda.investing</groupId>
             <artifactId>algorithmic_trading_framework</artifactId>
-            <version>1.0.0-SNAPSHOT</version>
+            <version>0.0.0-SNAPSHOT</version>
         </dependency>
 
         <dependency>
             <groupId>com.lambda.investing</groupId>
             <artifactId>backtest_engine</artifactId>
-            <version>1.0.0-SNAPSHOT</version>
+            <version>0.0.0-SNAPSHOT</version>
         </dependency>
 
 

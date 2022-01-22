@@ -1,11 +1,10 @@
-package com.lambda.investing.algorithmic_trading.avellaneda_stoikov_dqn;
+package com.lambda.investing.algorithmic_trading.reinforcement_learning;
 
 import ai.onnxruntime.*;
 import com.lambda.investing.algorithmic_trading.FileUtils;
 import org.apache.commons.lang.NotImplementedException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-//import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.io.File;
 import java.io.IOException;
@@ -16,7 +15,7 @@ import java.util.UUID;
 /**
  * https://www.codeproject.com/Articles/5278506/Using-Portable-ONNX-AI-Models-in-Java
  */
-public class OnnxMemoryReplayModel implements Cloneable, MemoryReplayModel {
+public abstract class OnnxMemoryReplayModel implements Cloneable, MemoryReplayModel {
 
 	protected Logger logger = LogManager.getLogger(OnnxMemoryReplayModel.class);
 	private static String CSV_SEPARATOR = " ";
@@ -96,7 +95,7 @@ public class OnnxMemoryReplayModel implements Cloneable, MemoryReplayModel {
 	 * @param input
 	 * @param target
 	 */
-	public void train(double[][] input, double[][] target) {
+	public boolean train(double[][] input, double[][] target) {
 		//todo persist matrix to file
 		String inputPath = fileGenerator.toString() + ".csv";
 		String targetPath = fileGenerator.toString() + ".csv";
@@ -129,7 +128,7 @@ public class OnnxMemoryReplayModel implements Cloneable, MemoryReplayModel {
 		}
 
 		//update model
-		return;
+		return true;
 	}
 
 	public double[] predict(double[] input) {

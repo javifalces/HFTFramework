@@ -1,7 +1,6 @@
 package com.lambda.investing.algorithmic_trading.constant_spread;
 
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
-import com.lambda.investing.algorithmic_trading.AlgorithmState;
 import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.exception.LambdaTradingException;

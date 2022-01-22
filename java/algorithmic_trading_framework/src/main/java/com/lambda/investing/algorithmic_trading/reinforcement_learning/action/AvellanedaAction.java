@@ -2,18 +2,10 @@ package com.lambda.investing.algorithmic_trading.reinforcement_learning.action;
 
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
-import com.google.common.primitives.Doubles;
-import com.google.common.primitives.Ints;
-import lombok.Getter;
-import lombok.Setter;
-import org.apache.commons.collections.BidiMap;
-import org.apache.commons.lang.ArrayUtils;
-import org.apache.commons.math3.exception.NumberIsTooLargeException;
-import org.apache.commons.math3.util.MathUtils;
 
-import java.util.*;
-
-import static org.apache.commons.math3.util.CombinatoricsUtils.binomialCoefficientDouble;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 
 public class AvellanedaAction extends AbstractAction {
 

@@ -5,7 +5,7 @@
     <parent>
         <artifactId>parent_pom</artifactId>
         <groupId>com.lambda.investing</groupId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>0.0.0-SNAPSHOT</version>
         <relativePath>../parent_pom/pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -17,20 +17,20 @@
         <dependency>
             <groupId>com.lambda.investing</groupId>
             <artifactId>algorithmic_trading_framework</artifactId>
-            <version>1.0.0-SNAPSHOT</version>
+            <version>0.0.0-SNAPSHOT</version>
         </dependency>
 
         <!--connector-->
         <dependency>
             <groupId>com.lambda.investing</groupId>
             <artifactId>market_data_connectors</artifactId>
-            <version>1.0.0-SNAPSHOT</version>
+            <version>0.0.0-SNAPSHOT</version>
         </dependency>
 
         <dependency>
             <groupId>com.lambda.investing</groupId>
             <artifactId>trading_engine_connectors</artifactId>
-            <version>1.0.0-SNAPSHOT</version>
+            <version>0.0.0-SNAPSHOT</version>
         </dependency>
 
         <!--Spring-->

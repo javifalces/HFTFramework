@@ -2,6 +2,8 @@ package com.lambda.investing.algorithmic_trading.avellaneda_stoikov_dqn;
 
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
 import com.lambda.investing.algorithmic_trading.avellaneda_stoikov_q_learn.AvellanedaStoikovQLearn;
+import com.lambda.investing.algorithmic_trading.reinforcement_learning.Dl4jMemoryReplayModel;
+import com.lambda.investing.algorithmic_trading.reinforcement_learning.MemoryReplayModel;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.q_learn.DeepQLearning;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.q_learn.IExplorationPolicy;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.q_learn.exploration_policy.EpsilonGreedyExploration;
@@ -67,7 +69,8 @@ public class AvellanedaStoikovDQNPrivate extends AvellanedaStoikovQLearn {
 		IExplorationPolicy explorationPolicy = new EpsilonGreedyExploration(this.epsilon);
 		try {
 			memoryReplay = new DeepQLearning(this.state, this.avellanedaAction, explorationPolicy, maxBatchSize,
-					this.predictionModel, this.targetModel, isRNN, discountFactor, learningRate);
+					this.predictionModel, this.targetModel, isRNN, discountFactor, learningRate,
+					this.trainingPredictIterationPeriod, this.trainingTargetIterationPeriod);
 
 			this.memoryReplay.loadMemory(getMemoryPath());
 
@@ -111,7 +114,7 @@ public class AvellanedaStoikovDQNPrivate extends AvellanedaStoikovQLearn {
 			return;
 		}
 
-		memoryReplay.updateState(lastStateArr, lastActionQ, rewardDelta, this.state);
+		memoryReplay.updateState(getCurrentTime(), lastStateArr, lastActionQ, rewardDelta, this.state);
 	}
 
 	public int getNextAction(AbstractState state) {
@@ -143,8 +146,7 @@ public class AvellanedaStoikovDQNPrivate extends AvellanedaStoikovQLearn {
 	}
 
 	private void trainTarget() {
-		this.targetModel = this.predictionModel.cloneIt();
-		this.targetModel.setModelPath(getTargetModelPath());
+		this.targetModel = this.predictionModel.cloneIt(targetModel.getModelPath());
 		this.targetModel.saveModel();
 		memoryReplay.setTargetModel(this.targetModel);
 

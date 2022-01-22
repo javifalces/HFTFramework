@@ -3,24 +3,21 @@ package com.lambda.investing.algorithmic_trading.reinforcement_learning.state;
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
 import com.lambda.investing.algorithmic_trading.PnlSnapshot;
-import com.lambda.investing.algorithmic_trading.reinforcement_learning.action.AvellanedaAction;
 import com.lambda.investing.model.candle.Candle;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import lombok.Getter;
 import org.apache.commons.lang3.ArrayUtils;
-import org.apache.commons.math3.exception.NumberIsTooLargeException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.paukov.combinatorics3.Generator;
 
 import java.io.*;
-import java.math.BigDecimal;
-import java.math.MathContext;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
-
-import static org.apache.commons.math3.util.CombinatoricsUtils.binomialCoefficientDouble;
 
 /**
  * https://softwareengineering.stackexchange.com/questions/286822/fast-indexing-of-k-combinations
@@ -99,6 +96,10 @@ import static org.apache.commons.math3.util.CombinatoricsUtils.binomialCoefficie
 		}
 		stateIndexToArr = HashBiMap.create();
 
+	}
+
+	public void setNumberOfDecimals(int numberOfDecimals) {
+		this.numberOfDecimals = numberOfDecimals;
 	}
 
 	public void loadCacheFile(String filePath) {

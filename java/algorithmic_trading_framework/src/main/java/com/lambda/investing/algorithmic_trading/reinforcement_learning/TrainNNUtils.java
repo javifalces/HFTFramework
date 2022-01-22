@@ -1,8 +1,6 @@
 package com.lambda.investing.algorithmic_trading.reinforcement_learning;
 
 import com.google.common.primitives.Doubles;
-import com.lambda.investing.algorithmic_trading.avellaneda_stoikov_dqn.Dl4jMemoryReplayModel;
-import com.lambda.investing.algorithmic_trading.reinforcement_learning.q_learn.DeepQLearning;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -17,7 +15,6 @@ import java.util.List;
 import java.util.Map;
 
 import static com.lambda.investing.algorithmic_trading.reinforcement_learning.q_learn.DeepQLearning.DEFAULT_PREDICTION_ACTION_SCORE;
-import static com.lambda.investing.algorithmic_trading.reinforcement_learning.q_learn.DeepQLearning.USE_AS_QLEARN;
 import static com.lambda.investing.algorithmic_trading.reinforcement_learning.q_learn.QLearning.CSV_SEPARATOR;
 
 public class TrainNNUtils {
@@ -130,13 +127,15 @@ public class TrainNNUtils {
 				bestIsPositive = false;
 			}
 
+
 			if (bestIsPositive) {
 				targetArrOutput[row][bestAction] = 1.0;
 			} else {
+				int worstAction = argmin(targetArr[row]);
 				//rest are better
-				double valueToSet = 1.0 / (targetArr[row].length - 1);
+				double valueToSet = 1.0;/// (targetArr[row].length - 1);
 				for (int column = 0; column < targetArr[row].length; column++) {
-					if (column == bestAction || targetArrOutput[row][column] < 0) {
+					if (column == worstAction || targetArrOutput[row][column] < 0) {
 						targetArrOutput[row][column] = 0;
 						continue;
 					}
@@ -152,40 +151,54 @@ public class TrainNNUtils {
 
 	}
 
-	public static double[][] getArrayValid(double[][] inputWithTarget, int stateNumberOfColumns, int actions) {
+	public static double[][] getArrayValid(double[][] inputWithTarget, int stateNumberOfColumns, int actions,
+			boolean cleanIt) {
 		double[][] targetRaw = getColumnsArray(inputWithTarget, stateNumberOfColumns, stateNumberOfColumns + actions);
 
 		double[][] outputArr = inputWithTarget.clone();
-		int rowsDeleted = 0;
-		for (int row = 0; row < targetRaw.length; row++) {
-			double sumRewardsState = 0.0;
-			for (int column = 0; column < targetRaw[row].length; column++) {
-				sumRewardsState += targetRaw[row][column];
+		if (cleanIt) {
+			int rowsDeleted = 0;
+			for (int row = 0; row < targetRaw.length; row++) {
+				double sumRewardsState = 0.0;
+				double bestColumn = Doubles.max(targetRaw[row]);
+				for (int column = 0; column < targetRaw[row].length; column++) {
+					sumRewardsState += targetRaw[row][column];
+				}
+				if (sumRewardsState == DEFAULT_PREDICTION_ACTION_SCORE
+						|| bestColumn == DEFAULT_PREDICTION_ACTION_SCORE) {
+					int indexToDelete = row - rowsDeleted;
+					outputArr = ArrayUtils.remove(outputArr, indexToDelete);
+					rowsDeleted++;
+				}
 			}
-			if (sumRewardsState == DEFAULT_PREDICTION_ACTION_SCORE) {
-				int indexToDelete = row - rowsDeleted;
-				outputArr = ArrayUtils.remove(outputArr, indexToDelete);
-				rowsDeleted++;
-			}
+			logger.info("input {} rows -> output {} rows", inputWithTarget.length, outputArr.length);
 		}
 		return outputArr;
+	}
 
+	@Deprecated public static double[][] getArrayValid(double[][] inputWithTarget, int stateNumberOfColumns,
+			int actions) {
+		return getArrayValid(inputWithTarget, stateNumberOfColumns, actions, false);
 	}
 
 	public static boolean trainOnData(TrainType trainType, String memoryPath, int actionColumns, int stateColumns,
 			String outputModelPath, double learningRateNN, double momentumNesterov, int nEpoch, int batchSize,
 			int maxBatchSize, double l2, double l1, int trainingStats, boolean isRNN, boolean isHyperParameterTuning,
 			int rnnHorizon) throws IOException {
-		if (USE_AS_QLEARN) {
-			System.out.println("not training using as QLearn!");
-			return true;
-		}
+
 		System.out.println(trainType.name() + " training");
 		if (trainType == TrainType.standard) {
 			return trainOnDataStandard(memoryPath, actionColumns, stateColumns, outputModelPath, learningRateNN,
 					momentumNesterov, nEpoch, batchSize, maxBatchSize, l2, l1, trainingStats, isRNN,
 					isHyperParameterTuning, rnnHorizon);
+		} else if (trainType == TrainType.custom_actor_critic) {
+			return trainOnDataCustomActorCritic(memoryPath, actionColumns, stateColumns, outputModelPath,
+					learningRateNN, momentumNesterov, nEpoch, batchSize, maxBatchSize, l2, l1, trainingStats, isRNN,
+					isHyperParameterTuning, rnnHorizon);
+		} else {
+			System.err.println("trainType method not found " + trainType);
 		}
+
 		System.err.println("trainType method not found " + trainType);
 		logger.error("trainType method not found " + trainType);
 		return false;
@@ -196,10 +209,6 @@ public class TrainNNUtils {
 			String outputModelPath, double learningRateNN, double momentumNesterov, int nEpoch, int batchSize,
 			int maxBatchSize, double l2, double l1, int trainingStats, boolean isRNN, boolean isHyperParameterTuning,
 			int rnnHorizon) throws IOException {
-		if (USE_AS_QLEARN) {
-			System.out.println("not training using as QLearn!");
-			return true;
-		}
 
 		File file = new File(memoryPath);
 		if (!file.exists()) {
@@ -243,5 +252,77 @@ public class TrainNNUtils {
 
 	}
 
+	private static boolean trainOnDataCustomActorCritic(String memoryPath, int actionColumns, int stateColumns,
+			String outputModelPath, double learningRateNN, double momentumNesterov, int nEpoch, int batchSize,
+			int maxBatchSize, double l2, double l1, int trainingStats, boolean isRNN, boolean isHyperParameterTuning,
+			int rnnHorizon) throws IOException {
+
+		File file = new File(memoryPath);
+		if (!file.exists()) {
+			System.err.println(memoryPath + " not exist to train");
+			return false;
+		}
+
+		///// input DATA
+		double[][] memoryData = loadCSV(memoryPath, stateColumns);
+		//check load dimension
+		int columnsRead = memoryData[0].length;
+		assert columnsRead == (stateColumns * 2) + actionColumns;
+		memoryData = getArrayValid(memoryData, stateColumns, actionColumns);//clean it
+		if (batchSize <= 0 && memoryData != null) {
+			batchSize = Math.min(512, memoryData.length / 2);
+		}
+		double[][] x = getColumnsArray(memoryData, 0, stateColumns);
+		double[][] y = getColumnsArray(memoryData, stateColumns, stateColumns + actionColumns);
+		double[][] yPredict = getTargetClassification(y);
+
+		//PREDICT -> classification
+		System.out.println("training prediction....");
+		Dl4jClassificationMemoryReplayModel predictMemoryReplayModel = new Dl4jClassificationMemoryReplayModel(
+				outputModelPath, learningRateNN, momentumNesterov, nEpoch, batchSize, maxBatchSize, l2, l1,
+				TRAIN_FROM_FILE_MODEL, isRNN);
+		if (trainingStats != 0) {
+			predictMemoryReplayModel.setTrainingStats(true);
+		}
+		if (isHyperParameterTuning) {
+			System.out.println("Hyperparameter tuning detected!  activate EARLY_STOPPING and disable training stats");
+			Dl4jClassificationMemoryReplayModel.HYPERPARAMETER_TUNING = true;
+			Dl4jClassificationMemoryReplayModel.EARLY_STOPPING = true;
+			predictMemoryReplayModel.setTrainingStats(false);
+		}
+
+		logger.info("starting training predict model with {} epoch on {} batch", nEpoch, batchSize);
+		//		System.out.println("training on data with   rows:"+x.length+"  columns:"+x[0].length+"  epochs:"+nEpoch+"  batchSize:"+batchSize+"  maxBatchSize:"+maxBatchSize);
+		long start = System.currentTimeMillis();
+		predictMemoryReplayModel.train(x, yPredict);
+		long elapsed = (System.currentTimeMillis() - start) / (1000 * 60);
+		logger.info("Predict trained finished on {} minutes ,saving model {}", elapsed, outputModelPath);
+		predictMemoryReplayModel.saveModel();
+
+		//TARGET -> classification
+		System.out.println("training target....");
+		String targetOutput = outputModelPath.replace("predict", "target");
+		Dl4jMemoryReplayModel targetMemoryReplayModel = new Dl4jMemoryReplayModel(targetOutput, learningRateNN,
+				momentumNesterov, nEpoch, batchSize, maxBatchSize, l2, l1, TRAIN_FROM_FILE_MODEL, isRNN);
+		if (trainingStats != 0) {
+			targetMemoryReplayModel.setTrainingStats(true);
+		}
+		if (isHyperParameterTuning) {
+			System.out.println("Hyperparameter tuning detected!  activate EARLY_STOPPING and disable training stats");
+			Dl4jMemoryReplayModel.HYPERPARAMETER_TUNING = true;
+			Dl4jMemoryReplayModel.EARLY_STOPPING = true;
+			targetMemoryReplayModel.setTrainingStats(false);
+		}
+		logger.info("starting training target model with {} epoch on {} batch", nEpoch, batchSize);
+		//		System.out.println("training on data with   rows:"+x.length+"  columns:"+x[0].length+"  epochs:"+nEpoch+"  batchSize:"+batchSize+"  maxBatchSize:"+maxBatchSize);
+		start = System.currentTimeMillis();
+		targetMemoryReplayModel.train(x, y);
+		elapsed = (System.currentTimeMillis() - start) / (1000 * 60);
+		logger.info("Target trained finished on {} minutes ,saving model {}", elapsed, targetOutput);
+		targetMemoryReplayModel.saveModel();
+
+		return true;
+
+	}
 
 }

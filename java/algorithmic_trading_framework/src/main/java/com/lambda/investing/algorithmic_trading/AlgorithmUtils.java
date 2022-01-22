@@ -2,18 +2,18 @@ package com.lambda.investing.algorithmic_trading;
 
 import com.lambda.investing.algorithmic_trading.avellaneda_stoikov.AvellanedaStoikov;
 import com.lambda.investing.algorithmic_trading.avellaneda_stoikov_dqn.AvellanedaStoikovDQNMarket;
-import com.lambda.investing.algorithmic_trading.avellaneda_stoikov_dqn.RSI;
-import com.lambda.investing.algorithmic_trading.avellaneda_stoikov_dqn.SMACross;
+//import com.lambda.investing.algorithmic_trading.avellaneda_stoikov_dqn.RSI;
+//import com.lambda.investing.algorithmic_trading.avellaneda_stoikov_dqn.SMACross;
 import com.lambda.investing.algorithmic_trading.avellaneda_stoikov_q_learn.AvellanedaStoikovQLearn;
 import com.lambda.investing.algorithmic_trading.constant_spread.ConstantSpreadAlgorithm;
 import com.lambda.investing.algorithmic_trading.constant_spread.LinearConstantSpreadAlgorithm;
-import com.lambda.investing.algorithmic_trading.mean_reversion.DQNRSISideQuoting;
-import com.lambda.investing.algorithmic_trading.mean_reversion.RSISideQuoting;
-import com.lambda.investing.algorithmic_trading.portfolio.FixedPortfolioAlgorithm;
-import com.lambda.investing.algorithmic_trading.portfolio.OnnxPortfolioAlgorithm;
-import com.lambda.investing.algorithmic_trading.statistical_arbitrage.StatisticalArbitrageQuotingAlgorithm;
-import com.lambda.investing.algorithmic_trading.trend_following.DQNMovingAverageSideQuoting;
-import com.lambda.investing.algorithmic_trading.trend_following.MovingAverageSideQuoting;
+//import com.lambda.investing.algorithmic_trading.mean_reversion.DQNRSISideQuoting;
+//import com.lambda.investing.algorithmic_trading.mean_reversion.RSISideQuoting;
+//import com.lambda.investing.algorithmic_trading.portfolio.FixedPortfolioAlgorithm;
+//import com.lambda.investing.algorithmic_trading.portfolio.OnnxPortfolioAlgorithm;
+//import com.lambda.investing.algorithmic_trading.statistical_arbitrage.StatisticalArbitrageQuotingAlgorithm;
+//import com.lambda.investing.algorithmic_trading.trend_following.DQNMovingAverageSideQuoting;
+//import com.lambda.investing.algorithmic_trading.trend_following.MovingAverageSideQuoting;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -96,49 +96,49 @@ public class AlgorithmUtils {
 		}
 
 		///// Directional Algos
-		if (algorithmName.startsWith("SMACross")) {
-			System.out.println("SMACross backtest " + algorithmName);
-			return new SMACross(algorithmConnectorConfiguration, algorithmName, parameters);
-		}
-
-		if (algorithmName.startsWith("StatArb")) {
-			System.out.println("StatArb backtest " + algorithmName);
-			//				return new StatisticalArbitrageAlgorithm(algorithmName, parameters);
-			return new StatisticalArbitrageQuotingAlgorithm(algorithmConnectorConfiguration, algorithmName, parameters);
-		}
-
-		if (algorithmName.startsWith("RSISideQuoting")) {
-			System.out.println("RSISideQuoting backtest " + algorithmName);
-			//				return new StatisticalArbitrageAlgorithm(algorithmName, parameters);
-			return new RSISideQuoting(algorithmConnectorConfiguration, algorithmName, parameters);
-		}
-		if (algorithmName.startsWith("DQNRSISideQuoting")) {
-			System.out.println("DQNRSISideQuoting backtest " + algorithmName);
-			//				return new StatisticalArbitrageAlgorithm(algorithmName, parameters);
-			return new DQNRSISideQuoting(algorithmConnectorConfiguration, algorithmName, parameters);
-		}
-
-		if (algorithmName.startsWith("MovingAverage")) {
-			System.out.println("MovingAverageSideQuoting backtest " + algorithmName);
-			//				return new StatisticalArbitrageAlgorithm(algorithmName, parameters);
-			return new MovingAverageSideQuoting(algorithmConnectorConfiguration, algorithmName, parameters);
-		}
-		if (algorithmName.startsWith("DQNMovingAverage")) {
-			System.out.println("DQNMovingAverageSideQuoting backtest " + algorithmName);
-			//				return new StatisticalArbitrageAlgorithm(algorithmName, parameters);
-			return new DQNMovingAverageSideQuoting(algorithmConnectorConfiguration, algorithmName, parameters);
-		}
-		if (algorithmName.startsWith("FixedPortfolioAlgorithm")) {
-			System.out.println("FixedPortfolioAlgorithm backtest " + algorithmName);
-			//				return new StatisticalArbitrageAlgorithm(algorithmName, parameters);
-			return new FixedPortfolioAlgorithm(algorithmConnectorConfiguration, algorithmName, parameters);
-		}
-
-		if (algorithmName.startsWith("OnnxPortfolioAlgorithm")) {
-			System.out.println("OnnxPortfolioAlgorithm backtest " + algorithmName);
-			//				return new StatisticalArbitrageAlgorithm(algorithmName, parameters);
-			return new OnnxPortfolioAlgorithm(algorithmConnectorConfiguration, algorithmName, parameters);
-		}
+		//		if (algorithmName.startsWith("SMACross")) {
+		//			System.out.println("SMACross backtest " + algorithmName);
+		//			return new SMACross(algorithmConnectorConfiguration, algorithmName, parameters);
+		//		}
+		//
+		//		if (algorithmName.startsWith("StatArb")) {
+		//			System.out.println("StatArb backtest " + algorithmName);
+		//			//				return new StatisticalArbitrageAlgorithm(algorithmName, parameters);
+		//			return new StatisticalArbitrageQuotingAlgorithm(algorithmConnectorConfiguration, algorithmName, parameters);
+		//		}
+		//
+		//		if (algorithmName.startsWith("RSISideQuoting")) {
+		//			System.out.println("RSISideQuoting backtest " + algorithmName);
+		//			//				return new StatisticalArbitrageAlgorithm(algorithmName, parameters);
+		//			return new RSISideQuoting(algorithmConnectorConfiguration, algorithmName, parameters);
+		//		}
+		//		if (algorithmName.startsWith("DQNRSISideQuoting")) {
+		//			System.out.println("DQNRSISideQuoting backtest " + algorithmName);
+		//			//				return new StatisticalArbitrageAlgorithm(algorithmName, parameters);
+		//			return new DQNRSISideQuoting(algorithmConnectorConfiguration, algorithmName, parameters);
+		//		}
+		//
+		//		if (algorithmName.startsWith("MovingAverage")) {
+		//			System.out.println("MovingAverageSideQuoting backtest " + algorithmName);
+		//			//				return new StatisticalArbitrageAlgorithm(algorithmName, parameters);
+		//			return new MovingAverageSideQuoting(algorithmConnectorConfiguration, algorithmName, parameters);
+		//		}
+		//		if (algorithmName.startsWith("DQNMovingAverage")) {
+		//			System.out.println("DQNMovingAverageSideQuoting backtest " + algorithmName);
+		//			//				return new StatisticalArbitrageAlgorithm(algorithmName, parameters);
+		//			return new DQNMovingAverageSideQuoting(algorithmConnectorConfiguration, algorithmName, parameters);
+		//		}
+		//		if (algorithmName.startsWith("FixedPortfolioAlgorithm")) {
+		//			System.out.println("FixedPortfolioAlgorithm backtest " + algorithmName);
+		//			//				return new StatisticalArbitrageAlgorithm(algorithmName, parameters);
+		//			return new FixedPortfolioAlgorithm(algorithmConnectorConfiguration, algorithmName, parameters);
+		//		}
+		//
+		//		if (algorithmName.startsWith("OnnxPortfolioAlgorithm")) {
+		//			System.out.println("OnnxPortfolioAlgorithm backtest " + algorithmName);
+		//			//				return new StatisticalArbitrageAlgorithm(algorithmName, parameters);
+		//			return new OnnxPortfolioAlgorithm(algorithmConnectorConfiguration, algorithmName, parameters);
+		//		}
 
 		System.err.println("algorithm " + algorithmName + " not found!");
 		return null;

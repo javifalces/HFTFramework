@@ -1,12 +1,14 @@
 package com.lambda.investing.algorithmic_trading.constant_spread;
 
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
-import com.lambda.investing.algorithmic_trading.AlgorithmState;
 import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.exception.LambdaTradingException;
 import com.lambda.investing.model.market_data.Depth;
-import com.lambda.investing.model.trading.*;
+import com.lambda.investing.model.trading.ExecutionReport;
+import com.lambda.investing.model.trading.OrderRequest;
+import com.lambda.investing.model.trading.QuoteRequest;
+import com.lambda.investing.model.trading.QuoteRequestAction;
 import org.apache.commons.math3.util.Precision;
 
 import java.util.Map;

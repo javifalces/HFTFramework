@@ -1,7 +1,7 @@
 package com.lambda.investing.algorithmic_trading;
 
 import com.lambda.investing.Configuration;
-import com.lambda.investing.algorithmic_trading.hedging.LinearRegressionHedgeManager;
+//import com.lambda.investing.algorithmic_trading.hedging.LinearRegressionHedgeManager;
 import com.lambda.investing.model.asset.Instrument;
 import lombok.Getter;
 import lombok.Setter;
@@ -35,14 +35,14 @@ import java.util.Map;
 		if (enableAutoHedger) {
 			String hedgePath = Configuration.OUTPUT_PATH + File.separator + String
 					.format("hedge_%s.json", getInstrument().getPrimaryKey());
-			try {
-				LinearRegressionHedgeManager hedgeManager = new LinearRegressionHedgeManager(hedgePath);
-				setHedgeManager(hedgeManager);
-			} catch (FileNotFoundException e) {
-				System.err.println(
-						"Error creating LinearRegressionHedgeManager looking for " + hedgePath + " disable AH");
-				logger.error("Error creating LinearRegressionHedgeManager looking for " + hedgePath + " disable AH");
-			}
+			//			try {
+			//				LinearRegressionHedgeManager hedgeManager = new LinearRegressionHedgeManager(hedgePath);
+			//				setHedgeManager(hedgeManager);
+			//			} catch (FileNotFoundException e) {
+			//				System.err.println(
+			//						"Error creating LinearRegressionHedgeManager looking for " + hedgePath + " disable AH");
+			//				logger.error("Error creating LinearRegressionHedgeManager looking for " + hedgePath + " disable AH");
+			//			}
 		}
 
 	}

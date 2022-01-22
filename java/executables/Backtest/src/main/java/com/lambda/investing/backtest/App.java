@@ -4,11 +4,9 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
 import com.lambda.investing.Configuration;
-import com.lambda.investing.algorithmic_trading.Algorithm;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.TrainType;
 import com.lambda.investing.backtest_engine.BacktestConfiguration;
 import com.lambda.investing.backtest_engine.ordinary.OrdinaryBacktest;
-import com.lambda.investing.market_data_connector.MarketDataConnectorPublisherListener;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.BeansException;
@@ -21,21 +19,22 @@ import org.springframework.core.io.support.PropertiesLoaderUtils;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.management.ManagementFactory;
 import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.text.ParseException;
-import java.util.*;
+import java.util.Properties;
+import java.util.Scanner;
 
-import static com.lambda.investing.algorithmic_trading.reinforcement_learning.TrainNNUtils.*;
+import static com.lambda.investing.algorithmic_trading.reinforcement_learning.TrainNNUtils.DEFAULT_TRAIN_TYPE;
+import static com.lambda.investing.algorithmic_trading.reinforcement_learning.TrainNNUtils.trainOnData;
 
 public class App {
 
+	private static boolean REMOVE_JSON_START = true;
 	private static final String TRAIN_MODE = "train";
 	protected final ApplicationContext ac;
 	protected final Logger logger;
-	public static Gson GSON = new GsonBuilder()
+	public static Gson GSON = new GsonBuilder().setPrettyPrinting()
 			.excludeFieldsWithModifiers(Modifier.STATIC, Modifier.TRANSIENT, Modifier.VOLATILE, Modifier.FINAL)
 			.serializeSpecialFloatingPointValues().disableHtmlEscaping().create();
 
@@ -79,8 +78,13 @@ public class App {
 				args = new String[] { exampleJson };
 				checkFile = false;
 			}
+			boolean deleteFile = false;
+			if (args.length == 2) {
+				//from python
+				deleteFile = true;
+			}
 
-			if (args.length != 1) {
+			if (args.length > 2) {
 				System.err.print("need a json file path as input argument to load backtest configuration");
 				System.exit(-1);
 			} else {
@@ -93,14 +97,22 @@ public class App {
 								+ args[0]);
 						System.exit(-1);
 					}
+
 					try {
 						String content = new String(Files.readAllBytes(Paths.get(args[0])));
 						args[0] = content;
 					} catch (IOException e) {
 						System.err.print("need valid a json file path as input argument to load backtest configuration "
 								+ args[0]);
+						if (REMOVE_JSON_START && deleteFile) {
+							file.delete();
+						}
 						System.exit(-1);
 
+					}
+
+					if (REMOVE_JSON_START && deleteFile) {
+						file.delete();
 					}
 				}
 
@@ -109,6 +121,7 @@ public class App {
 		} catch (BeansException be) {
 			logger = LogManager.getLogger();
 			logger.fatal("Unable to load Spring application context files", be);
+
 			throw be;
 		}
 		logger = LogManager.getLogger();
@@ -143,12 +156,11 @@ public class App {
 			if (trainInputConfiguration.getMemoryPath() != null
 					&& trainInputConfiguration.getOutputModelPath() != null) {
 				logger.info("trainInputConfiguration detected! -> training");
-				logger.info(args[0]);
+				logger.info("{}", GSON.toJson(trainInputConfiguration));
 				TrainType trainType = DEFAULT_TRAIN_TYPE;
 
 				if (trainInputConfiguration.getTrainType() != null) {
 					trainType = trainInputConfiguration.getTrainType();
-
 				}
 				System.out.println(trainType + " training model");
 				System.out.println("-----");
@@ -183,7 +195,7 @@ public class App {
 		System.out.println(args[0]);
 		System.out.println("-----");
 		logger.info("----");
-		logger.info("{}", args[0]);
+		logger.info("{}", GSON.toJson(inputConfiguration));
 		logger.info("----");
 		try {
 			Resource resource = new FileSystemResource("application.properties");

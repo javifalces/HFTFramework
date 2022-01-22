@@ -26,6 +26,8 @@ import java.util.Map;
 
 public class AvellanedaStoikovQLearn extends AvellanedaStoikov {
 
+	protected static boolean DELTA_REWARD = true;
+
 	protected List<Integer> actionHistoricalList = new ArrayList<>();
 	protected static int DEFAULT_LAST_Q = -1;
 	protected static String BASE_MEMORY_PATH = Configuration.OUTPUT_PATH + File.separator;
@@ -162,11 +164,11 @@ public class AvellanedaStoikovQLearn extends AvellanedaStoikov {
 		//State Registration
 		stateManager = new StateManager(this, state);
 
+
 		//saving maximun of max prices
 		super.setMidPricesQueue(maxWindowsTick);
 
 	}
-
 	public void init() {
 		init(true);
 	}
@@ -217,7 +219,6 @@ public class AvellanedaStoikovQLearn extends AvellanedaStoikov {
 		} catch (Exception e) {
 		}
 	}
-
 	@Override public boolean onDepthUpdate(Depth depth) {
 		if (lastDepth == null) {
 			this.lastDepth = depth;
@@ -242,8 +243,8 @@ public class AvellanedaStoikovQLearn extends AvellanedaStoikov {
 				super.riskAversion = actionValues[AvellanedaAction.RISK_AVERSION_INDEX];
 				super.skewPricePct = actionValues[AvellanedaAction.SKEW_PRICE_INDEX];
 				if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal()) {
-					logger.info("set action {}   -> windowTick={}  riskAversion={}  skewPricePct={} ", action,
-							super.windowTick, super.riskAversion, super.skewPricePct);
+					logger.info("[{}] set action {}   -> windowTick={}  riskAversion={}  skewPricePct={} ", action,
+							getCurrentTime(), super.windowTick, super.riskAversion, super.skewPricePct);
 				}
 				actionHistoricalList.add(action);
 				lastRewardQ = getCurrentReward();
@@ -259,12 +260,17 @@ public class AvellanedaStoikovQLearn extends AvellanedaStoikov {
 					double reward = getCurrentReward();
 					if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal()) {
 						logger.info(
-								"action {}   -> windowTick={}  riskAversion={}  skewPricePct={} -> currentReward={}   previouslyReward={}  rewardDelta={} => ",
-								lastActionQ, super.windowTick, super.riskAversion, super.skewPricePct, reward,
-								lastRewardQ, reward - lastRewardQ);
+								"[{}] action {}   -> windowTick={}  riskAversion={}  skewPricePct={} -> currentReward={}   previouslyReward={}  rewardDelta={} => ",
+								getCurrentTime(), lastActionQ, super.windowTick, super.riskAversion, super.skewPricePct,
+								reward, lastRewardQ, reward - lastRewardQ);
 					}
+					double rewardDelta = reward;
+					if (DELTA_REWARD) {
+						rewardDelta = reward - lastRewardQ;
+					}
+					rewardDelta = rewardDelta / this.quantity;
 
-					updateMemoryReplay(lastStateArr, lastStatePosition, lastActionQ, reward - lastRewardQ, this.state);
+					updateMemoryReplay(lastStateArr, lastStatePosition, lastActionQ, rewardDelta, this.state);
 					resetLastQValues();
 				}
 			}
