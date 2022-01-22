@@ -12,7 +12,7 @@ Open to suggestions/changes/modifications
 
 *This code is part of a bigger private repository with more algos and more connectors. If you see something wrong or is not compiling , please contact me by email*
 
-### [Alpha AS]
+## Alpha AS
 IS my research where and Avellaneda Stoikov market making implementation is going to be manage by RL.
 RL is going to configure the different Avellaneda stoikov parameters dinamically based on market state.
 ![Alpha AS](fig/AlphaAS_functional.jpg?raw=true "Alpha AS")
