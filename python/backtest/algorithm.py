@@ -21,7 +21,9 @@ import math
 
 class Algorithm:
     MAXTICKS_PLOT = 30000
-    NAME=''
+    NAME = ''
+    PLOT_ROLLING_WINDOW_TICKS = 25
+    FORMAT_SAVE_NUMBERS = '%.18e'
 
     def __init__(self, algorithm_info: str, parameters: dict) -> None:
         super().__init__()
@@ -55,10 +57,10 @@ class Algorithm:
                 print('clean ml model %s' % file)
                 os.remove(output_path + os.sep + file)
 
-    def get_test_name(self,NAME,algorithm_number:int):
+    def get_test_name(self, name: str, algorithm_number: int = None):
         prefix = self.algorithm_info
-        if not prefix.startswith(NAME):
-            prefix = '%s_%s' % (NAME, self.algorithm_info)
+        if not prefix.startswith(name):
+            prefix = '%s_%s' % (name, self.algorithm_info)
         if algorithm_number is None:
             algorithm_name = prefix
         else:
@@ -84,7 +86,18 @@ class Algorithm:
         if 'seed' in self.parameters.keys():
             self.parameters['seed'] = self.parameters['seed'] + iteration * 1000 + algorithm_number
 
-    def merge_q_matrix(self, backtest_launchers: list) -> list:
+    def get_iteration_number_filename(self, filename) -> int:
+        try:
+            splitted = filename.split('_')
+            last_item = splitted[-1]
+            number = last_item[:last_item.find(".")]
+            output = int(number)
+            return output
+        except:
+            return 0
+
+    def merge_q_matrix(self, backtest_launchers: list, algos_per_iteration: int = None) -> list:
+        # USED on PHD AVELLANEDA DQN ONLY!!!
         base_path_search = backtest_launchers[0].output_path
         csv_files = glob.glob(base_path_search + os.sep + '*.csv')
 
@@ -98,6 +111,10 @@ class Algorithm:
                 continue
             for algorithm_name in algorithm_names:
                 if self._is_memory_file(csv_file, algorithm_name=algorithm_name):
+                    if algos_per_iteration is not None:
+                        number_algo = self.get_iteration_number_filename(csv_file)
+                        if number_algo > algos_per_iteration:
+                            continue
                     csv_files_out.append(csv_file)
         print(
             'combining %d qmatrix for %d launchers from %s'
@@ -126,7 +143,7 @@ class Algorithm:
         # Override it
         print("saving %d rows in %d files" %( len(output_array),len(csv_files_out)))
         for csv_file_out in csv_files_out:
-            savetxt(csv_file_out, output_array, delimiter=',', fmt='%.18e')
+            savetxt(csv_file_out, output_array, delimiter=',', fmt=Algorithm.FORMAT_SAVE_NUMBERS)
         return csv_files_out
 
     def train_model(self, jar_path,train_input_configuration: TrainInputConfiguration):
@@ -238,17 +255,76 @@ class Algorithm:
         trade_pnl_df['returns'] = trade_pnl_df['returns'].replace([np.inf, -np.inf], np.nan)
         trade_pnl_df['close_returns'] = trade_pnl_df['close_returns'].replace([np.inf, -np.inf], np.nan)
         trade_pnl_df['open_returns'] = trade_pnl_df['open_returns'].replace([np.inf, -np.inf], np.nan)
-        trade_pnl_df.fillna(method='ffill',inplace=True)
-        before_len=len(trade_pnl_df)
-        trade_pnl_df.dropna(axis=0,inplace=True)#all the rest!
-        if(len(trade_pnl_df)==0 and before_len>0):
+        trade_pnl_df.fillna(method='ffill', inplace=True)
+        before_len = len(trade_pnl_df)
+        trade_pnl_df.dropna(axis=0, inplace=True)  # all the rest!
+        if (len(trade_pnl_df) == 0 and before_len > 0):
             print(rf"WARNING!! trade pnl size =0 and before dropna {before_len}!!")
-        trade_pnl_df['sharpe']=self.get_sharpe(trade_df=trade_pnl_df,column='returns')
-        trade_pnl_df['drawdown']=get_drawdown(trade_pnl_df['close_pnl'])
+        trade_pnl_df['sharpe'] = self.get_sharpe(trade_df=trade_pnl_df, column='returns')
+        trade_pnl_df['drawdown'] = get_drawdown(trade_pnl_df['close_pnl'])
 
         return trade_pnl_df
 
-    def plot_params(self,raw_trade_pnl_df: pd.DataFrame , figsize=None,title:str=None):
+    def plot_params_base(self, fig, axs, last_index_plotted, color, color_mean, bid_color, ask_color, lw, alpha,
+                         raw_trade_pnl_df: pd.DataFrame):
+        from matplotlib import dates
+        import matplotlib.pyplot as plt
+
+        df = self.get_trade_df(raw_trade_pnl_df=raw_trade_pnl_df)
+        df.set_index('time', inplace=True)
+
+        index = last_index_plotted + 1
+        ax = axs[index]
+        ax.plot(df['ask'], color=ask_color, lw=lw, alpha=alpha)
+        ax.plot(df['bid'], color=bid_color, lw=lw, alpha=alpha)
+        ax.grid(axis='y', ls='--', alpha=0.7)
+        ax.set_ylabel('price')
+        ax.legend(['ask', 'bid'])
+
+        index += 1
+        ax = axs[index]
+        # ax.bar(x=df.index,height=df['ask_qty'], color=ask_color, lw=lw, alpha=alpha)
+        # ax.bar(x=df.index,height=df['bid_qty'], color=bid_color, lw=lw, alpha=alpha)
+        ax.plot(df['ask_qty'], color=ask_color, lw=lw, alpha=alpha)
+        ax.plot(df['bid_qty'], color=bid_color, lw=lw, alpha=alpha)
+
+        ax.grid(axis='y', ls='--', alpha=0.7)
+        ax.set_ylabel('quantity')
+        ax.legend(['ask', 'bid'])
+
+        index += 1
+        ax = axs[index]
+        ax.plot(df['imbalance'], color=color, lw=lw, alpha=alpha)
+        ax.plot(df['imbalance'].rolling(window=self.PLOT_ROLLING_WINDOW_TICKS).mean(), color=color_mean, lw=lw - 0.1,
+                alpha=alpha)
+        ax.grid(axis='y', ls='--', alpha=0.7)
+        ax.set_ylabel('imbalance')
+
+        index += 1
+        ax = axs[index]
+        ax.plot(df['reward'], color=color, lw=lw, alpha=alpha)
+        ax.plot(df['reward'].rolling(window=self.PLOT_ROLLING_WINDOW_TICKS).mean(), color=color_mean, lw=lw - 0.1,
+                alpha=alpha)
+        ax.set_ylabel('reward')
+        ax.grid(axis='y', ls='--', alpha=0.7)
+        ax.set_title('mean reward=%.2f' % df['reward'].mean())
+
+        #### xaxis
+        # date_locator=dates.MinuteLocator()
+        date_locator = dates.HourLocator()
+        date_locator.MAXTICKS = Algorithm.MAXTICKS_PLOT
+
+        plt.gca().xaxis.set_major_locator(date_locator)
+        plt.gca().xaxis.set_major_formatter(dates.DateFormatter('%H:%M'))
+
+        minor_locator = dates.MinuteLocator(byminute=[0, 15, 30, 45], interval=1)
+        minor_locator.MAXTICKS = Algorithm.MAXTICKS_PLOT
+        plt.gca().xaxis.set_minor_locator(minor_locator)
+        plt.xticks(rotation=60)
+
+        return fig
+
+    def plot_params(self, raw_trade_pnl_df: pd.DataFrame, figsize=None, title: str = None):
         import seaborn as sns
         sns.set_theme()
         import matplotlib.pyplot as plt
@@ -256,7 +332,8 @@ class Algorithm:
             if figsize is None:
                 figsize = (20, 12)
 
-            df=self.get_trade_df(raw_trade_pnl_df=raw_trade_pnl_df)
+            df = self.get_trade_df(raw_trade_pnl_df=raw_trade_pnl_df)
+            df.set_index('time', inplace=True)
 
             print('plotting params from %s to %s' % (df.index[0], df.index[-1]))
 
@@ -270,78 +347,76 @@ class Algorithm:
 
             plt.close()
             subplot_origin = 510
+            nrows = 5
             if skew_change:
                 subplot_origin += 100
+                nrows += 1
 
             if windows_change:
                 subplot_origin += 100
+                nrows += 1
 
             subplot_origin += 1
-            plt.subplot(subplot_origin)
-            df['risk_aversion'].plot(figsize=figsize)
-            plt.legend()
+
+            index = 0
+            fig, axs = plt.subplots(nrows=nrows, ncols=1, figsize=figsize, sharex=True)
+            color = 'black'
+            color_mean = 'gray'
+            bid_color = 'green'
+            ask_color = 'red'
+
+            window = self.PLOT_ROLLING_WINDOW_TICKS
+            alpha = 0.9
+            lw = 0.5
+
+            ax = axs[index]
+            ax.plot(df['risk_aversion'], color=color, lw=lw, alpha=alpha)
+            ax.plot(df['risk_aversion'].rolling(window=window).mean(), color=color_mean, lw=lw - 0.1, alpha=alpha)
+
+            ax.set_ylabel('risk_aversion')
+            ax.grid(axis='y', ls='--', alpha=0.7)
+
             if title is not None:
-                plt.title(title)
+                ax.set_title(title)
 
             if windows_change:
-                subplot_origin += 1
-                plt.subplot(subplot_origin)
-                df['windows_tick'].plot(figsize=figsize)
-                plt.legend()
+                index += 1
+                ax = axs[index]
+                ax.plot(df['windows_tick'], color=color, lw=lw, alpha=alpha)
+                ax.plot(df['windows_tick'].rolling(window=window).mean(), color=color_mean, lw=lw - 0.1, alpha=alpha)
+
+                ax.set_ylabel('windows_tick')
+                ax.grid(axis='y', ls='--', alpha=0.7)
 
             if skew_change:
-                subplot_origin += 1
-                plt.subplot(subplot_origin)
-                df['skew_pct'].plot(figsize=figsize)
-                plt.legend()
+                index += 1
+                ax = axs[index]
+                ax.plot(df['skew_pct'], color=color, lw=lw, alpha=alpha)
+                ax.set_ylabel('skew_pct')
+                ax.grid(axis='y', ls='--', alpha=0.7)
 
-            subplot_origin += 1
-            plt.subplot(subplot_origin)
-            df['bid'].plot(figsize=figsize)
-            df['ask'].plot(figsize=figsize)
-            plt.legend()
-
-            subplot_origin += 1
-            plt.subplot(subplot_origin)
-            df['bid_qty'].plot(figsize=figsize)
-            df['ask_qty'].plot(figsize=figsize)
-            plt.legend()
-
-            subplot_origin += 1
-            plt.subplot(subplot_origin)
-            df['imbalance'].plot(figsize=figsize)
-            plt.legend()
-
-            subplot_origin += 1
-            plt.subplot(subplot_origin)
-            df['reward'].plot(figsize=figsize)
-            plt.legend()
-            # date_locator=dates.MinuteLocator()
-            date_locator = dates.HourLocator()
-            date_locator.MAXTICKS=Algorithm.MAXTICKS_PLOT
-
-            plt.gca().xaxis.set_major_locator(date_locator)
-            plt.gca().xaxis.set_major_formatter(dates.DateFormatter('%H:%M'))
-
+            fig = self.plot_params_base(fig, axs=axs, last_index_plotted=index, color=color, color_mean=color_mean,
+                                        bid_color=bid_color, ask_color=ask_color, lw=lw, alpha=alpha,
+                                        raw_trade_pnl_df=raw_trade_pnl_df)
             plt.show()
-            return plt.gcf()
+            return fig
         except Exception as e:
             print('Some error plotting params %s' % e)
         return None
 
-
-    def plot_trade_results(self, raw_trade_pnl_df: pd.DataFrame ,title:str=None,plot_open:bool=True) -> tuple:
+    def plot_trade_results(self, raw_trade_pnl_df: pd.DataFrame, figsize=None, title: str = None,
+                           plot_open: bool = True) -> tuple:
         import warnings
         import matplotlib.pyplot as plt
         import seaborn as sns
         sns.set_theme()
 
-        trade_pnl_df=self.get_trade_df(raw_trade_pnl_df=raw_trade_pnl_df)
+        trade_pnl_df = self.get_trade_df(raw_trade_pnl_df=raw_trade_pnl_df)
         from matplotlib import MatplotlibDeprecationWarning
         import pandas as pd
         warnings.filterwarnings("ignore", category=MatplotlibDeprecationWarning)
         warnings.filterwarnings("ignore", category=Warning)
-
+        #prepare dataframe to plot
 
         # plt.style.use('seaborn-white')
         # plt.style.use('seaborn-whitegrid')
@@ -352,138 +427,150 @@ class Algorithm:
         if len(trade_pnl_df) == 0:
             print('No trades to plot!')
             return (None, trade_pnl_df)
-
-        # if normalize_open_pnl and plot_open:
-        #     q1=trade_pnl_df['open_returns'].quantile(0.25)
-        #     q3=trade_pnl_df['open_returns'].quantile(0.75)
-        #     iqr=q3-q1
-        #     lower_limit = q1-1.5*iqr
-        #     upper_limit = q3+1.5*iqr
-        #     trade_pnl_df[trade_pnl_df['open_returns']>upper_limit]['open_returns']=upper_limit
-        #     trade_pnl_df[trade_pnl_df['open_returns']<lower_limit]['open_returns'] = lower_limit
-        #
-        #
-        #
-        #     trade_pnl_df['open_pnl'].iloc[1:]=trade_pnl_df['open_returns'].iloc[1:]
-        #     trade_pnl_df['open_pnl']=trade_pnl_df['open_pnl'].cumsum()
-        #
-        #     trade_pnl_df['returns'] = trade_pnl_df['open_returns']+trade_pnl_df['close_returns']
-        #     trade_pnl_df['total_pnl'] = trade_pnl_df['returns'].cumsum()
-
-
-        # try:
-        #
-        #     trade_pnl_df['time'] = trade_pnl_df['time'].dt.tz_localize("UTC").dt.tz_convert('Europe/Madrid')
-        # except Exception as e:
-        #     print('cant move trades time from UTC :%s' % e)
-
         print('plotting trade_results from %s to %s' % (trade_pnl_df['time'].iloc[0], trade_pnl_df['time'].iloc[-1]))
-
-
-
-        # if len(trade_pnl_df) == 0:
-        #     print('No trades to plot!')
-        #     return (None, trade_pnl_df)
         trade_pnl_df = trade_pnl_df.set_index('time')
-
-
-
+        # prepare blank plot
         plt.close()
-        figsize = (18, 15)  # 1800x1500
+        if figsize is None:
+            figsize = (20, 12)
+
         date_locator = dates.HourLocator()
         date_locator.MAXTICKS = Algorithm.MAXTICKS_PLOT
 
-        minor_locator=dates.MinuteLocator(byminute=[0,15,30,45], interval = 1)
+        minor_locator = dates.MinuteLocator(byminute=[0, 15, 30, 45], interval=1)
         minor_locator.MAXTICKS = Algorithm.MAXTICKS_PLOT
+        color = 'black'
+        color_close = 'black'
+        color_open = 'lightgray'
+
+        color_mean = 'lightgray'
+        bid_color = 'green'
+        ask_color = 'red'
+
+        window = self.PLOT_ROLLING_WINDOW_TICKS
+        alpha = 0.9
+        lw = 0.5
+        # prepare blank plot
+
+        index = 0
+        fig, axs = plt.subplots(nrows=4, ncols=1, figsize=figsize)
+
         # pnl
         try:
-            plt.subplot(411)
-            trade_pnl_df['close_pnl'].plot(figsize=figsize, style='r', lw=2)
-            # trade_pnl_df['realized_pnl'].plot(figsize=figsize, style='r', lw=1)
+            ax = axs[index]
+            legend_values = ['close_pnl']
+            ax.plot(trade_pnl_df['close_pnl'], color=color_close, lw=lw, alpha=alpha)
             if plot_open:
-                trade_pnl_df['open_pnl'].plot(figsize=figsize, style='b')
-            plt.legend()
-            if title is None:
-                plt.title(self.algorithm_info)
-            else:
-                plt.title(title)
+                ax.plot(trade_pnl_df['open_pnl'], color=color_open, lw=lw, alpha=alpha)
+                legend_values.append('open_pnl')
 
-            plt.gca().xaxis.set_major_locator(date_locator)
-            plt.gca().xaxis.set_major_formatter(dates.DateFormatter('%H:%M'))
-            plt.gca().xaxis.set_minor_locator(minor_locator)
-            plt.ylabel('equity curve pct')
-            # drawdown
+            ax.legend(legend_values)
+            ax.set_ylabel('pnl (€)')
+            ax.grid(axis='y', ls='--', alpha=0.7)
+
+            if title is None:
+                ax.set_title(self.algorithm_info)
+            else:
+                ax.set_title(title)
+            index +=1
+
         except Exception as e:
             print(rf"error plotting pnl {e}")
 
+        # drawdown
         try:
-            plt.subplot(412)
-
+            ax = axs[index]
             from backtest.pnl_utils import get_drawdown
             dd_open = get_drawdown(trade_pnl_df['open_pnl'])
             dd_close = get_drawdown(trade_pnl_df['close_pnl'])
             dd_close.index = pd.to_datetime(dd_close.index)
             dd_open.index = pd.to_datetime(dd_open.index)
+            legend_values = ['drawdown_close_pnl']
+            dd_close.plot.area(ax=ax, color=color_close, lw=lw, alpha=alpha)
+            # ax.plot(dd_close,kind='area', color=color_close, lw=lw, alpha=alpha)
 
-            dd_close.plot.area(figsize=figsize, style='--r')
             if plot_open:
-                dd_open.plot.area(figsize=figsize, style='--b')
+                dd_open.plot.area(ax=ax, color=color_open, lw=lw, alpha=alpha)
+                # ax.area(dd_open,kind='area', color=color_open, lw=lw, alpha=alpha)
+                legend_values.append('drawdown_open_pnl')
 
-                plt.legend(['drawdown_open_pnl', 'drawdown_close_pnl'])
-            else:
-                plt.legend(['drawdown_close_pnl'])
-
-            plt.ylabel('drawdown curve pct')
+            ax.legend(legend_values)
+            ax.set_ylabel('drawdown (€)')
             plt.gca().xaxis.set_major_locator(date_locator)
             plt.gca().xaxis.set_major_formatter(dates.DateFormatter('%H:%M'))
             plt.gca().xaxis.set_minor_locator(minor_locator)
+
+            index+=1
         except Exception as e:
             print(rf"error plotting dd {e}")
 
         # position sizing
         try:
-            plt.subplot(413)
-            trade_pnl_df['position'].plot(figsize=figsize, style='g')
+            ax = axs[index]
+            ax.plot(trade_pnl_df['position'], color=color, lw=lw, alpha=alpha)
+            ax.set_ylabel('position')
             # quantity_mean = trade_pnl_df['quantity']*(trade_pnl_df['position'].max())
             # quantity_mean.plot(color='k', figsize=figsize)
-            plt.ylabel('position - inventory')
             # plt.legend(['position','quantity_scaled'])
-            plt.legend()
+
             plt.gca().xaxis.set_major_locator(date_locator)
             plt.gca().xaxis.set_major_formatter(dates.DateFormatter('%H:%M'))
             plt.gca().xaxis.set_minor_locator(minor_locator)
+
+            ax.set_xlabel('time')
+            index += 1
         except Exception as e:
             print(rf"error plotting position {e}")
 
+        plt.gca().xaxis.set_major_locator(date_locator)
+        plt.gca().xaxis.set_major_formatter(dates.DateFormatter('%H:%M'))
+        plt.gca().xaxis.set_minor_locator(minor_locator)
+
         # returns hist
+        ax = plt.subplot(427)
+        # axs = fig.subplots(nrows=4, ncols=2)
+        index_col = 0
         try:
-            plt.subplot(427)
-            trade_pnl_df['close_returns'].plot(
-                kind='hist', figsize=figsize, stacked=True, style='r'
-            )
+            # ax = axs[index][index_col]
+            legend_values = ['close_returns']
+            sns.histplot(ax=ax, data=trade_pnl_df, x="close_returns", bins=30, kde=True, color=color_close)
+            # trade_pnl_df['close_returns'].plot(
+            #     kind='hist', ax=ax, stacked=True, color=color_close, lw=lw, alpha=alpha
+            # )
+
+            # ax.plot(trade_pnl_df['close_returns'], color=color_close, lw=lw, alpha=alpha)
             if plot_open:
-                trade_pnl_df['returns'].plot(
-                    kind='hist', figsize=figsize, stacked=True, style='b'
-                )
-            plt.title('returns - hist')
-            plt.ylabel('returns pct')
-            plt.legend()
-            plt.autoscale(True)
-            # plt.tight_layout()
+                sns.histplot(ax=ax, data=trade_pnl_df, x="returns", bins=30, kde=True, color=color_open)
+                # trade_pnl_df['returns'].plot(
+                #     kind='hist', ax=ax, stacked=True, color=color_open, lw=lw, alpha=alpha
+                # )
+
+                # ax.plot(trade_pnl_df['returns'],color=color_open, lw=lw, alpha=alpha)
+
+                legend_values.append('total_returns')
+
+            ax.legend(legend_values)
+            ax.set_title('returns - hist')
+            ax.set_ylabel('returns pct')
+
+            # ax.tight_layout()
+            # index+=1
+            index_col += 1
+
         except Exception as e:
             print(rf"error plotting returns {e}")
 
-
+        ax = plt.subplot(428)
         # add some metrics : sharpe max dd etc
         try:
-            plt.subplot(428)
-            axis = plt.gca()
+            # ax = axs[index][index_col]
             column_sharpe='returns'
 
             sharpe = self.get_sharpe(trade_df=trade_pnl_df,column='returns')
             if trade_pnl_df['sharpe'][:-1].sum() != 0:
-                trade_pnl_df['sharpe'][:-1].plot(figsize=figsize)
-                plt.title('rolling sharpe')
+                ax.plot(trade_pnl_df['sharpe'][:-1], color=color, lw=lw, alpha=alpha)
+                # trade_pnl_df['sharpe'][:-1].plot(figsize=figsize)
+                ax.set_title('rolling sharpe')
 
             # max_dd_close,max_dd_open,time_max_dd_close,time_max_dd_open
             from backtest.pnl_utils import get_max_drawdowns
@@ -509,18 +596,17 @@ class Algorithm:
                 )
             )
             props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
-            axis.text(
+            ax.text(
                 0.05,
                 0.95,
                 textstr,
-                transform=axis.transAxes,
+                transform=ax.transAxes,
                 fontsize=16,
                 verticalalignment='top',
                 bbox=props,
             )
         except Exception as e:
             print(rf"error plotting stats text box {e}")
-
 
         plt.show()
 
@@ -543,7 +629,7 @@ class Algorithm:
         )
         parameters = self.get_parameters()
 
-        algorithm_name = self.get_test_name(NAME=self.NAME, algorithm_number=algorithm_number)
+        algorithm_name = self.get_test_name(name=self.NAME, algorithm_number=algorithm_number)
 
         algorithm_configurationQ = AlgorithmConfiguration(
             algorithm_name=algorithm_name, parameters=parameters

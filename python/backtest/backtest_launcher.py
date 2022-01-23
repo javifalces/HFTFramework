@@ -40,10 +40,10 @@ class BacktestLauncher(threading.Thread):
 
     def __init__(
             self,
-        input_configuration: InputConfiguration,
-        id: str,
-        jar_path='Backtest.jar',
-        jvm_options: str = DEFAULT_JVM,
+            input_configuration: InputConfiguration,
+            id: str,
+            jar_path='Backtest.jar',
+            jvm_options: str = DEFAULT_JVM,
     ):
         threading.Thread.__init__(self)
         self.input_configuration = input_configuration
@@ -77,7 +77,7 @@ class BacktestLauncher(threading.Thread):
         textfile.write(file_content)
         textfile.close()
 
-        command_to_run = self.task + ' %s' % filename
+        command_to_run = self.task + ' %s 1' % filename
         print('pwd=%s' % os.getcwd())
         if self.VERBOSE_OUTPUT:
             command_to_run += '>%sout.log' % (os.getcwd() + os.sep)
@@ -89,7 +89,7 @@ class BacktestLauncher(threading.Thread):
         print('%s finished with code %d' % (self.id, ret))
         self.state = BacktestState.finished
         # remove input file
-        if REMOVE_INPUT_JSON and ret==0:
+        if REMOVE_INPUT_JSON and os.path.exists(filename):
             os.remove(filename)
 
 

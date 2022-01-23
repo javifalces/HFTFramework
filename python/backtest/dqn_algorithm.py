@@ -1,3 +1,5 @@
+from typing import Type
+
 from backtest.algorithm import Algorithm
 import copy
 import pandas as pd
@@ -5,7 +7,9 @@ import os
 from numpy import genfromtxt, savetxt
 import glob
 
+from backtest.algorithm_enum import AlgorithmEnum
 from backtest.iterations_period_time import IterationsPeriodTime
+from backtest.parameter_tuning.ga_configuration import GAConfiguration
 from backtest.score_enum import ScoreEnum, get_score_enum_csv_column
 import datetime
 from backtest.pnl_utils import *
@@ -121,7 +125,6 @@ class DQNAlgorithm(Algorithm):
     class TrainType:
         default = "standard"
         standart = "standard"
-        custom_actor_critic = "custom_actor_critic"
 
     STATE_LIST_PARAMETERS = ['stateColumnsFilter', 'periodsTAStates']
     DEFAULT_PREDICTION_ACTION_SCORE = 0.0
@@ -651,6 +654,47 @@ class DQNAlgorithm(Algorithm):
                     f"fill_memory finished with {memory_size_with_rewards}[{memory_size}] rows -> backup memory on {memory_backup}")
                 return
 
+    def is_policy_gradient_algorithm(self) -> bool:
+        # from backtest.rsi_dqn import RsiDQN
+        # from backtest.moving_average_dqn import MovingAverageDQN
+        # is_reinforce = isinstance(self, RsiDQN) or isinstance(self, MovingAverageDQN)
+        # return is_reinforce
+        return False
+
+    def parameter_tuning(
+            self,
+            algorithm_enum: AlgorithmEnum,
+            start_date: datetime.datetime,
+            end_date: datetime,
+            instrument_pk: str,
+            parameters_base: dict,
+            parameters_min: dict,
+            parameters_max: dict,
+            max_simultaneous: int,
+            generations: int,
+            ga_configuration: Type[GAConfiguration],
+            clean_initial_generation_experience: bool = True
+    ) -> (dict, pd.DataFrame):
+        # disable fit model!
+        if max_simultaneous > 1:
+            print(rf"disable fit models on pt!")
+            parameters_base['trainingPredictIterationPeriod'] = IterationsPeriodTime.OFF
+            parameters_base['trainingTargetIterationPeriod'] = IterationsPeriodTime.OFF
+
+        return super().parameter_tuning(
+            algorithm_enum=algorithm_enum,
+            start_date=start_date,
+            end_date=end_date,
+            instrument_pk=instrument_pk,
+            parameters_base=parameters_base,
+            parameters_min=parameters_min,
+            parameters_max=parameters_max,
+            max_simultaneous=max_simultaneous,
+            generations=generations,
+            ga_configuration=ga_configuration,
+            clean_initial_generation_experience=clean_initial_generation_experience
+        )
+
     def train(
             self,
             start_date: datetime.datetime,
@@ -758,7 +802,13 @@ class DQNAlgorithm(Algorithm):
                     print("limit number of iterations reached on early stopping explore_prob<=0.01-> break")
                     is_finished = True
                     break
+
+                if (self.is_policy_gradient_algorithm()):
+                    # print(rf"policy algorithm detected -> explore_prob for to 0")
+                    explore_prob = 0.0
+
                 explore_prob = max(0.0, explore_prob)
+
                 parameters = self.get_parameters(
                     explore_prob=explore_prob
                 )
