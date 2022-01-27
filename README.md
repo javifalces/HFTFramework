@@ -23,7 +23,7 @@ RL is going to configure the different Avellaneda stoikov parameters dinamically
 ## [JAVA]
 Where the algorithm logics , backtest and execution happens
 
-![Backtest Architecture](fig/BacktestArquitecture.pgb?raw=true "Backtest")
+![Backtest Architecture](fig/BacktestArquitecture.jpg?raw=true "Backtest")
 
 ![Live Architecture](fig/LiveArquitecture.jpg?raw=true "Live trading")
 
