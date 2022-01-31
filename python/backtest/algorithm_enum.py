@@ -4,6 +4,8 @@ class AlgorithmEnum:
     avellaneda_stoikov = "AvellanedaStoikov"
     constant_spread = "ConstantSpread"
     linear_constant_spread = "LinearConstantSpread"
+    alpha_avellaneda_stoikov = "AlphaAvellanedaStoikov"
+    alpha_constant_spread = "AlphaConstantSpread"
 
 
 def get_algorithm(algorithm_enum: AlgorithmEnum):
@@ -12,6 +14,8 @@ def get_algorithm(algorithm_enum: AlgorithmEnum):
     from backtest.avellaneda_dqn import AvellanedaDQN
     from backtest.constant_spread import ConstantSpread
     from backtest.linear_constant_spread import LinearConstantSpread
+    from backtest.alpha_avellaneda_stoikov import AlphaAvellanedaStoikov
+    from backtest.alpha_constant_spread import AlphaConstantSpread
 
     if algorithm_enum == AlgorithmEnum.avellaneda_q:
         return AvellanedaQ
@@ -23,3 +27,7 @@ def get_algorithm(algorithm_enum: AlgorithmEnum):
         return ConstantSpread
     if algorithm_enum == AlgorithmEnum.linear_constant_spread:
         return LinearConstantSpread
+    if algorithm_enum == AlgorithmEnum.alpha_avellaneda_stoikov:
+        return AlphaAvellanedaStoikov
+    if algorithm_enum == AlgorithmEnum.alpha_constant_spread:
+        return AlphaConstantSpread

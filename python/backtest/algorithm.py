@@ -96,55 +96,6 @@ class Algorithm:
         except:
             return 0
 
-    def merge_q_matrix(self, backtest_launchers: list, algos_per_iteration: int = None) -> list:
-        # USED on PHD AVELLANEDA DQN ONLY!!!
-        base_path_search = backtest_launchers[0].output_path
-        csv_files = glob.glob(base_path_search + os.sep + '*.csv')
-
-        algorithm_names = []
-        for backtest_launcher in backtest_launchers:
-            algorithm_names.append(backtest_launcher.id)
-
-        csv_files_out = []
-        for csv_file in csv_files:
-            if 'permutation' in csv_file:
-                continue
-            for algorithm_name in algorithm_names:
-                if self._is_memory_file(csv_file, algorithm_name=algorithm_name):
-                    if algos_per_iteration is not None:
-                        number_algo = self.get_iteration_number_filename(csv_file)
-                        if number_algo > algos_per_iteration:
-                            continue
-                    csv_files_out.append(csv_file)
-        print(
-            'combining %d qmatrix for %d launchers from %s'
-            % (len(csv_files_out), len(backtest_launchers), base_path_search)
-        )
-        output_array = None
-        for csv_file_out in csv_files_out:
-            my_data = genfromtxt(csv_file_out, delimiter=',')
-            print("combining %d rows" % len(my_data))
-            if output_array is None:
-                output_array = my_data
-            else:
-                output_array += my_data
-        if output_array is None:
-            print('cant combine %d files or no data t combine at %s!' % (len(csv_files_out), base_path_search))
-            return
-
-        if len(csv_files_out) > 0:
-            output_array = output_array / len(csv_files_out)
-            if output_array.shape[1]>0:
-                output_array = output_array[:, :-1]  # remove last column of nan
-            else:
-                print ('error combining output_shape in %s'%base_path_search)
-        else:
-            print('not csv files to merge detected at '+base_path_search)
-        # Override it
-        print("saving %d rows in %d files" %( len(output_array),len(csv_files_out)))
-        for csv_file_out in csv_files_out:
-            savetxt(csv_file_out, output_array, delimiter=',', fmt=Algorithm.FORMAT_SAVE_NUMBERS)
-        return csv_files_out
 
     def train_model(self, jar_path,train_input_configuration: TrainInputConfiguration):
 
@@ -339,11 +290,12 @@ class Algorithm:
 
             skew_change = True
             windows_change = True
-            if df['skew_pct'].fillna(0).diff().fillna(0).sum() == 0:
+
+            if len(df['skew_pct'].fillna(0).diff().fillna(0).unique()) == 0:
                 skew_change = False
 
-            if df['windows_tick'].fillna(0).diff().fillna(0).sum() == 0:
-                windows_change = False
+            # if len(df['windows_tick'].fillna(0).diff().fillna(0).unique()) == 0:
+            #     windows_change = False
 
             plt.close()
             subplot_origin = 510
@@ -566,7 +518,9 @@ class Algorithm:
             # ax = axs[index][index_col]
             column_sharpe='returns'
 
-            sharpe = self.get_sharpe(trade_df=trade_pnl_df,column='returns')
+            sharpe = self.get_sharpe(trade_df=trade_pnl_df, column='returns')
+            realized_sharpe = self.get_sharpe(trade_df=trade_pnl_df, column='close_returns')
+
             if trade_pnl_df['sharpe'][:-1].sum() != 0:
                 ax.plot(trade_pnl_df['sharpe'][:-1], color=color, lw=lw, alpha=alpha)
                 # trade_pnl_df['sharpe'][:-1].plot(figsize=figsize)
@@ -588,7 +542,9 @@ class Algorithm:
 
             textstr = '\n'.join(
                 (
-                    'sharpe=%.4f' % (sharpe,),
+                    'trades =%d ' % (len(trade_pnl_df)),
+                    'open sharpe=%.4f   close_sharpe=%.4f' % (sharpe, realized_sharpe),
+
                     'open max_drawdown pct=%.5f duration_mins=%d'
                     % (open_dd / 100, duration_mins_open),
                     'close max_drawdown pct=%.5f duration_mins=%d'

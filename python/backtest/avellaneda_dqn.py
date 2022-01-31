@@ -444,25 +444,74 @@ class AvellanedaDQN(DQNAlgorithm):
                 if 'score' in state_str or 'inventory' in state_str:
                     del state_columns[state_str]
 
-
         if state_columns is None or len(state_columns) == 0:
             number_state_columns = len(self._get_default_state_columns())
         else:
-            #add private columns
+            # add private columns
             number_state_columns = len(state_columns)
-            number_state_columns+=(parameters['horizonTicksPrivateState'] * PRIVATE_COLUMNS)
+            number_state_columns += (parameters['horizonTicksPrivateState'] * PRIVATE_COLUMNS)
 
         return number_state_columns
 
+    def merge_q_matrix(self, backtest_launchers: list, algos_per_iteration: int = None) -> list:
+        # USED on PHD AVELLANEDA DQN ONLY!!!
+        base_path_search = backtest_launchers[0].output_path
+        csv_files = glob.glob(base_path_search + os.sep + '*.csv')
+
+        algorithm_names = []
+        for backtest_launcher in backtest_launchers:
+            algorithm_names.append(backtest_launcher.id)
+
+        csv_files_out = []
+        for csv_file in csv_files:
+            if 'permutation' in csv_file:
+                continue
+            for algorithm_name in algorithm_names:
+                if self._is_memory_file(csv_file, algorithm_name=algorithm_name):
+                    if algos_per_iteration is not None:
+                        number_algo = self.get_iteration_number_filename(csv_file)
+                        if number_algo > algos_per_iteration:
+                            continue
+                    csv_files_out.append(csv_file)
+        print(
+            'combining %d qmatrix for %d launchers from %s'
+            % (len(csv_files_out), len(backtest_launchers), base_path_search)
+        )
+        output_array = None
+        for csv_file_out in csv_files_out:
+            my_data = genfromtxt(csv_file_out, delimiter=',')
+            print("combining %d rows" % len(my_data))
+            if output_array is None:
+                output_array = my_data
+            else:
+                output_array += my_data
+        if output_array is None:
+            print('cant combine %d files or no data t combine at %s!' % (len(csv_files_out), base_path_search))
+            return
+
+        if len(csv_files_out) > 0:
+            output_array = output_array / len(csv_files_out)
+            if output_array.shape[1] > 0:
+                output_array = output_array[:, :-1]  # remove last column of nan
+            else:
+                print('error combining output_shape in %s' % base_path_search)
+        else:
+            print('not csv files to merge detected at ' + base_path_search)
+        # Override it
+        print("saving %d rows in %d files" % (len(output_array), len(csv_files_out)))
+        for csv_file_out in csv_files_out:
+            savetxt(csv_file_out, output_array, delimiter=',', fmt=Algorithm.FORMAT_SAVE_NUMBERS)
+        return csv_files_out
+
     def get_number_of_action_columns(self, parameters: dict) -> int:
         number_of_lists = 0
-        list_of_lists=[]
+        list_of_lists = []
         for parameter_key in parameters.keys():
             value = parameters[parameter_key]
             if isinstance(value, list) and parameter_key != 'stateColumnsFilter':
                 number_of_lists += 1
                 list_of_lists.append(value)
-        assert number_of_lists==3
+        assert number_of_lists == 3
         number_of_actions=0
         for first_list in list_of_lists[0]:
             for second_list in list_of_lists[1]:

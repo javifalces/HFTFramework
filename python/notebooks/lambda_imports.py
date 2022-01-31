@@ -16,13 +16,11 @@ import statsmodels as sm
 from backtest.avellaneda_stoikov import AvellanedaStoikov
 from backtest.avellaneda_q import AvellanedaQ
 from backtest.avellaneda_dqn import AvellanedaDQN
-from backtest.sma_cross import SMACross
-from backtest.stat_arb import StatArb
 from backtest.linear_constant_spread import LinearConstantSpread
 from backtest.constant_spread import ConstantSpread
+from backtest.alpha_avellaneda_stoikov import AlphaAvellanedaStoikov
+from backtest.alpha_constant_spread import AlphaConstantSpread
 
-from backtest.rsi_dqn import RsiDQN
-from backtest.rsi import RSI
 import database.candle_generation
 from backtest.algorithm import *
 from backtest.algorithm_enum import *
