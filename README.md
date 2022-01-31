@@ -15,9 +15,15 @@ Open to suggestions/changes/modifications
 ## Alpha AS
 IS my research where and Avellaneda Stoikov market making implementation is going to be manage by RL.
 RL is going to configure the different Avellaneda stoikov parameters dinamically based on market state.
+
+* [Java Code](java/algorithmic_trading_framework/src/main/java/com/lambda/investing/algorithmic_trading/avellaneda_stoikov/AlphaAvellanedaStoikov.java)
+* [Python code caller](python/backtest/alpha_avellaneda_stoikov.py)
+
 ![Alpha AS](fig/AlphaAS_functional.jpg?raw=true "Alpha AS")
 
-
+### Avellaneda Stoikov implementation
+* [Java Code](java/algorithmic_trading_framework/src/main/java/com/lambda/investing/algorithmic_trading/avellaneda_stoikov/AvellanedaStoikov.java)
+* [Python code caller](python/backtest/avellaneda_stoikov.py)
 
 
 ## [JAVA]
