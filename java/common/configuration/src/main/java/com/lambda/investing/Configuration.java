@@ -1,22 +1,39 @@
 package com.lambda.investing;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.slf4j.helpers.MessageFormatter;
+
 import java.text.SimpleDateFormat;
+import java.util.Random;
 
 public class Configuration {
 
 	//backtest engine
 	public static int BACKTEST_THREADS_PUBLISHING_MARKETDATA = 0;//used to publish from parquet and csv file!
-	public static int BACKTEST_THREADS_PUBLISHING_EXECUTION_REPORTS = 1;//publishing on backtest engine
-	public static int BACKTEST_THREADS_LISTENING_ORDER_REQUEST = 2;//listening threads on backtest
+	public static int BACKTEST_THREADS_PUBLISHING_EXECUTION_REPORTS = 0;//publishing on backtest engine
+	public static int BACKTEST_THREADS_LISTENING_ORDER_REQUEST = 0;//listening threads on backtest
 
 	//algos engine
-	public static int BACKTEST_THREADS_PUBLISHING_ORDER_REQUEST = 1;//required >0 for latency simulation
-	public static int BACKTEST_THREADS_LISTENING_EXECUTION_REPORTS = 1;
+	public static int BACKTEST_THREADS_PUBLISHING_ORDER_REQUEST = 5;//required >0 for latency simulation
+	public static int BACKTEST_THREADS_LISTENING_EXECUTION_REPORTS = 0;
 
-	public static boolean IS_DEBUGGING = false;
+	public static boolean IS_DEBUGGING = false;//will disable latencies and muiltiThreading
 	//			java.lang.management.ManagementFactory.getRuntimeMXBean().getInputArguments().toString()
 	//					.indexOf("-agentlib:jdwp") > 0;
+
+	public static long RANDOM_SEED = 0;
+	public static Random RANDOM_GENERATOR = new Random();
+	public static Logger logger = LogManager.getLogger(Configuration.class);
+
+	public static void SET_RANDOM_GENERATOR(long seed) {
+		if (seed != RANDOM_SEED) {
+			System.out.println("SET SEED " + seed);
+			logger.info("SET SEED {}", seed);
+			RANDOM_SEED = seed;
+			RANDOM_GENERATOR = new Random(RANDOM_SEED);
+		}
+	}
 
 	public static String getEnvOrDefault(String name, String defaultValue) {
 		String output = System.getenv(name);

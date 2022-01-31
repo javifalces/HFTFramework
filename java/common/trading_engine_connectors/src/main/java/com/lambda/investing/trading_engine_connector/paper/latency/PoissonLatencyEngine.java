@@ -1,11 +1,11 @@
 package com.lambda.investing.trading_engine_connector.paper.latency;
 
-import com.lambda.investing.model.Util;
 import org.apache.commons.math3.distribution.PoissonDistribution;
-import org.apache.commons.math3.util.MathUtils;
 
 import java.util.Date;
 import java.util.Random;
+
+import static com.lambda.investing.Configuration.RANDOM_GENERATOR;
 
 public class PoissonLatencyEngine extends FixedLatencyEngine {
 
@@ -27,7 +27,7 @@ public class PoissonLatencyEngine extends FixedLatencyEngine {
 	public PoissonLatencyEngine(long meanLatencyMs) {
 		super(meanLatencyMs);
 		this.meanLatencyMs = meanLatencyMs;
-		r = new Random();
+		r = RANDOM_GENERATOR;
 		init();
 	}
 
@@ -79,9 +79,9 @@ public class PoissonLatencyEngine extends FixedLatencyEngine {
 
 	}
 
-	@Override public void delay() {
+	@Override public void delay(Date currentDate) {
 		long delay = getLatencyMs();
-		delayThread(delay);
+		delayThread(currentDate, delay);
 	}
 
 }

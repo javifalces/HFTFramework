@@ -7,46 +7,35 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-public class MovingAverageAction extends AbstractAction {
+public class ConstantSpreadAction extends AbstractAction {
 
-	public static Integer FAST_PERIODS_INDEX = 0;
-	public static Integer SLOW_PERIODS_INDEX = 1;
-	public static Integer CHANGESIDE_INDEX = 2;
-	public static int SIZE_ARRAY_ACTION = 3;//0-4
+	public static Integer LEVEL_INDEX = 0;
+	public static Integer SKEW_LEVEL_INDEX = 1;
+	public static int SIZE_ARRAY_ACTION = 2;//0-4
 
-	private int[] fastPeriods;
-	private int[] slowPeriods;
-	private int[] changeSides;
+	private int[] levels;
+	private int[] skewLevels;
 
 	private int numberOfActions;
 
 	private BiMap<Integer, ActionRow> actionIndexToArr;
 
-	public MovingAverageAction(int[] fastPeriods, int[] slowPeriods, int[] changeSides
-
-	) {
+	public ConstantSpreadAction(int[] levels, int[] skewLevels) {
 
 		List<Integer> validInputsSize = new ArrayList<>();
-		if (fastPeriods.length == 0) {
-			fastPeriods = null;
+		if (levels.length == 0) {
+			levels = null;
 		} else {
-			validInputsSize.add(fastPeriods.length);
+			validInputsSize.add(levels.length);
 		}
-		this.fastPeriods = fastPeriods;
+		this.levels = levels;
 
-		if (slowPeriods.length == 0) {
-			slowPeriods = null;
+		if (skewLevels.length == 0) {
+			skewLevels = null;
 		} else {
-			validInputsSize.add(slowPeriods.length);
+			validInputsSize.add(skewLevels.length);
 		}
-		this.slowPeriods = slowPeriods;
-
-		if (changeSides.length == 0) {
-			changeSides = null;
-		} else {
-			validInputsSize.add(changeSides.length);
-		}
-		this.changeSides = changeSides;
+		this.skewLevels = skewLevels;
 
 		if (validInputsSize.size() > 0) {
 			for (Integer length : validInputsSize) {
@@ -69,23 +58,18 @@ public class MovingAverageAction extends AbstractAction {
 	private void fillCacheActions() {
 		int counter = 0;
 		double[] inputArr = new double[SIZE_ARRAY_ACTION];
-		for (int fastPeriodIndex = 0; fastPeriodIndex < fastPeriods.length; fastPeriodIndex++) {
-			for (int slowPeriodIndex = 0; slowPeriodIndex < slowPeriods.length; slowPeriodIndex++) {
-				for (int changeSideIndex = 0; changeSideIndex < changeSides.length; changeSideIndex++) {
-					inputArr[FAST_PERIODS_INDEX] = fastPeriods[fastPeriodIndex];
-					inputArr[SLOW_PERIODS_INDEX] = slowPeriods[slowPeriodIndex];
-					inputArr[CHANGESIDE_INDEX] = changeSides[changeSideIndex];
-					getAction(inputArr);
-					counter++;
-
-				}
-
+		for (int level = 0; level < levels.length; level++) {
+			for (int skewLevel = 0; skewLevel < skewLevels.length; skewLevel++) {
+				inputArr[LEVEL_INDEX] = levels[level];
+				inputArr[SKEW_LEVEL_INDEX] = skewLevels[skewLevel];
+				getAction(inputArr);
+				counter++;
 			}
 		}
 
 		assert counter == getNumberActions();
 		assert actionIndexToArr.size() == counter;
-		System.out.println("MovingAverageAction has " + String.valueOf(actionIndexToArr.size()) + " actions");
+		System.out.println("ConstantSpreadAction has " + String.valueOf(actionIndexToArr.size()) + " actions");
 
 	}
 
@@ -156,19 +140,16 @@ public class MovingAverageAction extends AbstractAction {
 
 	private class ActionRow {
 
-		private int fastPeriod, slowPeriod, changeSide;
+		private int level, skewLevel;
 
-		public ActionRow(int fastPeriod, int slowPeriod, int changeSide) {
-			this.fastPeriod = fastPeriod;
-			this.slowPeriod = slowPeriod;
-			this.changeSide = changeSide;
+		public ActionRow(int level, int skewLevel) {
+			this.level = level;
+			this.skewLevel = skewLevel;
 		}
 
 		public ActionRow(double[] arrayInput) {
-			this.fastPeriod = (int) arrayInput[FAST_PERIODS_INDEX];
-			this.slowPeriod = (int) arrayInput[SLOW_PERIODS_INDEX];
-			this.changeSide = (int) arrayInput[CHANGESIDE_INDEX];
-
+			this.level = (int) arrayInput[LEVEL_INDEX];
+			this.skewLevel = (int) arrayInput[SKEW_LEVEL_INDEX];
 		}
 
 		@Override public boolean equals(Object o) {
@@ -177,20 +158,17 @@ public class MovingAverageAction extends AbstractAction {
 			if (!(o instanceof ActionRow))
 				return false;
 			ActionRow actionRow = (ActionRow) o;
-			return fastPeriod == actionRow.fastPeriod && slowPeriod == actionRow.slowPeriod
-					&& changeSide == actionRow.changeSide;
+			return level == actionRow.level && skewLevel == actionRow.skewLevel;
 		}
 
 		@Override public int hashCode() {
-
-			return Objects.hash(fastPeriod, slowPeriod, changeSide);
+			return Objects.hash(level, skewLevel);
 		}
 
 		public double[] getArray() {
 			double[] output = new double[SIZE_ARRAY_ACTION];
-			output[FAST_PERIODS_INDEX] = fastPeriod;
-			output[SLOW_PERIODS_INDEX] = slowPeriod;
-			output[CHANGESIDE_INDEX] = changeSide;
+			output[LEVEL_INDEX] = level;
+			output[SKEW_LEVEL_INDEX] = skewLevel;
 			return output;
 
 		}

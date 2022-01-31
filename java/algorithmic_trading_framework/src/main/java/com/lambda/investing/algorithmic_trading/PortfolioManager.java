@@ -2,30 +2,23 @@ package com.lambda.investing.algorithmic_trading;
 
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
-import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.portfolio.Portfolio;
 import com.lambda.investing.model.portfolio.PortfolioInstrument;
 import com.lambda.investing.model.trading.ExecutionReport;
-import com.lambda.investing.model.trading.Verb;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import tech.tablesaw.aggregate.AggregateFunctions;
 import tech.tablesaw.api.*;
+import tech.tablesaw.plotly.Plot;
+import tech.tablesaw.plotly.api.TimeSeriesPlot;
+import tech.tablesaw.plotly.components.Figure;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-
-//
-import tech.tablesaw.plotly.Plot;
-import tech.tablesaw.plotly.api.BubblePlot;
-import tech.tablesaw.plotly.api.TimeSeriesPlot;
-import tech.tablesaw.plotly.components.Figure;
-import tech.tablesaw.selection.Selection;
 
 import static com.lambda.investing.algorithmic_trading.PnlSnapshot.UPDATE_HISTORICAL_LOCK;
 
@@ -299,13 +292,21 @@ public class PortfolioManager {
 						Map<Long, List<CustomColumn>> historicalsCustoms = pnlSnapshot.historicalCustomColumns;
 
 						int size = 0;
+						int tradesSize = output1.rowCount();
 						for (String customKey : customColumnsKeys) {
 							try {
 								List<Double> customDouble = new ArrayList<>();
 								for (List<CustomColumn> customColumn : historicalsCustoms.values()) {
 									for (CustomColumn customColumn1 : customColumn) {
 										if (customKey.equalsIgnoreCase(customColumn1.getKey())) {
-											customDouble.add(customColumn1.getValue());
+											if (customDouble.size() + 1 > tradesSize) {
+												//												logger.warn(
+												//														"trying to add more rows on {} than in trades length skip this row  size={} totalLen={} !",
+												//														customKey, tradesSize, customDouble.size());
+												break;
+											} else {
+												customDouble.add(customColumn1.getValue());
+											}
 										}
 									}
 								}
@@ -314,7 +315,7 @@ public class PortfolioManager {
 								output1 = output1.addColumns(customColumn);
 							} catch (Exception e) {
 								logger.error("error adding custom column {} of len {}  to trades of len {}-> skip it",
-										customKey, size, output1.rowCount(), e);
+										customKey, size, tradesSize, e);
 							}
 						}
 					}

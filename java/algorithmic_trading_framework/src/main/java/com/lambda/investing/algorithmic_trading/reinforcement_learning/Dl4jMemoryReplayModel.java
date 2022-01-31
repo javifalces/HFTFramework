@@ -18,6 +18,7 @@ import org.deeplearning4j.nn.conf.BackpropType;
 import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
 import org.deeplearning4j.nn.conf.layers.DenseLayer;
+import org.deeplearning4j.nn.conf.layers.LSTM;
 import org.deeplearning4j.nn.conf.layers.OutputLayer;
 import org.deeplearning4j.nn.gradient.Gradient;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
@@ -232,9 +233,6 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 			double learningRate, double momentumNesterov, double l1, double l2) {
 
 		// https://deeplearning4j.konduit.ai/models/recurrent
-		if (momentumNesterov == 0) {
-
-		}
 		int secondLayerNodes = numInputs / 2;
 		WeightInit weightInit = WeightInit.XAVIER_UNIFORM;//a form of Gaussian distribution (WeightInit.XAVIER),
 		MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder().seed(seed)
@@ -245,15 +243,15 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 				.list().layer(0, new DenseLayer.Builder().nIn(numInputs).nOut(numHiddenNodes).weightInit(weightInit)
 						.activation(Activation.SIGMOID).build()).
 
-				//hidden layer 1
-				//						layer(1, new LSTM.Builder().nIn(numHiddenNodes).nOut(secondLayerNodes).weightInit(weightInit)
-				//						.activation(Activation.SIGMOID).build()).
+				//hidden layer 1 (required if we dont receive 3d data!)
+						layer(1, new LSTM.Builder().nIn(numHiddenNodes).nOut(secondLayerNodes).weightInit(weightInit)
+						.activation(Activation.SIGMOID).build()).
 				//hidden layer 2
 				//						layer(2, new LSTM.Builder().nIn(numHiddenNodes).nOut(numOutputs).weightInit(weightInit)
 				//						.activation(Activation.SIGMOID).build()).
 
 				//output layer
-						layer(1,
+						layer(2,
 						new OutputLayer.Builder(lossFunction).weightInit(weightInit).activation(activationFunction)
 								.weightInit(weightInit).nIn(secondLayerNodes).nOut(numOutputs).
 								build()).build();
@@ -293,13 +291,19 @@ public class Dl4jMemoryReplayModel implements MemoryReplayModel, Cloneable {
 
 	public MultiLayerNetwork createModel(int numInputs, int numHiddenNodes, int numOutputs, double learningRate,
 			double momentumNesterov, double l1, double l2) {
-		logger.info(
-				"Creating nn model inputs:{}  hiddenNodes:{}  outputs:{}  learningRate:{}  momentumNesterov:{} l1:{} l2:{}",
-				numInputs, numHiddenNodes, numOutputs, learningRate, momentumNesterov, l1, l2);
+
 		MultiLayerConfiguration conf = null;
 		if (isRNN) {
+			logger.info(
+					"Creating RNN nn model inputs:{}  hiddenNodes:{}  outputs:{}  learningRate:{}  momentumNesterov:{} l1:{} l2:{}",
+					numInputs, numHiddenNodes, numOutputs, learningRate, momentumNesterov, l1, l2);
+
 			conf = createRNNModel(numInputs, numHiddenNodes, numOutputs, learningRate, momentumNesterov, l1, l2);
 		} else {
+			logger.info(
+					"Creating nn model inputs:{}  hiddenNodes:{}  outputs:{}  learningRate:{}  momentumNesterov:{} l1:{} l2:{}",
+					numInputs, numHiddenNodes, numOutputs, learningRate, momentumNesterov, l1, l2);
+
 			conf = createFeedForwardModel(numInputs, numHiddenNodes, numOutputs, learningRate, momentumNesterov, l1,
 					l2);
 		}

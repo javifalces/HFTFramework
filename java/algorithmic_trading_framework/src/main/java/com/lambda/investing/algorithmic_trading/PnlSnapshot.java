@@ -1,14 +1,11 @@
 package com.lambda.investing.algorithmic_trading;
 
-import com.google.common.primitives.Doubles;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.ExecutionReportStatus;
 import com.lambda.investing.model.trading.Verb;
 import lombok.Getter;
-import lombok.Setter;
-import org.apache.commons.lang3.ArrayUtils;
 import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -17,9 +14,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetStd;
-import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore;
-import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscorePositive;
+import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.*;
 
 @Getter public class PnlSnapshot {
 
@@ -195,7 +190,11 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore
 
 				historicalTotalPnl.put(timestamp, totalPnl);
 				historicalSpread.put(timestamp, spread);
-				historicalAlgorithmInfo.put(timestamp, algorithmInfo);
+				if (algorithmInfo == null) {
+					historicalAlgorithmInfo.put(timestamp, "");
+				} else {
+					historicalAlgorithmInfo.put(timestamp, algorithmInfo);
+				}
 
 				historicalPrice.put(timestamp, lastPrice);
 				historicalQuantity.put(timestamp, lastQuantity);
@@ -252,7 +251,7 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore
 			return;
 		}
 
-		boolean isValidVerb = executionReport.getVerb() == null;
+		boolean isValidVerb = executionReport.getVerb() != null;
 		if (!isValidVerb) {
 			logger.warn("cant update trade in portfolio manager with not valid verb {}", executionReport.getVerb());
 			return;

@@ -162,7 +162,7 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 			//closed position
 			double remainQty = updateClosePosition(executionReport, leverage);
 			netPosition = newPosition;
-			//			lastQuantity = remainQty;
+//			lastQuantity = remainQty;
 			if (remainQty == 0) {
 				isClosePosition = true;
 				if (netPosition > 0) {

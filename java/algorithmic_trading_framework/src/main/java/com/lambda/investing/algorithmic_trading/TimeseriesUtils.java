@@ -1,7 +1,5 @@
 package com.lambda.investing.algorithmic_trading;
 
-import com.google.common.primitives.Doubles;
-
 public class TimeseriesUtils {
 
 	public static double GetMean(Double[] serie) {

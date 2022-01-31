@@ -68,8 +68,8 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
 
 	Map<String, Portfolio> porfolioMap;
 
-	protected LatencyEngine orderRequestLatencyEngine = new FixedLatencyEngine(
-			65);//change to more ms on OrdinaryBacktest
+	protected LatencyEngine orderRequestLatencyEngine = new PoissonLatencyEngine(
+			65);// //change to more ms on OrdinaryBacktest
 	protected LatencyEngine marketDataLatencyEngine = new FixedLatencyEngine(0);
 	protected LatencyEngine executionReportLatencyEngine = new FixedLatencyEngine(0);
 
@@ -267,7 +267,7 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
 			logger.error("trying to send orderRequest on {} not found in manager", orderRequest.getInstrument());
 			return false;
 		}
-		orderRequestLatencyEngine.delay();
+		orderRequestLatencyEngine.delay(orderRequestLatencyEngine.getCurrentTime());
 		orderRequest.setTimestampCreation(
 				orderRequestLatencyEngine.getCurrentTime().getTime());//update OrderRequestTime if required
 		return orderbookManager.orderRequest(orderRequest);
@@ -351,7 +351,7 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
 				super.notifyDepth(depth);
 			} else {
 				marketDataPool.submit(() -> {
-					marketDataLatencyEngine.delay();
+					marketDataLatencyEngine.delay(new Date(depth.getTimestamp()));
 					super.notifyDepth(depth);
 				});
 			}
@@ -363,7 +363,7 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
 				super.notifyTrade(trade);
 			} else {
 				marketDataPool.submit(() -> {
-					marketDataLatencyEngine.delay();
+					marketDataLatencyEngine.delay(new Date(trade.getTimestamp()));
 					super.notifyTrade(trade);
 				});
 			}
@@ -375,7 +375,7 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
 				super.notifyExecutionReport(executionReport);
 			} else {
 				executionReportPool.submit(() -> {
-					marketDataLatencyEngine.delay();
+					marketDataLatencyEngine.delay(new Date(executionReport.getTimestampCreation()));
 					super.notifyExecutionReport(executionReport);
 				});
 			}

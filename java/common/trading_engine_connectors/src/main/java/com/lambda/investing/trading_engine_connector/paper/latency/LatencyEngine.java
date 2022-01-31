@@ -10,5 +10,5 @@ public interface LatencyEngine {
 
 	void setNextUpdateMs(long nextUpdateMs);
 
-	void delay();
+	void delay(Date currentDate);
 }

@@ -1,13 +1,24 @@
 package com.lambda.investing.trading_engine_connector.paper.latency;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import java.util.Date;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class FixedLatencyEngine implements LatencyEngine {
 
-	protected static long THREAD_MS_WAITING = 1;//less than 1 is not possible and can cause some problems on backtest!
+	protected static long THREAD_MS_WAITING = 0;//less than 1 is not possible and can cause some problems on backtest!
+	protected static int THREAD_NS_WAITING = 0;
+
 	protected long latencyMs;
 	protected Date currentTime = new Date(0);
 	protected long nextUpdateMs = Long.MIN_VALUE;
+	protected Logger logger = LogManager.getLogger(FixedLatencyEngine.class);
+	protected AtomicInteger counterTimeSet = new AtomicInteger(0);
+	protected CountDownLatch latch;
+	protected final Object lockLatch = new Object();
 
 	public FixedLatencyEngine(long latencyMs) {
 		this.latencyMs = latencyMs;
@@ -16,6 +27,12 @@ public class FixedLatencyEngine implements LatencyEngine {
 	@Override public void setTime(Date currentDate) {
 		if (currentDate.getTime() > currentTime.getTime()) {
 			currentTime = currentDate;
+			counterTimeSet.incrementAndGet();
+			synchronized (lockLatch) {
+				if (latch != null) {
+					latch.countDown();
+				}
+			}
 		}
 	}
 
@@ -27,15 +44,16 @@ public class FixedLatencyEngine implements LatencyEngine {
 		this.nextUpdateMs = nextUpdateMs;
 	}
 
-	protected void delayThread(long delayMs) {
+	protected void delayThread(Date currentDate, long delayMs) {
 		if (delayMs <= 0) {
 			return;
 		} else if (nextUpdateMs != Long.MIN_VALUE && delayMs < this.nextUpdateMs) {
 			return;
 		} else {
-			Date startTime = currentTime;
+			Date startTime = currentDate;
 			long delayIter = delayMs;
 			long lastTimeEval = 0L;
+			int initialCounter = counterTimeSet.get();
 			while (currentTime.getTime() - startTime.getTime() < delayMs) {
 
 				//check next iteration when is it and discount already waited!
@@ -48,19 +66,43 @@ public class FixedLatencyEngine implements LatencyEngine {
 						lastTimeEval = currentTime.getTime();
 					}
 				}
-				if (THREAD_MS_WAITING > 0) {
+
+				if (THREAD_NS_WAITING > 0 || THREAD_MS_WAITING > 0) {
+
 					try {
-						Thread.sleep(THREAD_MS_WAITING);
+						Thread.sleep(THREAD_MS_WAITING, THREAD_NS_WAITING);
 					} catch (Exception e) {
 						;
 					}
+				} else {
+					synchronized (lockLatch) {
+						if (latch == null || latch.getCount() == 0) {
+							latch = new CountDownLatch(1);
+						}
+					}
+
+					try {
+						latch.await();
+					} catch (Exception e) {
+						;
+					}
+
 				}
 			}
+			//end while sleeping
+			int finalCounter = counterTimeSet.get();
+			int elapsedUpdates = finalCounter - initialCounter;
+			long elapsedSleep = (currentTime.getTime() - startTime.getTime());
+			if ((elapsedSleep > delayMs * 2 && elapsedUpdates > 2) || elapsedSleep > delayMs * 10) {
+				logger.warn("delayThread sleep on {} ms with {} updates from {} to {} ", elapsedSleep, elapsedUpdates,
+						startTime, currentTime);
+			}
+
 		}
 	}
 
-	@Override public void delay() {
-		delayThread(latencyMs);
+	@Override public void delay(Date currentDate) {
+		delayThread(currentDate, latencyMs);
 	}
 
 }

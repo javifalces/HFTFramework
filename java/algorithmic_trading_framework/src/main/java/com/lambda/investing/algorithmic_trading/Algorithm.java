@@ -2,7 +2,6 @@ package com.lambda.investing.algorithmic_trading;
 
 import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.hedging.HedgeManager;
-import com.lambda.investing.algorithmic_trading.hedging.HedgeManager;
 import com.lambda.investing.algorithmic_trading.hedging.NoHedgeManager;
 import com.lambda.investing.connector.ThreadUtils;
 import com.lambda.investing.market_data_connector.MarketDataListener;
@@ -17,7 +16,6 @@ import com.lambda.investing.model.portfolio.Portfolio;
 import com.lambda.investing.model.trading.*;
 import com.lambda.investing.trading_engine_connector.AbstractBrokerTradingEngine;
 import com.lambda.investing.trading_engine_connector.ExecutionReportListener;
-import com.lambda.investing.trading_engine_connector.TradingEngineConnector;
 import com.lambda.investing.trading_engine_connector.ZeroMqTradingEngineConnector;
 import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
@@ -33,6 +31,8 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static com.lambda.investing.Configuration.RANDOM_GENERATOR;
+import static com.lambda.investing.Configuration.SET_RANDOM_GENERATOR;
 import static com.lambda.investing.model.portfolio.Portfolio.GSON_STRING;
 import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_PORTFOLIO_INFO;
 
@@ -51,8 +51,8 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 	private static Long STATISTICS_PRINT_SECONDS = 60L;
 	private List<AlgorithmObserver> algorithmObservers;
 	protected static String BASE_PATH_OUTPUT = Configuration.OUTPUT_PATH;
-	private static Integer FIRST_HOUR_DEFAULT = -1;
-	private static Integer LAST_HOUR_DEFAULT = 25;
+	protected static Integer FIRST_HOUR_DEFAULT = -1;
+	protected static Integer LAST_HOUR_DEFAULT = 25;
 	protected static DateFormat DAY_STR_DATE_FORMAT = new SimpleDateFormat("yyyymmdd");
 
 	private static final String SEND_STATS = "->";
@@ -116,6 +116,10 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 	protected TimeServiceIfc timeService;
 	private AlgorithmState algorithmState = AlgorithmState.NOT_INITIALIZED;
 
+	public boolean isReady() {
+		return getAlgorithmState().equals(AlgorithmState.STARTED);
+	}
+
 	public AlgorithmState getAlgorithmState() {
 		return algorithmState;
 	}
@@ -135,6 +139,7 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 	private Map<String, OrderRequest> clientOrderIdToCancelWhenActive;
 	private CandleFromTickUpdater candleFromTickUpdater;
 	public static final Object EXECUTION_REPORT_LOCK = new Object();
+
 
 	public Algorithm(AlgorithmConnectorConfiguration algorithmConnectorConfiguration, String algorithmInfo,
 			Map<String, Object> parameters) {
@@ -434,10 +439,13 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 					this.lastHourOperatingIncluded);
 
 		}
-		this.seed = getParameterIntOrDefault(parameters, "seed", 0);//UTC  18-21
 
 		algorithmNotifier.notifyObserversOnUpdateParams(this.parameters);
 
+	}
+
+	protected void setSeed(long seed) {
+		SET_RANDOM_GENERATOR(seed);
 	}
 
 	public void setParameter(String name, Object value) {
@@ -457,6 +465,11 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 			this.algorithmConnectorConfiguration.getTradingEngineConnector().register(this.algorithmInfo, this);
 			this.algorithmConnectorConfiguration.getMarketDataProvider().register(this);
 			reset();
+			this.seed = getParameterIntOrDefault(parameters, "seed", 0);//load it here for initialization
+			if (this.seed != 0) {
+				setSeed(this.seed);
+			}
+
 			algorithmState = AlgorithmState.INITIALIZED;
 			logger.info("[{}]initialized  {}\n{}", getCurrentTime(), algorithmInfo);
 
@@ -563,7 +576,9 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 	//trading
 
 	protected String generateClientOrderId() {
-		return UUID.randomUUID().toString();
+		byte[] dataInput = new byte[10];
+		RANDOM_GENERATOR.nextBytes(dataInput);
+		return UUID.nameUUIDFromBytes(dataInput).toString();
 	}
 
 	protected void requestInfo(String info) {
@@ -630,8 +645,13 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 		//save requested orders to cancel after active received
 		Map<String, OrderRequest> requestOrders = instrumentManager.getAllRequestOrders();
 		try {
-			for (String clientOrderId : requestOrders.keySet()) {
-				clientOrderIdToCancelWhenActive.put(clientOrderId, requestOrders.get(clientOrderId));
+			for (Map.Entry<String, OrderRequest> entry : requestOrders.entrySet()) {
+				String clientOrderId = entry.getKey();
+				OrderRequest requestOrder = entry.getValue();
+				if (clientOrderId != null && requestOrder != null) {
+					clientOrderIdToCancelWhenActive.put(clientOrderId, requestOrder);
+				}
+
 			}
 		} catch (Exception e) {
 			logger.error("error on cancelAll ", e);
@@ -657,9 +677,19 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 
 	protected boolean checkOperationalTime() {
 		if (inOperationalTime()) {
+			if (getAlgorithmState().equals(AlgorithmState.STOPPED)) {
+				logger.info(
+						"[{}] inOperationalTime firstHourOperatingIncluded:{} lastHourOperatingIncluded:{} => start ",
+						getCurrentTime(), firstHourOperatingIncluded, lastHourOperatingIncluded);
+			}
 			start();
 			return true;
 		} else {
+			if (getAlgorithmState().equals(AlgorithmState.STARTED)) {
+				logger.info(
+						"[{}] not inOperationalTime firstHourOperatingIncluded:{} lastHourOperatingIncluded:{} => stop ",
+						getCurrentTime(), firstHourOperatingIncluded, lastHourOperatingIncluded);
+			}
 			stop();
 		}
 		if (lastCurrentDay == 0) {
@@ -835,6 +865,7 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 						orderRequest.getQuantity()));
 			}
 
+
 		}
 
 		boolean needOrigClientOrdId =
@@ -889,21 +920,29 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 			InstrumentManager instrumentManager = getInstrumentManager(instrumentPk);
 			Map<String, OrderRequest> instrumentSendOrders = instrumentManager.getAllRequestOrders();
 			OrderRequest orderRequest = instrumentSendOrders.get(executionReport.getClientOrderId());
-			orderRequest.setClientOrderId(generateClientOrderId());
+			//null pointer!!!!
+			if (orderRequest != null) {
+				orderRequest.setClientOrderId(generateClientOrderId());
 
-			Runnable methodRun = new Runnable() {
+				Runnable methodRun = new Runnable() {
 
-				@Override public void run() {
-					try {
-						sendOrderRequest(orderRequest);
-					} catch (LambdaTradingException e) {
-						e.printStackTrace();
-						logger.error("error retrying to send {}", orderRequest, e);
+					@Override public void run() {
+						try {
+							sendOrderRequest(orderRequest);
+						} catch (LambdaTradingException e) {
+							e.printStackTrace();
+							logger.error("error retrying to send {}", orderRequest, e);
+						}
 					}
-				}
-			};
+				};
 
-			ThreadUtils.schedule("retry_rejected", methodRun, delayMs);
+				ThreadUtils.schedule("retry_rejected", methodRun, delayMs);
+			} else {
+				System.err.println(Configuration.formatLog("{} not found to retry!   instrument orders map of size {}",
+						executionReport.getClientOrderId(), instrumentSendOrders.size()));
+				logger.warn("{} not found to retry!   instrument orders map of size {}",
+						executionReport.getClientOrderId(), instrumentSendOrders.size());
+			}
 		}
 	}
 
@@ -942,7 +981,7 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 	}
 
 	protected long generateRandomSeed() {
-		return System.currentTimeMillis() + (new Random()).nextLong();
+		return System.currentTimeMillis() + (RANDOM_GENERATOR).nextLong();
 	}
 
 	public void onUpdateCandle(Candle candle) {

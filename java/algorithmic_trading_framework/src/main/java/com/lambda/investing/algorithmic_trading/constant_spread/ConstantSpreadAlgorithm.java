@@ -1,7 +1,7 @@
 package com.lambda.investing.algorithmic_trading.constant_spread;
 
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
-import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
+import com.lambda.investing.algorithmic_trading.MarketMakingAlgorithm;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.exception.LambdaTradingException;
 import com.lambda.investing.model.market_data.Depth;
@@ -13,10 +13,11 @@ import org.apache.commons.math3.util.Precision;
 
 import java.util.Map;
 
-public class ConstantSpreadAlgorithm extends SingleInstrumentAlgorithm {
+public class ConstantSpreadAlgorithm extends MarketMakingAlgorithm {
 
 	private static double MAX_TICKS_MIDPRICE_PRICE_DEV = 100;
-	private int level;//0-4
+	public int level;//0-4
+	public int skewLevel;//-4 - 4
 	private double quantity;
 	private double quantityLimit;
 	private double lastValidSpread, lastValidMid = 0.01;
@@ -39,13 +40,23 @@ public class ConstantSpreadAlgorithm extends SingleInstrumentAlgorithm {
 	@Override public void setParameters(Map<String, Object> parameters) {
 		super.setParameters(parameters);
 		this.level = getParameterIntOrDefault(parameters, "level", 1);
+		this.skewLevel = getParameterIntOrDefault(parameters, "skewLevel", 0);
 		this.quantity = getParameterDouble(parameters, "quantity");
+		this.quantityBuy = quantity;
+		this.quantitySell = quantity;
 		this.quantityLimit = getParameterDoubleOrDefault(parameters, "quantity_limit", -1);
 	}
 
+
 	@Override public String printAlgo() {
-		return String.format("%s  level=%d    quantity=%.5f   quantity_limit=%.5f", algorithmInfo, level, quantity,
-				quantityLimit);
+		if (quantityLimit != -1) {
+			return String
+					.format("%s  level=%d    quantity=%.5f  skewLevel=%d quantity_limit=%.5f", algorithmInfo, level,
+							skewLevel, quantity, quantityLimit);
+		} else {
+			return String
+					.format("%s  level=%d    quantity=%.5f  skewLevel=%d", algorithmInfo, level, skewLevel, quantity);
+		}
 	}
 
 	//	@Override public AlgorithmState getAlgorithmState() {
@@ -69,8 +80,13 @@ public class ConstantSpreadAlgorithm extends SingleInstrumentAlgorithm {
 			try {
 				currentSpread = depth.getSpread();
 				midPrice = depth.getMidPrice();
-				askPrice = depth.getAsks()[level];
-				bidPrice = depth.getBids()[level];
+				//ASK = level+skew
+				int askPriceLevel = Math.min(Math.max(level + skewLevel, 1), depth.getAskLevels());
+				askPrice = depth.getAsks()[askPriceLevel - 1];
+
+				//BID = level-skew
+				int bidPriceLevel = Math.min(Math.max(level - skewLevel, 1), depth.getBidLevels());
+				bidPrice = depth.getBids()[bidPriceLevel - 1];
 			} catch (Exception e) {
 				return false;
 			}

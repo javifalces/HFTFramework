@@ -1,14 +1,14 @@
 package com.lambda.investing.algorithmic_trading.avellaneda_stoikov;
 
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
+import com.lambda.investing.algorithmic_trading.AlgorithmState;
 import com.lambda.investing.algorithmic_trading.InstrumentManager;
-import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
+import com.lambda.investing.algorithmic_trading.MarketMakingAlgorithm;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.exception.LambdaTradingException;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.trading.*;
-import org.apache.commons.math3.util.Precision;
 import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 
 import java.util.Map;
@@ -43,7 +43,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * k_bid = λb/delta(λb)  / delta(λb)=(λb-λb-1)/λb-1
  * :return: k_bid and k_ask tuple
  */
-public class AvellanedaStoikov extends SingleInstrumentAlgorithm {
+public class AvellanedaStoikov extends MarketMakingAlgorithm {
 
 	private static boolean DISABLE_ON_HIT = false;
 
@@ -121,6 +121,9 @@ public class AvellanedaStoikov extends SingleInstrumentAlgorithm {
 	@Override public void setParameters(Map<String, Object> parameters) {
 		super.setParameters(parameters);
 		this.quantity = getParameterDouble(parameters, "quantity");
+		this.quantityBuy = quantity;
+		this.quantitySell = quantity;
+
 		this.calculateTt = getParameterIntOrDefault(parameters, "calculateTt", 1) == 1;
 		this.riskAversion = getParameterDouble(parameters,
 				"risk_aversion");//0.0 low risk_aversion means risk_neutral investor.0.5 risk-averse investor
@@ -135,6 +138,7 @@ public class AvellanedaStoikov extends SingleInstrumentAlgorithm {
 		if (this.kDefault == -1) {
 			this.kDefault = null;
 		}
+
 
 	}
 
@@ -162,6 +166,7 @@ public class AvellanedaStoikov extends SingleInstrumentAlgorithm {
 		//For RL
 		this.midpricesQueue = EvictingQueue.create(windowTick);
 	}
+
 
 	@Override public void setParameter(String name, Object value) {
 		super.setParameter(name, value);
@@ -212,6 +217,12 @@ public class AvellanedaStoikov extends SingleInstrumentAlgorithm {
 
 	}
 
+	@Override public boolean isReady() {
+		boolean weAreReady = super.isReady();
+		boolean varianceIsReady = (getVarianceMidPrice() != null && Double.isFinite(getVarianceMidPrice()));
+		return weAreReady && varianceIsReady;
+	}
+
 	@Override public boolean onDepthUpdate(Depth depth) {
 		if (!super.onDepthUpdate(depth)) {
 			return false;
@@ -246,11 +257,12 @@ public class AvellanedaStoikov extends SingleInstrumentAlgorithm {
 
 		}
 		checkSideDisable(getCurrentTimestamp());
-		if (!depth.isDepthFilled()) {
+		if (!depth.isDepthFilled() && inOperationalTime() && getAlgorithmState().equals(AlgorithmState.STARTED)) {
 			//			logger.warn("Depth received incomplete! {}-> disable", depth.getInstrument());
+			logger.info("stopping algorithm because depth is incomplete!");
 			this.stop();
 			return false;
-		} else {
+		} else if (depth.isDepthFilled() && inOperationalTime() && getAlgorithmState().equals(AlgorithmState.STOPPED)) {
 			this.start();
 		}
 
@@ -318,11 +330,10 @@ public class AvellanedaStoikov extends SingleInstrumentAlgorithm {
 
 			double askPrice = (reservePrice + spreadAsk);
 			askPrice *= (1 + skewPricePct);
-			askPrice = Precision.round(askPrice, instrument.getNumberDecimalsPrice());
 
 			double bidPrice = (reservePrice - spreadBid);
 			bidPrice *= (1 + skewPricePct);
-			bidPrice = Precision.round(bidPrice, instrument.getNumberDecimalsPrice());
+
 			if (!Double.isFinite(askPrice) || !Double.isFinite(bidPrice)) {
 				logger.warn("wrong calculation ask-bid");
 				return false;
@@ -340,6 +351,8 @@ public class AvellanedaStoikov extends SingleInstrumentAlgorithm {
 				bidPrice = Math.max(bidPrice, minBidPrice);
 			}
 
+			bidPrice = instrument.roundPrice(bidPrice);
+			askPrice = instrument.roundPrice(askPrice);
 			//create quote request
 			QuoteRequest quoteRequest = createQuoteRequest(this.instrument);
 			quoteRequest.setQuoteRequestAction(QuoteRequestAction.On);

@@ -19,6 +19,7 @@ import org.apache.logging.log4j.Logger;
 import java.io.*;
 import java.util.*;
 
+import static com.lambda.investing.Configuration.SET_RANDOM_GENERATOR;
 import static com.lambda.investing.algorithmic_trading.reinforcement_learning.TrainNNUtils.argmax;
 import static com.lambda.investing.algorithmic_trading.reinforcement_learning.TrainNNUtils.getColumnsArray;
 
@@ -89,18 +90,19 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 		}
 
 		// create Q-array
-		int numberOfColumns =
-				getStateColumns() + action.getNumberActions() + getStateColumns();//state action next_state
+		int numberOfColumns = getNumberOfColumns();
 		memoryReplay = new double[this.maxMemorySize][numberOfColumns];
 		epsilon = ((EpsilonGreedyExploration) explorationPolicy).getEpsilon();
 		this.trainingPredictIterationPeriod = trainingPredictIterationPeriod;
 		this.trainingTargetIterationPeriod = trainingTargetIterationPeriod;
 	}
 
-	public void setSeed(long seed) {
-		logger.info("setting seed to {}", seed);
-		r = new Random(seed);
+	public int getNumberOfColumns() {
+		return getStateColumns() + action.getNumberActions() + getStateColumns();//state action next_state
+	}
 
+	public void setSeed(long seed) {
+		SET_RANDOM_GENERATOR(seed);
 	}
 
 	public void setPredictModel(MemoryReplayModel predictModel) {
