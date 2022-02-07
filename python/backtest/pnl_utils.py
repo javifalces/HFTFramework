@@ -336,7 +336,8 @@ def get_pnl_to_map(equity_curve: pd.Series, position: pd.Series, ) -> float:
     :return:
     '''
     # based on MM With Signals Through DRL
-    return (equity_curve / position.abs()).iloc[-1]
+    map = position.abs().mean()
+    return (equity_curve.iloc[-1] / map)
 
 
 def get_max_drawdown(equity_curve: pd.Series) -> float:
