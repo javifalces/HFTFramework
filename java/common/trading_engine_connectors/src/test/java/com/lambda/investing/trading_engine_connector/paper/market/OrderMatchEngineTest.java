@@ -23,6 +23,7 @@ import static org.mockito.Mockito.doAnswer;
 
 	private PaperTradingEngine paperTradingEngine;
 
+
 	private String instrumentPk = "btcusd_binance";
 
 	OrderMatchEngine orderMatchEngine;
@@ -488,7 +489,7 @@ import static org.mockito.Mockito.doAnswer;
 		//check ER
 		Assert.assertEquals(ExecutionReportStatus.CompletellyFilled,
 				lastExecutionReportListen.getExecutionReportStatus());
-		Assert.assertEquals(depth.getBestAsk(), lastExecutionReportListen.getPrice(), 0.0001);
+		Assert.assertEquals(orderRequest.getPrice(), lastExecutionReportListen.getPrice(), 0.0001);
 		Assert.assertEquals(orderRequest.getQuantity(), lastExecutionReportListen.getQuantityFill(), 0.0001);
 		Assert.assertEquals(orderRequest.getQuantity(), lastExecutionReportListen.getLastQuantity(), 0.0001);
 
@@ -499,7 +500,7 @@ import static org.mockito.Mockito.doAnswer;
 
 		//check trade
 		Assert.assertEquals(orderRequest.getQuantity(), lastTradeListen.getQuantity(), 0.001);
-		Assert.assertEquals(85, lastTradeListen.getPrice(), 0.001);
+		Assert.assertEquals(orderRequest.getPrice(), lastTradeListen.getPrice(), 0.001);
 	}
 
 	@Test public void refreshAlgoAndFilledWithDepthSell() {
@@ -521,7 +522,7 @@ import static org.mockito.Mockito.doAnswer;
 		//check ER
 		Assert.assertEquals(ExecutionReportStatus.CompletellyFilled,
 				lastExecutionReportListen.getExecutionReportStatus());
-		Assert.assertEquals(depth.getBestBid(), lastExecutionReportListen.getPrice(), 0.0001);
+		Assert.assertEquals(orderRequest.getPrice(), lastExecutionReportListen.getPrice(), 0.0001);
 		Assert.assertEquals(orderRequest.getQuantity(), lastExecutionReportListen.getQuantityFill(), 0.0001);
 		Assert.assertEquals(orderRequest.getQuantity(), lastExecutionReportListen.getLastQuantity(), 0.0001);
 
@@ -532,7 +533,7 @@ import static org.mockito.Mockito.doAnswer;
 
 		//check trade
 		Assert.assertEquals(orderRequest.getQuantity(), lastTradeListen.getQuantity(), 0.001);
-		Assert.assertEquals(98, lastTradeListen.getPrice(), 0.001);
+		Assert.assertEquals(orderRequest.getPrice(), lastTradeListen.getPrice(), 0.001);
 	}
 
 	@Test public void refreshAlgoAndFilledCompletelyBuy() {
@@ -547,7 +548,7 @@ import static org.mockito.Mockito.doAnswer;
 
 		//check ER
 		Assert.assertEquals(ExecutionReportStatus.PartialFilled, lastExecutionReportListen.getExecutionReportStatus());
-		Assert.assertEquals(depth.getAsks()[1], lastExecutionReportListen.getPrice(), 0.0001);
+		Assert.assertEquals(orderRequest.getPrice(), lastExecutionReportListen.getPrice(), 0.0001);
 		Assert.assertEquals(2, lastExecutionReportListen.getQuantityFill(), 0.0001);
 		Assert.assertEquals(1, lastExecutionReportListen.getLastQuantity(), 0.0001);
 
@@ -558,7 +559,7 @@ import static org.mockito.Mockito.doAnswer;
 
 		//check trade
 		Assert.assertEquals(1, lastTradeListen.getQuantity(), 0.001);
-		Assert.assertEquals(depth.getAsks()[1], lastTradeListen.getPrice(), 0.001);
+		Assert.assertEquals(orderRequest.getPrice(), lastTradeListen.getPrice(), 0.001);
 	}
 
 	@Test public void refreshAlgoAndFilledCompletelySell() {
@@ -579,7 +580,7 @@ import static org.mockito.Mockito.doAnswer;
 
 		//check ER
 		Assert.assertEquals(ExecutionReportStatus.PartialFilled, lastExecutionReportListen.getExecutionReportStatus());
-		Assert.assertEquals(depth.getBids()[1], lastExecutionReportListen.getPrice(), 0.0001);
+		Assert.assertEquals(orderRequest.getPrice(), lastExecutionReportListen.getPrice(), 0.0001);
 		Assert.assertEquals(4, lastExecutionReportListen.getQuantityFill(), 0.0001);
 		Assert.assertEquals(2, lastExecutionReportListen.getLastQuantity(), 0.0001);
 
@@ -590,7 +591,7 @@ import static org.mockito.Mockito.doAnswer;
 
 		//check trade
 		Assert.assertEquals(2, lastTradeListen.getQuantity(), 0.001);
-		Assert.assertEquals(depth.getBids()[1], lastTradeListen.getPrice(), 0.001);
+		Assert.assertEquals(orderRequest.getPrice(), lastTradeListen.getPrice(), 0.001);
 	}
 
 	@Test public void modifyCancelOrdersBuy() {

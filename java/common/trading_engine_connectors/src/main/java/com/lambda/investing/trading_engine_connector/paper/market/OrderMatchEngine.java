@@ -16,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class OrderMatchEngine extends OrderbookManager {
 
+	private static double ZERO_QTY_FILL = 1E-10;
 	public static boolean REFRESH_DEPTH_ORDER_REQUEST = true;//if true can be Stackoverflow on orderRequest!
 	public static boolean REFRESH_DEPTH_TRADES = true;//if true can be Stackoverflow on orderRequest!
 
@@ -180,6 +181,7 @@ public class OrderMatchEngine extends OrderbookManager {
 
 	}
 
+
 	private ExecutionReport getExecutionReport(OrderRequest orderSent) {
 		ExecutionReport executionReportOut = executionReportMap
 				.getOrDefault(orderSent.getClientOrderId(), new ExecutionReport(orderSent));
@@ -211,6 +213,7 @@ public class OrderMatchEngine extends OrderbookManager {
 		}
 
 	}
+
 
 	/**
 	 * When a trade is read check if match any limit order
@@ -258,14 +261,18 @@ public class OrderMatchEngine extends OrderbookManager {
 						ExecutionReport executionReport = getExecutionReport(orderSent);
 						double qtyFill = Math.min(executionReport.getQuantity() - executionReport.getQuantityFill(),
 								trade.getQuantity());
+
 						qtyTrade -= qtyFill;
 						orderInLevel.qty -= qtyFill;
 
 						executionReport.setQuantityFill(executionReport.getQuantityFill() + qtyFill);
-
+						if (executionReport.getQuantityFill() < ZERO_QTY_FILL) {
+							//ignore partial filled! probably already CF
+							continue;
+						}
 						executionReport.setLastQuantity(qtyFill);
 						executionReport.setExecutionReportStatus(ExecutionReportStatus.PartialFilled);
-						if (executionReport.getQuantityFill() == orderSent.getQuantity()) {
+						if (executionReport.getQuantityFill() >= orderSent.getQuantity()) {
 							executionReport.setExecutionReportStatus(ExecutionReportStatus.CompletellyFilled);
 						}
 						executionReport.setTimestampCreation(currentTimestamp);
@@ -310,14 +317,19 @@ public class OrderMatchEngine extends OrderbookManager {
 						ExecutionReport executionReport = getExecutionReport(orderSent);
 						double qtyFill = Math.min(executionReport.getQuantity() - executionReport.getQuantityFill(),
 								trade.getQuantity());
+
 						qtyTrade -= qtyFill;
 						orderInLevel.qty -= qtyFill;
 
 						executionReport.setQuantityFill(executionReport.getQuantityFill() + qtyFill);
+						if (executionReport.getQuantityFill() < ZERO_QTY_FILL) {
+							//ignore partial filled! probably already CF
+							continue;
+						}
 
 						executionReport.setLastQuantity(qtyFill);
 						executionReport.setExecutionReportStatus(ExecutionReportStatus.PartialFilled);
-						if (executionReport.getQuantityFill() == orderSent.getQuantity()) {
+						if (executionReport.getQuantityFill() >= orderSent.getQuantity()) {
 							executionReport.setExecutionReportStatus(ExecutionReportStatus.CompletellyFilled);
 						}
 						executionReport.setTimestampCreation(currentTimestamp);
@@ -518,6 +530,7 @@ public class OrderMatchEngine extends OrderbookManager {
 				}
 			}
 
+
 			if (orderRequest.getOrderType().equals(OrderType.Stop)) {
 				//TODO add implementation if needed!!!
 				ExecutionReport executionReport = generateRejection(orderRequest, "Stop order not implemented! ");
@@ -590,6 +603,11 @@ public class OrderMatchEngine extends OrderbookManager {
 								otherExecutionReport.setQuantityFill(otherExecutionReport.getQuantityFill() + newFill);
 								otherExecutionReport.setLastQuantity(newFill);
 
+								if (otherExecutionReport.getQuantityFill() < ZERO_QTY_FILL) {
+									//ignore partial filled! probably already CF
+									continue;
+								}
+
 								if (otherExecutionReport.getQuantityFill() >= otherExecutionReport.getQuantity()) {
 									otherExecutionReport
 											.setExecutionReportStatus(ExecutionReportStatus.CompletellyFilled);
@@ -615,6 +633,11 @@ public class OrderMatchEngine extends OrderbookManager {
 							orderER.setExecutionReportStatus(ExecutionReportStatus.PartialFilled);
 							orderER.setQuantityFill(newFill + orderER.getQuantityFill());
 							orderER.setLastQuantity(newFill);
+
+							if (executionReport.getQuantityFill() < ZERO_QTY_FILL) {
+								//ignore partial filled! probably already CF
+								continue;
+							}
 
 							if (orderER.getQuantityFill() >= orderER.getQuantity()) {
 								orderER.setExecutionReportStatus(ExecutionReportStatus.CompletellyFilled);
@@ -774,6 +797,10 @@ public class OrderMatchEngine extends OrderbookManager {
 								}
 								//match non mm bid with ask
 								double qtyFill = Math.min(bidOrder.qty, askOrder.qty);
+								if (Math.abs(qtyFill) < 1E-10) {
+									//ignore partial filled! probably already CF
+									continue;
+								}
 								bidOrder.qty -= qtyFill;
 								askOrder.qty -= qtyFill;
 
@@ -797,7 +824,12 @@ public class OrderMatchEngine extends OrderbookManager {
 									executionReport.setQuantityFill(executionReport.getQuantityFill() + qtyFill);
 									executionReport.setLastQuantity(qtyFill);
 
-									double priceExecuted = Math.min(askOrder.getPrice(), bidOrder.getPrice());
+									if (executionReport.getQuantityFill() < ZERO_QTY_FILL) {
+										//ignore partial filled! probably already CF
+										continue;
+									}
+
+									double priceExecuted = Math.max(askOrder.getPrice(), bidOrder.getPrice());
 									executionReport.setPrice(priceExecuted);
 
 									if (executionReport.getQuantityFill() == executionReport.getQuantity()) {
@@ -823,16 +855,20 @@ public class OrderMatchEngine extends OrderbookManager {
 									executionReport.setQuantityFill(executionReport.getQuantityFill() + qtyFill);
 									executionReport.setLastQuantity(qtyFill);
 
-									double priceExecuted = Math.max(askOrder.getPrice(), bidOrder.getPrice());
+									double priceExecuted = Math.min(askOrder.getPrice(), bidOrder.getPrice());
 									executionReport.setPrice(priceExecuted);
-
-									if (executionReport.getQuantityFill() == executionReport.getQuantity()) {
+									if (executionReport.getQuantityFill() < ZERO_QTY_FILL) {
+										//ignore partial filled! probably already CF
+										continue;
+									}
+									if (executionReport.getQuantityFill() >= executionReport.getQuantity()) {
 										executionReport
 												.setExecutionReportStatus(ExecutionReportStatus.CompletellyFilled);
 									}
 								}
 
 								executionReportMap.put(executionReport.getClientOrderId(), executionReport);
+
 								notifyExecutionReport(executionReport);//trades will be notified here
 
 							}
