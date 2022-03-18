@@ -2,6 +2,7 @@ package com.lambda.investing.algorithmic_trading.reinforcement_learning.state;
 
 import com.lambda.investing.algorithmic_trading.Algorithm;
 import com.lambda.investing.algorithmic_trading.AlgorithmObserver;
+import com.lambda.investing.algorithmic_trading.CandleListener;
 import com.lambda.investing.algorithmic_trading.PnlSnapshot;
 import com.lambda.investing.model.candle.Candle;
 import com.lambda.investing.model.market_data.Depth;
@@ -16,7 +17,7 @@ import org.apache.logging.log4j.Logger;
 import java.util.Date;
 import java.util.Map;
 
-@Getter @Setter public class StateManager implements AlgorithmObserver, Runnable {
+@Getter @Setter public class StateManager implements AlgorithmObserver, CandleListener, Runnable {
 
 	protected Logger logger = LogManager.getLogger(StateManager.class);
 	private static long MAX_WAIT_PNL_SNAPSHOT_UPDATE_MS = 1000 * 60 * 5;//5 minutes without update
@@ -32,7 +33,7 @@ import java.util.Map;
 	public StateManager(Algorithm algorithm, AbstractState abstractState) {
 		this.algorithm = algorithm;
 		this.abstractState = abstractState;
-		this.algorithm.getCandleFromTickUpdater().register(this::onUpdateCandle);
+		this.algorithm.getCandleFromTickUpdater().register(this);
 		pnlSnapshotForceUpdate = new Thread(this, "pnlSnapshotForceUpdate");
 		this.algorithm.register(this);
 		pnlSnapshotForceUpdate.start();

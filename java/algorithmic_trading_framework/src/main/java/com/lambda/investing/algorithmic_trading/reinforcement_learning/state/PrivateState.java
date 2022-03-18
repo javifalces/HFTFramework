@@ -1,5 +1,7 @@
 package com.lambda.investing.algorithmic_trading.reinforcement_learning.state;
 
+import com.google.common.collect.BiMap;
+import com.google.common.collect.HashBiMap;
 import com.lambda.investing.algorithmic_trading.PnlSnapshot;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.MatrixRoundUtils;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.ScoreEnum;

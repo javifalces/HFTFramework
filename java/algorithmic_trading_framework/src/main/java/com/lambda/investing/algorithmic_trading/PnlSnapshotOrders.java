@@ -12,17 +12,20 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 
 	protected TreeMap<Double, Double> openBuys;
 	protected TreeMap<Double, Double> openSells;
+	protected TreeMap<Double, Double> openFees;
 
 	public PnlSnapshotOrders() {
 		super();
 		openSells = new TreeMap<>();
 		openBuys = new TreeMap<>();
+		openFees = new TreeMap<>();
 	}
 
 	private double updateClosePosition(ExecutionReport executionReport, double leverage) {
 
 		double quantityWithDirection = executionReport.getLastQuantity();
 		TreeMap<Double, Double> priceMap = openSells;
+		TreeMap<Double, Double> feeMap = openFees;
 		Set<Double> priceSet = priceMap
 				.keySet();////sells removed in ascending order to remove most losing positions first
 
@@ -37,17 +40,24 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 
 		List<Double> pricesToRemove = new ArrayList<>();
 		double remainQty = minPositionAbsTotal;
-
+		double realizedFeesTemp = 0;
 		for (double price : priceSet) {
 			//first the lowest price bought
 			double initialPrice = price;
 			double qtyBuy = priceMap.get(initialPrice);
+			double entryFee = feeMap.get(initialPrice);
+			double exitFee = lastFee;
+			double totalFee = entryFee + exitFee;
 			double minPositionAbs = Math.min(Math.abs(qtyBuy), Math.abs(netPosition));
 			double realizedPnlTemp = (lastPrice - initialPrice) * minPositionAbs * sidePosition * leverage;
+			//include fees!
+			realizedPnlTemp -= (totalFee);
+
 			if (Double.isNaN(realizedPnlTemp)) {
 				realizedPnlTemp = 0.0;
 			}
 			realizedPnl += realizedPnlTemp;
+			realizedFeesTemp += totalFee;
 			remainQty -= Math.abs(qtyBuy);
 
 			if (remainQty <= 0) {
@@ -62,8 +72,10 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 			}
 
 		}
+
 		for (double price : pricesToRemove) {
 			priceMap.remove(price);
+			feeMap.remove(price);
 		}
 
 		return Math.abs(remainQty);
@@ -142,6 +154,10 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 		}
 
 		Instrument instrument = Instrument.getInstrument(executionReport.getInstrument());
+		boolean isTaker = isTaker(executionReport.getPrice(), executionReport.getVerb());
+		lastFee = instrument.calculateFee(isTaker, executionReport.getPrice(), executionReport.getLastQuantity());
+		realizedFees += lastFee;
+
 		double leverage = DEFAULT_LEVERAGE;
 		if (instrument != null) {
 			leverage = instrument.getLeverage();
@@ -162,7 +178,7 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 			//closed position
 			double remainQty = updateClosePosition(executionReport, leverage);
 			netPosition = newPosition;
-//			lastQuantity = remainQty;
+			//			lastQuantity = remainQty;
 			if (remainQty == 0) {
 				isClosePosition = true;
 				if (netPosition > 0) {
@@ -182,6 +198,7 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 		double prevAvgOpenPrice = avgOpenPrice;
 		if (!isClosePosition) {
 			double newAvgOpenPrice = lastPrice;
+			openFees.put(lastPrice, lastFee);
 			if (lastVerb.equalsIgnoreCase(Verb.Buy.name())) {
 				openBuys.put(lastPrice, Math.abs(lastQuantity));
 				newAvgOpenPrice = getAvgOpenPrice(openBuys);
@@ -208,9 +225,13 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 
 		//
 		if (lastDepth != null) {
-			updateDepth(lastDepth);
+			if (lastDepth.getTimestamp() < lastTimestampExecutionReportUpdate) {
+				lastDepth.setTimestamp(lastTimestampExecutionReportUpdate);
+			}
+			updateDepth(lastDepth);//to avoid save it earlier
 		}//update unrealized pnl
 		totalPnl = realizedPnl + unrealizedPnl;
+		totalFees = realizedFees + unrealizedFees;
 		//historical
 		updateHistoricals(executionReport.getTimestampCreation());
 		processedClOrdId.put(executionReport.getClientOrderId(), executionReport.getExecutionReportStatus());
@@ -265,7 +286,16 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 		}
 
 		double initialPrice = avgOpenPrice;//TODO use openBids or openAsks
-		double unrealizedPnlProposal = (lastPriceForUnrealized - initialPrice) * netPosition;
+
+		Instrument instrument = Instrument.getInstrument(depth.getInstrument());
+
+		//supposing maker fees!
+		Verb verbEntry = netPosition > 0 ? Verb.Buy : Verb.Sell;
+		//		double entryFee = instrument.calculateFee(false, initialPrice, netPosition);
+		double exitFee = instrument.calculateFee(true, lastPriceForUnrealized, netPosition);
+		unrealizedFees = exitFee;
+
+		double unrealizedPnlProposal = ((lastPriceForUnrealized - initialPrice) * netPosition);
 		boolean isOnLimitsOfPnl = true;
 		if (CHECK_OPEN_PNL) {
 			isOnLimitsOfPnl = checkUnrealizedHistorical(unrealizedPnlProposal);//remove here
@@ -275,8 +305,8 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 			//			logger.warn("unrealizedPnlProposal is out of bounds {} => using previous {}", unrealizedPnlProposal,
 			//					unrealizedPnl);
 		} else {
-			unrealizedPnl = unrealizedPnlProposal * leverage;
-			midpricesQueue.add(lastPrice);
+			unrealizedPnl = (unrealizedPnlProposal * leverage) - unrealizedFees;
+			midpricesQueue.offer(lastPrice);
 			calculateBoundariesPrice(lastPriceForUnrealized);
 		}
 
@@ -286,6 +316,10 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 		if (!depth.isDepthFilled()) {
 			return;
 		}
+		if (lastDepth != null && lastDepth.getTimestamp() > depth.getTimestamp()) {
+			return;
+		}
+
 		Instrument instrument = Instrument.getInstrument(depth.getInstrument());
 		double leverage = DEFAULT_LEVERAGE;
 		if (instrument != null) {
@@ -297,6 +331,7 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 			updateOpenPosition(depth, leverage);
 		}
 		totalPnl = unrealizedPnl + realizedPnl;
+		totalFees = realizedFees + unrealizedFees;
 		lastDepth = depth;
 		spread = depth.getSpread();
 		updateHistoricals(depth.getTimestamp());

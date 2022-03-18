@@ -2,23 +2,30 @@ package com.lambda.investing.algorithmic_trading;
 
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
+import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.portfolio.Portfolio;
 import com.lambda.investing.model.portfolio.PortfolioInstrument;
 import com.lambda.investing.model.trading.ExecutionReport;
+import com.lambda.investing.model.trading.Verb;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import tech.tablesaw.aggregate.AggregateFunctions;
 import tech.tablesaw.api.*;
-import tech.tablesaw.plotly.Plot;
-import tech.tablesaw.plotly.api.TimeSeriesPlot;
-import tech.tablesaw.plotly.components.Figure;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+
+//
+import tech.tablesaw.plotly.Plot;
+import tech.tablesaw.plotly.api.BubblePlot;
+import tech.tablesaw.plotly.api.TimeSeriesPlot;
+import tech.tablesaw.plotly.components.Figure;
+import tech.tablesaw.selection.Selection;
 
 import static com.lambda.investing.algorithmic_trading.PnlSnapshot.UPDATE_HISTORICAL_LOCK;
 
@@ -130,13 +137,16 @@ public class PortfolioManager {
 			return "";
 		}
 		String output = String
-				.format("\n\ttrades:%d  position:%.3f totalPnl:%.3f\n\trealizedPnl:%.3f\n\tunrealizedPnl:%.3f",
+				.format("\n\ttrades:%d  position:%.3f totalPnl:%.3f totalFees:%.3f\n\trealizedPnl:%.3f  realizedFees:%.3f \n\tunrealizedPnl:%.3f  unrealizedFees:%.3f ",
 						pnlSnapshot.numberOfTrades.get(), pnlSnapshot.netPosition, pnlSnapshot.totalPnl,
-						pnlSnapshot.realizedPnl, pnlSnapshot.unrealizedPnl);
+						pnlSnapshot.totalFees, pnlSnapshot.realizedPnl, pnlSnapshot.realizedFees,
+						pnlSnapshot.unrealizedPnl, pnlSnapshot.unrealizedFees);
 
-		logger.info("\n\ttrades:{}  position:{} totalPnl:{}\n\trealizedPnl:{}\n\tunrealizedPnl:{}",
-				pnlSnapshot.numberOfTrades, pnlSnapshot.netPosition, pnlSnapshot.totalPnl, pnlSnapshot.realizedPnl,
-				pnlSnapshot.unrealizedPnl);
+		logger.info(
+				"\n\ttrades:{}  position:{} totalPnl:{} totalFees:{}\n\trealizedPnl:{}  realizedFees:{}\n\tunrealizedPnl:{}  unrealizedFees:{}",
+				pnlSnapshot.numberOfTrades, pnlSnapshot.netPosition, pnlSnapshot.totalPnl, pnlSnapshot.totalFees,
+				pnlSnapshot.realizedPnl, pnlSnapshot.realizedFees, pnlSnapshot.unrealizedPnl,
+				pnlSnapshot.unrealizedFees);
 
 		return output;
 
@@ -209,6 +219,21 @@ public class PortfolioManager {
 
 	}
 
+	protected List<Double> getSortedValuesDouble(Map<Long, Double> input) {
+		List<Double> output = new ArrayList<>(new TreeMap<Long, Double>(input).values());
+		return output;
+	}
+
+	protected List<Integer> getSortedValuesInteger(Map<Long, Integer> input) {
+		List<Integer> output = new ArrayList<>(new TreeMap<Long, Integer>(input).values());
+		return output;
+	}
+
+	protected List<String> getSortedValuesString(Map<Long, String> input) {
+		List<String> output = new ArrayList<>(new TreeMap<Long, String>(input).values());
+		return output;
+	}
+
 	public synchronized Map<Instrument, Table> getTradesTable(String basePath) {
 		synchronized (UPDATE_HISTORICAL_LOCK) {
 			Map<Instrument, Table> output = new ConcurrentHashMap<>();
@@ -222,21 +247,25 @@ public class PortfolioManager {
 						logger.warn("no trades detected!");
 						return output;
 					}
-					List<Long> timestamp = new ArrayList<>(pnlSnapshot.historicalAvgOpenPrice.keySet());
-					List<Double> netPosition = new ArrayList<>(pnlSnapshot.historicalNetPosition.values());
-					List<Double> avgOpenPrice = new ArrayList<>(pnlSnapshot.historicalAvgOpenPrice.values());
-					List<Double> netInvestment = new ArrayList<>(pnlSnapshot.historicalNetInvestment.values());
-					List<Double> historicalRealizedPnl = new ArrayList<>(pnlSnapshot.historicalRealizedPnl.values());
-					List<Double> historicalUnrealizedPnl = new ArrayList<>(
-							pnlSnapshot.historicalUnrealizedPnl.values());
-					List<Double> historicalTotalPnl = new ArrayList<>(pnlSnapshot.historicalTotalPnl.values());
-					List<Double> historicalPrice = new ArrayList<>(pnlSnapshot.historicalPrice.values());
-					List<Double> historicalQuantity = new ArrayList<>(pnlSnapshot.historicalQuantity.values());
-					List<String> historicalAlgorithmInfo = new ArrayList<>(
-							pnlSnapshot.historicalAlgorithmInfo.values());
-					List<Integer> numberTrades = new ArrayList<>(pnlSnapshot.historicalNumberOfTrades.values());
-					List<String> historicalVerb = new ArrayList<>(pnlSnapshot.historicalVerb.values());
-					List<String> historicalClOrdId = new ArrayList<>(pnlSnapshot.historicalClOrdId.values());
+
+					TreeMap<Long, Double> historicalAvgOpenPriceTemp = new TreeMap<Long, Double>(
+							pnlSnapshot.historicalAvgOpenPrice);
+
+					List<Long> timestamp = new ArrayList<>(
+							new TreeMap<Long, Double>(pnlSnapshot.historicalAvgOpenPrice).keySet());
+					List<Double> netPosition = getSortedValuesDouble(pnlSnapshot.historicalNetPosition);
+					List<Double> avgOpenPrice = getSortedValuesDouble(pnlSnapshot.historicalAvgOpenPrice);
+					List<Double> netInvestment = getSortedValuesDouble(pnlSnapshot.historicalNetInvestment);
+					List<Double> historicalRealizedPnl = getSortedValuesDouble(pnlSnapshot.historicalRealizedPnl);
+					List<Double> historicalUnrealizedPnl = getSortedValuesDouble(pnlSnapshot.historicalUnrealizedPnl);
+					List<Double> historicalTotalPnl = getSortedValuesDouble(pnlSnapshot.historicalTotalPnl);
+					List<Double> historicalFee = getSortedValuesDouble(pnlSnapshot.historicalFee);
+					List<Double> historicalPrice = getSortedValuesDouble(pnlSnapshot.historicalPrice);
+					List<Double> historicalQuantity = getSortedValuesDouble(pnlSnapshot.historicalQuantity);
+					List<String> historicalAlgorithmInfo = getSortedValuesString(pnlSnapshot.historicalAlgorithmInfo);
+					List<Integer> numberTrades = getSortedValuesInteger(pnlSnapshot.historicalNumberOfTrades);
+					List<String> historicalVerb = getSortedValuesString(pnlSnapshot.historicalVerb);
+					List<String> historicalClOrdId = getSortedValuesString(pnlSnapshot.historicalClOrdId);
 
 					//timestamp conversion
 					Long[] timestampArr = new Long[timestamp.size()];
@@ -251,11 +280,11 @@ public class PortfolioManager {
 					}
 
 					logger.info(
-							"getTradesTable has {} rows -> timestamp:{} verb:{} algorithmInfo:{} price:{} quantity:{} netPosition:{} avgOpenPrice:{} netInvestment:{} historicalRealizedPnl:{} historicalUnrealizedPnl:{} historicalTotalPnl:{} numberTrades:{}",
+							"getTradesTable has {} rows -> timestamp:{} verb:{} algorithmInfo:{} fee:{} price:{} quantity:{} netPosition:{} avgOpenPrice:{} netInvestment:{} historicalRealizedPnl:{} historicalUnrealizedPnl:{} historicalTotalPnl:{} numberTrades:{}",
 							dates.length, timestamp.size(), historicalVerb.size(), historicalAlgorithmInfo.size(),
-							historicalPrice.size(), historicalQuantity.size(), netPosition.size(), avgOpenPrice.size(),
-							netInvestment.size(), historicalRealizedPnl.size(), historicalUnrealizedPnl.size(),
-							historicalTotalPnl.size(), numberTrades.size());
+							historicalFee.size(), historicalPrice.size(), historicalQuantity.size(), netPosition.size(),
+							avgOpenPrice.size(), netInvestment.size(), historicalRealizedPnl.size(),
+							historicalUnrealizedPnl.size(), historicalTotalPnl.size(), numberTrades.size());
 
 					LongColumn timestampColumn = LongColumn.create("timestamp", ArrayUtils.toPrimitive(timestampArr));
 					DateTimeColumn dateTimeColumn = DateTimeColumn.create("date", dates);
@@ -264,6 +293,7 @@ public class PortfolioManager {
 							.create("algorithmInfo", fromStrList(historicalAlgorithmInfo));
 					StringColumn clOrdIdColumn = StringColumn.create("clientOrderId", fromStrList(historicalClOrdId));
 					DoubleColumn priceColumn = DoubleColumn.create("price", fromList(historicalPrice));
+					DoubleColumn feeColumn = DoubleColumn.create("fee", fromList(historicalFee));
 					DoubleColumn quantityColumn = DoubleColumn.create("quantity", fromList(historicalQuantity));
 					DoubleColumn netPositionColumn = DoubleColumn.create("netPosition", fromList(netPosition));
 					DoubleColumn avgOpenPriceColumn = DoubleColumn.create("avgOpenPrice", fromList(avgOpenPrice));
@@ -282,15 +312,15 @@ public class PortfolioManager {
 					Table output1 = Table.create(algorithm.algorithmInfo);
 					output1 = output1
 							.addColumns(timestampColumn, dateTimeColumn, clOrdIdColumn, verbColumn, priceColumn,
-									quantityColumn, netPositionColumn, avgOpenPriceColumn, netInvestmentColumn,
-									historicalRealizedPnlColumn, historicalUnrealizedPnltColumn,
+									quantityColumn, feeColumn, netPositionColumn, avgOpenPriceColumn,
+									netInvestmentColumn, historicalRealizedPnlColumn, historicalUnrealizedPnltColumn,
 									historicalTotalPnlColumn, numberTradesColumn, algoInfoColumn);
 
 					//add custom columns
 					if (customColumnsKeys.size() > 0) {
 						ffillHistoricalCustomColumns(pnlSnapshot);
-						Map<Long, List<CustomColumn>> historicalsCustoms = pnlSnapshot.historicalCustomColumns;
-
+						Map<Long, List<CustomColumn>> historicalsCustoms = new TreeMap<Long, List<CustomColumn>>(
+								pnlSnapshot.historicalCustomColumns);
 						int size = 0;
 						int tradesSize = output1.rowCount();
 						for (String customKey : customColumnsKeys) {

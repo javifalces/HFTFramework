@@ -16,6 +16,7 @@ import com.lambda.investing.model.portfolio.Portfolio;
 import com.lambda.investing.model.trading.*;
 import com.lambda.investing.trading_engine_connector.AbstractBrokerTradingEngine;
 import com.lambda.investing.trading_engine_connector.ExecutionReportListener;
+import com.lambda.investing.trading_engine_connector.TradingEngineConnector;
 import com.lambda.investing.trading_engine_connector.ZeroMqTradingEngineConnector;
 import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
@@ -31,8 +32,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static com.lambda.investing.Configuration.RANDOM_GENERATOR;
-import static com.lambda.investing.Configuration.SET_RANDOM_GENERATOR;
+import static com.lambda.investing.Configuration.*;
 import static com.lambda.investing.model.portfolio.Portfolio.GSON_STRING;
 import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_PORTFOLIO_INFO;
 
@@ -470,6 +470,9 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 				setSeed(this.seed);
 			}
 
+			//			SET_MULTITHREAD_CONFIGURATION(Configuration.MULTITHREADING_CORE);
+			//			SET_DELAY_ORDER_BACKTEST_MS(Configuration.DELAY_ORDER_BACKTEST_MS);
+
 			algorithmState = AlgorithmState.INITIALIZED;
 			logger.info("[{}]initialized  {}\n{}", getCurrentTime(), algorithmInfo);
 
@@ -777,7 +780,7 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 
 		if (isInactive) {
 			if (executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled)) {
-				tradesInstrument.add(executionReport.getClientOrderId());
+				tradesInstrument.offer(executionReport.getClientOrderId());
 				instrumentManager.setCfTradesReceived(tradesInstrument);
 			}
 
@@ -902,6 +905,8 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 			throw new LambdaTradingException("cant quote with algo not started");
 		}
 		QuoteManager quoteManager = getQuoteManager(quoteRequest.getInstrument().getPrimaryKey());
+		quoteRequest.setBidPrice(quoteRequest.getInstrument().roundPrice(quoteRequest.getBidPrice()));
+		quoteRequest.setAskPrice(quoteRequest.getInstrument().roundPrice(quoteRequest.getAskPrice()));
 		quoteManager.quoteRequest(quoteRequest);
 	}
 
@@ -960,11 +965,14 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 
 		String instrumentPk = orderRequest.getInstrument();
 		InstrumentManager instrumentManager = getInstrumentManager(instrumentPk);
+
 		orderRequest = checkOrderRequest(orderRequest);
 		orderRequest.setTimestampCreation(getCurrentTimestamp());
 
 		//updating the OrderRequestMap before sending
 		Instrument instrumentOrder = instrumentManager.getInstrument();
+		orderRequest.setPrice(instrumentOrder.roundPrice(orderRequest.getPrice()));
+
 		Map<String, OrderRequest> instrumentSendOrders = instrumentManager.getAllRequestOrders();
 		//		if(pendingToRemoveClientOrderId.contains(orderRequest.getClientOrderId())){
 		//			pendingToRemoveClientOrderId.remove(orderRequest.getClientOrderId());
@@ -1002,17 +1010,17 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 				timeService.setCurrentTimestamp(new Date().getTime());
 			}
 
-			if (!checkOperationalTime()) {
-				return false;
-			}
 			//check depth
 		} catch (Exception e) {
 			logger.warn("error capture onDepthUpdate on algorithm {} ", this.algorithmInfo, e);
 		}
 		checkDepth(depth);
-
 		//update cache
 		portfolioManager.updateDepth(depth);
+
+		if (!checkOperationalTime()) {
+			return false;
+		}
 		InstrumentManager instrumentManager = getInstrumentManager(depth.getInstrument());
 		instrumentManager.setLastDepth(depth);
 		addStatistics(RECEIVE_STATS + " depth");
@@ -1163,7 +1171,7 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 						//already processed
 						return false;
 					}
-					cfTradesProcessed.add(executionReport.getClientOrderId());
+					cfTradesProcessed.offer(executionReport.getClientOrderId());
 				}
 
 				addToPersist(executionReport);

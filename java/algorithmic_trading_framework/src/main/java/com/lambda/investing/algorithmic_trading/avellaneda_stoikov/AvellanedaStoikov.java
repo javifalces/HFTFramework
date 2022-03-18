@@ -1,14 +1,12 @@
 package com.lambda.investing.algorithmic_trading.avellaneda_stoikov;
 
-import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
-import com.lambda.investing.algorithmic_trading.AlgorithmState;
-import com.lambda.investing.algorithmic_trading.InstrumentManager;
-import com.lambda.investing.algorithmic_trading.MarketMakingAlgorithm;
+import com.lambda.investing.algorithmic_trading.*;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.exception.LambdaTradingException;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.trading.*;
+import org.apache.commons.math3.util.Precision;
 import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 
 import java.util.Map;
@@ -188,9 +186,9 @@ public class AvellanedaStoikov extends MarketMakingAlgorithm {
 		}
 		boolean minuteHasPassed = getCurrentTimestamp() - counterStartingMinuteMs > 60 * 1000;
 		if (minuteHasPassed) {
-			counterTradesPerMinute.add(counterTrades);//counter per minute
-			counterBuyTradesPerMinute.add(counterBuyTrades);//counter per minute
-			counterSellTradesPerMinute.add(counterSellTrades);//counter per minute
+			counterTradesPerMinute.offer(counterTrades);//counter per minute
+			counterBuyTradesPerMinute.offer(counterBuyTrades);//counter per minute
+			counterSellTradesPerMinute.offer(counterSellTrades);//counter per minute
 			counterStartingMinuteMs = getCurrentTimestamp();
 			counterTrades = 0L;
 			counterBuyTrades = 0L;
@@ -233,9 +231,9 @@ public class AvellanedaStoikov extends MarketMakingAlgorithm {
 		}
 		boolean minuteHasPassed = getCurrentTimestamp() - counterStartingQuoteMinuteMs > 60 * 1000;
 		if (minuteHasPassed) {
-			counterAskQuotesPerMinute.add(counterAskQuotes);//counter per minute
-			counterBidQuotesPerMinute.add(counterBidQuotes);//counter per minute
-			counterQuotesPerMinute.add(counterQuotes);//counter per minute
+			counterAskQuotesPerMinute.offer(counterAskQuotes);//counter per minute
+			counterBidQuotesPerMinute.offer(counterBidQuotes);//counter per minute
+			counterQuotesPerMinute.offer(counterQuotes);//counter per minute
 			counterStartingQuoteMinuteMs = getCurrentTimestamp();
 			counterAskQuotes = 0L;
 			counterBidQuotes = 0L;

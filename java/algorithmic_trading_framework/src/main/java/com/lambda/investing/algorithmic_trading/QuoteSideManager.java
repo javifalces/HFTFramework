@@ -18,6 +18,7 @@ import static com.lambda.investing.algorithmic_trading.Algorithm.LOG_LEVEL;
 
 public class QuoteSideManager {
 
+	public static int MAX_SIZE_LAST_CLORDID_SENT = 200;
 	private static long MAX_TIME_ERROR_MS = 1000 * 10;
 	private static int MAX_CANCEL_REJ_DELETE = 5;
 
@@ -32,7 +33,7 @@ public class QuoteSideManager {
 
 	private Double lastPrice, lastQuantity;
 
-	private Queue<String> cfTradesClientOrderId;
+	protected Queue<String> cfTradesClientOrderId;
 	boolean isDisablePending = false;
 	private Map<String, Integer> counterCancelRej;
 	private Queue<String> counterCancelRejIgnored;
@@ -65,9 +66,17 @@ public class QuoteSideManager {
 		counterCancelRej = new ConcurrentHashMap<>();
 		cfTradesClientOrderId = EvictingQueue.create(60);
 		counterCancelRejIgnored = EvictingQueue.create(200);
-		lastClOrdIdSent = EvictingQueue.create(100);
+		lastClOrdIdSent = EvictingQueue.create(MAX_SIZE_LAST_CLORDID_SENT);
 		cancelConfirmedOriginalClientOrderId = EvictingQueue.create(200);
 		timestampError = Long.MIN_VALUE;
+	}
+
+	public Queue<String> getLastClOrdIdSent() {
+		return lastClOrdIdSent;
+	}
+
+	public Queue<String> getCfTradesClientOrderId() {
+		return cfTradesClientOrderId;
 	}
 
 	private OrderRequest createOrderRequest(Instrument instrument, Verb verb, double price, double quantity) {
@@ -156,7 +165,7 @@ public class QuoteSideManager {
 			if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal()) {
 				logger.info("[{}] {}", new Date(orderRequest.getTimestampCreation()), orderRequest);
 			}
-			lastClOrdIdSent.add(orderRequest.getClientOrderId());
+			lastClOrdIdSent.offer(orderRequest.getClientOrderId());
 			clOrdIdPending = orderRequest.getClientOrderId();
 			algorithm.sendOrderRequest(orderRequest);
 			timestampError = Long.MIN_VALUE;
@@ -194,6 +203,10 @@ public class QuoteSideManager {
 		//		}
 	}
 
+	public String getClientOrderIdSent() {
+		return clientOrderIdSent;
+	}
+
 	public void unquoteSide() throws LambdaTradingException {
 		QuoteRequest lastQuote = lastQuoteSent;
 		if (isDisable) {
@@ -218,7 +231,7 @@ public class QuoteSideManager {
 		}
 	}
 
-	public synchronized boolean onExecutionReportUpdate(ExecutionReport executionReport) {
+	public boolean onExecutionReportUpdate(ExecutionReport executionReport) {
 		if (executionReport.getVerb() != null && !executionReport.getVerb().equals(verb)) {
 			//is from the other side
 			return false;
@@ -244,12 +257,13 @@ public class QuoteSideManager {
 			logger.warn("[{}] {}-{}  {}", new Date(executionReport.getTimestampCreation()),
 					executionReport.getClientOrderId(), executionReport.getExecutionReportStatus(), executionReport);
 
+		} else {
+			if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal()) {
+				logger.info("[{}] {}-{}  {}", new Date(executionReport.getTimestampCreation()),
+						executionReport.getClientOrderId(), executionReport.getExecutionReportStatus(),
+						executionReport);
+			}
 		}
-		if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal()) {
-			logger.info("[{}] {}-{}  {}", new Date(executionReport.getTimestampCreation()),
-					executionReport.getClientOrderId(), executionReport.getExecutionReportStatus(), executionReport);
-		}
-
 		boolean isActive =
 				executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Active) || executionReport
 						.getExecutionReportStatus().equals(ExecutionReportStatus.PartialFilled);
@@ -289,7 +303,7 @@ public class QuoteSideManager {
 		}
 
 		if (executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Cancelled)) {
-			cancelConfirmedOriginalClientOrderId.add(executionReport.getOrigClientOrderId());
+			cancelConfirmedOriginalClientOrderId.offer(executionReport.getOrigClientOrderId());
 			isDisable = true;
 		}
 		if (isInactive) {
@@ -311,7 +325,7 @@ public class QuoteSideManager {
 
 			if (isFilled) {
 				//here is only Cf
-				cfTradesClientOrderId.add(executionReport.getClientOrderId());
+				cfTradesClientOrderId.offer(executionReport.getClientOrderId());
 				if (stopOnCf) {
 					try {
 						unquoteSide();
@@ -335,7 +349,7 @@ public class QuoteSideManager {
 					activeClientOrderId = null;
 					lastPrice = null;
 					lastQuantity = null;
-					counterCancelRejIgnored.add(executionReport.getOrigClientOrderId());
+					counterCancelRejIgnored.offer(executionReport.getOrigClientOrderId());
 					counterCancelRej.remove(executionReport.getOrigClientOrderId());
 				} else {
 					counterCancelRej.put(executionReport.getOrigClientOrderId(), counter + 1);

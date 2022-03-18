@@ -1,11 +1,14 @@
 package com.lambda.investing.algorithmic_trading;
 
+import com.google.common.primitives.Doubles;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.ExecutionReportStatus;
 import com.lambda.investing.model.trading.Verb;
 import lombok.Getter;
+import lombok.Setter;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -14,7 +17,9 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.*;
+import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetStd;
+import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore;
+import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscorePositive;
 
 @Getter public class PnlSnapshot {
 
@@ -31,11 +36,11 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.*;
 	public static final Object UPDATE_HISTORICAL_LOCK = new Object();
 
 	Logger logger = LogManager.getLogger(PnlSnapshot.class);
-	public double netPosition, avgOpenPrice, netInvestment, realizedPnl, unrealizedPnl, totalPnl, lastPriceForUnrealized, spread;
+	public double netPosition, avgOpenPrice, netInvestment, realizedPnl, unrealizedPnl, totalPnl, totalFees, lastPriceForUnrealized, spread, realizedFees, unrealizedFees;
 	public String algorithmInfo;
 	public Map<Double, Double> openPriceToVolume;
 	public List<Long> historicalTimestamp;
-	public Map<Long, Double> historicalNetPosition, historicalAvgOpenPrice, historicalNetInvestment, historicalRealizedPnl, historicalUnrealizedPnl, historicalSpread, historicalTotalPnl, historicalPrice, historicalQuantity;
+	public Map<Long, Double> historicalNetPosition, historicalAvgOpenPrice, historicalNetInvestment, historicalRealizedPnl, historicalUnrealizedPnl, historicalSpread, historicalTotalPnl, historicalPrice, historicalFee, historicalQuantity;
 	public Map<Long, String> historicalAlgorithmInfo;
 	public Map<Long, String> historicalClOrdId;
 	protected Queue<Double> lastUnrealizedPnls;
@@ -45,7 +50,7 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.*;
 	public Map<Long, Integer> historicalNumberOfTrades;
 	protected Map<String, ExecutionReportStatus> processedClOrdId;
 	protected boolean nextCustomReject = false;
-	protected double lastPrice, lastQuantity;
+	protected double lastPrice, lastQuantity, lastFee;
 	protected long lastTimestampUpdate;
 	protected long lastTimestampExecutionReportUpdate = 0;
 	public String lastVerb;
@@ -78,6 +83,7 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.*;
 		historicalTotalPnl = new ConcurrentHashMap<>();
 		processedClOrdId = new ConcurrentHashMap<>();
 
+		historicalFee = new ConcurrentHashMap<>();
 		historicalPrice = new ConcurrentHashMap<>();
 		historicalQuantity = new ConcurrentHashMap<>();
 		historicalVerb = new ConcurrentHashMap<>();
@@ -180,6 +186,10 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.*;
 				if (new Date(timestamp).getYear() < 80) {//lower 1980 is strange
 					logger.warn("trying to update historicals with year {}", new Date(timestamp));
 				}
+				if (historicalTimestamp.contains(timestamp)) {
+					//modify it
+					timestamp += 1;
+				}
 				lastTimestampUpdate = timestamp;
 				historicalTimestamp.add(timestamp);
 				historicalNetPosition.put(timestamp, netPosition);
@@ -200,10 +210,12 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.*;
 				historicalQuantity.put(timestamp, lastQuantity);
 				historicalVerb.put(timestamp, lastVerb);
 				historicalClOrdId.put(timestamp, lastClOrdId);
+				historicalFee.put(timestamp, lastFee);
+
 				historicalNumberOfTrades.put(timestamp, numberOfTrades.get());
 				try {
-					lastSpreads.add(historicalSpread.get(timestamp));
-					lastUnrealizedPnls.add(historicalUnrealizedPnl.get(timestamp));
+					lastSpreads.offer(historicalSpread.get(timestamp));
+					lastUnrealizedPnls.offer(historicalUnrealizedPnl.get(timestamp));
 				} catch (Exception e) {
 					logger.error("error adding lastSpreads or lastUnrealizedPnls ", e);
 				}
@@ -219,6 +231,12 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.*;
 		//		}
 		synchronized (UPDATE_HISTORICAL_LOCK) {
 			if (numberOfTrades.get() > 0 && timestamp > 0) {
+
+				if (historicalTimestamp.contains(timestamp)) {
+					//modify it
+					timestamp += 1;
+				}
+
 				CustomColumn customColumn = new CustomColumn(key, value);
 				List<CustomColumn> columnsList = historicalCustomColumns.getOrDefault(timestamp, new ArrayList<>());
 				if (!columnsList.contains(customColumn)) {
@@ -291,6 +309,7 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.*;
 		lastQuantity = executionReport.getLastQuantity();
 		lastVerb = executionReport.getVerb().name();
 		lastClOrdId = executionReport.getClientOrderId();
+
 		//		lastPrice = Math.min(lastPrice, maxExecutionPriceValid);
 		//		lastPrice = Math.max(lastPrice, minExecutionPriceValid);
 		//		if (lastPrice == maxExecutionPriceValid || lastPrice == minExecutionPriceValid) {
@@ -298,6 +317,9 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.*;
 		//					executionReport.getPrice(), lastPrice);
 		//		}
 		Instrument instrument = Instrument.getInstrument(executionReport.getInstrument());
+		boolean isTaker = isTaker(executionReport.getPrice(), executionReport.getVerb());
+		lastFee = instrument.calculateFee(isTaker, executionReport.getPrice(), executionReport.getLastQuantity());
+
 		double leverage = DEFAULT_LEVERAGE;
 		if (instrument != null) {
 			leverage = instrument.getLeverage();
@@ -366,10 +388,33 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.*;
 			updateDepth(lastDepth);
 		}//update unrealized pnl
 		totalPnl = realizedPnl + unrealizedPnl;
+		totalFees = realizedFees + unrealizedFees;
 
 		//historical
 		updateHistoricals(executionReport.getTimestampCreation());
 		processedClOrdId.put(executionReport.getClientOrderId(), executionReport.getExecutionReportStatus());
+
+	}
+
+	public boolean isTaker(double price, Verb verb) {
+		if (lastDepth == null) {
+			logger.warn("not possible to know if we are takers! without depth -> return false");
+			return false;
+		}
+		if (verb.equals(Verb.Buy)) {
+			//			if(price>lastDepth.getMidPrice()){
+			if (price >= lastDepth.getBestAsk()) {
+				return true;
+			}
+		}
+
+		if (verb.equals(Verb.Sell)) {
+			//			if(price<lastDepth.getMidPrice()){
+			if (price <= lastDepth.getBestBid()) {
+				return true;
+			}
+		}
+		return false;
 
 	}
 
@@ -438,12 +483,13 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.*;
 				//						unrealizedPnl);
 			} else {
 				unrealizedPnl = unrealizedPnlProposal * leverage;
-				midpricesQueue.add(lastPrice);
+				midpricesQueue.offer(lastPrice);
 				calculateBoundariesPrice(lastPriceForUnrealized);
 			}
 
 		}
 		totalPnl = unrealizedPnl + realizedPnl;
+		totalFees = realizedFees + unrealizedFees;
 		lastDepth = depth;
 		spread = depth.getSpread();
 		updateHistoricals(depth.getTimestamp());

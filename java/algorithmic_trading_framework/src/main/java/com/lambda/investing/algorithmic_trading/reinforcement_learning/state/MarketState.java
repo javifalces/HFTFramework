@@ -1,8 +1,10 @@
 package com.lambda.investing.algorithmic_trading.reinforcement_learning.state;
 
+import com.google.common.primitives.Doubles;
 import com.lambda.investing.algorithmic_trading.PnlSnapshot;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.ScoreEnum;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.ScoreUtils;
+import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.candle.Candle;
 import com.lambda.investing.model.candle.CandleType;
 import com.lambda.investing.model.market_data.Depth;
@@ -12,6 +14,7 @@ import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.curator.shaded.com.google.common.collect.Queues;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Queue;
 
@@ -273,14 +276,14 @@ public class MarketState extends AbstractState {
 			}
 		}
 
-		if (!privateIsReady && candleIsReady && marketIsReady) {
-			logger.warn("private states initially not received-> set 0.0");
-			for (int horizon = 0; horizon < this.privateHorizonSave; horizon++) {
-				this.inventoryBuffer.add(0.0);
-				this.scoreBuffer.add(0.0);
-			}
-			privateIsReady = true;
-		}
+		//		if (!privateIsReady && candleIsReady && marketIsReady) {
+		//			logger.warn("private states initially not received-> set 0.0");
+		//			for (int horizon = 0; horizon < this.privateHorizonSave; horizon++) {
+		//				this.inventoryBuffer.add(0.0);
+		//				this.scoreBuffer.add(0.0);
+		//			}
+		//			privateIsReady = true;
+		//		}
 
 		return candleIsReady && marketIsReady && privateIsReady;
 
@@ -295,6 +298,7 @@ public class MarketState extends AbstractState {
 			return;
 		}
 
+
 		double open = candle.getOpen();
 		double high = candle.getHigh();
 		double low = candle.getLow();
@@ -308,10 +312,10 @@ public class MarketState extends AbstractState {
 			open = 0.;///not deleting!
 		}
 
-		candlesOpen.add(open);
-		candlesHigh.add(high);
-		candlesLow.add(low);
-		candlesClose.add(close);
+		candlesOpen.offer(open);
+		candlesHigh.offer(high);
+		candlesLow.offer(low);
+		candlesClose.offer(close);
 
 		if (candlesClose.size() >= candleHorizonSave) {
 			Double[] highCandlesDouble = new Double[candleHorizonSave];
@@ -336,8 +340,8 @@ public class MarketState extends AbstractState {
 
 	@Override public synchronized void updateTrade(Trade trade) {
 		if (!disableLastClose) {
-			lastClosePriceBuffer.add(trade.getPrice());
-			lastCloseQuantityBuffer.add(trade.getQuantity());
+			lastClosePriceBuffer.offer(trade.getPrice());
+			lastCloseQuantityBuffer.offer(trade.getQuantity());
 		}
 	}
 
@@ -351,13 +355,13 @@ public class MarketState extends AbstractState {
 		if (PRIVATE_QUANTITY_RELATIVE) {
 			score = score / quantity;
 		}
-		scoreBuffer.add(score);
+		scoreBuffer.offer(score);
 
 		double position = pnlSnapshot.netPosition;
 		if (PRIVATE_QUANTITY_RELATIVE) {
 			position = position / quantity;
 		}
-		inventoryBuffer.add(position);
+		inventoryBuffer.offer(position);
 
 		lastPrivateTickSave = pnlSnapshot.getLastTimestampUpdate();
 	}
@@ -387,14 +391,14 @@ public class MarketState extends AbstractState {
 			ask = Math.abs(ask - midPrice);
 			microPrice = Math.abs(microPrice - midPrice);
 		}
-		midpriceBuffer.add(midPrice);
-		spreadBuffer.add(spread);
-		bidPriceBuffer.add(bid);
-		bidQtyBuffer.add(bidQty);
-		askPriceBuffer.add(ask);
-		askQtyBuffer.add(askQty);
-		micropriceBuffer.add(microPrice);
-		imbalanceBuffer.add(imbalance);
+		midpriceBuffer.offer(midPrice);
+		spreadBuffer.offer(spread);
+		bidPriceBuffer.offer(bid);
+		bidQtyBuffer.offer(bidQty);
+		askPriceBuffer.offer(ask);
+		askQtyBuffer.offer(askQty);
+		micropriceBuffer.offer(microPrice);
+		imbalanceBuffer.offer(imbalance);
 
 		lastMarketTickSave = depth.getTimestamp();
 

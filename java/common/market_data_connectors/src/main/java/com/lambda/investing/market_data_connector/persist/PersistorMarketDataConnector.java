@@ -32,6 +32,7 @@ import java.util.zip.ZipOutputStream;
 
 import static com.lambda.investing.Configuration.FILE_CSV_DATE_FORMAT;
 import static com.lambda.investing.data_manager.csv.CSVDataManager.removeEmptyLines;
+import static com.lambda.investing.data_manager.csv.CSVUtils.TIMESTAMP_COL;
 import static com.lambda.investing.market_data_connector.AbstractMarketDataProvider.GSON;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
@@ -46,6 +47,7 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
 	private static boolean DELETE_PROCESSED_CSV = true;//TODO change when all is fine
 	private List<String> ignoredInstruments = new ArrayList<>();
 	private Calendar calendar;
+	private Set<Integer> daysAlreadyProcessed = new HashSet<>();
 	private Statistics statistics;
 	protected Logger logger = LogManager.getLogger(PersistorMarketDataConnector.class);
 
@@ -70,6 +72,8 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
 	private String name;
 	private Map<String, Long> fileToErrorCounter;
 	private boolean persistParquet = true;
+
+	private final Object lockSynchCache = new Object();
 	//	private String persistSuffix = null;
 
 	public PersistorMarketDataConnector(String dataPath, String parquetDataPath, ConnectorProvider connectorProvider,
@@ -160,11 +164,14 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
 
 	public void saveDepth(Depth depth) {
 		//add to persistor
+
 		calendar.setTimeInMillis(depth.getTimestamp());
 		Instrument instrument = Instrument.getInstrument(depth.getInstrument());
 		InstrumentCache instrumentCache = instrumentCacheMap.getOrDefault(instrument, new InstrumentCache(instrument));
 		instrumentCache.updateDepth(depth);
-		instrumentCacheMap.put(instrument, instrumentCache);
+		synchronized (lockSynchCache) {
+			instrumentCacheMap.put(instrument, instrumentCache);
+		}
 	}
 
 	public void saveTrade(Trade trade) {
@@ -173,7 +180,9 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
 		Instrument instrument = Instrument.getInstrument(trade.getInstrument());
 		InstrumentCache instrumentCache = instrumentCacheMap.getOrDefault(instrument, new InstrumentCache(instrument));
 		instrumentCache.updateTrade(trade);
-		instrumentCacheMap.put(instrument, instrumentCache);
+		synchronized (lockSynchCache) {
+			instrumentCacheMap.put(instrument, instrumentCache);
+		}
 
 	}
 
@@ -214,6 +223,7 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
 							logger.warn("depth file {} without header -> append it", depthFile.toString());
 							StringBuilder fileContentDepth2 = new StringBuilder();
 							fileContentDepth2.append(Depth.headerCSV());
+							fileContentDepth2.append(System.lineSeparator());
 							fileContentDepth2.append(fileContentDepth);
 							fileContentDepth = fileContentDepth2;
 						}
@@ -261,6 +271,7 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
 							logger.warn("trade file {} without header -> append it", tradeFile.toString());
 							StringBuilder fileContentTrade2 = new StringBuilder();
 							fileContentTrade2.append(Trade.headerCSV());
+							fileContentTrade.append(System.lineSeparator());
 							fileContentTrade2.append(fileContentTrade);
 							fileContentTrade = fileContentTrade2;
 						}
@@ -529,13 +540,16 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
 
 	private List<String> createParquets(List<String> csvFilesFound) {
 		List<String> filesProcessed = new ArrayList<>();
-		if (csvFilesFound.size() > 0 && calendar.getTime().getHours() == 0) {
-			logger.info("change of day detected => waiting 30 seconds");
+		if (csvFilesFound.size() > 0 && calendar.getTime().getHours() == 0 && !daysAlreadyProcessed
+				.contains(calendar.getTime().getDay())) {
+			logger.info("change of day detected {} csvFilesFound => waiting 30 seconds", csvFilesFound.size());
 			try {
 				Thread.sleep(30000);
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
+			//to pass only one per day at 12:00
+			daysAlreadyProcessed.add(calendar.getTime().getDay());
 		}
 		for (String csvFile : csvFilesFound) {
 			File file = new File(csvFile);
@@ -637,7 +651,7 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
 					logger.error("{}  as {} reading result is null", csvFile, classToPersist);
 					long currentCounter = fileToErrorCounter.getOrDefault(csvFile, 0L);
 					if (currentCounter > MAX_RETRIES_PARQUET) {
-						logger.error("reach the limit of {} {} => mas as processed to delete it", MAX_RETRIES_PARQUET,
+						logger.error("reach the limit of {} {} => mark as processed to delete it", MAX_RETRIES_PARQUET,
 								csvFile);
 						filesProcessed.add(csvFile);
 						fileToErrorCounter.remove(csvFile);
@@ -649,16 +663,30 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
 				List<CSVable> listToPersist = new ArrayList<>();
 				logger.debug("reading {} rows of csv to list persist", readTable.rowCount());
 				for (Row row : readTable) {
-					if (typeMessage == (TypeMessage.depth)) {
-						listToPersist.add(CSVUtils.createDepth(row, instrument, ""));
-					} else if (typeMessage == (TypeMessage.trade)) {
-						listToPersist.add(CSVUtils.createTrade(row, instrument, ""));
-					} else {
-						logger.warn("unknown type of message to persist {} => skip it", typeMessage);
+					try {
+						Date rowDate = new Date(row.getLong(TIMESTAMP_COL));
+						if (rowDate.getDay() != date.getDay()) {
+							//just in case....
+							continue;
+						}
+
+						if (typeMessage == (TypeMessage.depth)) {
+							listToPersist.add(CSVUtils.createDepth(row, instrument, ""));
+						} else if (typeMessage == (TypeMessage.trade)) {
+							listToPersist.add(CSVUtils.createTrade(row, instrument, ""));
+						} else {
+							logger.warn("unknown type of message to persist {} => skip it", typeMessage);
+						}
+					} catch (Exception e) {
+						logger.error("error reading {} {} on row {} -> skip it {} ", typeMessage, csvFile, row, e);
 					}
 				}
+				if (listToPersist.size() == 0) {
+					//					filesProcessed.add(csvFile);
+					throw new Exception("file parsed with 0 rows ,not marks as processed to delete " + csvFile);
+				}
 
-				logger.debug("saving {} into parquet file {}", type, pathOutput);
+				logger.debug("saving {} rows {} into parquet file {}", listToPersist.size(), type, pathOutput);
 				parquetDataManager.saveData(listToPersist, classToPersist, pathOutput);
 				logger.debug("saved {} ", pathOutput);
 
@@ -666,14 +694,14 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
 				Table parquetCreated = parquetDataManager.getData(pathOutput, classToPersist);
 				//same size as readTable?
 				if (parquetCreated.rowCount() != readTable.rowCount()) {
-					logger.error("different number of rows output {} than input file {}", parquetCreated.rowCount(),
+					logger.warn("different number of rows output {} than input file {}", parquetCreated.rowCount(),
 							readTable.rowCount());
 				}
 				filesProcessed.add(csvFile);
 
 			} catch (Exception e) {
-				logger.error("cant read CSV {} to transform to parquet", csvFile, e);
-
+				logger.error("cant read CSV {} to transform to parquet {}", csvFile, e);
+				e.printStackTrace();
 			}
 
 		}
