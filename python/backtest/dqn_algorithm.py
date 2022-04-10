@@ -51,6 +51,7 @@ DEFAULT_PARAMETERS = {
     "horizonTicksMarketState": 1,
     "binaryStateOutputs": 0,
     "periodsTAStates": [9, 13, 21],
+    "seed": 0
 }
 
 
@@ -125,6 +126,7 @@ class DQNAlgorithm(Algorithm):
     class TrainType:
         default = "standard"
         standart = "standard"
+        custom_actor_critic = "custom_actor_critic"
 
     STATE_LIST_PARAMETERS = ['stateColumnsFilter', 'periodsTAStates']
     DEFAULT_PREDICTION_ACTION_SCORE = 0.0
@@ -177,11 +179,27 @@ class DQNAlgorithm(Algorithm):
             return self._get_ta_state_columns(binary_outputs=is_binary, market_horizon_save=horizonTicksMarketState,
                                               periods=periods)
 
+    def _get_multimarket_state_columns(self) -> list:
+        multimarket_instruments = self.parameters['otherInstrumentsStates']
+        multimarket_periods = self.parameters['otherInstrumentsMsPeriods']
+        multimarket_states = []
+        if multimarket_instruments is not None and len(multimarket_instruments) > 0:
+            pattern_base = ['zscore_mid']
+            for instrument in multimarket_instruments:
+                for pattern in pattern_base:
+                    for period in multimarket_periods:
+                        multimarket_states.append(rf'{pattern}_{instrument}_{period}')
+        return multimarket_states
+
     def _get_ta_state_columns(self, binary_outputs: bool = False,
                               market_horizon_save: int = DEFAULT_MARKET_HORIZON_SAVE,
                               periods: list = DEFAULT_TA_INDICATORS_PERIODS):
-        return ga_ta_state_columns(binary_outputs=binary_outputs, market_horizon_save=market_horizon_save,
-                                   periods=periods)
+        ta_states = ga_ta_state_columns(binary_outputs=binary_outputs, market_horizon_save=market_horizon_save,
+                                        periods=periods)
+
+        # adding multimarket parameters
+        multimarket_states = self._get_multimarket_state_columns()
+        return ta_states + multimarket_states
 
     def _get_market_state_columns(self):
         MARKET_MIDPRICE_RELATIVE = True
@@ -193,6 +211,8 @@ class DQNAlgorithm(Algorithm):
         private_horizon_ticks = self.parameters['horizonTicksPrivateState']
         market_horizon_ticks = self.parameters['horizonTicksMarketState']
         candle_horizon = self.parameters['horizonCandlesState']
+        #     "otherInstrumentsStates": [],
+        #     "otherInstrumentsMsPeriods": []
 
         if not self.REMOVE_PRIVATE_STATES:
             for private_state_horizon in range(private_horizon_ticks - 1, -1, -1):
@@ -239,7 +259,9 @@ class DQNAlgorithm(Algorithm):
         candle_states.append('candle_max')
         candle_states.append('candle_min')
 
-        columns_states = private_states + market__depth_states + market__trade_states + candle_states
+        # adding multimarket parameters
+        multimarket_states = self._get_multimarket_state_columns()
+        columns_states = private_states + market__depth_states + market__trade_states + candle_states + multimarket_states
         return columns_states
 
     def _get_action_columns(self) -> list:
@@ -320,7 +342,8 @@ class DQNAlgorithm(Algorithm):
         return number_state_columns
 
     def get_number_of_action_columns(self, parameters: dict) -> int:
-        raise NotImplementedError
+        actions = self._get_action_columns()
+        return len(actions)
 
     def get_rewards(self, memory_replay_file: str = None, state_columns: list = None) -> pd.DataFrame:
         memory_df = self.get_memory_replay_df(memory_replay_file=memory_replay_file, state_columns=state_columns)
@@ -367,7 +390,7 @@ class DQNAlgorithm(Algorithm):
             assert len(df_next_state_columns) == number_state_columns
         except Exception as e:
             print(
-                rf"something goes wrong when number_of_actions={number_of_actions}!={len(df_reward_columns)} on memory or and number_state_columns={number_state_columns}!= {len(df_state_columns)} on memory ")
+                rf"something goes wrong when number_of_actions={number_of_actions}!={len(df_reward_columns)} on memory or and number_state_columns={number_state_columns}!= {len(df_state_columns)} on memory   df.shape={df.shape}")
             print(e)
             raise e
         # change rewards==0 to nan
@@ -390,6 +413,7 @@ class DQNAlgorithm(Algorithm):
             algorithm_names.append(backtest_launcher.id)
 
         csv_files_out = []
+        main_memory_file = LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename()
         if algos_per_iteration > 1:
             for csv_file in csv_files:
                 if 'permutation' in csv_file:
@@ -402,9 +426,9 @@ class DQNAlgorithm(Algorithm):
                                 continue
                         csv_files_out.append(csv_file)
             if include_original:
-                csv_files_out.append(LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename())
+                csv_files_out.append(main_memory_file)
         else:
-            csv_files_out.append(LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename())
+            csv_files_out.append(main_memory_file)
             print(rf"only one algo=> no merge using  {self.get_memory_replay_filename()}")
             return csv_files_out
 
@@ -417,8 +441,10 @@ class DQNAlgorithm(Algorithm):
         array_list = []
         for csv_file_out in csv_files_out:
             try:
+                if csv_file_out == main_memory_file:
+                    continue
                 my_data = genfromtxt(csv_file_out, delimiter=',')
-                print("combining %d rows from %s" % (len(my_data), csv_file_out))
+                print("combining %d rows %d columns from %s" % (len(my_data), my_data.shape[1], csv_file_out))
                 if len(my_data) == 0 or len(my_data[0][:]) == 0:
                     print('has no valid data ,ignore %s' % csv_file_out)
                     continue
@@ -539,7 +565,8 @@ class DQNAlgorithm(Algorithm):
     ):
 
         backtest_configuration = BacktestConfiguration(
-            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk
+            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk, delay_order_ms=self.DELAY_MS,
+            multithread_configuration=self.MULTITHREAD_CONFIGURATION
         )
         explore_prob = 1.0  # i dont care
         max_batch_size = self.get_max_batch_size()
@@ -655,11 +682,8 @@ class DQNAlgorithm(Algorithm):
                 return
 
     def is_policy_gradient_algorithm(self) -> bool:
-        # from backtest.rsi_dqn import RsiDQN
-        # from backtest.moving_average_dqn import MovingAverageDQN
-        # is_reinforce = isinstance(self, RsiDQN) or isinstance(self, MovingAverageDQN)
-        # return is_reinforce
-        return False
+        policy_gradients = [DQNAlgorithm.TrainType.custom_actor_critic]
+        return self.train_type in policy_gradients
 
     def parameter_tuning(
             self,
@@ -733,14 +757,15 @@ class DQNAlgorithm(Algorithm):
                                  max_iterations=fill_memory_max_iterations
                                  )
                 print("finished fill memory=> set training to one worker only")
-            clean_initial_experience = False
+                clean_initial_experience = False
 
         # training has to be sequential!
         algos_per_iteration = 1
         simultaneous_algos = 1
 
         backtest_configuration = BacktestConfiguration(
-            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk
+            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk, delay_order_ms=self.DELAY_MS,
+            multithread_configuration=self.MULTITHREAD_CONFIGURATION
         )
         explore_prob = 1.0  # i dont care
         if force_explore_prob is not None:
@@ -1028,15 +1053,16 @@ class DQNAlgorithm(Algorithm):
                 break
 
         clean_gpu_memory()
-        print(rf"one last iteration training")
-        parameters = self.get_parameters(explore_prob=explore_prob)
-        last_train_dict = self.test(start_date=start_date, end_date=end_date, instrument_pk=instrument_pk,
-                                    explore_prob=explore_prob,
-                                    trainingPredictIterationPeriod=parameters['trainingPredictIterationPeriod'],
-                                    trainingTargetIterationPeriod=parameters['trainingTargetIterationPeriod'],
-                                    clean_experience=False
-                                    )
-        output_list.append(last_train_dict)
+        if simultaneous_algos > 1:
+            print(rf"one last iteration training")
+            parameters = self.get_parameters(explore_prob=explore_prob)
+            last_train_dict = self.test(start_date=start_date, end_date=end_date, instrument_pk=instrument_pk,
+                                        explore_prob=explore_prob,
+                                        trainingPredictIterationPeriod=parameters['trainingPredictIterationPeriod'],
+                                        trainingTargetIterationPeriod=parameters['trainingTargetIterationPeriod'],
+                                        clean_experience=False
+                                        )
+            output_list.append(last_train_dict)
 
         if plot_training:
             fig = self.plot_training_results(score_early_stopping, scores, rewards)
@@ -1098,7 +1124,8 @@ class DQNAlgorithm(Algorithm):
     ) -> dict:
 
         backtest_configuration = BacktestConfiguration(
-            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk
+            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk, delay_order_ms=self.DELAY_MS,
+            multithread_configuration=self.MULTITHREAD_CONFIGURATION
         )
         parameters = self.get_parameters(explore_prob=explore_prob)
         if trainingPredictIterationPeriod is not None:

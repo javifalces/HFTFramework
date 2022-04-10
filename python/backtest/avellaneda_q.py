@@ -68,7 +68,8 @@ class AvellanedaQ(Algorithm):
     ) -> list:
 
         backtest_configuration = BacktestConfiguration(
-            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk
+            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk, delay_order_ms=self.DELAY_MS,
+            multithread_configuration=self.MULTITHREAD_CONFIGURATION
         )
         output_list = []
 
@@ -116,7 +117,7 @@ class AvellanedaQ(Algorithm):
             output_list.append(output_dict)
             # Combine experience
             if algos_per_iteration>1:
-                self.merge_q_matrix(backtest_launchers=backtest_launchers)
+                self.merge_q_matrix(backtest_launchers=backtest_launchers, algos_per_iteration=algos_per_iteration)
         return output_list
 
     def test(
@@ -129,7 +130,8 @@ class AvellanedaQ(Algorithm):
         clean_experience: bool = False,
     ) -> dict:
         backtest_configuration = BacktestConfiguration(
-            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk
+            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk, delay_order_ms=self.DELAY_MS,
+            multithread_configuration=self.MULTITHREAD_CONFIGURATION
         )
         parameters = self.get_parameters(explore_prob=explore_prob)
         algorithm_name = '%s_%s_%d' % (self.NAME, self.algorithm_info, algorithm_numer)

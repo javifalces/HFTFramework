@@ -347,11 +347,13 @@ class GAParameterTuning:
 
         algorithms = []
         for param_dict in param_dicts:
-            algorithm_info = 'ga_%d' % self.counter_algorithms
+            algorithm_info = '%s_ga_%d' % (self.algorithm, self.counter_algorithms)
             self.counter_algorithms += 1
 
             algorithm_class = get_algorithm(self.algorithm)
             if algorithm_class is None:
+                print("WARNING!! need to add algorithm to backtest.algorithm_enum.get_algorithm() ")
+                print("WARNING!! need to add algorithm to backtest.algorithm_enum.get_algorithm() ")
                 print("WARNING!! need to add algorithm to backtest.algorithm_enum.get_algorithm() ")
             # restore the base params cant be optimized
             parameters = copy.copy(self.parameters_base_final)

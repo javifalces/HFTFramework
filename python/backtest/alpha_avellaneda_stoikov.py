@@ -82,6 +82,8 @@ DEFAULT_PARAMETERS = {
     "isRNN": False,
     "stateColumnsFilter": [],
     "seed": 0,
+    "otherInstrumentsStates": [],
+    "otherInstrumentsMsPeriods": []
 }
 
 PRIVATE_COLUMNS = 2

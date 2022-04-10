@@ -34,17 +34,24 @@ import pandas as pd
 
 JAR_PATH = BACKTEST_JAR_PATH
 
+class MultiThreadConfiguration:
+    multithread = "multi_thread"
+    singlethread = "single_thread"
 
 class BacktestConfiguration:
     def __init__(
-        self,
-        start_date: datetime.datetime,
-        end_date: datetime.datetime,
-        instrument_pk: str,
+            self,
+            start_date: datetime.datetime,
+            end_date: datetime.datetime,
+            instrument_pk: str,
+            delay_order_ms: int = 65,
+            multithread_configuration: str = MultiThreadConfiguration.multithread
     ):
+        self.delay_order_ms = delay_order_ms
         self.start_date = start_date
         self.end_date = end_date
         self.instrument_pk = instrument_pk
+        self.multithread_configuration = multithread_configuration
 
     def get_json(self) -> str:
         output_dict = {}
@@ -58,6 +65,8 @@ class BacktestConfiguration:
             output_dict['startDate'] = self.start_date.strftime(format_date_hour)
             output_dict['endDate'] = self.end_date.strftime(format_date_hour)
         output_dict['instrument'] = self.instrument_pk
+        output_dict['delayOrderMs'] = self.delay_order_ms
+        output_dict['multithreadConfiguration'] = self.multithread_configuration
         json_object = json.dumps(output_dict)
         return json_object
 
@@ -105,9 +114,9 @@ class AlgorithmConfiguration:
 
 class InputConfiguration:
     def __init__(
-        self,
-        backtest_configuration: BacktestConfiguration,
-        algorithm_configuration: AlgorithmConfiguration,
+            self,
+            backtest_configuration: BacktestConfiguration,
+            algorithm_configuration: AlgorithmConfiguration,
     ):
         self.backtest_configuration = backtest_configuration
         self.algorithm_configuration = algorithm_configuration
@@ -120,10 +129,10 @@ class InputConfiguration:
     def get_filename(self):
 
         return (
-            self.algorithm_configuration.algorithm_name
-            + '_'
-            + str(uuid.uuid1())
-            + '.json'
+                self.algorithm_configuration.algorithm_name
+                + '_'
+                + str(uuid.uuid1())
+                + '.json'
         )
 
 class TrainInputConfiguration:
@@ -143,6 +152,7 @@ class TrainInputConfiguration:
   "maxBatchSize":5000,
   "isRNN":False,
   "hyperparameterTuning":False,
+  "trainType":"standard"
 }
 
     '''
@@ -150,7 +160,8 @@ class TrainInputConfiguration:
     def __init__(self, memory_path: str, output_model_path: str, action_columns: int, state_columns: int,
                  number_epochs: int,
                  batch_size: int, max_batch_size: int, l2: float = 0.0001, l1: float = 0.0, learning_rate: float = 0.25,
-                 momentum_nesterov: float = 0.5, training_stats: int = 0, is_rnn:bool=False,hyperparameter_tuning: bool = False):
+                 momentum_nesterov: float = 0.5, training_stats: int = 0, is_rnn: bool = False,
+                 hyperparameter_tuning: bool = False, train_type: str = "standard"):
         self.memory_path = memory_path
         if not os.path.exists(self.memory_path):
             raise Exception('memory_path not found %s ' % self.memory_path)
@@ -168,7 +179,8 @@ class TrainInputConfiguration:
         self.batch_size = batch_size
         self.max_batch_size = max_batch_size
         self.hyperparameter_tuning = hyperparameter_tuning
-        self.is_rnn=is_rnn
+        self.is_rnn = is_rnn
+        self.train_type = train_type
         self.check_memory_inputs()
 
     def check_memory_inputs(self):
@@ -194,6 +206,7 @@ class TrainInputConfiguration:
         output_dict['maxBatchSize'] = self.max_batch_size
         output_dict['hyperparameterTuning'] = self.hyperparameter_tuning
         output_dict['isRNN'] = self.is_rnn
+        output_dict['trainType'] = self.train_type
 
         json_object = json.dumps(output_dict)
         return json_object
@@ -201,9 +214,9 @@ class TrainInputConfiguration:
     def get_filename(self):
 
         return (
-            'train_input'
-            + '_'
-            + str(uuid.uuid1())
-            + '.json'
+                'train_input'
+                + '_'
+                + str(uuid.uuid1())
+                + '.json'
         )
 

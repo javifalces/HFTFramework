@@ -52,7 +52,8 @@ class LinearConstantSpread(Algorithm):
         # makes no sense
 
         backtest_configuration = BacktestConfiguration(
-            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk
+            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk, delay_order_ms=self.DELAY_MS,
+            multithread_configuration=self.MULTITHREAD_CONFIGURATION
         )
         output_list = []
         for iteration in range(iterations):

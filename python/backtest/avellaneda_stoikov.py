@@ -1,6 +1,7 @@
 import datetime
 from typing import Type
 
+from backtest import pnl_utils
 from backtest.algorithm import Algorithm
 from backtest.algorithm_enum import AlgorithmEnum
 from backtest.backtest_launcher import BacktestLauncher, BacktestLauncherController
@@ -49,18 +50,19 @@ class AvellanedaStoikov(Algorithm):
 
 
     def train(
-        self,
-        start_date: datetime.datetime,
-        end_date: datetime,
-        instrument_pk: str,
-        iterations: int,
-        algos_per_iteration: int,
-        simultaneous_algos: int = 1,
+            self,
+            start_date: datetime.datetime,
+            end_date: datetime,
+            instrument_pk: str,
+            iterations: int,
+            algos_per_iteration: int,
+            simultaneous_algos: int = 1,
     ) -> list:
         # makes no sense
 
         backtest_configuration = BacktestConfiguration(
-            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk
+            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk, delay_order_ms=self.DELAY_MS,
+            multithread_configuration=self.MULTITHREAD_CONFIGURATION
         )
         output_list = []
         for iteration in range(iterations):
@@ -102,15 +104,16 @@ class AvellanedaStoikov(Algorithm):
         return output_list
 
     def test(
-        self,
-        start_date: datetime.datetime,
-        end_date: datetime,
-        instrument_pk: str,
-        algorithm_number: int = 0,
-        clean_experience: bool = False,
+            self,
+            start_date: datetime.datetime,
+            end_date: datetime,
+            instrument_pk: str,
+            algorithm_number: int = 0,
+            clean_experience: bool = False,
     ) -> dict:
         backtest_configuration = BacktestConfiguration(
-            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk
+            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk, delay_order_ms=self.DELAY_MS,
+            multithread_configuration=self.MULTITHREAD_CONFIGURATION
         )
         parameters = self.get_parameters()
         algorithm_name = self.get_test_name(name=self.NAME, algorithm_number=algorithm_number)
@@ -141,16 +144,16 @@ class AvellanedaStoikov(Algorithm):
         return output_dict
 
     def parameter_tuning(
-        self,
-        start_date: datetime.datetime,
-        end_date: datetime,
-        instrument_pk: str,
-        parameters_min: dict,
-        parameters_max: dict,
-        max_simultaneous: int,
-        generations: int,
-        ga_configuration: Type[GAConfiguration],
-        parameters_base: dict = DEFAULT_PARAMETERS,
+            self,
+            start_date: datetime.datetime,
+            end_date: datetime,
+            instrument_pk: str,
+            parameters_min: dict,
+            parameters_max: dict,
+            max_simultaneous: int,
+            generations: int,
+            ga_configuration: Type[GAConfiguration],
+            parameters_base: dict = DEFAULT_PARAMETERS,
     ) -> (dict, pd.DataFrame):
 
         return super().parameter_tuning(
@@ -172,23 +175,26 @@ if __name__ == '__main__':
 
     ga_configuration = GAConfiguration
     ga_configuration.population = 3
-    ga_configuration.decay=[0.5,0.7]
-    ga_configuration.sigma=2
+    ga_configuration.decay = [0.5, 0.7]
+    ga_configuration.sigma = 2
 
-    best_param_dict, summary_df = avellaneda_stoikov.parameter_tuning(
-        instrument_pk='btcusdt_binance',
-        start_date=datetime.datetime(year=2020, day=9, month=12),
-        end_date=datetime.datetime(year=2020, day=9, month=12),
-        parameters_min={"risk_aversion": 0.1, "window_tick": 3},
-        parameters_max={"risk_aversion": 0.9, "window_tick": 15},
-        generations=3,
-        max_simultaneous=1,
-        ga_configuration=ga_configuration,
-    )
-    # avellaneda_stoikov.set_parameters(parameters=best_param_dict)
-    #
-    # output_test = avellaneda_stoikov.test(
+    # best_param_dict, summary_df = avellaneda_stoikov.parameter_tuning(
     #     instrument_pk='btcusdt_binance',
     #     start_date=datetime.datetime(year=2020, day=9, month=12),
     #     end_date=datetime.datetime(year=2020, day=9, month=12),
+    #     parameters_min={"risk_aversion": 0.1, "window_tick": 3},
+    #     parameters_max={"risk_aversion": 0.9, "window_tick": 15},
+    #     generations=3,
+    #     max_simultaneous=1,
+    #     ga_configuration=ga_configuration,
     # )
+    # avellaneda_stoikov.set_parameters(parameters=best_param_dict)
+    #
+    output_test = avellaneda_stoikov.test(
+        instrument_pk='btcusdt_binance',
+        start_date=datetime.datetime(year=2020, day=9, month=12),
+        end_date=datetime.datetime(year=2020, day=9, month=12),
+    )
+    key = list(output_test.keys())[0]
+    df = output_test[key]
+    pnl_map = pnl_utils.get_pnl_to_map(df['historicalTotalPnl'], df['netPosition'])

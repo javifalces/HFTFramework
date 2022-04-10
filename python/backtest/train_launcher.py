@@ -49,7 +49,7 @@ class TrainLauncher(threading.Thread):
         textfile.write(file_content)
         textfile.close()
 
-        command_to_run = self.task + ' %s' % filename
+        command_to_run = self.task + ' %s 1' % filename
         print('pwd=%s' % os.getcwd())
         if self.VERBOSE_OUTPUT:
             command_to_run += '>%sout.log' % (os.getcwd() + os.sep)
@@ -60,7 +60,8 @@ class TrainLauncher(threading.Thread):
         print('%s finished with code %d' % (self.id, ret))
         # remove input file
         self.state = TrainLauncherState.finished
-        if ret == 0:
+
+        if os.path.exists(filename):
             os.remove(filename)
 
 

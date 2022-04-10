@@ -240,7 +240,8 @@ class AvellanedaDQN(DQNAlgorithm):
     ) -> list:
 
         backtest_configuration = BacktestConfiguration(
-            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk
+            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk, delay_order_ms=self.DELAY_MS,
+            multithread_configuration=self.MULTITHREAD_CONFIGURATION
         )
         momentum_nesterov = self.parameters['momentumNesterov']
         learning_rate = self.parameters['learningRateNN']
@@ -386,7 +387,8 @@ class AvellanedaDQN(DQNAlgorithm):
             clean_experience: bool = False,
     ) -> dict:
         backtest_configuration = BacktestConfiguration(
-            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk
+            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk, delay_order_ms=self.DELAY_MS,
+            multithread_configuration=self.MULTITHREAD_CONFIGURATION
         )
 
         if explore_prob is not None:

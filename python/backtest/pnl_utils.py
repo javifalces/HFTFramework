@@ -134,7 +134,7 @@ def __calculate_close_returns_numba__(trades_input):
                         quantity_to_save_dict -= entry_quantity
                         remaining_position -= entry_quantity
                         closed_return += -entry_quantity * (
-                            row[price_column] - entry_price
+                                row[price_column] - entry_price
                         )
 
                         entry_remain_position = sell_dict[entry_price] - entry_quantity
@@ -251,8 +251,8 @@ def get_max_drawdowns(backtest_returns):
     try:
         UW_dt = (
             equity_curve[i:]
-            .loc[equity_curve[i:].values >= equity_curve[j]]
-            .index.values[0]
+                .loc[equity_curve[i:].values >= equity_curve[j]]
+                .index.values[0]
         )
         UW_dt = pd.to_datetime(str(UW_dt))
         UW_dt = UW_dt.strftime("%Y-%m-%d")
@@ -304,14 +304,13 @@ def get_falces_marin_ratio(equity_curve: pd.Series, number_trades: int) -> float
     if number_trades == 0:
         return -9999.99
     returns = equity_curve.pct_change(periods=1).replace([0.0, np.nan, np.inf, -np.inf], np.nan).dropna()
-    max_dd_pct = get_max_drawdown_pct(equity_curve)#to avoid start at zero
-
-    if max_dd_pct == 0:
-        max_dd_pct = ZERO_VALUE_DEFAULT
-
+    max_dd_pct = get_max_drawdown_pct(equity_curve)  # to avoid start at zero
+    final_pnl = equity_curve.iloc[-1]
+    max_dd_pct = max(1.0, max_dd_pct)
     med_return = returns.median()  # avoid outliers
+    mean_return = returns.mean()
 
-    return (med_return / max_dd_pct) * number_trades
+    return abs((mean_return / max_dd_pct)) * np.sign(final_pnl) * number_trades
 
 
 def get_ulcer_index(equity_curve: pd.Series):
@@ -356,11 +355,11 @@ def get_max_drawdown_pct(equity_curve: pd.Series) -> float:
         max_dd = dd.iloc[max_dd_position]  # max_pnl-min_pnl
         assert max_dd == max_pnl - min_pnl
         if max_pnl == 0.0:
-            return 1.0
+            return 0.0
         return (max_dd) / max_pnl
     except Exception as e:
         print(rf"error calculating get_max_drawdown_pct {str(e)}")
-        return 1.0
+        return 0.0
 
 def get_score(backtest_df: pd.DataFrame, score_enum: ScoreEnum,
               equity_column_score: ScoreEnum = ScoreEnum.total_pnl) -> float:
@@ -379,7 +378,7 @@ def get_score(backtest_df: pd.DataFrame, score_enum: ScoreEnum,
     if score_enum == ScoreEnum.total_pnl:
         score = equity_curve.iloc[-1]
     if score_enum == ScoreEnum.realized_pnl:
-        score = backtest_df[get_score_enum_csv_column(ScoreEnum.realized_pnl)]
+        score = backtest_df[get_score_enum_csv_column(ScoreEnum.realized_pnl)].iloc[-1]
 
     return score
 
@@ -387,7 +386,9 @@ def get_score(backtest_df: pd.DataFrame, score_enum: ScoreEnum,
 if __name__ == '__main__':
     # equity_curve_test = pd.Series([100., 110., 90., 80., 95., 100.01, 120., 140.1, 170.2])
     equity_curve_test = pd.Series([100., 110., 120., 150.])
+    position_curve_test = pd.Series([1., 4., -3., 2.])
     num_trades = 3
+    pnl_map = get_pnl_to_map(equity_curve_test, position_curve_test)
     max_dd = get_max_drawdown(equity_curve_test)
     sharpe = get_sharpe(equity_curve=equity_curve_test)
     falcma = get_falces_marin_ratio(equity_curve=equity_curve_test, number_trades=num_trades)

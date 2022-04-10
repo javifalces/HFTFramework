@@ -36,8 +36,8 @@ DEFAULT_PARAMETERS = {
     "trainingTargetIterationPeriod": IterationsPeriodTime.END_OF_SESSION,  # train at the end,offline
     "epoch": 75,
     # Q
-    'levelAction': [1, 2, 3, 4, 0.1],
-    'skewLevelAction': [0.0, 1, -1],
+    'levelAction': [1, 2, 3, 4, 5],
+    'skewLevelAction': [0, 1, -1],
 
     "minPrivateState": (-1),
     "maxPrivateState": (-1),
@@ -142,6 +142,69 @@ class AlphaConstantSpread(DQNAlgorithm):
             ga_configuration=ga_configuration,
             clean_initial_generation_experience=clean_initial_generation_experience
         )
+
+    def plot_params(self, raw_trade_pnl_df: pd.DataFrame, figsize=None, title: str = None):
+        import seaborn as sns
+        sns.set_theme()
+        import matplotlib.pyplot as plt
+        try:
+            if figsize is None:
+                figsize = (20, 12)
+
+            df = self.get_trade_df(raw_trade_pnl_df=raw_trade_pnl_df)
+            df.set_index('time', inplace=True)
+
+            print('plotting params from %s to %s' % (df.index[0], df.index[-1]))
+
+            skew_change = True
+
+            # if df['skewLevel'].fillna(0).diff().fillna(0).sum() == 0:
+            #     skew_change = False
+
+            plt.close()
+            subplot_origin = 510
+            nrows = 5
+            if skew_change:
+                subplot_origin += 100
+                nrows += 1
+
+            subplot_origin += 1
+            index = 0
+            fig, axs = plt.subplots(nrows=nrows, ncols=1, figsize=figsize, sharex=True)
+            color = 'black'
+            color_mean = 'gray'
+            bid_color = 'green'
+            ask_color = 'red'
+
+            window = 25
+            alpha = 0.9
+            lw = 0.5
+
+            ax = axs[index]
+            ax.plot(df['level'], color=color, lw=lw, alpha=alpha)
+            ax.plot(df['level'].rolling(window=window).mean(), color=color_mean, lw=lw - 0.1, alpha=alpha)
+
+            ax.set_ylabel('level')
+            ax.grid(axis='y', ls='--', alpha=0.7)
+
+            if title is not None:
+                ax.set_title(title)
+
+            if skew_change:
+                index += 1
+                ax = axs[index]
+                ax.plot(df['skewLevel'], color=color, lw=lw, alpha=alpha)
+                ax.set_ylabel('skewLevel')
+                ax.grid(axis='y', ls='--', alpha=0.7)
+            fig = self.plot_params_base(fig, axs=axs, last_index_plotted=index, color=color, color_mean=color_mean,
+                                        bid_color=bid_color, ask_color=ask_color, lw=lw, alpha=alpha,
+                                        raw_trade_pnl_df=raw_trade_pnl_df)
+            plt.show()
+            return fig
+
+        except Exception as e:
+            print('Some error plotting params %s' % e)
+        return None
 
     # def get_memory_replay_filename(self, algorithm_number: int = None):
     #     # memoryReplay_DQNRSISideQuoting_eurusd_darwinex_test.csv

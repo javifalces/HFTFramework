@@ -10,7 +10,7 @@ import copy
 from backtest.algorithm_enum import AlgorithmEnum
 from backtest.backtest_launcher import BacktestLauncher, BacktestLauncherController
 from backtest.input_configuration import BacktestConfiguration, TrainInputConfiguration, AlgorithmConfiguration, \
-    InputConfiguration, JAR_PATH
+    InputConfiguration, JAR_PATH, MultiThreadConfiguration
 from backtest.parameter_tuning.ga_configuration import GAConfiguration
 from backtest.parameter_tuning.ga_parameter_tuning import GAParameterTuning
 from backtest.pnl_utils import get_drawdown
@@ -25,15 +25,19 @@ class Algorithm:
     PLOT_ROLLING_WINDOW_TICKS = 25
     FORMAT_SAVE_NUMBERS = '%.18e'
 
+    DELAY_MS = 65
+    MULTITHREAD_CONFIGURATION = MultiThreadConfiguration.multithread
+
     def __init__(self, algorithm_info: str, parameters: dict) -> None:
         super().__init__()
         # self.NAME=''
         self.algorithm_info = algorithm_info
         self.parameters = copy.copy(parameters)
-    def get_json_param(self)->dict:
+
+    def get_json_param(self) -> dict:
         # import json
-        output_dict={}
-        output_dict['algorithmName']=self.algorithm_info
+        output_dict = {}
+        output_dict['algorithmName'] = self.algorithm_info
         output_dict['parameters']=self.parameters
         return output_dict
 
@@ -119,7 +123,8 @@ class Algorithm:
     ) -> (dict, pd.DataFrame):
 
         backtest_configuration = BacktestConfiguration(
-            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk
+            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk, delay_order_ms=self.DELAY_MS,
+            multithread_configuration=self.MULTITHREAD_CONFIGURATION
         )
 
         #exponential reducing sigma
@@ -581,7 +586,8 @@ class Algorithm:
             clean_experience: bool = False,
     ) -> dict:
         backtest_configuration = BacktestConfiguration(
-            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk
+            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk, delay_order_ms=self.DELAY_MS,
+            multithread_configuration=self.MULTITHREAD_CONFIGURATION
         )
         parameters = self.get_parameters()
 
