@@ -145,6 +145,7 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 		lastQuantity = executionReport.getLastQuantity();
 		lastVerb = executionReport.getVerb().name();
 		lastClOrdId = executionReport.getClientOrderId();
+		instrumentPk = executionReport.getInstrument();
 
 		lastPrice = Math.min(lastPrice, maxExecutionPriceValid);
 		lastPrice = Math.max(lastPrice, minExecutionPriceValid);
@@ -154,7 +155,7 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 		}
 
 		Instrument instrument = Instrument.getInstrument(executionReport.getInstrument());
-		boolean isTaker = isTaker(executionReport.getPrice(), executionReport.getVerb());
+		boolean isTaker = isTaker(instrument, executionReport.getPrice(), executionReport.getVerb());
 		lastFee = instrument.calculateFee(isTaker, executionReport.getPrice(), executionReport.getLastQuantity());
 		realizedFees += lastFee;
 
@@ -224,11 +225,12 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 		lastTimestampExecutionReportUpdate = executionReport.getTimestampCreation();
 
 		//
-		if (lastDepth != null) {
-			if (lastDepth.getTimestamp() < lastTimestampExecutionReportUpdate) {
-				lastDepth.setTimestamp(lastTimestampExecutionReportUpdate);
+		if (lastDepth.containsKey(instrument)) {
+			Depth depth = lastDepth.get(instrument);
+			if (depth.getTimestamp() < lastTimestampExecutionReportUpdate) {
+				depth.setTimestamp(lastTimestampExecutionReportUpdate);
 			}
-			updateDepth(lastDepth);//to avoid save it earlier
+			updateDepth(depth);//to avoid save it earlier
 		}//update unrealized pnl
 		totalPnl = realizedPnl + unrealizedPnl;
 		totalFees = realizedFees + unrealizedFees;
@@ -316,11 +318,11 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 		if (!depth.isDepthFilled()) {
 			return;
 		}
-		if (lastDepth != null && lastDepth.getTimestamp() > depth.getTimestamp()) {
+		Instrument instrument = Instrument.getInstrument(depth.getInstrument());
+		if (lastDepth.containsKey(instrument) && lastDepth.get(instrument).getTimestamp() > depth.getTimestamp()) {
 			return;
 		}
 
-		Instrument instrument = Instrument.getInstrument(depth.getInstrument());
 		double leverage = DEFAULT_LEVERAGE;
 		if (instrument != null) {
 			leverage = instrument.getLeverage();
@@ -332,7 +334,7 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 		}
 		totalPnl = unrealizedPnl + realizedPnl;
 		totalFees = realizedFees + unrealizedFees;
-		lastDepth = depth;
+		lastDepth.put(instrument, depth);
 		spread = depth.getSpread();
 		updateHistoricals(depth.getTimestamp());
 

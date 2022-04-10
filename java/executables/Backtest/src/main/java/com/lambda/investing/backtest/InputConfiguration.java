@@ -1,7 +1,17 @@
 package com.lambda.investing.backtest;
 
+import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.AlgorithmUtils;
 import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
+//import com.lambda.investing.algorithmic_trading.arbitrage.ArbitrageAlgorithm;
+import com.lambda.investing.algorithmic_trading.avellaneda_stoikov.AvellanedaStoikov;
+import com.lambda.investing.algorithmic_trading.avellaneda_stoikov_dqn.*;
+import com.lambda.investing.algorithmic_trading.avellaneda_stoikov_q_learn.AvellanedaStoikovQLearn;
+import com.lambda.investing.algorithmic_trading.constant_spread.ConstantSpreadAlgorithm;
+import com.lambda.investing.algorithmic_trading.constant_spread.LinearConstantSpreadAlgorithm;
+//import com.lambda.investing.algorithmic_trading.hedging.LinearRegressionHedgeManager;
+//import com.lambda.investing.algorithmic_trading.mean_reversion.DQNRSISideQuoting;
+//import com.lambda.investing.algorithmic_trading.mean_reversion.RSISideQuoting;
 //import com.lambda.investing.algorithmic_trading.statistical_arbitrage.StatisticalArbitrageAlgorithm;
 //import com.lambda.investing.algorithmic_trading.statistical_arbitrage.StatisticalArbitrageQuotingAlgorithm;
 import com.lambda.investing.backtest_engine.BacktestConfiguration;
@@ -61,8 +71,9 @@ import java.util.*;
 
 		private String startDate;//20201208
 		private String endDate;//20201210
-
+		private long delayOrderMs;//65
 		private String instrument;
+		private String multithreadConfiguration = null;
 
 		public Backtest() {
 		}
@@ -78,12 +89,16 @@ import java.util.*;
 			}
 			List<Instrument> instrumentList = new ArrayList<>();
 			instrumentList.add(instrumentObject);
-			//			if (algorithm instanceof StatisticalArbitrageAlgorithm) {
-			//
-			//				//				StatisticalArbitrageAlgorithm algo = (StatisticalArbitrageAlgorithm) algorithm;
-			//				StatisticalArbitrageQuotingAlgorithm algo = (StatisticalArbitrageQuotingAlgorithm) algorithm;
-			//				instrumentList.addAll(algo.getInterestedInstruments());
-			//			}
+
+			//add the rest of instruments in case needed
+			Set<Instrument> algoInstrumentSet = algorithm.getInstruments();
+			for (Instrument instrument : algoInstrumentSet) {
+				if (!instrumentList.contains(instrument)) {
+					instrumentList.add(instrument);
+				}
+			}
+
+			//ad hedge manager rest of insturments
 			if (algorithm.getHedgeManager() != null) {
 				//adding
 				Set<Instrument> instrumentSet = algorithm.getHedgeManager().getInstrumentsHedgeList();
@@ -100,7 +115,11 @@ import java.util.*;
 			backtestConfiguration.setAlgorithm(algorithm);
 			backtestConfiguration.setStartTime(startDate);
 			backtestConfiguration.setEndTime(endDate);
+			backtestConfiguration.setDelayOrderMs(delayOrderMs);
 			backtestConfiguration.setInstruments(instrumentList);
+			if (multithreadConfiguration != null) {
+				backtestConfiguration.setMultithreadConfiguration(multithreadConfiguration);
+			}
 			backtestConfiguration.setBacktestSource("parquet");
 			backtestConfiguration.setSpeed(-1);
 			backtestConfiguration.setBacktestExternalConnection("ordinary");

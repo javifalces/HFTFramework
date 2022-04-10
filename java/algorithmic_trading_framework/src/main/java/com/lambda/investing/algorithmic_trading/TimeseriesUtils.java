@@ -1,6 +1,14 @@
 package com.lambda.investing.algorithmic_trading;
 
+import java.util.List;
+
 public class TimeseriesUtils {
+
+	public static Double[] GetArrayInput(List<Double> input) {
+		Double[] spreadArr = new Double[input.size()];
+		spreadArr = input.toArray(spreadArr);
+		return spreadArr;
+	}
 
 	public static double GetMean(Double[] serie) {
 		double sum = 0.;

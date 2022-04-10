@@ -9,13 +9,20 @@ import java.util.Random;
 
 public class Configuration {
 
+	public enum MULTITHREAD_CONFIGURATION {
+		SINGLE_THREADING, MULTITHREADING
+	}
+
+	public static MULTITHREAD_CONFIGURATION MULTITHREADING_CORE = MULTITHREAD_CONFIGURATION.MULTITHREADING;//by default multithreading
+
+	public static long DELAY_ORDER_BACKTEST_MS = 65;
 	//backtest engine
 	public static int BACKTEST_THREADS_PUBLISHING_MARKETDATA = 0;//used to publish from parquet and csv file!
 	public static int BACKTEST_THREADS_PUBLISHING_EXECUTION_REPORTS = 0;//publishing on backtest engine
 	public static int BACKTEST_THREADS_LISTENING_ORDER_REQUEST = 0;//listening threads on backtest
 
 	//algos engine
-	public static int BACKTEST_THREADS_PUBLISHING_ORDER_REQUEST = 5;//required >0 for latency simulation
+	public static int BACKTEST_THREADS_PUBLISHING_ORDER_REQUEST = 2;//required >0 for latency simulation
 	public static int BACKTEST_THREADS_LISTENING_EXECUTION_REPORTS = 0;
 
 	public static boolean IS_DEBUGGING = false;//will disable latencies and muiltiThreading
@@ -25,6 +32,27 @@ public class Configuration {
 	public static long RANDOM_SEED = 0;
 	public static Random RANDOM_GENERATOR = new Random();
 	public static Logger logger = LogManager.getLogger(Configuration.class);
+
+	public static void SET_MULTITHREAD_CONFIGURATION(MULTITHREAD_CONFIGURATION MULTITHREADING_CORE) {
+		System.out.println("SET_MULTITHREAD_CONFIGURATION to " + MULTITHREADING_CORE.name());
+		logger.info("SET_MULTITHREAD_CONFIGURATION to {}", MULTITHREADING_CORE.name());
+		Configuration.MULTITHREADING_CORE = MULTITHREADING_CORE;
+		if (Configuration.MULTITHREADING_CORE.equals(MULTITHREAD_CONFIGURATION.SINGLE_THREADING)) {
+			BACKTEST_THREADS_PUBLISHING_MARKETDATA = 0;
+			BACKTEST_THREADS_PUBLISHING_EXECUTION_REPORTS = 0;
+			BACKTEST_THREADS_LISTENING_ORDER_REQUEST = 0;
+			BACKTEST_THREADS_PUBLISHING_ORDER_REQUEST = 0;
+			BACKTEST_THREADS_LISTENING_EXECUTION_REPORTS = 0;
+			DELAY_ORDER_BACKTEST_MS = 0;
+		}
+
+	}
+
+	public static void SET_DELAY_ORDER_BACKTEST_MS(long delayOrderMs) {
+		System.out.println("SET_DELAY_ORDER_BACKTEST_MS to " + delayOrderMs);
+		logger.info("SET_DELAY_ORDER_BACKTEST_MS to {}", delayOrderMs);
+		DELAY_ORDER_BACKTEST_MS = delayOrderMs;
+	}
 
 	public static void SET_RANDOM_GENERATOR(long seed) {
 		if (seed != RANDOM_SEED) {

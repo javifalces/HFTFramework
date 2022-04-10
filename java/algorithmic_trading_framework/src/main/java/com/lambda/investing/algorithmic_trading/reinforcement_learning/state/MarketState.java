@@ -1,6 +1,5 @@
 package com.lambda.investing.algorithmic_trading.reinforcement_learning.state;
 
-import com.google.common.primitives.Doubles;
 import com.lambda.investing.algorithmic_trading.PnlSnapshot;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.ScoreEnum;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.ScoreUtils;
@@ -14,7 +13,6 @@ import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.curator.shaded.com.google.common.collect.Queues;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Queue;
 
@@ -22,30 +20,29 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Ma
 
 public class MarketState extends AbstractState {
 
-	private static boolean MARKET_MIDPRICE_RELATIVE = true;
-	private static boolean PRIVATE_QUANTITY_RELATIVE = true;
-	private static boolean PRIVATE_DELTA_STATES = false;
+	protected static boolean MARKET_MIDPRICE_RELATIVE = true;
+	protected static boolean PRIVATE_QUANTITY_RELATIVE = true;
+	protected static boolean PRIVATE_DELTA_STATES = false;
 	public static boolean REMOVE_PRIVATE_STATE = false;
 
 	public static String PERIOD_CANDLE_1MIN = "1Min";
 
-	private static double MARKET_MAX_NUMBER = 10.;
-	private static double MARKET_MIN_NUMBER = -10.;
+	protected static double MARKET_MAX_NUMBER = 10.;
+	protected static double MARKET_MIN_NUMBER = -10.;
 
-	private static String[] PRIVATE_COLUMNS_PATTERN = new String[] { "inventory", "score" };
+	protected static String[] PRIVATE_COLUMNS_PATTERN = new String[] { "inventory", "score" };
 
-	private static String[] MARKET_COLUMNS_PATTERN = new String[] { "bid_price", "ask_price", "bid_qty", "ask_qty",
+	protected static String[] MARKET_COLUMNS_PATTERN = new String[] { "bid_price", "ask_price", "bid_qty", "ask_qty",
 			"spread", "midprice", "imbalance", "microprice", "last_close_price", "last_close_qty" };
 
-	private static String[] CANDLE_COLUMNS_PATTERN = new String[] { "open", "high", "low", "close" };
+	protected static String[] CANDLE_COLUMNS_PATTERN = new String[] { "open", "high", "low", "close" };
 
-
-	private static String[] CANDLE_INDICATORS = new String[] { "ma", "std", "max", "min" };
+	protected static String[] CANDLE_INDICATORS = new String[] { "ma", "std", "max", "min" };
 	private double lastCandlesMA, lastCandleStd, lastCandleMax, lastCandleMin = Double.NaN;
 	//private buffer
 	private ScoreEnum scoreEnumColumn;
-	private int privateHorizonSave, marketHorizonSave, candleHorizonSave;
-	private long privateTickMs, marketTickMs;
+	protected int privateHorizonSave, marketHorizonSave, candleHorizonSave;
+	protected long privateTickMs, marketTickMs;
 	private long lastPrivateTickSave, lastMarketTickSave;
 
 	private int privateNumberDecimals, marketNumberDecimals, candleNumberDecimals;
@@ -63,13 +60,15 @@ public class MarketState extends AbstractState {
 	private Queue<Double> candlesClose;
 	private CandleType candleType;
 	private boolean disableLastClose = false;
+	protected Instrument instrument;
 
-	public MarketState(ScoreEnum scoreEnumColumn, int privateHorizonSave, int marketHorizonSave, int candleHorizonSave,
-			long privateTickMs, long marketTickMs, int privateNumberDecimals, int marketNumberDecimals,
-			int candleNumberDecimals, double privateMinNumber, double privateMaxNumber, double marketMinNumber,
-			double marketMaxNumber, double candleMinNumber, double candleMaxNumber, double quantity,
-			CandleType candleType) {
+	public MarketState(Instrument instrument, ScoreEnum scoreEnumColumn, int privateHorizonSave, int marketHorizonSave,
+			int candleHorizonSave, long privateTickMs, long marketTickMs, int privateNumberDecimals,
+			int marketNumberDecimals, int candleNumberDecimals, double privateMinNumber, double privateMaxNumber,
+			double marketMinNumber, double marketMaxNumber, double candleMinNumber, double candleMaxNumber,
+			double quantity, CandleType candleType) {
 		super(privateNumberDecimals);
+		this.instrument = instrument;
 		this.scoreEnumColumn = scoreEnumColumn;
 
 		this.privateHorizonSave = privateHorizonSave;
@@ -297,7 +296,9 @@ public class MarketState extends AbstractState {
 		if (!candle.getCandleType().equals(this.candleType)) {
 			return;
 		}
-
+		if (!candle.getInstrumentPk().equals(instrument.getPrimaryKey())) {
+			return;
+		}
 
 		double open = candle.getOpen();
 		double high = candle.getHigh();
@@ -340,6 +341,10 @@ public class MarketState extends AbstractState {
 
 	@Override public synchronized void updateTrade(Trade trade) {
 		if (!disableLastClose) {
+			if (!trade.getInstrument().equals(instrument.getPrimaryKey())) {
+				return;
+			}
+
 			lastClosePriceBuffer.offer(trade.getPrice());
 			lastCloseQuantityBuffer.offer(trade.getQuantity());
 		}
@@ -369,6 +374,10 @@ public class MarketState extends AbstractState {
 	@Override public synchronized void updateDepthState(Depth depth) {
 		if ((depth.getTimestamp() - lastMarketTickSave) < marketTickMs) {
 			//not enough time to save it
+			return;
+		}
+
+		if (!depth.getInstrument().equals(instrument.getPrimaryKey())) {
 			return;
 		}
 

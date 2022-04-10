@@ -23,7 +23,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import tech.tablesaw.api.Table;
 
-import javax.annotation.PostConstruct;
+
 import java.io.File;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
@@ -139,7 +139,7 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 	private Map<String, OrderRequest> clientOrderIdToCancelWhenActive;
 	private CandleFromTickUpdater candleFromTickUpdater;
 	public static final Object EXECUTION_REPORT_LOCK = new Object();
-
+	protected Set<Instrument> instruments = new HashSet<>();
 
 	public Algorithm(AlgorithmConnectorConfiguration algorithmConnectorConfiguration, String algorithmInfo,
 			Map<String, Object> parameters) {
@@ -455,7 +455,7 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 
 	public abstract String printAlgo();
 
-	@PostConstruct public void init() {
+	public void init() {
 		if (algorithmState.getNumber() < 0) {
 			algorithmState = AlgorithmState.INITIALIZING;
 			logger.info("[{}]Initializing algorithm {}", getCurrentTime(), algorithmInfo);
@@ -1026,7 +1026,7 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 		addStatistics(RECEIVE_STATS + " depth");
 		depthReceived.incrementAndGet();
 
-		algorithmNotifier.notifyObserversOnUpdateDepth(depth);
+		algorithmNotifier.notifyObserversOnUpdateDepth(depth);//to stateManager - to state
 
 		hedgeManager.onDepthUpdate(depth);
 		return true;
@@ -1148,6 +1148,10 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 		}
 
 		return true;
+	}
+
+	public Set<Instrument> getInstruments() {
+		return instruments;
 	}
 
 	/**

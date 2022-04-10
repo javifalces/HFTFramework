@@ -10,7 +10,7 @@ import org.apache.commons.lang3.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import javax.annotation.PostConstruct;
+
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 	private static List<String> FX_MARKETS_LIST = Arrays.asList(new String[] { Market.Darwinex.name().toLowerCase() });
 
 	private static Map<String, Instrument> INSTRUMENT_PK_TO_INSTRUMENT = new ConcurrentHashMap<>();
-	private static final double DEFAULT_LEVERAGE_FX = 200;
+	private static final double DEFAULT_LEVERAGE_FX = 100000;
 	private static double DEFAULT_PRICE_TICK = 0.00001;
 	private static double DEFAULT_QTY_TICK = 0.00001;
 
@@ -45,16 +45,18 @@ import java.util.concurrent.ConcurrentHashMap;
 
 	//// All fees are cumulative!
 	private double pctFee = DEFAULT_PCT_FEE;
+	private double volumeFeePct = DEFAULT_PCT_FEE;
 	private double constantFee = DEFAULT_CONSTANT_FEE;
 	private double makerFeePct = DEFAULT_MAKER_FEE_PCT;
 	private double takerFeePct = DEFAULT_TAKER_FEE_PCT;
+
 	//	private double priceStep = DEFAULT_PRICE_STEP;
 	//	private double quantityStep = DEFAULT_QTY_STEP;
 
 	//
 	private double leverage = 1;
 
-	@PostConstruct public void addMap() {
+	public void addMap() {
 		INSTRUMENT_PK_TO_INSTRUMENT.put(getPrimaryKey(), this);
 		if (isFX()) {
 			leverage = DEFAULT_LEVERAGE_FX;
@@ -75,8 +77,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 	public double calculateFee(boolean isTaker, double price, double quantity) {
 		double feePct = getPctFee(isTaker);
-		double variableFee = feePct * quantity * price;
-		double totalCost = Math.abs(variableFee) + Math.abs(getConstantFee());
+		double variableFeePct = feePct * quantity * price * leverage;
+		double variableFeeVolume = (volumeFeePct / 100.0) * quantity * leverage;
+		double totalCost = Math.abs(variableFeePct) + Math.abs(variableFeeVolume) + Math.abs(getConstantFee());
 		return totalCost;
 	}
 

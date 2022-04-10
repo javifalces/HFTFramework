@@ -8,7 +8,6 @@ import com.lambda.investing.algorithmic_trading.reinforcement_learning.q_learn.D
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.q_learn.IExplorationPolicy;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.q_learn.exploration_policy.EpsilonGreedyExploration;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.state.AbstractState;
-//import com.lambda.investing.algorithmic_trading.reinforcement_learning.state.DiscreteTAState;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.state.MarketState;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.state.StateManager;
 import com.lambda.investing.model.asset.Instrument;
@@ -206,12 +205,7 @@ public abstract class DQNAbstractMarketMaking extends SingleInstrumentAlgorithm 
 		this.horizonCandlesState = getParameterIntOrDefault(parameters, "horizonCandlesState", 1);
 		this.numberDecimalsCandleState = getParameterIntOrDefault(parameters, "numberDecimalsCandleState", 0);
 
-		double quantity = (marketMakingAlgorithm.quantityBuy + marketMakingAlgorithm.quantitySell) / 2;
-		this.state = new MarketState(this.scoreEnum, this.horizonTicksPrivateState, this.horizonTicksMarketState,
-				this.horizonCandlesState, this.horizonMinMsTick, this.horizonMinMsTick, this.numberDecimalsPrivateState,
-				this.numberDecimalsMarketState, this.numberDecimalsCandleState, this.minPrivateState,
-				this.maxPrivateState, this.minMarketState, this.maxMarketState, this.minCandleState,
-				this.maxCandleState, quantity, CandleType.time_1_min);
+		setState();
 
 		this.stateColumnsFilter = getParameterArrayString(parameters, "stateColumnsFilter");
 		if (this.stateColumnsFilter != null && this.stateColumnsFilter.length > 0) {
@@ -255,6 +249,47 @@ public abstract class DQNAbstractMarketMaking extends SingleInstrumentAlgorithm 
 
 		algorithmNotifier.notifyObserversOnUpdateParams(this.parameters);
 
+	}
+
+	protected void setState() {
+		double quantity = (marketMakingAlgorithm.quantityBuy + marketMakingAlgorithm.quantitySell) / 2;
+		String[] multiMarketOtherInstruments = getParameterArrayString(parameters, "otherInstrumentsStates");
+		int[] otherInstrumentsMsPeriods = getParameterArrayInt(parameters, "otherInstrumentsMsPeriods");
+		if (otherInstrumentsMsPeriods == null) {
+			otherInstrumentsMsPeriods = new int[] { 1000, 5000, 30000 };
+		}
+
+		if (multiMarketOtherInstruments == null || multiMarketOtherInstruments.length == 0) {
+			this.state = new MarketState(this.instrument, this.scoreEnum, this.horizonTicksPrivateState,
+					this.horizonTicksMarketState, this.horizonCandlesState, this.horizonMinMsTick,
+					this.horizonMinMsTick, this.numberDecimalsPrivateState, this.numberDecimalsMarketState,
+					this.numberDecimalsCandleState, this.minPrivateState, this.maxPrivateState, this.minMarketState,
+					this.maxMarketState, this.minCandleState, this.maxCandleState, quantity, CandleType.time_1_min);
+		} else {
+			double minMultiMarketState = getParameterDoubleOrDefault(parameters, "minMultiMarketState", -1);
+			double maxMultiMarketState = getParameterDoubleOrDefault(parameters, "maxMultiMarketState", -1);
+			int numberDecimalsMultiMarketState = getParameterIntOrDefault(parameters, "numberDecimalsMultiMarketState",
+					-1);
+
+			List<String> otherInstrumentsStr = com.lambda.investing.algorithmic_trading.ArrayUtils
+					.StringArrayList(multiMarketOtherInstruments);
+			List<Instrument> otherInstruments = new ArrayList<>();
+
+			for (String instrument : otherInstrumentsStr) {
+				Instrument instrument1 = Instrument.getInstrument(instrument);
+				otherInstruments.add(Instrument.getInstrument(instrument));
+				instruments.add(instrument1);
+			}
+
+			//			this.state = new MultiMarketState(this.instrument, otherInstruments, this.scoreEnum,
+			//					this.horizonTicksPrivateState, this.horizonTicksMarketState, this.horizonCandlesState,
+			//					this.horizonMinMsTick, this.horizonMinMsTick, this.numberDecimalsPrivateState,
+			//					this.numberDecimalsMarketState, this.numberDecimalsCandleState, this.minPrivateState,
+			//					this.maxPrivateState, this.minMarketState, this.maxMarketState, this.minCandleState,
+			//					this.maxCandleState, quantity, CandleType.time_1_min, numberDecimalsMultiMarketState,
+			//					minMultiMarketState, maxMultiMarketState, otherInstrumentsMsPeriods);
+
+		}
 	}
 
 	private void createModels(Map<String, Object> parameters) {
@@ -683,6 +718,7 @@ public abstract class DQNAbstractMarketMaking extends SingleInstrumentAlgorithm 
 				this.targetModel.train(input, target);
 				memoryReplay.setTargetModel(this.predictionModel);
 				lastDateTrainTarget = this.getCurrentTime();
+				break;
 			default:
 				System.out.println("cloning target " + reinforcementLearningType + " model from predict");
 				if (!predictionModel.isTrained()) {

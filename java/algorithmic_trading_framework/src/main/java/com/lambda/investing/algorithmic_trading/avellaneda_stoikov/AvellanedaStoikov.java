@@ -1,12 +1,14 @@
 package com.lambda.investing.algorithmic_trading.avellaneda_stoikov;
 
-import com.lambda.investing.algorithmic_trading.*;
+import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
+import com.lambda.investing.algorithmic_trading.AlgorithmState;
+import com.lambda.investing.algorithmic_trading.InstrumentManager;
+import com.lambda.investing.algorithmic_trading.MarketMakingAlgorithm;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.exception.LambdaTradingException;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.trading.*;
-import org.apache.commons.math3.util.Precision;
 import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 
 import java.util.Map;

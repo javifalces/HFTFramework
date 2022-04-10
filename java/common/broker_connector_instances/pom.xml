@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>parent_pom</artifactId>
+        <groupId>com.lambda.investing</groupId>
+        <version>0.0.0-SNAPSHOT</version>
+        <relativePath>../../parent_pom/pom.xml</relativePath>
+    </parent>
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>broker_connector_instances</artifactId>
+    <properties>
+        <com.squareup.retrofit2.version>2.4.0</com.squareup.retrofit2.version>
+        <xchange.version>5.0.14-SNAPSHOT</xchange.version>
+    </properties>
+
+    <!-- maven for xchange snapshots    -->
+    <repositories>
+        <repository>
+            <id>sonatype-nexus-snapshots</id>
+            <name>Sonatype Nexus Snapshots</name>
+            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+        </repository>
+    </repositories>
+    <!-- maven for xchange snapshots    -->
+
+
+    <dependencies>
+        <dependency>
+            <groupId>com.lambda.investing</groupId>
+            <artifactId>models</artifactId>
+            <version>0.0.0-SNAPSHOT</version>
+        </dependency>
+
+        <!--Metatrader zeromq-->
+        <dependency>
+            <groupId>com.lambda.investing</groupId>
+            <artifactId>connectors</artifactId>
+            <version>0.0.0-SNAPSHOT</version>
+        </dependency>
+
+        <!--binance api -->
+        <dependency>
+            <groupId>com.squareup.retrofit2</groupId>
+            <artifactId>retrofit</artifactId>
+            <version>${com.squareup.retrofit2.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.squareup.retrofit2</groupId>
+            <artifactId>converter-jackson</artifactId>
+            <version>${com.squareup.retrofit2.version}</version>
+        </dependency>
+
+
+        <!--        XChange-->
+        <dependency>
+            <groupId>org.knowm.xchange</groupId>
+            <artifactId>xchange-core</artifactId>
+            <version>${xchange.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.knowm.xchange</groupId>
+            <artifactId>xchange-stream-core</artifactId>
+            <version>${xchange.version}</version>
+        </dependency>
+
+
+        <dependency>
+            <groupId>org.knowm.xchange</groupId>
+            <artifactId>xchange-stream-service-netty</artifactId>
+            <version>${xchange.version}</version>
+        </dependency>
+
+        <!--        coinbase-->
+        <dependency>
+            <groupId>org.knowm.xchange</groupId>
+            <artifactId>xchange-coinbasepro</artifactId>
+            <version>${xchange.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.knowm.xchange</groupId>
+            <artifactId>xchange-stream-coinbasepro</artifactId>
+            <version>${xchange.version}</version>
+        </dependency>
+        <!--        kraken-->
+        <dependency>
+            <groupId>org.knowm.xchange</groupId>
+            <artifactId>xchange-kraken</artifactId>
+            <version>${xchange.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.knowm.xchange</groupId>
+            <artifactId>xchange-stream-kraken</artifactId>
+            <version>${xchange.version}</version>
+        </dependency>
+        <!--        bitmex-->
+        <dependency>
+            <groupId>org.knowm.xchange</groupId>
+            <artifactId>xchange-bitmex</artifactId>
+            <version>${xchange.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.knowm.xchange</groupId>
+            <artifactId>xchange-stream-bitmex</artifactId>
+            <version>${xchange.version}</version>
+        </dependency>
+        <!--        binance-->
+        <dependency>
+            <groupId>org.knowm.xchange</groupId>
+            <artifactId>xchange-binance</artifactId>
+            <version>${xchange.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.knowm.xchange</groupId>
+            <artifactId>xchange-stream-binance</artifactId>
+            <version>${xchange.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>commons-codec</groupId>
+            <artifactId>commons-codec</artifactId>
+            <version>1.10</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+        </dependency>
+
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!--Adding to create package function-->
+            <plugin>
+                <artifactId>maven-assembly-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+
+</project>

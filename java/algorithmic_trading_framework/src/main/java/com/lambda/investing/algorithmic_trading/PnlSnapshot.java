@@ -13,6 +13,7 @@ import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.security.acl.LastOwnerException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -38,10 +39,12 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore
 	Logger logger = LogManager.getLogger(PnlSnapshot.class);
 	public double netPosition, avgOpenPrice, netInvestment, realizedPnl, unrealizedPnl, totalPnl, totalFees, lastPriceForUnrealized, spread, realizedFees, unrealizedFees;
 	public String algorithmInfo;
+	public String instrumentPk;
 	public Map<Double, Double> openPriceToVolume;
 	public List<Long> historicalTimestamp;
 	public Map<Long, Double> historicalNetPosition, historicalAvgOpenPrice, historicalNetInvestment, historicalRealizedPnl, historicalUnrealizedPnl, historicalSpread, historicalTotalPnl, historicalPrice, historicalFee, historicalQuantity;
 	public Map<Long, String> historicalAlgorithmInfo;
+	public Map<Long, String> historicalInstrumentPk;
 	public Map<Long, String> historicalClOrdId;
 	protected Queue<Double> lastUnrealizedPnls;
 	protected Queue<Double> lastSpreads;
@@ -63,7 +66,7 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore
 	protected double minExecutionPriceValid = -Double.MAX_VALUE;
 	protected int windowTick = 10;
 	protected double stdMidPrice = 0.0;
-	protected Depth lastDepth = null;
+	protected Map<Instrument, Depth> lastDepth;
 
 	List<Double> zerosList = Arrays.asList(0.0, -0.0);
 
@@ -71,9 +74,10 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore
 		historicalTimestamp = new ArrayList<>();
 		openPriceToVolume = new ConcurrentHashMap<>();
 		historicalCustomColumns = new ConcurrentHashMap<>();
-
+		lastDepth = new ConcurrentHashMap<>();
 		historicalNetPosition = new ConcurrentHashMap<>();
 		historicalAlgorithmInfo = new ConcurrentHashMap<>();
+		historicalInstrumentPk = new ConcurrentHashMap<>();
 		historicalClOrdId = new ConcurrentHashMap<>();
 		historicalAvgOpenPrice = new ConcurrentHashMap<>();
 		historicalNetInvestment = new ConcurrentHashMap<>();
@@ -186,10 +190,7 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore
 				if (new Date(timestamp).getYear() < 80) {//lower 1980 is strange
 					logger.warn("trying to update historicals with year {}", new Date(timestamp));
 				}
-				if (historicalTimestamp.contains(timestamp)) {
-					//modify it
-					timestamp += 1;
-				}
+				timestamp = getTimestamp(timestamp);
 				lastTimestampUpdate = timestamp;
 				historicalTimestamp.add(timestamp);
 				historicalNetPosition.put(timestamp, netPosition);
@@ -205,7 +206,7 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore
 				} else {
 					historicalAlgorithmInfo.put(timestamp, algorithmInfo);
 				}
-
+				historicalInstrumentPk.put(timestamp, instrumentPk);
 				historicalPrice.put(timestamp, lastPrice);
 				historicalQuantity.put(timestamp, lastQuantity);
 				historicalVerb.put(timestamp, lastVerb);
@@ -224,6 +225,28 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore
 		}
 	}
 
+	public long getTimestamp(Long timestampIn) {
+		if (timestampIn < lastTimestampUpdate) {
+			timestampIn = lastTimestampUpdate;
+		}
+		if (historicalNumberOfTrades.containsKey(timestampIn)) {
+			//			if (historicalNumberOfTrades.containsKey(timestampIn)) {
+			int currentNumberOfTrades = numberOfTrades.get();
+			int previousNumberOfTrades = historicalNumberOfTrades.get(timestampIn);
+			if (previousNumberOfTrades > currentNumberOfTrades) {
+				timestampIn -= 1;
+			} else {
+				timestampIn += 1;
+			}
+
+		} else {
+			//modify it by default
+			timestampIn += 1;
+		}
+		//		}
+		return timestampIn;
+	}
+
 	public void updateHistoricalsCustom(Long timestamp, String key, double value) {
 		//		if(nextCustomReject){
 		//			nextCustomReject=false;
@@ -231,11 +254,7 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore
 		//		}
 		synchronized (UPDATE_HISTORICAL_LOCK) {
 			if (numberOfTrades.get() > 0 && timestamp > 0) {
-
-				if (historicalTimestamp.contains(timestamp)) {
-					//modify it
-					timestamp += 1;
-				}
+				//				timestamp = getTimestamp(timestamp);
 
 				CustomColumn customColumn = new CustomColumn(key, value);
 				List<CustomColumn> columnsList = historicalCustomColumns.getOrDefault(timestamp, new ArrayList<>());
@@ -317,7 +336,7 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore
 		//					executionReport.getPrice(), lastPrice);
 		//		}
 		Instrument instrument = Instrument.getInstrument(executionReport.getInstrument());
-		boolean isTaker = isTaker(executionReport.getPrice(), executionReport.getVerb());
+		boolean isTaker = isTaker(instrument, executionReport.getPrice(), executionReport.getVerb());
 		lastFee = instrument.calculateFee(isTaker, executionReport.getPrice(), executionReport.getLastQuantity());
 
 		double leverage = DEFAULT_LEVERAGE;
@@ -379,13 +398,14 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore
 		//net position
 		netPosition = newPosition;
 		algorithmInfo = executionReport.getAlgorithmInfo();
+		instrumentPk = executionReport.getInstrument();
 		//number of trades
 		numberOfTrades.incrementAndGet();
 		lastTimestampExecutionReportUpdate = executionReport.getTimestampCreation();
 
 		//
-		if (lastDepth != null) {
-			updateDepth(lastDepth);
+		if (lastDepth.containsKey(instrument)) {
+			updateDepth(lastDepth.get(instrument));
 		}//update unrealized pnl
 		totalPnl = realizedPnl + unrealizedPnl;
 		totalFees = realizedFees + unrealizedFees;
@@ -396,21 +416,22 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore
 
 	}
 
-	public boolean isTaker(double price, Verb verb) {
-		if (lastDepth == null) {
+	public boolean isTaker(Instrument instrument, double price, Verb verb) {
+		if (!lastDepth.containsKey(instrument)) {
 			logger.warn("not possible to know if we are takers! without depth -> return false");
 			return false;
 		}
+		Depth depth = lastDepth.get(instrument);
 		if (verb.equals(Verb.Buy)) {
 			//			if(price>lastDepth.getMidPrice()){
-			if (price >= lastDepth.getBestAsk()) {
+			if (price >= depth.getBestAsk()) {
 				return true;
 			}
 		}
 
 		if (verb.equals(Verb.Sell)) {
 			//			if(price<lastDepth.getMidPrice()){
-			if (price <= lastDepth.getBestBid()) {
+			if (price <= depth.getBestBid()) {
 				return true;
 			}
 		}
@@ -490,7 +511,7 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore
 		}
 		totalPnl = unrealizedPnl + realizedPnl;
 		totalFees = realizedFees + unrealizedFees;
-		lastDepth = depth;
+		lastDepth.put(instrument, depth);
 		spread = depth.getSpread();
 		updateHistoricals(depth.getTimestamp());
 

@@ -16,6 +16,7 @@
     <modules>
         <module>BinanceEngine</module>
         <module>Backtest</module>
+        <module>AlgoTradingZeroMq</module>
     </modules>
 
 

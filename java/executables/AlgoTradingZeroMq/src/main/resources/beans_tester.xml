@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:util="http://www.springframework.org/schema/util"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
+
+    <bean
+            class="org.springframework.context.support.PropertySourcesPlaceholderConfigurer">
+        <property name="ignoreResourceNotFound" value="true"/>
+        <property name="locations">
+            <list>
+                <value>file:connector_tester_application.properties</value>
+                <value>classpath:connector_tester_application.properties</value>
+            </list>
+        </property>
+    </bean>
+
+    <import resource="classpath:metatrader_instruments.xml"></import>
+    <import resource="classpath:darwinex_instruments.xml"></import>
+    <import resource="classpath:binance_instruments.xml"></import>
+    <import resource="classpath:base_beans.xml"></import>
+    <import resource="classpath:connector_tester_beans.xml"></import>
+
+    <bean
+            class="org.springframework.context.support.PropertySourcesPlaceholderConfigurer">
+        <property name="ignoreResourceNotFound" value="true"/>
+        <property name="locations">
+            <list>
+                <value>file:connector_tester_application.properties</value>
+                <value>classpath:connector_tester_application.properties</value>
+            </list>
+        </property>
+    </bean>
+
+
+    <!--Is not rsi-->
+    <bean id="tester"
+          class="com.lambda.investing.algorithmic_trading.tester.RandomMarketTester">
+        <constructor-arg index="0" ref="algorithmConnectorConfiguration"/>
+        <constructor-arg index="1" value="tester"/>
+        <constructor-arg index="2">
+            <map>
+                <entry key="quantity" value="0.01"/>
+            </map>
+        </constructor-arg>
+        <property name="instrument" ref="eurusd_darwinex"></property>
+    </bean>
+
+    <bean id="liveTrading"
+          class="com.lambda.investing.live_trading_engine.LiveTrading" init-method="init">
+        <constructor-arg index="0" ref="algorithmConnectorConfiguration"/>
+        <property name="algorithm" ref="tester"></property>
+        <property name="paperTrading" value="false"></property>
+        <property name="demoTrading" value="false"></property>
+    </bean>
+
+
+    <!--GUI-->
+
+    <!--<bean id="GUI" class="com.lambda.investing.algorithmic_trading.gui.AlgorithmicTradingGUI" init-method="start">-->
+    <!--<constructor-arg>-->
+    <!--<list>-->
+    <!--<ref bean="dqn"/>-->
+    <!--</list>-->
+    <!--</constructor-arg>-->
+    <!--</bean>-->
+
+
+</beans>

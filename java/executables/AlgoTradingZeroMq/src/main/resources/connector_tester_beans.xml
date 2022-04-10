@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:util="http://www.springframework.org/schema/util"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
+
+
+    <bean id="marketDataPublisherConnectorConfiguration"
+          class="com.lambda.investing.connector.zero_mq.ZeroMqConfiguration">
+        <property name="port" value="${marketdata.port}"/>
+        <property name="host" value="localhost"/>
+    </bean>
+
+    <bean id="marketDataConnectorPublisher" class="com.lambda.investing.connector.zero_mq.ZeroMqPublisher">
+        <constructor-arg index="0" value="metatraderMarketDataConnectorPublisher"/>
+        <constructor-arg index="1" value="1"/>
+    </bean>
+
+    <bean id="metatraderConnector" class="com.lambda.investing.metatrader.MetatraderZeroBrokerConnector"
+          factory-method="getInstance">
+        <constructor-arg index="0" value="localhost"/>
+        <constructor-arg index="1" value="${metatrader.pub.port}"/><!-- PUB port-->
+        <constructor-arg index="2" value="${metatrader.push.port}"/><!-- PUSH port-->
+        <constructor-arg index="3" value="${metatrader.pull.port}"/><!-- PULL port-->
+    </bean>
+
+
+    <bean id="metatraderMarketDataPublisher"
+          class="com.lambda.investing.market_data_connector.metatrader.MetatraderMarketDataPublisher"
+          init-method="init">
+        <constructor-arg index="0" ref="marketDataPublisherConnectorConfiguration"/>
+        <constructor-arg index="1" ref="marketDataConnectorPublisher"/>
+        <constructor-arg index="2" ref="metatraderConnector"/>
+        <property name="broker" value="${metatrader.broker}"/>
+    </bean>
+
+
+    <!--persistance listener-->
+    <bean id="marketDataConnectorProvider" class="com.lambda.investing.connector.zero_mq.ZeroMqProvider"
+          factory-method="getInstance" init-method="start">
+        <constructor-arg index="0" ref="marketDataPublisherConnectorConfiguration"/>
+        <constructor-arg index="1" value="1"/>
+    </bean>
+
+
+    <!--we dont need persitance in darwinex-->
+    <!--<bean id="persistMarketDataConnectorPublisher"-->
+    <!--class="com.lambda.investing.market_data_connector.persist.PersistorMarketDataConnector" init-method="init">-->
+    <!--<constructor-arg index="0" value="${csv.datapath}"/>-->
+    <!--<constructor-arg index="1" value="${parquet.datapath}"/>-->
+    <!--<constructor-arg index="2" ref="marketDataConnectorProvider"/>-->
+    <!--<constructor-arg index="3" ref="marketDataPublisherConnectorConfiguration"/>-->
+    <!--<property name="persistParquet" value="true"/>-->
+    <!--&lt;!&ndash;<property name="persistSuffix" value="${metatrader.broker}"/>&ndash;&gt;-->
+
+    <!--</bean>-->
+
+    <!--trading engine-->
+    <bean id="orderRequestConfiguration" class="com.lambda.investing.connector.zero_mq.ZeroMqConfiguration">
+        <property name="port" value="${tradeengine.port}"/>
+        <property name="host" value="localhost"/>
+    </bean>
+
+    <bean id="orderRequestConnectorProvider" class="com.lambda.investing.connector.zero_mq.ZeroMqProvider"
+          factory-method="getInstance" init-method="start">
+        <constructor-arg index="0" ref="orderRequestConfiguration"/>
+        <constructor-arg index="1" value="1"/>
+    </bean>
+
+
+    <bean id="metatraderTradingEngine"
+          class="com.lambda.investing.trading_engine_connector.metatrader.MetatraderTradingEngine" init-method="start">
+        <constructor-arg index="0" ref="orderRequestConfiguration"/>
+        <constructor-arg index="1" ref="orderRequestConnectorProvider"/>
+        <constructor-arg index="2" ref="marketDataPublisherConnectorConfiguration"/>
+        <constructor-arg index="3" ref="marketDataConnectorPublisher"/>
+        <constructor-arg index="4" ref="metatraderConnector"/>
+    </bean>
+
+
+</beans>

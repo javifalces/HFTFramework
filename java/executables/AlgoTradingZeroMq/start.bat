@@ -1,0 +1,1 @@
+java -Xmx2048m -Duser.timezone=GMT -jar "target\AlgoTradingZeroMq.jar" parameters_rsi_dqn_eurusd.json

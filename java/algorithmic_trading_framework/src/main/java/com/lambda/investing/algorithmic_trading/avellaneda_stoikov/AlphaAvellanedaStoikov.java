@@ -2,21 +2,14 @@ package com.lambda.investing.algorithmic_trading.avellaneda_stoikov;
 
 import com.google.common.primitives.Doubles;
 import com.google.common.primitives.Ints;
-import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
 import com.lambda.investing.algorithmic_trading.LogLevels;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.DQNAbstractMarketMaking;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.ReinforcementLearningType;
-import com.lambda.investing.algorithmic_trading.reinforcement_learning.ScoreEnum;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.action.AvellanedaAction;
-import com.lambda.investing.algorithmic_trading.reinforcement_learning.state.MarketState;
-import com.lambda.investing.model.candle.CandleType;
 import org.apache.logging.log4j.LogManager;
 
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 
 public class AlphaAvellanedaStoikov extends DQNAbstractMarketMaking {
 
