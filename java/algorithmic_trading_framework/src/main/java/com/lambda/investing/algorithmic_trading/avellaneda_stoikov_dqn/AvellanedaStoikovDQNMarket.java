@@ -186,11 +186,11 @@ public class AvellanedaStoikovDQNMarket extends AvellanedaStoikovQLearn {
 		//			this.horizonCandlesState = 0;
 		//		}
 
-		this.state = new MarketState(this.scoreEnum, this.horizonTicksPrivateState, this.horizonTicksMarketState,
-				this.horizonCandlesState, this.horizonMinMsTick, this.horizonMinMsTick, this.numberDecimalsPrivateState,
-				this.numberDecimalsMarketState, this.numberDecimalsCandleState, this.minPrivateState,
-				this.maxPrivateState, this.minMarketState, this.maxMarketState, this.minCandleState,
-				this.maxCandleState, this.quantity, CandleType.time_1_min);
+		this.state = new MarketState(this.instrument, this.scoreEnum, this.horizonTicksPrivateState,
+				this.horizonTicksMarketState, this.horizonCandlesState, this.horizonMinMsTick, this.horizonMinMsTick,
+				this.numberDecimalsPrivateState, this.numberDecimalsMarketState, this.numberDecimalsCandleState,
+				this.minPrivateState, this.maxPrivateState, this.minMarketState, this.maxMarketState,
+				this.minCandleState, this.maxCandleState, this.quantity, CandleType.time_1_min);
 
 		if (this.stateColumnsFilter != null && this.stateColumnsFilter.length > 0) {
 			Set<String> privateStatesList = new HashSet<>(((MarketState) this.state).getPrivateColumns());
