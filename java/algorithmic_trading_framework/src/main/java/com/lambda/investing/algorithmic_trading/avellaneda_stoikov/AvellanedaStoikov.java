@@ -1,14 +1,12 @@
 package com.lambda.investing.algorithmic_trading.avellaneda_stoikov;
 
-import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
-import com.lambda.investing.algorithmic_trading.AlgorithmState;
-import com.lambda.investing.algorithmic_trading.InstrumentManager;
-import com.lambda.investing.algorithmic_trading.MarketMakingAlgorithm;
+import com.lambda.investing.algorithmic_trading.*;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.exception.LambdaTradingException;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.trading.*;
+import org.apache.commons.math3.util.Precision;
 import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 
 import java.util.Map;
@@ -197,20 +195,30 @@ public class AvellanedaStoikov extends MarketMakingAlgorithm {
 			counterSellTrades = 0L;
 
 		} else {
-			InstrumentManager instrumentManager = getInstrumentManager(trade.getInstrument());
-			Depth lastDepth = instrumentManager.getLastDepth();
+			if (trade.getVerb() == null) {
+				//infer the side
+				InstrumentManager instrumentManager = getInstrumentManager(trade.getInstrument());
+				Depth lastDepth = instrumentManager.getLastDepth();
+				if (lastDepth != null && lastDepth.isDepthFilled()) {
+					if (trade.getPrice() < lastDepth.getMidPrice()) {
+						//buy
+						counterBuyTrades++;
+					}
+					if (trade.getPrice() > lastDepth.getMidPrice()) {
+						//buy
+						counterSellTrades++;
+					}
 
-			if (lastDepth != null && lastDepth.isDepthFilled()) {
-				if (trade.getPrice() < lastDepth.getBestBid()) {
-					//buy
+				}
+			} else {
+				if (trade.getVerb().equals(Verb.Buy)) {
 					counterBuyTrades++;
 				}
-				if (trade.getPrice() > lastDepth.getBestAsk()) {
-					//buy
+				if (trade.getVerb().equals(Verb.Sell)) {
 					counterSellTrades++;
 				}
-
 			}
+
 			counterTrades++;
 		}
 		return true;
@@ -283,17 +291,17 @@ public class AvellanedaStoikov extends MarketMakingAlgorithm {
 		//			logger.debug("");
 		//		}
 
-		double kTotal = calculateK(this.counterQuotesPerMinute);
+		double kTotal = calculateK(this.counterTradesPerMinute);
 		if (!Double.isFinite(kTotal) || kTotal == 0) {
 			return false;
 		}
 		//each side
-		double kBuy = calculateK(this.counterBidQuotesPerMinute);
+		double kBuy = calculateK(this.counterBuyTradesPerMinute);
 		if (!Double.isFinite(kBuy) || kBuy == 0) {
 			return false;
 		}
 
-		double kSell = calculateK(this.counterAskQuotesPerMinute);
+		double kSell = calculateK(this.counterSellTradesPerMinute);
 		if (!Double.isFinite(kSell) || kSell == 0) {
 			return false;
 		}
