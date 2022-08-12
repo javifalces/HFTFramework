@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:util="http://www.springframework.org/schema/util"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+    <bean id="instrument1" class="com.lambda.investing.model.asset.Instrument">
+        <property name="isin" value="US00000"></property>
+        <property name="symbol" value="GOOGL"></property>
+        <property name="market" value="NASDAQ"></property>
+    </bean>
+
+    <bean id="instrument2" class="com.lambda.investing.model.asset.Instrument">
+        <property name="symbol" value="btcusd"></property>
+    </bean>
+
+    <util:list id="instrumentListSubscribed" value-type="com.lambda.investing.model.asset.Instrument">
+        <ref bean="instrument1"/>
+        <ref bean="instrument2"/>
+    </util:list>
+
+
+    <bean id="connectorConfiguration" class="com.lambda.investing.connector.zero_mq.ZeroMqConfiguration">
+        <property name="port" value="666"/>
+        <property name="host" value="localhost"/>
+    </bean>
+
+
+    <bean id="zeroMqMarketDataConnector" class="com.lambda.investing.market_data_connector.ZeroMqMarketDataConnector"
+          init-method="start">
+        <constructor-arg index="0" ref="connectorConfiguration"/>
+        <constructor-arg index="1" ref="instrumentListSubscribed"/>
+        <constructor-arg index="2" value="-1"/><!--Threads listening -->
+    </bean>
+
+    <bean id="marketDataPainter" class="com.lambda.investing.market_data_connector.MarketDataPainter"
+          init-method="init">
+        <property name="marketDataProvider" ref="zeroMqMarketDataConnector"></property>
+    </bean>
+
+</beans>

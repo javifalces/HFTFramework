@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:util="http://www.springframework.org/schema/util"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+
+    <bean id="connectorConfiguration" class="com.lambda.investing.connector.zero_mq.ZeroMqConfiguration">
+        <property name="port" value="666"/>
+        <property name="host" value="localhost"/>
+    </bean>
+
+    <bean id="connectorPublisher" class="com.lambda.investing.connector.zero_mq.ZeroMqPublisher">
+        <constructor-arg index="0" value="mockConnectorPublisher"/>
+        <constructor-arg index="1" value="1"/>
+    </bean>
+
+
+    <bean id="instrument1" class="com.lambda.investing.model.asset.Instrument">
+        <property name="isin" value="US00000"></property>
+        <property name="symbol" value="GOOGL"></property>
+        <property name="market" value="NASDAQ"></property>
+    </bean>
+
+    <bean id="marketDataConfiguration1" class="com.lambda.investing.market_data_connector.mock.MockMarketDataConfiguration">
+        <constructor-arg index="0" ref="instrument1"/>
+        <constructor-arg index="1" value="5"/>
+        <constructor-arg index="2" value="0.01"/>
+        <constructor-arg index="3" value="0.1"/>
+    </bean>
+
+    <util:list id="marketDataConfigurationList">
+        <ref bean="marketDataConfiguration1"/>
+    </util:list>
+
+
+    <bean id="mockMarketDataConnectorPublisher" class="com.lambda.investing.market_data_connector.mock.MockMarketDataConnectorPublisher">
+        <constructor-arg index="0" ref="connectorConfiguration"/>
+        <constructor-arg index="1" ref="connectorPublisher"/>
+        <constructor-arg index="2" value="500"/>
+        <property name="marketDataConfigurationList" ref="marketDataConfigurationList"></property>
+    </bean>
+
+
+</beans>
