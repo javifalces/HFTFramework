@@ -1,8 +1,8 @@
 import datetime
 from typing import Type
 
-from backtest.algorithm import Algorithm
-from backtest.algorithm_enum import AlgorithmEnum
+from trading_algorithms.algorithm import Algorithm
+from trading_algorithms.algorithm_enum import AlgorithmEnum
 from backtest.backtest_launcher import BacktestLauncher, BacktestLauncherController
 from backtest.input_configuration import (
     BacktestConfiguration,
@@ -10,27 +10,23 @@ from backtest.input_configuration import (
     InputConfiguration,
     JAR_PATH,
 )
-import glob
 import os
 import copy
 import pandas as pd
 
 from backtest.parameter_tuning.ga_configuration import GAConfiguration
-from backtest.score_enum import ScoreEnum
 
 DEFAULT_PARAMETERS = {
-    # ConstantSpread default
     "quantity": (0.0001),
     "level": (0),
-    "quantity_limit": (-1),
+    "quantity_limit": (0.001),  # x10
     "first_hour": (7),
     "last_hour": (19),
-    "skewLevel": (0)
 }
 
 
-class ConstantSpread(Algorithm):
-    NAME = AlgorithmEnum.constant_spread
+class LinearConstantSpread(Algorithm):
+    NAME = AlgorithmEnum.linear_constant_spread
 
     def __init__(self, algorithm_info: str, parameters: dict = DEFAULT_PARAMETERS):
         super().__init__(
@@ -41,21 +37,24 @@ class ConstantSpread(Algorithm):
         parameters = copy.copy(self.parameters)
         return parameters
 
-
     def train(
-            self,
-            start_date: datetime.datetime,
-            end_date: datetime,
-            instrument_pk: str,
-            iterations: int,
-            algos_per_iteration: int,
-            simultaneous_algos: int = 1,
+        self,
+        start_date: datetime.datetime,
+        end_date: datetime,
+        instrument_pk: str,
+        iterations: int,
+        algos_per_iteration: int,
+        simultaneous_algos: int = 1,
     ) -> list:
         # makes no sense
 
         backtest_configuration = BacktestConfiguration(
-            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk, delay_order_ms=self.DELAY_MS,
-            multithread_configuration=self.MULTITHREAD_CONFIGURATION
+            start_date=start_date,
+            end_date=end_date,
+            instrument_pk=instrument_pk,
+            delay_order_ms=self.DELAY_MS,
+            multithread_configuration=self.MULTITHREAD_CONFIGURATION,
+            fees_commissions_included=self.FEES_COMMISSIONS_INCLUDED,
         )
         output_list = []
         for iteration in range(iterations):
@@ -96,19 +95,17 @@ class ConstantSpread(Algorithm):
 
         return output_list
 
-
-
     def parameter_tuning(
-            self,
-            start_date: datetime.datetime,
-            end_date: datetime,
-            instrument_pk: str,
-            parameters_min: dict,
-            parameters_max: dict,
-            max_simultaneous: int,
-            generations: int,
-            ga_configuration: Type[GAConfiguration],
-            parameters_base: dict = DEFAULT_PARAMETERS,
+        self,
+        start_date: datetime.datetime,
+        end_date: datetime,
+        instrument_pk: str,
+        parameters_min: dict,
+        parameters_max: dict,
+        max_simultaneous: int,
+        generations: int,
+        ga_configuration: Type[GAConfiguration],
+        parameters_base: dict = DEFAULT_PARAMETERS,
     ) -> (dict, pd.DataFrame):
 
         return super().parameter_tuning(
@@ -126,7 +123,7 @@ class ConstantSpread(Algorithm):
 
 
 if __name__ == '__main__':
-    constant_spread = ConstantSpread(algorithm_info='test_main')
+    constant_spread = LinearConstantSpread(algorithm_info='test_main')
 
     # ga_configuration = GAConfiguration
     # ga_configuration.population = 3
@@ -141,18 +138,15 @@ if __name__ == '__main__':
     #     ga_configuration=ga_configuration,
     # )
     # constant_spread.set_parameters(parameters=best_param_dict)
-    import matplotlib.pyplot as plt
+    #
+    # output_test = constant_spread.test(
+    #     instrument_pk='btcusdt_binance',
+    #     start_date=datetime.datetime(year=2020, day=9, month=12),
+    #     end_date=datetime.datetime(year=2020, day=9, month=12),
+    # )
 
-    for i in range(2):
-        plt.close()
-        parameters_dict = DEFAULT_PARAMETERS
-        parameters_dict['skewLevel'] = -3
-        constant_spread.set_parameters(parameters_dict)
-        output_test = constant_spread.test(
-            instrument_pk='btcusdt_binance',
-            start_date=datetime.datetime(year=2020, day=9, month=12, hour=9),
-            end_date=datetime.datetime(year=2020, day=9, month=12, hour=15),
-        )
-        name_output = constant_spread.get_test_name(name=constant_spread.NAME)
-        backtest_df = output_test[name_output]
-        constant_spread.plot_trade_results(raw_trade_pnl_df=backtest_df)
+    output_test = constant_spread.test(
+        instrument_pk='btcusdt_binance',
+        start_date=datetime.datetime(year=2020, day=19, month=12, hour=7),
+        end_date=datetime.datetime(year=2020, day=19, month=12, hour=19),
+    )

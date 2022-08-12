@@ -24,11 +24,11 @@ class TrainLauncher(threading.Thread):
         DEFAULT_JVM = DEFAULT_JVM_UNIX
 
     def __init__(
-            self,
-            train_input_configuration: TrainInputConfiguration,
-            id: str,
-            jar_path='Backtest.jar',
-            jvm_options: str = DEFAULT_JVM,
+        self,
+        train_input_configuration: TrainInputConfiguration,
+        id: str,
+        jar_path='Backtest.jar',
+        jvm_options: str = DEFAULT_JVM,
     ):
         threading.Thread.__init__(self)
         self.train_input_configuration = train_input_configuration
@@ -67,6 +67,7 @@ class TrainLauncher(threading.Thread):
 
 def clean_javacpp():
     from pathlib import Path
+
     home = str(Path.home())
     java_cpp = home + os.sep + rf'.javacpp\cache'
     print('cleaning java_cpp: %s' % java_cpp)
@@ -76,6 +77,7 @@ def clean_javacpp():
 def clean_gpu_memory():
     # print(rf"cleaning gpu memory")
     from numba import cuda
+
     device = cuda.get_current_device()
     device.reset()
 
@@ -102,7 +104,7 @@ class TrainLauncherController:
                 ]
 
                 for idx in range(
-                        min(self.max_simultaneous - running, len(backtest_waiting))
+                    min(self.max_simultaneous - running, len(backtest_waiting))
                 ):
                     train_launcher = backtest_waiting[idx]
                     print("launching %s" % train_launcher.id)
@@ -121,12 +123,18 @@ class TrainLauncherController:
 
 
 if __name__ == '__main__':
-    train_input_configuration = TrainInputConfiguration(memory_path='memoryReplay_sample.csv',
-                                                        output_model_path='output_python.model',
-                                                        action_columns=6, state_columns=6, number_epochs=200
-                                                        )
+    train_input_configuration = TrainInputConfiguration(
+        memory_path='memoryReplay_sample.csv',
+        output_model_path='output_python.model',
+        action_columns=6,
+        state_columns=6,
+        number_epochs=200,
+    )
 
-    train_launcher = TrainLauncher(train_input_configuration=train_input_configuration, id='main_launcher',
-                                   jar_path=rf'D:\javif\Coding\cryptotradingdesk\java\executables\Backtest\target\Backtest.jar')
+    train_launcher = TrainLauncher(
+        train_input_configuration=train_input_configuration,
+        id='main_launcher',
+        jar_path=rf'D:\javif\Coding\cryptotradingdesk\java\executables\Backtest\target\Backtest.jar',
+    )
     train_launcher_controller = TrainLauncherController(train_launcher=train_launcher)
     train_launcher_controller.run()

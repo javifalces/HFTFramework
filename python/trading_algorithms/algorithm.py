@@ -1,16 +1,19 @@
 import os
-import glob
 import datetime
-from typing import Type
 import numpy as np
 import pandas as pd
 from matplotlib import dates
-from numpy import genfromtxt, savetxt
 import copy
-from backtest.algorithm_enum import AlgorithmEnum
+from trading_algorithms.algorithm_enum import AlgorithmEnum
 from backtest.backtest_launcher import BacktestLauncher, BacktestLauncherController
-from backtest.input_configuration import BacktestConfiguration, TrainInputConfiguration, AlgorithmConfiguration, \
-    InputConfiguration, JAR_PATH, MultiThreadConfiguration
+from backtest.input_configuration import (
+    BacktestConfiguration,
+    TrainInputConfiguration,
+    AlgorithmConfiguration,
+    InputConfiguration,
+    JAR_PATH,
+    MultiThreadConfiguration,
+)
 from backtest.parameter_tuning.ga_configuration import GAConfiguration
 from backtest.parameter_tuning.ga_parameter_tuning import GAParameterTuning
 from backtest.pnl_utils import get_drawdown
@@ -26,10 +29,18 @@ class Algorithm:
     FORMAT_SAVE_NUMBERS = '%.18e'
 
     DELAY_MS = 65
+    FEES_COMMISSIONS_INCLUDED = True
     MULTITHREAD_CONFIGURATION = MultiThreadConfiguration.multithread
+
+    @staticmethod
+    def set_defaults_parameters(parameters: dict, DEFAULT_PARAMETERS: dict) -> dict:
+        for default_key, default_value in DEFAULT_PARAMETERS.items():
+            parameters.setdefault(default_key, default_value)
+        return parameters
 
     def __init__(self, algorithm_info: str, parameters: dict) -> None:
         super().__init__()
+
         # self.NAME=''
         self.algorithm_info = algorithm_info
         self.parameters = copy.copy(parameters)
@@ -38,14 +49,18 @@ class Algorithm:
         # import json
         output_dict = {}
         output_dict['algorithmName'] = self.algorithm_info
-        output_dict['parameters']=self.parameters
+        output_dict['parameters'] = self.parameters
         return output_dict
 
     def _is_memory_file(self, file: str, algorithm_name: str):
-        return algorithm_name in file and ('qmatrix' in file or 'memoryReplay' in file or 'input_ml' in file)
+        return algorithm_name in file and (
+            'qmatrix' in file or 'memoryReplay' in file or 'input_ml' in file
+        )
 
     def _is_model_file(self, file: str, algorithm_name: str):
-        return algorithm_name in file and (file.endswith('.model') or file.endswith('.onnx'))
+        return algorithm_name in file and (
+            file.endswith('.model') or file.endswith('.onnx')
+        )
 
     def clean_experience(self, output_path):
         # clean it
@@ -79,63 +94,86 @@ class Algorithm:
                 os.remove(output_path + os.sep + file)
 
     def set_parameters(self, parameters: dict):
+        parameters_key_set_it = []
         for key_param in self.parameters.keys():
             if key_param in parameters.keys():
                 self.parameters[key_param] = parameters[key_param]
+                parameters_key_set_it.append(key_param)
+
+        parameters_key_input = set(parameters.keys())
+        if len(parameters_key_set_it) < len(parameters_key_input):
+            not_set = list(set(parameters_key_input) - set(parameters_key_set_it))
+            not_set_str = ','.join(not_set)
+            print(f'rf"WARNING some parameters not set! {not_set_str}')
 
         if 'seed' in parameters.keys():
             self.parameters['seed'] = parameters['seed']
 
     def set_training_seed(self, parameters, iteration: int, algorithm_number: int):
         if 'seed' in self.parameters.keys():
-            self.parameters['seed'] = self.parameters['seed'] + iteration * 1000 + algorithm_number
+            self.parameters['seed'] = (
+                self.parameters['seed'] + iteration * 1000 + algorithm_number
+            )
 
     def get_iteration_number_filename(self, filename) -> int:
         try:
             splitted = filename.split('_')
             last_item = splitted[-1]
-            number = last_item[:last_item.find(".")]
+            number = last_item[: last_item.find(".")]
             output = int(number)
             return output
         except:
             return 0
 
+    def train_model(self, jar_path, train_input_configuration: TrainInputConfiguration):
 
-    def train_model(self, jar_path,train_input_configuration: TrainInputConfiguration):
-
-        train_launcher = TrainLauncher(train_input_configuration=train_input_configuration,jar_path=jar_path ,id='')
+        train_launcher = TrainLauncher(
+            train_input_configuration=train_input_configuration,
+            jar_path=jar_path,
+            id='',
+        )
         train_launcher_controller = TrainLauncherController(train_launcher)
         train_launcher_controller.run()
 
     def parameter_tuning(
-            self,
-            algorithm_enum: AlgorithmEnum,
-            start_date: datetime.datetime,
-            end_date: datetime,
-            instrument_pk: str,
-            parameters_base: dict,
-            parameters_min: dict,
-            parameters_max: dict,
-            max_simultaneous: int,
-            generations: int,
-            ga_configuration: Type[GAConfiguration],
-            clean_initial_generation_experience:bool=True
+        self,
+        algorithm_enum: AlgorithmEnum,
+        start_date: datetime.datetime,
+        end_date: datetime,
+        instrument_pk: str,
+        parameters_base: dict,
+        parameters_min: dict,
+        parameters_max: dict,
+        max_simultaneous: int,
+        generations: int,
+        ga_configuration: GAConfiguration,
+        clean_initial_generation_experience: bool = True,
     ) -> (dict, pd.DataFrame):
 
         backtest_configuration = BacktestConfiguration(
-            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk, delay_order_ms=self.DELAY_MS,
-            multithread_configuration=self.MULTITHREAD_CONFIGURATION
+            start_date=start_date,
+            end_date=end_date,
+            instrument_pk=instrument_pk,
+            delay_order_ms=self.DELAY_MS,
+            multithread_configuration=self.MULTITHREAD_CONFIGURATION,
+            fees_commissions_included=self.FEES_COMMISSIONS_INCLUDED,
         )
 
-        #exponential reducing sigma
+        # exponential reducing sigma
         generations_exp_decay = []
-        exp_multiplier=0.1
-        for generation in range(1,generations):
-            sigma_expected = ga_configuration.sigma*math.exp(-exp_multiplier*generation)
-            generations_exp_decay.append(ga_configuration.sigma-sigma_expected)
+        exp_multiplier = ga_configuration.exp_multiplier
+        sigmas = [ga_configuration.sigma]
+        for generation in range(1, generations):
+            sigma_expected = ga_configuration.sigma * math.exp(
+                -exp_multiplier * generation
+            )
+            generations_exp_decay.append(ga_configuration.sigma - sigma_expected)
+            sigmas.append(ga_configuration.sigma - generations_exp_decay[-1])
+        sigmas_str = [str(i) for i in sigmas]
+        print(rf"Sigmas parameter_tuning -> {sigmas_str}")
 
-        ga_configuration.decay=generations_exp_decay
-        #%
+        ga_configuration.decay = generations_exp_decay
+        # %
 
         ga_parameter_tuning = GAParameterTuning(
             ga_configuration=ga_configuration,
@@ -151,7 +189,10 @@ class Algorithm:
         for generation in range(generations):
             # clean between generations exp
             if clean_initial_generation_experience:
-                print('cleaning outputs/experience on generation %d in path %s' % (generation,BACKTEST_OUTPUT_PATH))
+                print(
+                    'cleaning outputs/experience on generation %d in path %s'
+                    % (generation, BACKTEST_OUTPUT_PATH)
+                )
                 self.clean_experience(output_path=BACKTEST_OUTPUT_PATH)
                 self.clean_permutation_cache(output_path=BACKTEST_OUTPUT_PATH)
 
@@ -168,35 +209,34 @@ class Algorithm:
         )
         return (best_param_dict, ga_parameter_tuning.population_df_out)
 
-    def get_sharpe(self, trade_df: pd.DataFrame,column:str='returns') -> float:
+    def get_sharpe(self, trade_df: pd.DataFrame, column: str = 'returns') -> float:
         if len(trade_df) == 0:
             return 0.0
         returns = trade_df[column]
-        return returns.mean()/returns.std()
+        return returns.mean() / returns.std()
 
-
-    def get_trade_df(self,raw_trade_pnl_df: pd.DataFrame):
-        columns_rn={
-            'date':'time',
-            'historicalTotalPnl':'total_pnl',
+    def get_trade_df(self, raw_trade_pnl_df: pd.DataFrame):
+        columns_rn = {
+            'date': 'time',
+            'historicalTotalPnl': 'total_pnl',
             'historicalRealizedPnl': 'close_pnl',
             'historicalUnrealizedPnl': 'open_pnl',
-            'netPosition':'position',
-
+            'netPosition': 'position',
             # #columns=['time', 'risk_aversion', 'windows_tick', 'skew_pct', 'bid', 'ask', 'bid_qty', 'ask_qty',
             #              'imbalance',
             #              'reward'],
-
-            'skewPricePct':'skew_pct',
+            'skewPricePct': 'skew_pct',
             'riskAversion': 'risk_aversion',
             'windowTick': 'windows_tick',
-            'clientOrderId': 'client_order_id'
-
-
+            'clientOrderId': 'client_order_id',
+            'kDefault': 'k_default',
+            'aDefault': 'a_default',
         }
 
-        trade_pnl_df=raw_trade_pnl_df.rename(columns=columns_rn)
-        trade_pnl_df['time']=pd.to_datetime(trade_pnl_df['timestamp']*1000000)#+ pd.DateOffset(hours=1)
+        trade_pnl_df = raw_trade_pnl_df.rename(columns=columns_rn)
+        trade_pnl_df['time'] = pd.to_datetime(
+            trade_pnl_df['timestamp'] * 1000000
+        )  # + pd.DateOffset(hours=1)
 
         # trade_pnl_df['returns'] = trade_pnl_df['total_pnl'].pct_change().fillna(0)
         # trade_pnl_df['close_returns']=trade_pnl_df['close_pnl'].pct_change().fillna(0)
@@ -208,21 +248,40 @@ class Algorithm:
 
         trade_pnl_df['open_pnl'] = trade_pnl_df['total_pnl']
 
-        trade_pnl_df['returns'] = trade_pnl_df['returns'].replace([np.inf, -np.inf], np.nan)
-        trade_pnl_df['close_returns'] = trade_pnl_df['close_returns'].replace([np.inf, -np.inf], np.nan)
-        trade_pnl_df['open_returns'] = trade_pnl_df['open_returns'].replace([np.inf, -np.inf], np.nan)
+        trade_pnl_df['returns'] = trade_pnl_df['returns'].replace(
+            [np.inf, -np.inf], np.nan
+        )
+        trade_pnl_df['close_returns'] = trade_pnl_df['close_returns'].replace(
+            [np.inf, -np.inf], np.nan
+        )
+        trade_pnl_df['open_returns'] = trade_pnl_df['open_returns'].replace(
+            [np.inf, -np.inf], np.nan
+        )
         trade_pnl_df.fillna(method='ffill', inplace=True)
         before_len = len(trade_pnl_df)
         trade_pnl_df.dropna(axis=0, inplace=True)  # all the rest!
-        if (len(trade_pnl_df) == 0 and before_len > 0):
+        if len(trade_pnl_df) == 0 and before_len > 0:
             print(rf"WARNING!! trade pnl size =0 and before dropna {before_len}!!")
-        trade_pnl_df['sharpe'] = self.get_sharpe(trade_df=trade_pnl_df, column='returns')
+        trade_pnl_df['sharpe'] = self.get_sharpe(
+            trade_df=trade_pnl_df, column='returns'
+        )
         trade_pnl_df['drawdown'] = get_drawdown(trade_pnl_df['close_pnl'])
 
         return trade_pnl_df
 
-    def plot_params_base(self, fig, axs, last_index_plotted, color, color_mean, bid_color, ask_color, lw, alpha,
-                         raw_trade_pnl_df: pd.DataFrame):
+    def plot_params_base(
+        self,
+        fig,
+        axs,
+        last_index_plotted,
+        color,
+        color_mean,
+        bid_color,
+        ask_color,
+        lw,
+        alpha,
+        raw_trade_pnl_df: pd.DataFrame,
+    ):
         from matplotlib import dates
         import matplotlib.pyplot as plt
 
@@ -251,16 +310,24 @@ class Algorithm:
         index += 1
         ax = axs[index]
         ax.plot(df['imbalance'], color=color, lw=lw, alpha=alpha)
-        ax.plot(df['imbalance'].rolling(window=self.PLOT_ROLLING_WINDOW_TICKS).mean(), color=color_mean, lw=lw - 0.1,
-                alpha=alpha)
+        ax.plot(
+            df['imbalance'].rolling(window=self.PLOT_ROLLING_WINDOW_TICKS).mean(),
+            color=color_mean,
+            lw=lw - 0.1,
+            alpha=alpha,
+        )
         ax.grid(axis='y', ls='--', alpha=0.7)
         ax.set_ylabel('imbalance')
 
         index += 1
         ax = axs[index]
         ax.plot(df['reward'], color=color, lw=lw, alpha=alpha)
-        ax.plot(df['reward'].rolling(window=self.PLOT_ROLLING_WINDOW_TICKS).mean(), color=color_mean, lw=lw - 0.1,
-                alpha=alpha)
+        ax.plot(
+            df['reward'].rolling(window=self.PLOT_ROLLING_WINDOW_TICKS).mean(),
+            color=color_mean,
+            lw=lw - 0.1,
+            alpha=alpha,
+        )
         ax.set_ylabel('reward')
         ax.grid(axis='y', ls='--', alpha=0.7)
         ax.set_title('mean reward=%.2f' % df['reward'].mean())
@@ -280,10 +347,14 @@ class Algorithm:
 
         return fig
 
-    def plot_params(self, raw_trade_pnl_df: pd.DataFrame, figsize=None, title: str = None):
+    def plot_params(
+        self, raw_trade_pnl_df: pd.DataFrame, figsize=None, title: str = None
+    ):
         import seaborn as sns
+
         sns.set_theme()
         import matplotlib.pyplot as plt
+
         try:
             if figsize is None:
                 figsize = (20, 12)
@@ -328,7 +399,12 @@ class Algorithm:
 
             ax = axs[index]
             ax.plot(df['risk_aversion'], color=color, lw=lw, alpha=alpha)
-            ax.plot(df['risk_aversion'].rolling(window=window).mean(), color=color_mean, lw=lw - 0.1, alpha=alpha)
+            ax.plot(
+                df['risk_aversion'].rolling(window=window).mean(),
+                color=color_mean,
+                lw=lw - 0.1,
+                alpha=alpha,
+            )
 
             ax.set_ylabel('risk_aversion')
             ax.grid(axis='y', ls='--', alpha=0.7)
@@ -340,7 +416,12 @@ class Algorithm:
                 index += 1
                 ax = axs[index]
                 ax.plot(df['windows_tick'], color=color, lw=lw, alpha=alpha)
-                ax.plot(df['windows_tick'].rolling(window=window).mean(), color=color_mean, lw=lw - 0.1, alpha=alpha)
+                ax.plot(
+                    df['windows_tick'].rolling(window=window).mean(),
+                    color=color_mean,
+                    lw=lw - 0.1,
+                    alpha=alpha,
+                )
 
                 ax.set_ylabel('windows_tick')
                 ax.grid(axis='y', ls='--', alpha=0.7)
@@ -352,28 +433,44 @@ class Algorithm:
                 ax.set_ylabel('skew_pct')
                 ax.grid(axis='y', ls='--', alpha=0.7)
 
-            fig = self.plot_params_base(fig, axs=axs, last_index_plotted=index, color=color, color_mean=color_mean,
-                                        bid_color=bid_color, ask_color=ask_color, lw=lw, alpha=alpha,
-                                        raw_trade_pnl_df=raw_trade_pnl_df)
+            fig = self.plot_params_base(
+                fig,
+                axs=axs,
+                last_index_plotted=index,
+                color=color,
+                color_mean=color_mean,
+                bid_color=bid_color,
+                ask_color=ask_color,
+                lw=lw,
+                alpha=alpha,
+                raw_trade_pnl_df=raw_trade_pnl_df,
+            )
             plt.show()
             return fig
         except Exception as e:
             print('Some error plotting params %s' % e)
         return None
 
-    def plot_trade_results(self, raw_trade_pnl_df: pd.DataFrame, figsize=None, title: str = None,
-                           plot_open: bool = True) -> tuple:
+    def plot_trade_results(
+        self,
+        raw_trade_pnl_df: pd.DataFrame,
+        figsize=None,
+        title: str = None,
+        plot_open: bool = True,
+    ) -> tuple:
         import warnings
         import matplotlib.pyplot as plt
         import seaborn as sns
+
         sns.set_theme()
 
         trade_pnl_df = self.get_trade_df(raw_trade_pnl_df=raw_trade_pnl_df)
         from matplotlib import MatplotlibDeprecationWarning
         import pandas as pd
+
         warnings.filterwarnings("ignore", category=MatplotlibDeprecationWarning)
         warnings.filterwarnings("ignore", category=Warning)
-        #prepare dataframe to plot
+        # prepare dataframe to plot
 
         # plt.style.use('seaborn-white')
         # plt.style.use('seaborn-whitegrid')
@@ -384,7 +481,10 @@ class Algorithm:
         if len(trade_pnl_df) == 0:
             print('No trades to plot!')
             return (None, trade_pnl_df)
-        print('plotting trade_results from %s to %s' % (trade_pnl_df['time'].iloc[0], trade_pnl_df['time'].iloc[-1]))
+        print(
+            'plotting trade_results from %s to %s'
+            % (trade_pnl_df['time'].iloc[0], trade_pnl_df['time'].iloc[-1])
+        )
         trade_pnl_df = trade_pnl_df.set_index('time')
         # prepare blank plot
         plt.close()
@@ -429,7 +529,7 @@ class Algorithm:
                 ax.set_title(self.algorithm_info)
             else:
                 ax.set_title(title)
-            index +=1
+            index += 1
 
         except Exception as e:
             print(rf"error plotting pnl {e}")
@@ -438,6 +538,7 @@ class Algorithm:
         try:
             ax = axs[index]
             from backtest.pnl_utils import get_drawdown
+
             dd_open = get_drawdown(trade_pnl_df['open_pnl'])
             dd_close = get_drawdown(trade_pnl_df['close_pnl'])
             dd_close.index = pd.to_datetime(dd_close.index)
@@ -457,7 +558,7 @@ class Algorithm:
             plt.gca().xaxis.set_major_formatter(dates.DateFormatter('%H:%M'))
             plt.gca().xaxis.set_minor_locator(minor_locator)
 
-            index+=1
+            index += 1
         except Exception as e:
             print(rf"error plotting dd {e}")
 
@@ -490,14 +591,28 @@ class Algorithm:
         try:
             # ax = axs[index][index_col]
             legend_values = ['close_returns']
-            sns.histplot(ax=ax, data=trade_pnl_df, x="close_returns", bins=30, kde=True, color=color_close)
+            sns.histplot(
+                ax=ax,
+                data=trade_pnl_df,
+                x="close_returns",
+                bins=30,
+                kde=True,
+                color=color_close,
+            )
             # trade_pnl_df['close_returns'].plot(
             #     kind='hist', ax=ax, stacked=True, color=color_close, lw=lw, alpha=alpha
             # )
 
             # ax.plot(trade_pnl_df['close_returns'], color=color_close, lw=lw, alpha=alpha)
             if plot_open:
-                sns.histplot(ax=ax, data=trade_pnl_df, x="returns", bins=30, kde=True, color=color_open)
+                sns.histplot(
+                    ax=ax,
+                    data=trade_pnl_df,
+                    x="returns",
+                    bins=30,
+                    kde=True,
+                    color=color_open,
+                )
                 # trade_pnl_df['returns'].plot(
                 #     kind='hist', ax=ax, stacked=True, color=color_open, lw=lw, alpha=alpha
                 # )
@@ -521,10 +636,12 @@ class Algorithm:
         # add some metrics : sharpe max dd etc
         try:
             # ax = axs[index][index_col]
-            column_sharpe='returns'
+            column_sharpe = 'returns'
 
             sharpe = self.get_sharpe(trade_df=trade_pnl_df, column='returns')
-            realized_sharpe = self.get_sharpe(trade_df=trade_pnl_df, column='close_returns')
+            realized_sharpe = self.get_sharpe(
+                trade_df=trade_pnl_df, column='close_returns'
+            )
 
             if trade_pnl_df['sharpe'][:-1].sum() != 0:
                 ax.plot(trade_pnl_df['sharpe'][:-1], color=color, lw=lw, alpha=alpha)
@@ -533,9 +650,24 @@ class Algorithm:
 
             # max_dd_close,max_dd_open,time_max_dd_close,time_max_dd_open
             from backtest.pnl_utils import get_max_drawdowns
+
             # MDD_start, MDD_end, time_difference, drawdown, UW_dt, UW_duration
-            open_time_dd,close_time_dd,td,open_dd, UW_dt, UW_duration  = get_max_drawdowns(trade_pnl_df['open_pnl'])
-            open_time_dd, close_time_dd, td, close_dd, UW_dt, UW_duration = get_max_drawdowns(trade_pnl_df['close_pnl'])
+            (
+                open_time_dd,
+                close_time_dd,
+                td,
+                open_dd,
+                UW_dt,
+                UW_duration,
+            ) = get_max_drawdowns(trade_pnl_df['open_pnl'])
+            (
+                open_time_dd,
+                close_time_dd,
+                td,
+                close_dd,
+                UW_dt,
+                UW_duration,
+            ) = get_max_drawdowns(trade_pnl_df['close_pnl'])
             try:
                 duration_mins_open = int(open_time_dd.seconds / 60)
             except:
@@ -549,7 +681,6 @@ class Algorithm:
                 (
                     'trades =%d ' % (len(trade_pnl_df)),
                     'open sharpe=%.4f   close_sharpe=%.4f' % (sharpe, realized_sharpe),
-
                     'open max_drawdown pct=%.5f duration_mins=%d'
                     % (open_dd / 100, duration_mins_open),
                     'close max_drawdown pct=%.5f duration_mins=%d'
@@ -572,26 +703,32 @@ class Algorithm:
         plt.show()
 
         return (plt.gcf(), trade_pnl_df)
+
     def get_parameters(self) -> dict:
         parameters = copy.copy(self.parameters)
         return parameters
 
-
     def test(
-            self,
-            start_date: datetime.datetime,
-            end_date: datetime,
-            instrument_pk: str,
-            algorithm_number: int = 0,
-            clean_experience: bool = False,
+        self,
+        start_date: datetime.datetime,
+        end_date: datetime,
+        instrument_pk: str,
+        algorithm_number: int = 0,
+        clean_experience: bool = False,
     ) -> dict:
         backtest_configuration = BacktestConfiguration(
-            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk, delay_order_ms=self.DELAY_MS,
-            multithread_configuration=self.MULTITHREAD_CONFIGURATION
+            start_date=start_date,
+            end_date=end_date,
+            instrument_pk=instrument_pk,
+            delay_order_ms=self.DELAY_MS,
+            multithread_configuration=self.MULTITHREAD_CONFIGURATION,
+            fees_commissions_included=self.FEES_COMMISSIONS_INCLUDED,
         )
         parameters = self.get_parameters()
 
-        algorithm_name = self.get_test_name(name=self.NAME, algorithm_number=algorithm_number)
+        algorithm_name = self.get_test_name(
+            name=self.NAME, algorithm_number=algorithm_number
+        )
 
         algorithm_configurationQ = AlgorithmConfiguration(
             algorithm_name=algorithm_name, parameters=parameters

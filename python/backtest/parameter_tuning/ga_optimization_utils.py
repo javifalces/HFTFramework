@@ -29,7 +29,7 @@ def random_param_dict(
         eval_ser += new_np
 
         eval_ser.dropna(inplace=True)
-        if len(eval_ser)!=len(max_ser) or len(eval_ser)!=len(min_ser):
+        if len(eval_ser) != len(max_ser) or len(eval_ser) != len(min_ser):
             print(f'eval_ser is different len than max_ser or min_ser  -> {eval_ser}')
         eval_ser[eval_ser > max_ser] = max_ser[eval_ser > max_ser]
         eval_ser[eval_ser < min_ser] = min_ser[eval_ser < min_ser]

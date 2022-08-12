@@ -1,0 +1,2 @@
+{"backtest":{"startDate": "20201209 10:00:00", "endDate": "20201209 13:00:00", "instrument": "btcusdt_binance"},
+"algorithm":{"algorithmName": "AvellanedaStoikov_AvellanedaStoikov_test_main_1_0", "parameters": {"risk_aversion": "0.1", "position_multiplier": "100", "window_tick": "13", "minutes_change_k": "10", "quantity": "0.0001", "k_default": "0.00769", "spread_multiplier": "4.0", "first_hour": "7", "last_hour": "19"}}}

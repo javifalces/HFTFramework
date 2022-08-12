@@ -1,11 +1,8 @@
 import pandas as pd
 import numpy as np
-from joblib import Memory
 from numba import njit
 
-import collections
-
-from backtest.score_enum import ScoreEnum, get_score_enum_csv_column
+from trading_algorithms.score_enum import ScoreEnum, get_score_enum_csv_column
 
 ZERO_VALUE_DEFAULT = 0.00000001
 
@@ -134,7 +131,7 @@ def __calculate_close_returns_numba__(trades_input):
                         quantity_to_save_dict -= entry_quantity
                         remaining_position -= entry_quantity
                         closed_return += -entry_quantity * (
-                                row[price_column] - entry_price
+                            row[price_column] - entry_price
                         )
 
                         entry_remain_position = sell_dict[entry_price] - entry_quantity
@@ -204,16 +201,8 @@ def __calculate_closed_returns_trades__(trades_input: pd.DataFrame) -> tuple:
     return __calculate_closed_returns_trades_numba__(trades_input=trades_input)
 
 
-
-
-
 def get_asymetric_dampened_reward(trade_df: pd.DataFrame):
     return trade_df['asymmetric_dampened_pnl'].iloc[-1]
-
-
-
-
-
 
 
 def get_max_drawdowns(backtest_returns):
@@ -251,8 +240,8 @@ def get_max_drawdowns(backtest_returns):
     try:
         UW_dt = (
             equity_curve[i:]
-                .loc[equity_curve[i:].values >= equity_curve[j]]
-                .index.values[0]
+            .loc[equity_curve[i:].values >= equity_curve[j]]
+            .index.values[0]
         )
         UW_dt = pd.to_datetime(str(UW_dt))
         UW_dt = UW_dt.strftime("%Y-%m-%d")
@@ -264,11 +253,12 @@ def get_max_drawdowns(backtest_returns):
     return MDD_start, MDD_end, time_difference, drawdown, UW_dt, UW_duration
 
 
-def get_drawdown(equity_curve:pd.Series)->pd.Series:
+def get_drawdown(equity_curve: pd.Series) -> pd.Series:
     data_ser_df = equity_curve  # backtest_returns.cumsum()
     # return data_ser_df.expanding(1).max() - data_ser_df
     highest_value = data_ser_df.cummax()
     return highest_value - data_ser_df
+
 
 def get_sortino(equity_curve: pd.Series, rfr=0, target=0) -> float:
     # rfr = 0
@@ -292,6 +282,7 @@ def get_sharpe(equity_curve: pd.Series, rfr=0) -> float:
     sharpe = (expected_return - rfr) / down_stdev
     return sharpe
 
+
 def get_falces_marin_ratio(equity_curve: pd.Series, number_trades: int) -> float:
     '''
     Falces Marin ratio
@@ -303,7 +294,11 @@ def get_falces_marin_ratio(equity_curve: pd.Series, number_trades: int) -> float
     '''
     if number_trades == 0:
         return -9999.99
-    returns = equity_curve.pct_change(periods=1).replace([0.0, np.nan, np.inf, -np.inf], np.nan).dropna()
+    returns = (
+        equity_curve.pct_change(periods=1)
+        .replace([0.0, np.nan, np.inf, -np.inf], np.nan)
+        .dropna()
+    )
     max_dd_pct = get_max_drawdown_pct(equity_curve)  # to avoid start at zero
     final_pnl = equity_curve.iloc[-1]
     max_dd_pct = max(1.0, max_dd_pct)
@@ -322,7 +317,10 @@ def get_ulcer_index(equity_curve: pd.Series):
     return returns.mean() / max_dd
 
 
-def get_pnl_to_map(equity_curve: pd.Series, position: pd.Series, ) -> float:
+def get_pnl_to_map(
+    equity_curve: pd.Series,
+    position: pd.Series,
+) -> float:
     '''
     Pnl to mean absolute position
     simultaneously considers both the profitability and the incurred inventory risk of the MM strategy up to the time t.
@@ -336,7 +334,7 @@ def get_pnl_to_map(equity_curve: pd.Series, position: pd.Series, ) -> float:
     '''
     # based on MM With Signals Through DRL
     map = position.abs().mean()
-    return (equity_curve.iloc[-1] / map)
+    return equity_curve.iloc[-1] / map
 
 
 def get_max_drawdown(equity_curve: pd.Series) -> float:
@@ -361,8 +359,12 @@ def get_max_drawdown_pct(equity_curve: pd.Series) -> float:
         print(rf"error calculating get_max_drawdown_pct {str(e)}")
         return 0.0
 
-def get_score(backtest_df: pd.DataFrame, score_enum: ScoreEnum,
-              equity_column_score: ScoreEnum = ScoreEnum.total_pnl) -> float:
+
+def get_score(
+    backtest_df: pd.DataFrame,
+    score_enum: ScoreEnum,
+    equity_column_score: ScoreEnum = ScoreEnum.total_pnl,
+) -> float:
     equity_curve = backtest_df[get_score_enum_csv_column(equity_column_score)]
     trades = len(backtest_df)
     score = 0
@@ -385,10 +387,12 @@ def get_score(backtest_df: pd.DataFrame, score_enum: ScoreEnum,
 
 if __name__ == '__main__':
     # equity_curve_test = pd.Series([100., 110., 90., 80., 95., 100.01, 120., 140.1, 170.2])
-    equity_curve_test = pd.Series([100., 110., 120., 150.])
-    position_curve_test = pd.Series([1., 4., -3., 2.])
+    equity_curve_test = pd.Series([100.0, 110.0, 120.0, 150.0])
+    position_curve_test = pd.Series([1.0, 4.0, -3.0, 2.0])
     num_trades = 3
     pnl_map = get_pnl_to_map(equity_curve_test, position_curve_test)
     max_dd = get_max_drawdown(equity_curve_test)
     sharpe = get_sharpe(equity_curve=equity_curve_test)
-    falcma = get_falces_marin_ratio(equity_curve=equity_curve_test, number_trades=num_trades)
+    falcma = get_falces_marin_ratio(
+        equity_curve=equity_curve_test, number_trades=num_trades
+    )

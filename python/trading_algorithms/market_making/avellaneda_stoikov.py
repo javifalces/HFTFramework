@@ -1,9 +1,7 @@
 import datetime
-from typing import Type
-import copy
 
-from backtest.algorithm import Algorithm
-from backtest.algorithm_enum import AlgorithmEnum
+from trading_algorithms.algorithm import Algorithm
+from trading_algorithms.algorithm_enum import AlgorithmEnum
 from backtest.backtest_launcher import BacktestLauncher, BacktestLauncherController
 from backtest.input_configuration import (
     BacktestConfiguration,
@@ -11,50 +9,56 @@ from backtest.input_configuration import (
     InputConfiguration,
     JAR_PATH,
 )
-import glob
 import os
+import copy
 import pandas as pd
+
 from backtest.parameter_tuning.ga_configuration import GAConfiguration
-from backtest.score_enum import ScoreEnum
+
+
+class KCalculationEnum:
+    Quotes = "Quotes"
+    Alridge = "Alridge"
+
+
+class SpreadCalculationEnum:
+    Avellaneda = "Avellaneda"
+    Alridge = "Alridge"
+    GueantTapia = "GueantTapia"
 
 
 DEFAULT_PARAMETERS = {
-    # Q
-    "skewPricePctAction": [0.0],
-    "riskAversionAction": [0.9, 0.5],
-    "windowsTickAction": [5, 10],
-    "minPrivateState": (-0.001),
-    "maxPrivateState": (0.001),
-    "numberDecimalsPrivateState": (4),
-    "horizonTicksPrivateState": (1),
-    "horizonMinMsTick": (10),
-    "scoreEnum": ScoreEnum.total_pnl,
-    "timeHorizonSeconds": (5),
-    "epsilon": (0.2),
     # Avellaneda default
-    "risk_aversion": (0.9),
-    "position_multiplier": (100),
-    "window_tick": (10),
-    "minutes_change_k": (10),
+    "riskAversion": (0.68),
+    "windowTick": (25),  # for midPrice variance calculation
     "quantity": (0.0001),
-    "k_default": (0.00769),
-    "spread_multiplier": (5.0),
-    "first_hour": (7),
-    "last_hour": (19),
+    "firstHour": (7),
+    "lastHour": (19),
+    "calculateTt": 1,  # if 1 reserve price effect will be less affected by position with the session time
+    "minutesChangeK": (1),
+    "kDefault": (-1),
+    "aDefault": (-1),
+    "sigmaDefault": (-1),
+    "spreadCalculation": SpreadCalculationEnum.Avellaneda,
+    "kCalculation": KCalculationEnum.Alridge,
+    "positionMultiplier": (335.35),  # not modify original results  1/quantity
+    "spreadMultiplier": (5.0),
 }
 
 
-class AvellanedaQ(Algorithm):
-    NAME = AlgorithmEnum.avellaneda_q
+class AvellanedaStoikov(Algorithm):
+    NAME = AlgorithmEnum.avellaneda_stoikov
 
     def __init__(self, algorithm_info: str, parameters: dict = DEFAULT_PARAMETERS):
+        parameters = Algorithm.set_defaults_parameters(
+            parameters=parameters, DEFAULT_PARAMETERS=DEFAULT_PARAMETERS
+        )
         super().__init__(
             algorithm_info=self.NAME + "_" + algorithm_info, parameters=parameters
         )
 
-    def get_parameters(self, explore_prob: float)->dict:
+    def get_parameters(self) -> dict:
         parameters = copy.copy(self.parameters)
-        parameters['explore_prob'] = explore_prob
         return parameters
 
     def train(
@@ -66,22 +70,21 @@ class AvellanedaQ(Algorithm):
         algos_per_iteration: int,
         simultaneous_algos: int = 1,
     ) -> list:
+        # makes no sense
 
         backtest_configuration = BacktestConfiguration(
-            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk, delay_order_ms=self.DELAY_MS,
-            multithread_configuration=self.MULTITHREAD_CONFIGURATION
+            start_date=start_date,
+            end_date=end_date,
+            instrument_pk=instrument_pk,
+            delay_order_ms=self.DELAY_MS,
+            multithread_configuration=self.MULTITHREAD_CONFIGURATION,
+            fees_commissions_included=self.FEES_COMMISSIONS_INCLUDED,
         )
         output_list = []
-
         for iteration in range(iterations):
             backtest_launchers = []
             for algorithm_number in range(algos_per_iteration):
-                parameters = self.get_parameters(
-                    explore_prob=1 - iteration / iterations
-                )
-
-                self.set_training_seed(parameters=parameters, iteration=iteration, algorithm_number=algorithm_number)
-
+                parameters = self.parameters
                 algorithm_name = '%s_%s_%d' % (
                     self.NAME,
                     self.algorithm_info,
@@ -105,8 +108,6 @@ class AvellanedaQ(Algorithm):
             if iteration == 0 and os.path.isdir(backtest_launchers[0].output_path):
                 # clean it
                 self.clean_experience(output_path=backtest_launchers[0].output_path)
-            # in case number of states/actions changes
-            self.clean_permutation_cache(output_path=backtest_launchers[0].output_path)
 
             # Launch it
             backtest_controller = BacktestLauncherController(
@@ -115,9 +116,7 @@ class AvellanedaQ(Algorithm):
             )
             output_dict = backtest_controller.run()
             output_list.append(output_dict)
-            # Combine experience
-            if algos_per_iteration>1:
-                self.merge_q_matrix(backtest_launchers=backtest_launchers, algos_per_iteration=algos_per_iteration)
+
         return output_list
 
     def test(
@@ -125,16 +124,21 @@ class AvellanedaQ(Algorithm):
         start_date: datetime.datetime,
         end_date: datetime,
         instrument_pk: str,
-        explore_prob: float = 0.2,
-        algorithm_numer: int = 0,
+        algorithm_number: int = 0,
         clean_experience: bool = False,
     ) -> dict:
         backtest_configuration = BacktestConfiguration(
-            start_date=start_date, end_date=end_date, instrument_pk=instrument_pk, delay_order_ms=self.DELAY_MS,
-            multithread_configuration=self.MULTITHREAD_CONFIGURATION
+            start_date=start_date,
+            end_date=end_date,
+            instrument_pk=instrument_pk,
+            delay_order_ms=self.DELAY_MS,
+            multithread_configuration=self.MULTITHREAD_CONFIGURATION,
+            fees_commissions_included=self.FEES_COMMISSIONS_INCLUDED,
         )
-        parameters = self.get_parameters(explore_prob=explore_prob)
-        algorithm_name = '%s_%s_%d' % (self.NAME, self.algorithm_info, algorithm_numer)
+        parameters = self.get_parameters()
+        algorithm_name = self.get_test_name(
+            name=self.NAME, algorithm_number=algorithm_number
+        )
 
         algorithm_configurationQ = AlgorithmConfiguration(
             algorithm_name=algorithm_name, parameters=parameters
@@ -157,9 +161,8 @@ class AvellanedaQ(Algorithm):
             backtest_launchers=[backtest_launcher], max_simultaneous=1
         )
         output_dict = backtest_controller.run()
-        output_dict[self.algorithm_info]=output_dict[algorithm_name]
+        output_dict[self.algorithm_info] = output_dict[algorithm_name]
         del output_dict[algorithm_name]
-
         return output_dict
 
     def parameter_tuning(
@@ -171,12 +174,15 @@ class AvellanedaQ(Algorithm):
         parameters_max: dict,
         max_simultaneous: int,
         generations: int,
-        ga_configuration: Type[GAConfiguration],
-        parameters_base: dict = DEFAULT_PARAMETERS,
+        ga_configuration: GAConfiguration,
+        parameters_base: dict = None,
     ) -> (dict, pd.DataFrame):
 
+        if parameters_base is None:
+            parameters_base = self.parameters
+
         return super().parameter_tuning(
-            algorithm_enum=AlgorithmEnum.avellaneda_q,
+            algorithm_enum=AlgorithmEnum.avellaneda_stoikov,
             start_date=start_date,
             end_date=end_date,
             instrument_pk=instrument_pk,
@@ -190,37 +196,31 @@ class AvellanedaQ(Algorithm):
 
 
 if __name__ == '__main__':
-
-    avellaneda_q = AvellanedaQ(algorithm_info='test_main')
-
-    ga_configuration = GAConfiguration
-    ga_configuration.population = 3
-
-    output_train = avellaneda_q.parameter_tuning(
+    avellaneda_stoikov = AvellanedaStoikov(algorithm_info='test_main')
+    avellaneda_stoikov.parameter_tuning(
+        start_date=datetime.datetime(year=2022, day=14, month=6),
+        end_date=datetime.datetime(year=2022, day=14, month=6),
+        parameters_min={"kDefault": 0.0},
+        parameters_max={"kDefault": 1.0},
         instrument_pk='btcusdt_binance',
-        start_date=datetime.datetime(year=2020, day=8, month=12),
-        end_date=datetime.datetime(year=2020, day=8, month=12),
-        parameters_min={"risk_aversion": 0.1, "window_tick": 3},
-        parameters_max={"risk_aversion": 0.9, "window_tick": 15},
-        generations=3,
         max_simultaneous=1,
-        ga_configuration=ga_configuration,
-
-
+        generations=5,
+        ga_configuration=GAConfiguration(),
     )
+    new_parameters = copy.copy(DEFAULT_PARAMETERS)
+    new_parameters["spreadCalculation"] = SpreadCalculationEnum.GueantTapia
+    new_parameters["kDefault"] = 0.3
+    new_parameters["aDefault"] = 0.9
+    new_parameters["calculateTt"] = 0.0
+    avellaneda_stoikov.set_parameters(new_parameters)
 
-
-    output_train = avellaneda_q.train(
+    output_test = avellaneda_stoikov.test(
         instrument_pk='btcusdt_binance',
-        start_date=datetime.datetime(year=2020, day=8, month=12),
-        end_date=datetime.datetime(year=2020, day=8, month=12),
-        iterations=5,
-        algos_per_iteration=2,
-        simultaneous_algos=1,
+        start_date=datetime.datetime(year=2022, day=14, month=6),
+        end_date=datetime.datetime(year=2022, day=14, month=6),
     )
-
-    output_test = avellaneda_q.test(
-        instrument_pk='btcusdt_binance',
-        start_date=datetime.datetime(year=2020, day=9, month=12),
-        end_date=datetime.datetime(year=2020, day=9, month=12),
-    )
+    name_output = avellaneda_stoikov.get_test_name(name=avellaneda_stoikov.NAME)
+    backtest_df = output_test[name_output]
+    avellaneda_stoikov.plot_trade_results(backtest_df)
+    # import matplotlib.pyplot as plt
+    # plt.show()

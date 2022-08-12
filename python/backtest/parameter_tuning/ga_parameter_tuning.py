@@ -1,6 +1,4 @@
-from typing import Type
-
-from backtest.algorithm_enum import AlgorithmEnum, get_algorithm
+from trading_algorithms.algorithm_enum import AlgorithmEnum, get_algorithm
 from backtest.backtest_launcher import BacktestLauncher, BacktestLauncherController
 from backtest.input_configuration import (
     BacktestConfiguration,
@@ -10,11 +8,9 @@ from backtest.input_configuration import (
 )
 import json
 from backtest.parameter_tuning.ga_configuration import GAConfiguration
-import pandas as pd
-import numpy as np
 
 from backtest.pnl_utils import *
-from backtest.score_enum import ScoreEnum, get_score_enum_csv_column
+from trading_algorithms.score_enum import ScoreEnum, get_score_enum_csv_column
 
 import random
 import copy
@@ -28,14 +24,14 @@ class GAParameterTuning:
     INCREASE_POPULATION = True
 
     def __init__(
-            self,
-            ga_configuration: Type[GAConfiguration],
-            algorithm: AlgorithmEnum,
-            parameters_base: dict,
-            parameters_min: dict,
-            parameters_max: dict,
-            max_simultaneous: int,
-            initial_param_dict_list: list = [],
+        self,
+        ga_configuration: GAConfiguration,
+        algorithm: AlgorithmEnum,
+        parameters_base: dict,
+        parameters_min: dict,
+        parameters_max: dict,
+        max_simultaneous: int,
+        initial_param_dict_list: list = [],
     ):
         self.counter_algorithms = 0
         self.max_simultaneous = max_simultaneous
@@ -49,9 +45,10 @@ class GAParameterTuning:
         self.ignored_keys = []
         self.ignored_dict = {}
         for parameter in self.parameters_base.keys():
-            if not isinstance(self.parameters_base[parameter], int) and \
-                    not isinstance(self.parameters_base[parameter], float):
-                        self.ignored_keys.append(parameter)
+            if not isinstance(self.parameters_base[parameter], int) and not isinstance(
+                self.parameters_base[parameter], float
+            ):
+                self.ignored_keys.append(parameter)
         ignored_keys_str = ','.join(self.ignored_keys)
         print(f'ignoring params to optimize {ignored_keys_str}')
         for ignored in self.ignored_keys:
@@ -83,7 +80,9 @@ class GAParameterTuning:
             columns=['param_dict', 'score', 'pnl', 'sharpe', 'trades', 'generation']
         )
 
-    def _random_param_dict(self, current_eval_ser=None, sigma_eval: float = None) -> dict:
+    def _random_param_dict(
+        self, current_eval_ser=None, sigma_eval: float = None
+    ) -> dict:
         # randomizer between min and max
 
         # remove not analized keys
@@ -111,7 +110,9 @@ class GAParameterTuning:
                 output_dict[ignored_dict_keys] = ignored_dict[ignored_dict_keys]
         return output_dict
 
-    def _create_random_population(self, population_size: int, sigma_eval: float) -> dict:
+    def _create_random_population(
+        self, population_size: int, sigma_eval: float
+    ) -> dict:
         output = {}
         id = 0
 
@@ -212,9 +213,10 @@ class GAParameterTuning:
 
     def _generate_initial_population(self, check_unique_population: bool) -> list:
         from configuration import logger
+
         param_dicts = []
         initialized_with_precreated_population = (
-                self.generation == 0 and len(self.initial_param_dict_list) > 0
+            self.generation == 0 and len(self.initial_param_dict_list) > 0
         )
         if initialized_with_precreated_population:
             logger.info('loading initial population')
@@ -255,13 +257,17 @@ class GAParameterTuning:
                     param_dicts.append(param_dict)
 
         for param_dict in param_dicts:
-            print('initial [%d] sigma=%.2f' % (self.counter_algorithms + param_dicts.index(param_dict),self.sigma) + json.dumps(param_dict,
-                                                                                                          indent=4))
+            print(
+                'initial [%d] sigma=%.2f'
+                % (self.counter_algorithms + param_dicts.index(param_dict), self.sigma)
+                + json.dumps(param_dict, indent=4)
+            )
 
         return param_dicts
 
     def _generate_next_gen(self, check_unique_population: bool) -> list:
         from configuration import logger
+
         param_dicts = []  # new offpsring params
         if not self.INCREASE_POPULATION:
             # ELITE population
@@ -289,8 +295,8 @@ class GAParameterTuning:
                 logger.error('cant fill all population different!! -> less population')
                 break
             is_crossover = (
-                    number < self.ga_configuration.crossover_prob
-                    and len(self.population_df) > 1
+                number < self.ga_configuration.crossover_prob
+                and len(self.population_df) > 1
             )
             # CROSSOVER
             if is_crossover:
@@ -311,23 +317,35 @@ class GAParameterTuning:
             ## add new pop
             param_dicts.append(param_dict)
         if not self.INCREASE_POPULATION:
-            print("generation %d with new %d mutations and %d crossover" % (
-            self.generation, mutation_count, crossover_count))
+            print(
+                "generation %d with new %d mutations and %d crossover"
+                % (self.generation, mutation_count, crossover_count)
+            )
         else:
-            print("generation %d with new %d mutations  %d crossover  %d elite" % (
-                self.generation, mutation_count, crossover_count, elite_population))
+            print(
+                "generation %d with new %d mutations  %d crossover  %d elite"
+                % (self.generation, mutation_count, crossover_count, elite_population)
+            )
 
         for param_dict in param_dicts:
-            print('[%d]gen=%d sigma=%.2f' % (self.counter_algorithms + param_dicts.index(param_dict),self.generation,self.sigma) + json.dumps(param_dict, indent=4))
+            print(
+                '[%d]gen=%d sigma=%.2f'
+                % (
+                    self.counter_algorithms + param_dicts.index(param_dict),
+                    self.generation,
+                    self.sigma,
+                )
+                + json.dumps(param_dict, indent=4)
+            )
         return param_dicts
 
     def run_generation(
-            self,
-            backtest_configuration: BacktestConfiguration,
-            check_unique_population: bool = True,
+        self,
+        backtest_configuration: BacktestConfiguration,
+        check_unique_population: bool = True,
     ) -> list:
         is_empty_population = (
-                len(self.population_df) == 0 or self.population_df['score'].sum() == 0
+            len(self.population_df) == 0 or self.population_df['score'].sum() == 0
         )
         if is_empty_population:
             param_dicts = self._generate_initial_population(check_unique_population)
@@ -336,13 +354,15 @@ class GAParameterTuning:
         try:
             assert len(param_dicts) == self.ga_configuration.population
         except Exception as e:
-            print(rf"something was wrong len(param_dicts) {len(param_dicts)}!={self.ga_configuration.population} self.ga_configuration.population")
+            print(
+                rf"something was wrong len(param_dicts) {len(param_dicts)}!={self.ga_configuration.population} self.ga_configuration.population"
+            )
         self._run_backtests(
             backtest_configuration=backtest_configuration, param_dicts=param_dicts
         )
 
     def _run_backtests(
-            self, backtest_configuration: BacktestConfiguration, param_dicts: list
+        self, backtest_configuration: BacktestConfiguration, param_dicts: list
     ):
 
         algorithms = []
@@ -352,9 +372,15 @@ class GAParameterTuning:
 
             algorithm_class = get_algorithm(self.algorithm)
             if algorithm_class is None:
-                print("WARNING!! need to add algorithm to backtest.algorithm_enum.get_algorithm() ")
-                print("WARNING!! need to add algorithm to backtest.algorithm_enum.get_algorithm() ")
-                print("WARNING!! need to add algorithm to backtest.algorithm_enum.get_algorithm() ")
+                print(
+                    "WARNING!! need to add algorithm to backtest.algorithm_enum.get_algorithm() "
+                )
+                print(
+                    "WARNING!! need to add algorithm to backtest.algorithm_enum.get_algorithm() "
+                )
+                print(
+                    "WARNING!! need to add algorithm to backtest.algorithm_enum.get_algorithm() "
+                )
             # restore the base params cant be optimized
             parameters = copy.copy(self.parameters_base_final)
             for param_dict_key in param_dict.keys():
@@ -402,8 +428,8 @@ class GAParameterTuning:
             algorithm_info = algorithm.algorithm_info
             param_dict = algorithm.parameters
             if algorithm_info not in output_dict or output_dict[algorithm_info] is None:
-                score = 0.
-                pnl = 0.
+                score = 0.0
+                pnl = 0.0
                 trades = 0
                 sharpe = -999
                 ulcer = -999
@@ -423,13 +449,17 @@ class GAParameterTuning:
                         get_score_enum_csv_column(ScoreEnum.total_pnl)
                     ].iloc[-1]
 
-                    score = get_score(backtest_df=output_dict[algorithm_info],
-                                      score_enum=self.ga_configuration.score_column,
-                                      equity_column_score=self.ga_configuration.equity_column_score)
+                    score = get_score(
+                        backtest_df=output_dict[algorithm_info],
+                        score_enum=self.ga_configuration.score_column,
+                        equity_column_score=self.ga_configuration.equity_column_score,
+                    )
                 except Exception as e:
-                    print(rf"Error getting scores on {algorithm_info} -> score=0  {str(e)}")
-                    score = 0.
-                    pnl = 0.
+                    print(
+                        rf"Error getting scores on {algorithm_info} -> score=0  {str(e)}"
+                    )
+                    score = 0.0
+                    pnl = 0.0
                     trades = 0
                     sharpe = -999
                     ulcer = -999
@@ -462,7 +492,16 @@ class GAParameterTuning:
             generations.append(self.generation)
 
         new_generation_df = pd.DataFrame(
-            columns=['param_dict', 'score', 'pnl', 'sharpe', 'trades', 'sortino', 'ulcer', 'max_dd']
+            columns=[
+                'param_dict',
+                'score',
+                'pnl',
+                'sharpe',
+                'trades',
+                'sortino',
+                'ulcer',
+                'max_dd',
+            ]
         )
 
         new_generation_df['generation'] = generations
@@ -478,23 +517,24 @@ class GAParameterTuning:
         # filter for the next generation
         self.population_df = new_generation_df
 
-        self.population_df_out = self.population_df_out.append(new_generation_df, ignore_index=True)
+        self.population_df_out = self.population_df_out.append(
+            new_generation_df, ignore_index=True
+        )
 
         if self.INCREASE_POPULATION:
             self.population_df = self.population_df_out
 
-        if isinstance(self.decay,float):
+        if isinstance(self.decay, float):
             self.sigma -= self.decay
 
-        if isinstance(self.decay,list):
+        if isinstance(self.decay, list):
             index_to_take = self.generation
-            if index_to_take>=len(self.decay):
-                index_to_take=len(self.decay)-1
-            self.sigma =self.ga_configuration.sigma - self.decay[index_to_take]
-            self.sigma=max(self.sigma,0.01)
+            if index_to_take >= len(self.decay):
+                index_to_take = len(self.decay) - 1
+            self.sigma = self.ga_configuration.sigma - self.decay[index_to_take]
+            self.sigma = max(self.sigma, 0.01)
 
         self.generation += 1
-
 
     def get_param_dict(self, in_param_dict: dict):
         out = copy.copy(in_param_dict)
@@ -503,9 +543,9 @@ class GAParameterTuning:
         return out
 
     def get_best_param_dict(self):
-        output = self.population_df_out.sort_values(by='score', ascending=False).iloc[0][
-            'param_dict'
-        ]
+        output = self.population_df_out.sort_values(by='score', ascending=False).iloc[
+            0
+        ]['param_dict']
         return self.get_param_dict(output)
 
     def get_best_score(self):

@@ -10,4 +10,4 @@ class IterationsPeriodTime:
     SEVEN_HOURS = -17
     EIGHT_HOURS = -18
     DAILY = -24
-    END_OF_SESSION=-25
+    END_OF_SESSION = -25

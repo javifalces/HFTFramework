@@ -1,104 +1,61 @@
 import datetime
-from typing import Type
-import copy
-import shutil
-import numpy as np
-import time
 
-from backtest.dqn_algorithm import DQNAlgorithm
-from numpy import genfromtxt, savetxt
+from trading_algorithms import dqn_algorithm
+from trading_algorithms.dqn_algorithm import DQNAlgorithm
 
-from backtest.algorithm import Algorithm
-from backtest.algorithm_enum import AlgorithmEnum
-from backtest.backtest_launcher import BacktestLauncher, BacktestLauncherController
-from backtest.input_configuration import (
-    BacktestConfiguration,
-    AlgorithmConfiguration,
-    InputConfiguration,
-    JAR_PATH,
-    TrainInputConfiguration)
-import glob
-import os
+from trading_algorithms.algorithm import Algorithm
+from trading_algorithms.algorithm_enum import AlgorithmEnum
 import pandas as pd
 
-from backtest.iterations_period_time import IterationsPeriodTime
+from trading_algorithms.iterations_period_time import IterationsPeriodTime
 from backtest.parameter_tuning.ga_configuration import GAConfiguration
 from backtest.pnl_utils import get_score
-from backtest.score_enum import ScoreEnum
-from backtest.train_launcher import clean_gpu_memory
-from configuration import LAMBDA_OUTPUT_PATH, BACKTEST_OUTPUT_PATH
+from trading_algorithms.market_making import constant_spread
+from trading_algorithms.score_enum import ScoreEnum
+from configuration import BACKTEST_OUTPUT_PATH
 
 DEFAULT_PARAMETERS = {
-    # DQN parameters
-    "maxBatchSize": 10000,
-    "batchSize": 500,
-    "trainingPredictIterationPeriod": IterationsPeriodTime.END_OF_SESSION,  # train only at the end,offline
-    "trainingTargetIterationPeriod": IterationsPeriodTime.END_OF_SESSION,  # train at the end,offline
-    "epoch": 75,
-    # Q
+    # Action
     'levelAction': [1, 2, 3, 4, 5],
     'skewLevelAction': [0, 1, -1],
-
+    # states
     "minPrivateState": (-1),
     "maxPrivateState": (-1),
     "numberDecimalsPrivateState": (3),
     "horizonTicksPrivateState": (5),
-
     "minMarketState": (-1),
     "maxMarketState": (-1),
     "numberDecimalsMarketState": (7),
     "horizonTicksMarketState": (10),
-
     "minCandleState": (-1),
     "maxCandleState": (-1),
     "numberDecimalsCandleState": (3),
     "horizonCandlesState": (2),
-
     "horizonMinMsTick": (0),
+    # rewards
     "scoreEnum": ScoreEnum.asymmetric_dampened_pnl,
     "timeHorizonSeconds": (5),
-
-    "epsilon": (0.2),  # probability of explore=> random action
-
-    "discountFactor": 0.75,  # next state prediction reward discount
-    "learningRate": 0.85,  # 0.25 in phd? new values reward multiplier
-    "momentumNesterov": 0.0,  # # speed to change learning rate
-    "learningRateNN": 0.0001,  # # between 0.01 to 0.1
-
-    # Avellaneda default
-    "risk_aversion": (0.6),
-    "position_multiplier": (335),
-    "calculateTt": 1,  # if 1 reserve price effect will be less affected by position with the session time
-    "window_tick": (25),
-    "minutes_change_k": (1),
-    "quantity": (0.0001),  # 1/quantity
-    "k_default": (-1),
-    "spread_multiplier": (5.0),
-    "first_hour": (7),
-    "last_hour": (19),
-    "l1": 0.,
-    "l2": 0.,
-    "isRNN": False,
-    "stateColumnsFilter": [],
-    "seed": 0
 }
-
-PRIVATE_COLUMNS = 2
+DEFAULT_PARAMETERS.update(dqn_algorithm.DEFAULT_PARAMETERS)
+DEFAULT_PARAMETERS.update(constant_spread.DEFAULT_PARAMETERS)
 
 
 class AlphaConstantSpread(DQNAlgorithm):
     NAME = AlgorithmEnum.alpha_constant_spread
 
     def __init__(self, algorithm_info: str, parameters: dict = DEFAULT_PARAMETERS):
-        super().__init__(
-            algorithm_info=algorithm_info, parameters=parameters
+        parameters = Algorithm.set_defaults_parameters(
+            parameters=parameters, DEFAULT_PARAMETERS=DEFAULT_PARAMETERS
         )
+
+        super().__init__(algorithm_info=algorithm_info, parameters=parameters)
         self.is_filtered_states = False
-        if 'stateColumnsFilter' in parameters.keys() and parameters['stateColumnsFilter'] is not None and len(
-                parameters['stateColumnsFilter']) > 0:
+        if (
+            'stateColumnsFilter' in parameters.keys()
+            and parameters['stateColumnsFilter'] is not None
+            and len(parameters['stateColumnsFilter']) > 0
+        ):
             self.is_filtered_states = True
-
-
 
     def _get_action_columns(self):
         levels = self.parameters['levelAction']
@@ -112,21 +69,19 @@ class AlphaConstantSpread(DQNAlgorithm):
                 counter += 1
         return actions
 
-
-
     def parameter_tuning(
-            self,
-            start_date: datetime.datetime,
-            end_date: datetime,
-            instrument_pk: str,
-            parameters_min: dict,
-            parameters_max: dict,
-            max_simultaneous: int,
-            generations: int,
-            ga_configuration: Type[GAConfiguration],
-            parameters_base: dict = DEFAULT_PARAMETERS,
-            clean_initial_generation_experience: bool = True,
-            algorithm_enum=AlgorithmEnum.alpha_constant_spread
+        self,
+        start_date: datetime.datetime,
+        end_date: datetime,
+        instrument_pk: str,
+        parameters_min: dict,
+        parameters_max: dict,
+        max_simultaneous: int,
+        generations: int,
+        ga_configuration: GAConfiguration,
+        parameters_base: dict = DEFAULT_PARAMETERS,
+        clean_initial_generation_experience: bool = True,
+        algorithm_enum=AlgorithmEnum.alpha_constant_spread,
     ) -> (dict, pd.DataFrame):
 
         return super().parameter_tuning(
@@ -140,13 +95,17 @@ class AlphaConstantSpread(DQNAlgorithm):
             max_simultaneous=max_simultaneous,
             generations=generations,
             ga_configuration=ga_configuration,
-            clean_initial_generation_experience=clean_initial_generation_experience
+            clean_initial_generation_experience=clean_initial_generation_experience,
         )
 
-    def plot_params(self, raw_trade_pnl_df: pd.DataFrame, figsize=None, title: str = None):
+    def plot_params(
+        self, raw_trade_pnl_df: pd.DataFrame, figsize=None, title: str = None
+    ):
         import seaborn as sns
+
         sns.set_theme()
         import matplotlib.pyplot as plt
+
         try:
             if figsize is None:
                 figsize = (20, 12)
@@ -182,7 +141,12 @@ class AlphaConstantSpread(DQNAlgorithm):
 
             ax = axs[index]
             ax.plot(df['level'], color=color, lw=lw, alpha=alpha)
-            ax.plot(df['level'].rolling(window=window).mean(), color=color_mean, lw=lw - 0.1, alpha=alpha)
+            ax.plot(
+                df['level'].rolling(window=window).mean(),
+                color=color_mean,
+                lw=lw - 0.1,
+                alpha=alpha,
+            )
 
             ax.set_ylabel('level')
             ax.grid(axis='y', ls='--', alpha=0.7)
@@ -196,9 +160,18 @@ class AlphaConstantSpread(DQNAlgorithm):
                 ax.plot(df['skewLevel'], color=color, lw=lw, alpha=alpha)
                 ax.set_ylabel('skewLevel')
                 ax.grid(axis='y', ls='--', alpha=0.7)
-            fig = self.plot_params_base(fig, axs=axs, last_index_plotted=index, color=color, color_mean=color_mean,
-                                        bid_color=bid_color, ask_color=ask_color, lw=lw, alpha=alpha,
-                                        raw_trade_pnl_df=raw_trade_pnl_df)
+            fig = self.plot_params_base(
+                fig,
+                axs=axs,
+                last_index_plotted=index,
+                color=color,
+                color_mean=color_mean,
+                bid_color=bid_color,
+                ask_color=ask_color,
+                lw=lw,
+                alpha=alpha,
+                raw_trade_pnl_df=raw_trade_pnl_df,
+            )
             plt.show()
             return fig
 
@@ -219,7 +192,6 @@ if __name__ == '__main__':
     parameters_base_pt['maxBatchSize'] = 5000
     parameters_base_pt['batchSize'] = 128
     parameters_base_pt['stateColumnsFilter'] = []
-    parameters_base_pt['isRNN'] = False
 
     alpha_constant_spread.set_parameters(parameters=parameters_base_pt)
 
@@ -251,7 +223,7 @@ if __name__ == '__main__':
     alpha_constant_spread.clean_model(output_path=BACKTEST_OUTPUT_PATH)
     iterations = 0
     explore_prob = 1.0
-    while (True):
+    while True:
 
         parameters = alpha_constant_spread.get_parameters(explore_prob=explore_prob)
         alpha_constant_spread.set_parameters(parameters)
@@ -259,29 +231,37 @@ if __name__ == '__main__':
             clean_experience = True
         else:
             clean_experience = False
-        print(rf"starting training with explore_prob = {alpha_constant_spread.parameters['epsilon']}")
+        print(
+            rf"starting training with explore_prob = {alpha_constant_spread.parameters['epsilon']}"
+        )
         output_test = alpha_constant_spread.test(
             instrument_pk='btcusdt_binance',
             start_date=datetime.datetime(year=2020, day=9, month=12, hour=7),
             end_date=datetime.datetime(year=2020, day=9, month=12, hour=9),
             trainingPredictIterationPeriod=IterationsPeriodTime.END_OF_SESSION,
             trainingTargetIterationPeriod=IterationsPeriodTime.END_OF_SESSION,
-            clean_experience=clean_experience
+            clean_experience=clean_experience,
         )
         # name_output = avellaneda_dqn.NAME + '_' + avellaneda_dqn.algorithm_info + '_0'
-        name_output = alpha_constant_spread.get_test_name(name=alpha_constant_spread.NAME, algorithm_number=0)
+        name_output = alpha_constant_spread.get_test_name(
+            name=alpha_constant_spread.NAME, algorithm_number=0
+        )
         backtest_df = output_test[name_output]
 
-        score = get_score(backtest_df=backtest_df, score_enum=ScoreEnum.realized_pnl,
-                          equity_column_score=ScoreEnum.realized_pnl)
+        score = get_score(
+            backtest_df=backtest_df,
+            score_enum=ScoreEnum.realized_pnl,
+            equity_column_score=ScoreEnum.realized_pnl,
+        )
 
         results.append(backtest_df)
         scores.append(score)
 
         import matplotlib.pyplot as plt
 
-        alpha_constant_spread.plot_trade_results(raw_trade_pnl_df=output_test[name_output],
-                                                 title='test %d' % iterations)
+        alpha_constant_spread.plot_trade_results(
+            raw_trade_pnl_df=output_test[name_output], title='test %d' % iterations
+        )
         plt.show()
 
         alpha_constant_spread.plot_params(raw_trade_pnl_df=output_test[name_output])

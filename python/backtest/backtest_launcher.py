@@ -1,7 +1,7 @@
 from enum import Enum
 import glob
 
-from backtest.algorithm_enum import AlgorithmEnum
+from trading_algorithms.algorithm_enum import AlgorithmEnum
 from backtest.input_configuration import (
     InputConfiguration,
     BacktestConfiguration,
@@ -12,9 +12,7 @@ import threading
 import time
 from pathlib import Path
 import pandas as pd
-import platform
 from configuration import BACKTEST_OUTPUT_PATH, operative_system
-
 
 
 class BacktestState(Enum):
@@ -27,7 +25,7 @@ OUTPUT_PATH = BACKTEST_OUTPUT_PATH
 REMOVE_FINAL_CSV = True
 REMOVE_INPUT_JSON = True
 
-DEFAULT_JVM_WIN = '-Xmx8000M'
+DEFAULT_JVM_WIN = '-Xmx24000M'
 DEFAULT_JVM_UNIX = '-Xmx8000M'
 
 
@@ -39,11 +37,11 @@ class BacktestLauncher(threading.Thread):
         DEFAULT_JVM = DEFAULT_JVM_UNIX
 
     def __init__(
-            self,
-            input_configuration: InputConfiguration,
-            id: str,
-            jar_path='Backtest.jar',
-            jvm_options: str = DEFAULT_JVM,
+        self,
+        input_configuration: InputConfiguration,
+        id: str,
+        jar_path='Backtest.jar',
+        jvm_options: str = DEFAULT_JVM,
     ):
         threading.Thread.__init__(self)
         self.input_configuration = input_configuration
@@ -60,7 +58,7 @@ class BacktestLauncher(threading.Thread):
 
         if self.id != self.input_configuration.algorithm_configuration.algorithm_name:
             self.input_configuration.algorithm_configuration.algorithm_name += (
-                    '_' + str(id)
+                '_' + str(id)
             )
 
         if not os.path.isdir(self.output_path):
@@ -102,7 +100,9 @@ class BacktestLauncherController:
         input_configuration = backtest_launcher.input_configuration
         algo_name = input_configuration.algorithm_configuration.algorithm_name
 
-        csv_filenames = glob.glob(backtest_launcher.output_path + os.sep + 'trades_table_%s_*.csv' % algo_name)
+        csv_filenames = glob.glob(
+            backtest_launcher.output_path + os.sep + 'trades_table_%s_*.csv' % algo_name
+        )
         for csv_filename in csv_filenames:
             os.remove(csv_filename)
 
@@ -122,7 +122,7 @@ class BacktestLauncherController:
                 ]
 
                 for idx in range(
-                        min(self.max_simultaneous - running, len(backtest_waiting))
+                    min(self.max_simultaneous - running, len(backtest_waiting))
                 ):
                     backtest_launcher = backtest_waiting[idx]
                     print("launching %s" % backtest_launcher.id)
@@ -142,6 +142,7 @@ class BacktestLauncherController:
 
     def execute_joblib(self):
         from factor_investing.util.paralellization_util import process_jobs_joblib
+
         jobs = []
         for backtest_launcher in self.backtest_launchers:
             job = {"func": backtest_launcher.run}
@@ -159,43 +160,65 @@ class BacktestLauncherController:
             df = None
             input_configuration = backtest_launcher.input_configuration
             algo_name = input_configuration.algorithm_configuration.algorithm_name
-            output[backtest_launcher.id]=None
+            output[backtest_launcher.id] = None
             instrument_pk = input_configuration.backtest_configuration.instrument_pk
             if algo_name.startswith(AlgorithmEnum.stat_arb):
                 ## get rest of instruments and combine
-                csv_filenames = glob.glob(backtest_launcher.output_path + os.sep +'trades_table_%s_*.csv'%algo_name)
+                csv_filenames = glob.glob(
+                    backtest_launcher.output_path
+                    + os.sep
+                    + 'trades_table_%s_*.csv' % algo_name
+                )
                 for csv_filename in csv_filenames:
                     try:
                         df_temp = pd.read_csv(csv_filename)
-                        instrument_pk_list=csv_filename.split(os.sep)[-1].split('_')[-2:]
-                        instrument_pk='_'.join(instrument_pk_list).split('.')[0]
-                        df_temp['instrument']=instrument_pk
-                        df_temp['historicalUnrealizedPnl'] = df_temp['historicalUnrealizedPnl'].diff().fillna(0.0)
-                        df_temp['historicalTotalPnl'] = df_temp['historicalTotalPnl'].diff().fillna(0.0)
-                        df_temp['historicalRealizedPnl'] = df_temp['historicalRealizedPnl'].diff().fillna(0.0)
+                        instrument_pk_list = csv_filename.split(os.sep)[-1].split('_')[
+                            -2:
+                        ]
+                        instrument_pk = '_'.join(instrument_pk_list).split('.')[0]
+                        df_temp['instrument'] = instrument_pk
+                        df_temp['historicalUnrealizedPnl'] = (
+                            df_temp['historicalUnrealizedPnl'].diff().fillna(0.0)
+                        )
+                        df_temp['historicalTotalPnl'] = (
+                            df_temp['historicalTotalPnl'].diff().fillna(0.0)
+                        )
+                        df_temp['historicalRealizedPnl'] = (
+                            df_temp['historicalRealizedPnl'].diff().fillna(0.0)
+                        )
                         if df is None:
-                            df=df_temp
+                            df = df_temp
                         else:
-                            df=df.append(df_temp)
+                            df = df.append(df_temp)
                         path.append(csv_filename)
                     except Exception as e:
-                        print('something goes wrong reading output csv %s : %s'%(csv_filename,str(e)))
+                        print(
+                            'something goes wrong reading output csv %s : %s'
+                            % (csv_filename, str(e))
+                        )
                 if df is not None:
-                    df=df.set_index(keys='date').sort_index(ascending=True).reset_index()
-                    df['historicalUnrealizedPnl']=df['historicalUnrealizedPnl'].cumsum()
+                    df = (
+                        df.set_index(keys='date')
+                        .sort_index(ascending=True)
+                        .reset_index()
+                    )
+                    df['historicalUnrealizedPnl'] = df[
+                        'historicalUnrealizedPnl'
+                    ].cumsum()
                     df['historicalRealizedPnl'] = df['historicalRealizedPnl'].cumsum()
-                    df['historicalTotalPnl'] = df['historicalUnrealizedPnl']+df['historicalRealizedPnl']
-                    print(f'{algo_name} finished with {len(df)} trades on {len(path)} csv files')
+                    df['historicalTotalPnl'] = (
+                        df['historicalUnrealizedPnl'] + df['historicalRealizedPnl']
+                    )
+                    print(
+                        f'{algo_name} finished with {len(df)} trades on {len(path)} csv files'
+                    )
                 else:
-                    print(f'{algo_name} finished with empty trades on {len(path)} csv files')
-
-
+                    print(
+                        f'{algo_name} finished with empty trades on {len(path)} csv files'
+                    )
 
             else:
-                csv_filename = 'trades_table_%s_%s.csv' % (
-                    algo_name,
-                    instrument_pk
-                )
+                csv_filename = 'trades_table_%s_%s.csv' % (algo_name, instrument_pk)
                 path = backtest_launcher.output_path + os.sep + csv_filename
                 if not os.path.exists(path):
                     print('%s output file %s not exist' % (backtest_launcher.id, path))
@@ -204,7 +227,7 @@ class BacktestLauncherController:
                     df = pd.read_csv(path)
 
             if df['date'].iloc[0].startswith("1970"):
-                df=df.iloc[1:]
+                df = df.iloc[1:]
 
             output[backtest_launcher.id] = df
             if df is None:
@@ -212,13 +235,17 @@ class BacktestLauncherController:
             else:
                 print('%s with %d trades' % (algo_name, len(df)))
             if REMOVE_FINAL_CSV:
-                if isinstance(path ,str):
+                if isinstance(path, str):
                     os.remove(path)
                 if isinstance(path, list):
                     for path_i in path:
                         os.remove(path_i)
             ##remove position json
-            position_files = glob.glob(backtest_launcher.output_path + os.sep+'%s_paperTradingEngine_position.json'%(algo_name))
+            position_files = glob.glob(
+                backtest_launcher.output_path
+                + os.sep
+                + '%s_paperTradingEngine_position.json' % (algo_name)
+            )
             for position_file in position_files:
                 os.remove(position_file)
 

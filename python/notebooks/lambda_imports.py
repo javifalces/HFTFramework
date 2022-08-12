@@ -1,50 +1,68 @@
 import warnings
+
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 import matplotlib.pyplot as plt
-plt.ioff()#disable interactive plot
-import datetime
-import os
-# import sys
-import numpy as np
-import pandas as pd
-from pandas.tseries import offsets
-import seaborn as sns
-sns.set_theme()
-from backtest.iterations_period_time import IterationsPeriodTime
-import pylab
-import statsmodels as sm
-from backtest.avellaneda_stoikov import AvellanedaStoikov
-from backtest.avellaneda_q import AvellanedaQ
-from backtest.avellaneda_dqn import AvellanedaDQN
-from backtest.linear_constant_spread import LinearConstantSpread
-from backtest.constant_spread import ConstantSpread
-from backtest.alpha_avellaneda_stoikov import AlphaAvellanedaStoikov
-from backtest.alpha_constant_spread import AlphaConstantSpread
 
-import database.candle_generation
-from backtest.algorithm import *
-from backtest.algorithm_enum import *
-from backtest.backtest_launcher import *
-from backtest.input_configuration import *
-from database.tick_db import TickDB
-import copy
-import mplfinance as mpf
-import mlfinlab
-from backtest.pnl_utils import get_drawdown, get_max_drawdowns, get_sortino, get_asymetric_dampened_reward, \
-    get_pnl_to_map, get_sharpe, get_max_drawdown
-from configuration import LAMBDA_INPUT_PATH, LAMBDA_OUTPUT_PATH, ZEROMQ_JAR_PATH, BACKTEST_JAR_PATH
+plt.ioff()  # disable interactive plot
+# import sys
+import seaborn as sns
+import pandas as pd
+import numpy as np
+import time
+import datetime
+import tqdm
+import os
+import math
 import dill
-from backtest.style import Style
+import joblib
+import pickle
+
+
+sns.set_theme()
+import pylab
+
 
 from database.tick_db import *
+
+
+
 # import plotly.graph_objects as go
 from notebooks.email_util import EmailConnector
+from configuration import *
+
+from trading_algorithms.iterations_period_time import IterationsPeriodTime
+from trading_algorithms.score_enum import ScoreEnum
+from trading_algorithms.state_utils import *
+from trading_algorithms.candles_type import *
+from trading_algorithms.algorithm_enum import *
+from utils.pandas_utils.dataframe_utils import *
+from utils.date_utils import *
+from backtest.pnl_utils import *
+
+from trading_algorithms.algorithm import Algorithm
+from trading_algorithms.dqn_algorithm import DQNAlgorithm
+
+from trading_algorithms.market_making.avellaneda_stoikov import AvellanedaStoikov
+from trading_algorithms.market_making.alpha_avellaneda_stoikov import (
+    AlphaAvellanedaStoikov,
+)
+from trading_algorithms.market_making.rl4j_alpha_avellaneda_stoikov import (
+    Rl4jAlphaAvellanedaStoikov,
+)
+
+from trading_algorithms.market_making.constant_spread import ConstantSpread
+from trading_algorithms.market_making.linear_constant_spread import LinearConstantSpread
+from trading_algorithms.market_making.alpha_constant_spread import AlphaConstantSpread
+
+
+
+
+
 plt.rcParams['figure.figsize'] = [12, 8]
-plt.rcParams['figure.dpi'] = 100 # 200 e.g. is really fine, but slower
-from backtest.score_enum import ScoreEnum
+plt.rcParams['figure.dpi'] = 100  # 200 e.g. is really fine, but slower
 # pd.options.plotting.backend ='matplotlib'# "plotly"
 pd.set_option('display.max_rows', 50)
-pd.set_option('display.max_columns',50)
+pd.set_option('display.max_columns', 50)
 
 # pd.set_option('display.width', 1000)
 def plot_with_style():
@@ -58,17 +76,27 @@ def plot_with_style():
     if "DejaVu Sans Mono" not in pylab.rcParams["font.monospace"]:
         pylab.rcParams["font.monospace"] += ["DejaVu Sans Mono"]
 
-def send_email(recipient, subject, body, html=None, file_append=[]):
-    EmailConnector().send_email(recipient=recipient,subject=subject,body=body,html=html,file_append=file_append)
 
-def save_notebook_session(session_name:str):
+def send_email(recipient, subject, body, html=None, file_append=[]):
+    EmailConnector().send_email(
+        recipient=recipient,
+        subject=subject,
+        body=body,
+        html=html,
+        file_append=file_append,
+    )
+
+
+def save_notebook_session(session_name: str):
     print('notebook session file save as  %s' % session_name)
     dill.dump_session(session_name)
 
-def load_notebook_session(session_name:str):
+
+def load_notebook_session(session_name: str):
     if os.path.isfile(session_name):
-        print('notebook session file found %s'%session_name)
+        print('notebook session file found %s' % session_name)
         dill.load_session(session_name)
+
 
 def plot_with_dark_style():
 
@@ -98,6 +126,9 @@ def plot_with_dark_style():
     # set plot style if no arguments provided
     jtplot.style()
 
+
 # plot_with_style()
 # plot_with_dark_style()
 plt.ion()  # plt show not required
+
+# from utils.tensorflow_utils import *

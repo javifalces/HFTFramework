@@ -1,23 +1,13 @@
 import os
-import glob
-import datetime
-import threading
 
 from enum import Enum
 from pathlib import Path
-from typing import Type
-import numpy as np
-import pandas as pd
-from matplotlib import dates
-from numpy import genfromtxt, savetxt
-import copy
-from backtest.algorithm_enum import AlgorithmEnum
-from backtest.input_configuration import BacktestConfiguration, TrainInputConfiguration
-from backtest.parameter_tuning.ga_configuration import GAConfiguration
-from backtest.parameter_tuning.ga_parameter_tuning import GAParameterTuning
-from backtest.pnl_utils import get_drawdown
-from backtest.train_launcher import TrainLauncher, TrainLauncherController
-from configuration import BACKTEST_OUTPUT_PATH, ZEROMQ_JAR_PATH, operative_system, LAMBDA_INPUT_PATH, LAMBDA_OUTPUT_PATH
+from configuration import (
+    ZEROMQ_JAR_PATH,
+    operative_system,
+    LAMBDA_INPUT_PATH,
+    LAMBDA_OUTPUT_PATH,
+)
 import json
 
 
@@ -39,15 +29,21 @@ class AlgoTradingZeroMqLauncher:
     base_output = LAMBDA_OUTPUT_PATH + os.sep
     if operative_system == 'windows':
         DEFAULT_JVM = DEFAULT_JVM_WIN
-        PREFIX_START=""
+        PREFIX_START = ""
     else:
         DEFAULT_JVM = DEFAULT_JVM_UNIX
 
-    def __init__(self, algorithm_settings_path: str, jar_path=ZEROMQ_JAR_PATH,
-                 jvm_options: str = DEFAULT_JVM) -> None:
+    def __init__(
+        self,
+        algorithm_settings_path: str,
+        jar_path=ZEROMQ_JAR_PATH,
+        jvm_options: str = DEFAULT_JVM,
+    ) -> None:
         if not os.path.isfile(algorithm_settings_path):
             print(f"algorithm_settings_path not found {algorithm_settings_path}")
-            raise FileNotFoundError(f"algorithm_settings_path not found {algorithm_settings_path}")
+            raise FileNotFoundError(
+                f"algorithm_settings_path not found {algorithm_settings_path}"
+            )
         self.algorithm_settings_path = algorithm_settings_path
 
         self.jar_path = jar_path
@@ -55,28 +51,34 @@ class AlgoTradingZeroMqLauncher:
         self.state = AlgorithmState.created
         self.jvm_options = '-Duser.timezone=GMT ' + jvm_options
         self.algorithm_name = self._read_algorithm_name()
-        self.output_path=None
+        self.output_path = None
         if self.algorithm_name is not None:
-            self.output_path= rf"{self.base_output}"
-            #copy models
+            self.output_path = rf"{self.base_output}"
+            # copy models
             self.jvm_options += f' -Doutput.path={self.output_path}'  # change log name
-            self.jvm_options += f' -Dlog.appName={self.algorithm_name}'  # change log name
+            self.jvm_options += (
+                f' -Dlog.appName={self.algorithm_name}'  # change log name
+            )
 
         # jvm_options += f' -Dlog.appName={algo_name}'  # change log name
         self.pid = None
         self.process = None
+
     def _read_algorithm_name(self):
         try:
             with open(self.algorithm_settings_path, 'r') as myfile:
                 data = myfile.read()
-            settings=json.loads(data)
+            settings = json.loads(data)
             return settings["algorithm"]["algorithmName"]
         except Exception as e:
             print(f"not the right json format on {self.algorithm_settings_path}")
         return None
 
     def run(self):
-        if self.state == AlgorithmState.created or self.state == AlgorithmState.finished:
+        if (
+            self.state == AlgorithmState.created
+            or self.state == AlgorithmState.finished
+        ):
             self.task = 'java %s -jar %s' % (self.jvm_options, self.jar_path)
             self.state = AlgorithmState.running
 
@@ -85,7 +87,9 @@ class AlgoTradingZeroMqLauncher:
             if self.VERBOSE_OUTPUT:
                 command_to_run += '>%sout.log' % (os.getcwd() + os.sep)
 
-            self.process = subprocess.Popen(command_to_run, creationflags=subprocess.CREATE_NEW_CONSOLE)
+            self.process = subprocess.Popen(
+                command_to_run, creationflags=subprocess.CREATE_NEW_CONSOLE
+            )
 
             self.pid = self.process.pid
             print(f"started process {self.pid} ")
@@ -99,7 +103,11 @@ class AlgoTradingZeroMqLauncher:
             if self.process.poll() is None:
                 self.process.kill()
                 self.state = AlgorithmState.finished
+
+
 import glob
+
+
 class AutomaticStartZeroMqTrading:
     def __init__(self, filter_regexp: str = '*.json', vm_options: str = None):
         self.filter_regexp = filter_regexp
@@ -107,24 +115,34 @@ class AutomaticStartZeroMqTrading:
         self.vm_options = vm_options
 
     def start(self):
-        path_with_regexp=LAMBDA_INPUT_PATH+os.sep+self.filter_regexp
-        configuration_files_filtered=glob.glob(path_with_regexp,recursive=True)
-        if len(configuration_files_filtered)==0:
-            print(f"no config files found for {self.filter_regexp} in {LAMBDA_INPUT_PATH}")
+        path_with_regexp = LAMBDA_INPUT_PATH + os.sep + self.filter_regexp
+        configuration_files_filtered = glob.glob(path_with_regexp, recursive=True)
+        if len(configuration_files_filtered) == 0:
+            print(
+                f"no config files found for {self.filter_regexp} in {LAMBDA_INPUT_PATH}"
+            )
             return
         else:
-            print(f"AutomaticStartZeroMqTrading going to launch {len(configuration_files_filtered)} processes")
+            print(
+                f"AutomaticStartZeroMqTrading going to launch {len(configuration_files_filtered)} processes"
+            )
             for configuration_file in configuration_files_filtered:
                 if self.vm_options is None:
-                    launcher = AlgoTradingZeroMqLauncher(algorithm_settings_path=configuration_file)
+                    launcher = AlgoTradingZeroMqLauncher(
+                        algorithm_settings_path=configuration_file
+                    )
                 else:
-                    launcher = AlgoTradingZeroMqLauncher(algorithm_settings_path=configuration_file,
-                                                         jvm_options=self.vm_options)
+                    launcher = AlgoTradingZeroMqLauncher(
+                        algorithm_settings_path=configuration_file,
+                        jvm_options=self.vm_options,
+                    )
                 self.algo_trading_processes.append(launcher)
                 launcher.run()
 
     def stop(self):
-        print(f"AutomaticStartZeroMqTrading going to kill {len(self.algo_trading_processes)} processes")
+        print(
+            f"AutomaticStartZeroMqTrading going to kill {len(self.algo_trading_processes)} processes"
+        )
         for algo_trading_proces in self.algo_trading_processes:
             algo_trading_proces.kill()
 
@@ -145,7 +163,9 @@ if __name__ == '__main__':
     else:
         vm_options = DEFAULT_JVM_WIN
     print(f"vm_options={vm_options}")
-    automatic_launcher = AutomaticStartZeroMqTrading(filter_regexp='*.json', vm_options=vm_options)
+    automatic_launcher = AutomaticStartZeroMqTrading(
+        filter_regexp='*.json', vm_options=vm_options
+    )
     try:
         automatic_launcher.start()
         print("Ctrl+C to kill all algos")

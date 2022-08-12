@@ -3,11 +3,13 @@ class ScoreEnum:
     realized_pnl = 'realized_pnl'
     unrealized_pnl = 'unrealized_pnl'
     asymmetric_dampened_pnl = 'asymmetric_dampened_pnl'
-    sharpe='sharpe'
-    sortino='sortino'
-    ulcer='ulcer'
-    max_dd='max_dd'
-    falcma_ratio='falcma_ratio'
+    pnl_to_map = 'pnl_to_map'
+    sharpe = 'sharpe'
+    sortino = 'sortino'
+    ulcer = 'ulcer'
+    max_dd = 'max_dd'
+    falcma_ratio = 'falcma_ratio'
+    asymmetric_dampened_pnl_to_map = 'asymmetric_dampened_pnl_to_map'
 
 
 def get_score_enum_csv_column(score_enum: ScoreEnum):
