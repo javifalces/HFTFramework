@@ -27,7 +27,7 @@ RL is going to configure the different Avellaneda stoikov parameters dinamically
 
 
 ## [JAVA]
-Where the algorithm logics , backtest and execution happens
+Where the algorithm logics , backtest and execution happens [JAVA 11 required]
 
 ![Backtest Architecture](fig/BacktestArquitecture.jpg?raw=true "Backtest")
 
@@ -39,8 +39,9 @@ first install maven modules
 1. parent_pom
 2. common
 3. algorithmic_trading_framework
-4. backtest_engine
-5. executables
+4. trading_algorithms
+5. backtest_engine
+6. executables
 
 then package executables -> Backtest.jar
 *Backtest.jar* is going to be our python launcher to get backtest results
@@ -66,7 +67,7 @@ Grateful for the libraries directly used
 * LAMBDA_LOGS_PATH = where we are going to save the java logs
 
 ## [PYTHON]
-To get backtest results compare , optimize parameters -> Algo trading strategies are just and enumeration business logic must be in java
+To get backtest results compare , optimize parameters -> Algo trading strategies are just and enumeration.Business logic must be in java
 *compile and package java first!*
 Grateful for the libraries directly used
 
@@ -74,6 +75,8 @@ Grateful for the libraries directly used
 * Pandas
 * Numpy
 * seaborn
+* Darwinex-ticks
+* dwx-zeromq-connector
 * ...etc
 
 
