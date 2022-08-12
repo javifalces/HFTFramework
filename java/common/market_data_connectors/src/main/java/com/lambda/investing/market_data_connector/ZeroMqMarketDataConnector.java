@@ -16,7 +16,7 @@ import lombok.Getter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import javax.annotation.PostConstruct;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -28,6 +28,7 @@ import java.util.Set;
 	private ZeroMqProvider zeroMqProvider;
 
 	private List<String> instrumentPksList;
+	private boolean listenER = true;
 	///////////////////// Constructors ////////////////////
 
 	/**
@@ -36,11 +37,15 @@ import java.util.Set;
 	 * @param zeroMqConfiguration
 	 */
 	public ZeroMqMarketDataConnector(ZeroMqConfiguration zeroMqConfiguration, int threadsListening) {
-		this.zeroMqConfiguration = zeroMqConfiguration;
+		this.zeroMqConfiguration = new ZeroMqConfiguration(zeroMqConfiguration);
 		zeroMqProvider = ZeroMqProvider.getInstance(this.zeroMqConfiguration, threadsListening);
 		zeroMqProvider.register(this.zeroMqConfiguration, this);
 		logger.info("Listening MarketData {}   in tcp://{}:{}", this.zeroMqConfiguration.getTopic(),
 				this.zeroMqConfiguration.getHost(), this.zeroMqConfiguration.getPort());
+	}
+
+	public void setListenER(boolean listenER) {
+		this.listenER = listenER;
 	}
 
 	public void setInstrumentPksList(List<String> instrumentPksList) {
@@ -50,21 +55,21 @@ import java.util.Set;
 		this.instrumentPksList = instrumentPksList;
 	}
 
-	public ZeroMqMarketDataConnector(ZeroMqConfiguration zeroMqConfigurationIn, Instrument instrument,
-			int threadsListening) {
-		List<ZeroMqConfiguration> zeroMqConfigurationList = ZeroMqConfiguration
-				.getMarketDataZeroMqConfiguration(zeroMqConfigurationIn.getHost(), zeroMqConfigurationIn.getPort(),
-						instrument);
+	//	public ZeroMqMarketDataConnector(ZeroMqConfiguration zeroMqConfigurationIn, Instrument instrument,
+	//			int threadsListening) {
+	//		List<ZeroMqConfiguration> zeroMqConfigurationList = ZeroMqConfiguration
+	//				.getMarketDataZeroMqConfiguration(zeroMqConfigurationIn.getHost(), zeroMqConfigurationIn.getPort(),
+	//						instrument);
+	//
+	//		for (ZeroMqConfiguration zeroMqConfiguration : zeroMqConfigurationList) {
+	//			zeroMqProvider = ZeroMqProvider.getInstance(zeroMqConfiguration, threadsListening);
+	//			zeroMqProvider.register(zeroMqConfiguration, this);
+	//
+	//			logger.info("Listening {}   in tcp://{}:{}", zeroMqConfiguration.getTopic(), zeroMqConfiguration.getHost(),
+	//					zeroMqConfiguration.getPort());
+	//		}
 
-		for (ZeroMqConfiguration zeroMqConfiguration : zeroMqConfigurationList) {
-			zeroMqProvider = ZeroMqProvider.getInstance(zeroMqConfiguration, threadsListening);
-			zeroMqProvider.register(zeroMqConfiguration, this);
-
-			logger.info("Listening {}   in tcp://{}:{}", zeroMqConfiguration.getTopic(), zeroMqConfiguration.getHost(),
-					zeroMqConfiguration.getPort());
-		}
-
-	}
+	//	}
 
 	public ZeroMqMarketDataConnector(ZeroMqConfiguration zeroMqConfigurationIn, List<Instrument> instruments,
 			int threadsListening) {
@@ -86,7 +91,7 @@ import java.util.Set;
 
 	}
 
-	@PostConstruct public void start() {
+	public void start() {
 		this.statisticsReceived = null;
 		zeroMqProvider.start(true, true);
 	}
@@ -136,11 +141,11 @@ import java.util.Set;
 
 		//// ER should come from the trading engine!
 		//		when trading is coming here
-		//		if (typeMessage == TypeMessage.execution_report) {
-		//			//ExecutionReport received
-		//			ExecutionReport executionReport = GSON.fromJson(content, ExecutionReport.class);
-		//			notifyExecutionReport(executionReport);
-		//		}
+		if (typeMessage == TypeMessage.execution_report && listenER) {
+			//ExecutionReport received
+			ExecutionReport executionReport = GSON.fromJson(content, ExecutionReport.class);
+			notifyExecutionReport(executionReport);
+		}
 
 	}
 }

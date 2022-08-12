@@ -2,26 +2,42 @@ package com.lambda.investing.algorithmic_trading.reinforcement_learning.action;
 
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
+import com.google.common.primitives.Doubles;
+import com.google.common.primitives.Ints;
+import lombok.Getter;
+import lombok.Setter;
+import org.apache.commons.collections.BidiMap;
+import org.apache.commons.lang.ArrayUtils;
+import org.apache.commons.math3.exception.NumberIsTooLargeException;
+import org.apache.commons.math3.util.MathUtils;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
+
+import static org.apache.commons.math3.util.CombinatoricsUtils.binomialCoefficientDouble;
 
 public class AvellanedaAction extends AbstractAction {
 
 	public static Integer WINDOWS_INDEX = 0;
 	public static Integer RISK_AVERSION_INDEX = 1;
 	public static Integer SKEW_PRICE_INDEX = 2;
+	public static Integer K_DEFAULT_INDEX = 3;
+	public static Integer A_DEFAULT_INDEX = 4;
+
+	public static int ACTION_COLUMNS = 5;//WINDOWS_INDEX RISK_AVERSION_INDEX SKEW_PRICE_INDEX K_DEFAULT_INDEX A_DEFAULT_INDEX
 
 	private int[] windowsTick;
 	private double[] riskAversion;
 	private double[] skewPricePct;
 
+	private double[] kDefault;
+	private double[] aDefault;
+
 	private int numberOfActions;
 
 	private BiMap<Integer, ActionRow> actionIndexToArr;
 
-	public AvellanedaAction(int[] windowsTick, double[] riskAversion, double[] skewPricePct) {
+	public AvellanedaAction(int[] windowsTick, double[] riskAversion, double[] skewPricePct, double[] kDefault,
+							double[] aDefault) {
 
 		List<Integer> validInputsSize = new ArrayList<>();
 		if (windowsTick.length == 0) {
@@ -45,6 +61,21 @@ public class AvellanedaAction extends AbstractAction {
 		}
 		this.skewPricePct = skewPricePct;
 
+		if (kDefault.length == 0) {
+			kDefault = null;
+		} else {
+			validInputsSize.add(kDefault.length);
+		}
+		this.kDefault = kDefault;
+
+		if (aDefault.length == 0) {
+			aDefault = null;
+		} else {
+			validInputsSize.add(aDefault.length);
+		}
+		this.aDefault = aDefault;
+
+
 		if (validInputsSize.size() > 0) {
 
 			for (Integer length : validInputsSize) {
@@ -66,16 +97,22 @@ public class AvellanedaAction extends AbstractAction {
 
 	private void fillCacheActions() {
 		int counter = 0;
-		double[] inputArr = new double[3];
+		double[] inputArr = new double[ACTION_COLUMNS];
 		for (int windowIndex = 0; windowIndex < windowsTick.length; windowIndex++) {
 			for (int riskIndex = 0; riskIndex < riskAversion.length; riskIndex++) {
 				for (int skewIndex = 0; skewIndex < skewPricePct.length; skewIndex++) {
-					//					double[] inputArr = new double[3];
-					inputArr[WINDOWS_INDEX] = windowsTick[windowIndex];
-					inputArr[RISK_AVERSION_INDEX] = riskAversion[riskIndex];
-					inputArr[SKEW_PRICE_INDEX] = skewPricePct[skewIndex];
-					getAction(inputArr);
-					counter++;
+					for (int kIndex = 0; kIndex < kDefault.length; kIndex++) {
+						for (int aIndex = 0; aIndex < aDefault.length; aIndex++) {
+							//					double[] inputArr = new double[3];
+							inputArr[WINDOWS_INDEX] = windowsTick[windowIndex];
+							inputArr[RISK_AVERSION_INDEX] = riskAversion[riskIndex];
+							inputArr[SKEW_PRICE_INDEX] = skewPricePct[skewIndex];
+							inputArr[K_DEFAULT_INDEX] = kDefault[kIndex];
+							inputArr[A_DEFAULT_INDEX] = aDefault[aIndex];
+							getAction(inputArr);
+							counter++;
+						}
+					}
 				}
 			}
 		}
@@ -89,7 +126,7 @@ public class AvellanedaAction extends AbstractAction {
 	}
 
 	@Override public int getAction(double[] actionArr) {
-		assert actionArr.length == 3;
+		assert actionArr.length == ACTION_COLUMNS;
 		/// iterative method
 		ActionRow actionRow = new ActionRow(actionArr);
 		Integer positionOut = actionIndexToArr.inverse().get(actionRow);
@@ -156,18 +193,22 @@ public class AvellanedaAction extends AbstractAction {
 	private class ActionRow {
 
 		private int window;
-		private double risk, skew;
+		private double risk, skew, kDefault, aDefault;
 
-		public ActionRow(int window, double risk, double skew) {
+		public ActionRow(int window, double risk, double skew, double kDefault, double aDefault) {
 			this.window = window;
 			this.risk = risk;
 			this.skew = skew;
+			this.kDefault = kDefault;
+			this.aDefault = aDefault;
 		}
 
 		public ActionRow(double[] arrayInput) {
 			this.window = (int) arrayInput[WINDOWS_INDEX];
 			this.risk = arrayInput[RISK_AVERSION_INDEX];
 			this.skew = arrayInput[SKEW_PRICE_INDEX];
+			this.kDefault = arrayInput[K_DEFAULT_INDEX];
+			this.aDefault = arrayInput[A_DEFAULT_INDEX];
 		}
 
 		@Override public boolean equals(Object o) {
@@ -177,19 +218,22 @@ public class AvellanedaAction extends AbstractAction {
 				return false;
 			ActionRow actionRow = (ActionRow) o;
 			return window == actionRow.window && Double.compare(actionRow.risk, risk) == 0
-					&& Double.compare(actionRow.skew, skew) == 0;
+					&& Double.compare(actionRow.skew, skew) == 0 && Double.compare(actionRow.kDefault, kDefault) == 0
+					&& Double.compare(actionRow.aDefault, aDefault) == 0;
 		}
 
 		@Override public int hashCode() {
 
-			return Objects.hash(window, risk, skew);
+			return Objects.hash(window, risk, skew, kDefault, aDefault);
 		}
 
 		public double[] getArray() {
-			double[] output = new double[3];
+			double[] output = new double[ACTION_COLUMNS];
 			output[WINDOWS_INDEX] = window;
 			output[RISK_AVERSION_INDEX] = risk;
 			output[SKEW_PRICE_INDEX] = skew;
+			output[K_DEFAULT_INDEX] = kDefault;
+			output[A_DEFAULT_INDEX] = aDefault;
 			return output;
 
 		}

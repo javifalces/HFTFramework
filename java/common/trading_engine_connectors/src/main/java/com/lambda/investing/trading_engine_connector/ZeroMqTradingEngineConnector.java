@@ -28,7 +28,7 @@ import com.lambda.investing.trading_engine_connector.paper.PaperTradingEngineCon
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import javax.annotation.PostConstruct;
+
 import java.io.File;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
@@ -97,7 +97,7 @@ public class ZeroMqTradingEngineConnector implements TradingEngineConnector, Con
 
 	}
 
-	@PostConstruct public void start() {
+	public void start() {
 		zeroMqExecutionReportProvider.start(true, true);
 	}
 
@@ -133,12 +133,18 @@ public class ZeroMqTradingEngineConnector implements TradingEngineConnector, Con
 		}
 	}
 
-	@Override public void requestInfo(String info) {
+	@Override
+	public void requestInfo(String info) {
 		if (isPaperTrading && paperTradingEngine != null) {
 			this.paperTradingEngine.requestInfo(info);
 		} else {
 			this.zeroMqPublisher.publish(this.zeroMqConfigurationOrderRequest, TypeMessage.info, info, info);
 		}
+	}
+
+	@Override
+	public void reset() {
+		this.paperTradingEngine.reset();
 	}
 
 	public void notifyExecutionReport(ExecutionReport executionReport) {
@@ -241,7 +247,9 @@ public class ZeroMqTradingEngineConnector implements TradingEngineConnector, Con
 					ordinaryMarketDataProvider.getConnectorConfiguration(), this.zeroMqPublisher);
 			paperTradingEngine.setPaperConnectorMarketDataAndExecutionReportPublisher(paperConnectorPublisher);
 
-		} else {
+		} else
+
+		{
 			logger.error(
 					"cant be paper trading on other type of MarketDataProvider as ZeroMqMarketDataConnector or OrdinaryMarketDataProvider");
 		}

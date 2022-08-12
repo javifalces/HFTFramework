@@ -4,11 +4,13 @@ import java.util.Date;
 
 public interface LatencyEngine {
 
-	Date getCurrentTime();
+    Date getCurrentTime();
 
-	void setTime(Date currentDate);
+    void setTime(Date currentDate);
 
-	void setNextUpdateMs(long nextUpdateMs);
+    void setNextUpdateMs(long nextUpdateMs);
 
-	void delay(Date currentDate);
+    void delay(Date currentDate);
+
+    void reset();
 }

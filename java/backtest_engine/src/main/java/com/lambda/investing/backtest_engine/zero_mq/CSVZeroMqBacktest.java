@@ -47,14 +47,13 @@ public class CSVZeroMqBacktest extends AbstractBacktest {
 			THREADS_LISTENING_ORDER_REQUEST = 0;
 		}
 	}
-
 	public void setHost(String host) {
 		this.host = host;
 	}
 
 	@Override protected MarketDataProvider getAlgorithmMarketDataProvider() {
 		ZeroMqMarketDataConnector zeroMqMarketDataConnector = new ZeroMqMarketDataConnector(
-				(ZeroMqConfiguration) marketDataConnectorConfiguration, backtestConfiguration.getInstruments().get(0),
+				(ZeroMqConfiguration) marketDataConnectorConfiguration,
 				//todo fix it if need more instruments
 				THREADS_PUBLISHING_MARKET_DATA_FILE);
 		zeroMqMarketDataConnector.start();
@@ -81,8 +80,8 @@ public class CSVZeroMqBacktest extends AbstractBacktest {
 	@Override protected void constructPaperExecutionReportConnectorPublisher() {
 		paperTradingEngineConnector = getPaperTradingEngineConnector();
 
-		paperTradingEngine = new PaperTradingEngine(paperTradingEngineConnector, ordinaryMarketDataConnectorProvider,
-				backtestOrderRequestProvider, tradingEngineConnectorConfiguration);
+		paperTradingEngine = new PaperTradingEngine(paperTradingEngineConnector,
+				ordinaryMarketDataConnectorProvider, backtestOrderRequestProvider, tradingEngineConnectorConfiguration);
 
 	}
 
@@ -105,6 +104,7 @@ public class CSVZeroMqBacktest extends AbstractBacktest {
 					"cant read files : ordinaryMarketDataConnectorPublisher in CSVZeroMqBacktest is not CSVMarketDataConnectorPublisher");
 		}
 	}
+
 
 	@Override protected ConnectorConfiguration getMarketDataConnectorConfiguration() {
 		ZeroMqConfiguration zeroMqConfiguration = new ZeroMqConfiguration();

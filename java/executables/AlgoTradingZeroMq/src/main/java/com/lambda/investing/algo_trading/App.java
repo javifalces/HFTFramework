@@ -5,12 +5,14 @@ import com.google.gson.GsonBuilder;
 import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.Algorithm;
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
+import com.lambda.investing.algorithmic_trading.ArrayUtils;
 import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
 import com.lambda.investing.live_trading_engine.LiveTrading;
 import com.lambda.investing.market_data_connector.ZeroMqMarketDataConnector;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.trading_engine_connector.ZeroMqTradingEngineConnector;
+import org.apache.hadoop.fs.Path;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.BeansException;
@@ -156,7 +158,7 @@ public class App {
 		ZeroMqMarketDataConnector marketDataConnector = ac.getBean(ZeroMqMarketDataConnector.class);
 		//set instrument?
 		String[] instrumentPkArr = zeroMqTradingConfiguration.getInstrumentPks();
-		List<String> instrumentList = Arrays.asList(instrumentPkArr);
+		List<String> instrumentList = ArrayUtils.StringArrayList(instrumentPkArr);
 
 		//add hedgeManagerInstruments
 		AlgorithmConnectorConfiguration algorithmConnectorConfiguration = ac
@@ -165,10 +167,17 @@ public class App {
 		Algorithm algorithm = algorithmConfiguration.getAlgorithm(algorithmConnectorConfiguration);
 		for (Instrument instrument : algorithm.getHedgeManager().getInstrumentsHedgeList()) {
 			String instrumentPk = instrument.getPrimaryKey();
-			if (instrumentList.contains(instrumentPk)) {
+			if (!instrumentList.contains(instrumentPk)) {
 				instrumentList.add(instrumentPk);
 			}
 		}
+		for (Instrument instrument : algorithm.getInstruments()) {
+			String instrumentPk = instrument.getPrimaryKey();
+			if (!instrumentList.contains(instrumentPk)) {
+				instrumentList.add(instrumentPk);
+			}
+		}
+
 		//Add all the rest
 		List<String> instruments = new ArrayList<>();
 		for (String instrumentPk : instrumentList) {
@@ -185,7 +194,7 @@ public class App {
 
 		}
 
-		String instrumentListStr = instruments.stream().collect(Collectors.joining(","));
+		String instrumentListStr = ArrayUtils.PrintArrayListString(instruments, ",");
 		System.out
 				.println(String.format("FILTER TO RECEIVE %d instruments : %s", instruments.size(), instrumentListStr));
 		marketDataConnector.setInstrumentPksList(instruments);
@@ -240,108 +249,71 @@ public class App {
 		System.setProperty("log.appName", zeroMqTradingConfiguration.getAlgorithm().getAlgorithmName());
 	}
 
-	protected App(String[] args) throws IOException {
+	private static ZeroMqTradingConfiguration loadJson(String[] args) {
+		ZeroMqTradingConfiguration zeroMqTradingConfiguration = GSON
+				.fromJson(args[0], ZeroMqTradingConfiguration.class);
+		System.out.println("-----");
+		System.out.println(args[0]);
+		System.out.println("-----");
 
-		try {
+		return zeroMqTradingConfiguration;
+	}
 
-			boolean checkFile = true;
-			if (args.length != 1) {
-				System.err.print("need a json file path as input argument to load backtest configuration");
-				System.exit(-1);
-			} else {
+	private static String[] argsFileToString(String[] args) {
+		boolean checkFile = true;
+		if (args.length != 1) {
+			System.err.print("need a json file path as input argument to load backtest configuration");
+			System.exit(-1);
+		} else {
 
-				//File detected
-				if (checkFile) {
-					File file = new File(args[0]);
-					if (!file.exists()) {
-						System.err.print("need valid a json file path as input argument to load backtest configuration "
-								+ args[0]);
-						System.exit(-1);
-					}
-					try {
-						String content = new String(Files.readAllBytes(Paths.get(args[0])));
-						args[0] = content;
-					} catch (IOException e) {
-						System.err.print("need valid a json file path as input argument to load backtest configuration "
-								+ args[0]);
-						System.exit(-1);
-
-					}
+			//File detected
+			if (checkFile) {
+				File file = new File(args[0]);
+				if (!file.exists()) {
+					System.err.print("need valid a json file path as input argument to load backtest configuration "
+							+ args[0]);
+					System.exit(-1);
 				}
+				try {
+					String content = new String(Files.readAllBytes(Paths.get(args[0])));
+					args[0] = content;
+				} catch (IOException e) {
+					System.err.print("need valid a json file path as input argument to load backtest configuration "
+							+ args[0]);
+					System.exit(-1);
 
+				}
 			}
 
+		}
+		return args;
+	}
+
+	protected App(String[] args) throws IOException {
+		ZeroMqTradingConfiguration zeroMqTradingConfiguration = null;
+		try {
+			args = argsFileToString(args);
 			//configure properties before
-			ZeroMqTradingConfiguration zeroMqTradingConfiguration = GSON
-					.fromJson(args[0], ZeroMqTradingConfiguration.class);
+			zeroMqTradingConfiguration = loadJson(args);
+
 			setLogProperty(zeroMqTradingConfiguration);
 			configureMarketDataConnector(zeroMqTradingConfiguration);
 			configureOrderRequestConnector(zeroMqTradingConfiguration);
 			//load all beans
-			ac = new ClassPathXmlApplicationContext(new String[] { "classpath:beans.xml" });
+			ac = new ClassPathXmlApplicationContext(new String[]{"classpath:beans.xml"});
 		} catch (BeansException be) {
 			be.printStackTrace();
 			logger = LogManager.getLogger();
 			logger.fatal("Unable to load Spring application context files", be);
 			throw be;
 		}
-		ZeroMqTradingConfiguration zeroMqTradingConfiguration = GSON
-				.fromJson(args[0], ZeroMqTradingConfiguration.class);
-		logger = LogManager.getLogger();
-		System.out.println("-----");
-		System.out.println(args[0]);
-		System.out.println("-----");
+		logger = LogManager.getLogger();//load logger properties
 		logger.info("----");
 		logger.info("{}", GSON.toJson(zeroMqTradingConfiguration));
 		logger.info("----");
+
 		try {
-			Resource resource = new FileSystemResource("application.properties");
-			if (!resource.exists()) {
-				//when running from ide
-				resource = new ClassPathResource("application.properties");
-			}
-			Properties props = PropertiesLoaderUtils.loadProperties(resource);
-			Properties environmentPro = System.getProperties();
-
-			String outputPath = props.getProperty("output.path");
-			if (environmentPro.getProperty("output.path") != null) {
-				outputPath = environmentPro.getProperty("output.path");
-			}
-
-			if (outputPath != null) {
-				System.out.println("Override OUTPUT_PATH(from output.path) to " + outputPath);
-				Configuration.OUTPUT_PATH = outputPath;
-			} else {
-				System.out.println("default OUTPUT_PATH(from LAMBDA_OUTPUT_PATH) to " + Configuration.OUTPUT_PATH);
-				outputPath = Configuration.OUTPUT_PATH;
-			}
-			new File(outputPath).mkdirs();
-
-			String inputPath = props.getProperty("parquet.path");
-			if (environmentPro.getProperty("parquet.path") != null) {
-				inputPath = environmentPro.getProperty("parquet.path");
-			}
-
-			if (inputPath != null) {
-				System.out.println("Override DATA_PATH(from parquet.path) to " + inputPath);
-				Configuration.DATA_PATH = inputPath;
-			} else {
-				System.out.println("default DATA_PATH(from LAMBDA_DATA_PATH) to " + Configuration.DATA_PATH);
-				inputPath = Configuration.DATA_PATH;
-			}
-
-			String tempPath = props.getProperty("temp.path");
-			if (environmentPro.getProperty("temp.path") != null) {
-				tempPath = environmentPro.getProperty("temp.path");
-			}
-
-			if (tempPath != null) {
-				System.out.println("Override TEMP_PATH(from temp.path) to " + tempPath);
-				Configuration.TEMP_PATH = tempPath;
-			} else {
-				System.out.println("default TEMP_PATH (from LAMBDA_TEMP_PATH) to " + Configuration.TEMP_PATH);
-
-			}
+			ConfigurationPropertiesLoader configurationProperties = new ConfigurationPropertiesLoader("application.properties");
 
 			configureMarketDataConnectorInstrumentFilter(ac, zeroMqTradingConfiguration);
 			configurePaperTrading(ac, zeroMqTradingConfiguration);
@@ -363,6 +335,95 @@ public class App {
 			System.exit(-1);
 		}
 
+	}
+
+	private class ConfigurationPropertiesLoader {
+		private String path;
+		public String logPath;
+		public String tempPath;
+		public String inputPath;
+		public String outputPath;
+
+		Properties resourceProperties;
+		Properties environmentProperties;
+
+		public ConfigurationPropertiesLoader(String path) {
+			try {
+				this.path = path;
+				Resource resource = new FileSystemResource("application.properties");
+				if (!resource.exists()) {
+					//when running from ide
+					resource = new ClassPathResource("application.properties");
+				}
+				resourceProperties = PropertiesLoaderUtils.loadProperties(resource);
+				environmentProperties = System.getProperties();
+				setProperties();
+
+			} catch (Exception e) {
+				logger.error("error in backtest ", e);
+				e.printStackTrace();
+				System.exit(-1);
+			}
+
+		}
+
+		private void setProperties() {
+			outputPath = resourceProperties.getProperty("output.path");
+			if (environmentProperties.getProperty("output.path") != null) {
+				outputPath = environmentProperties.getProperty("output.path");
+			}
+
+			if (outputPath != null) {
+				System.out.println("Override OUTPUT_PATH(from output.path) to " + outputPath);
+				Configuration.OUTPUT_PATH = outputPath;
+			} else {
+				System.out.println("default OUTPUT_PATH(from LAMBDA_OUTPUT_PATH) to " + Configuration.OUTPUT_PATH);
+				outputPath = Configuration.OUTPUT_PATH;
+			}
+			new File(outputPath).mkdirs();
+
+			inputPath = resourceProperties.getProperty("parquet.path");
+			if (environmentProperties.getProperty("parquet.path") != null) {
+				inputPath = environmentProperties.getProperty("parquet.path");
+			}
+
+			if (inputPath != null) {
+				if (inputPath.endsWith(Path.SEPARATOR)) {
+					inputPath = inputPath.substring(0, inputPath.length() - 2);
+				}
+
+				System.out.println("Override DATA_PATH(from parquet.path) to " + inputPath);
+				Configuration.DATA_PATH = inputPath;
+			} else {
+				System.out.println("default DATA_PATH(from LAMBDA_DATA_PATH) to " + Configuration.DATA_PATH);
+				inputPath = Configuration.DATA_PATH;
+			}
+
+			tempPath = resourceProperties.getProperty("temp.path");
+			if (environmentProperties.getProperty("temp.path") != null) {
+				tempPath = environmentProperties.getProperty("temp.path");
+			}
+
+			if (tempPath != null) {
+				System.out.println("Override TEMP_PATH(from temp.path) to " + tempPath);
+				Configuration.TEMP_PATH = tempPath;
+			} else {
+				System.out.println("default TEMP_PATH (from LAMBDA_TEMP_PATH) to " + Configuration.TEMP_PATH);
+
+			}
+
+			logPath = resourceProperties.getProperty("log.path");
+			if (environmentProperties.getProperty("log.path") != null) {
+				logPath = environmentProperties.getProperty("log.path");
+			}
+			String separator = System.getProperty("file.separator");
+			if (logPath == null) {
+				logPath = System.getProperty("user.dir") + separator + "LOG";
+				System.out.println("LOG_PATH(from working dir) to " + logPath);
+			} else {
+				System.out.println("LOG_PATH(from log.path) to " + logPath);
+			}
+		}
 	}
 
 

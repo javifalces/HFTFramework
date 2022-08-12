@@ -44,8 +44,8 @@ public class OrderOrderbook {
 
 	public String toString() {
 		return "[" + this.clientOrderId + "] - " + algorithmInfo + " \t" + Double.toString(quantity) + "@" + Double
-				.toString(price) + "\ttime=" + new Date(timestamp) + "\tnextOrderOrderId=" + Integer
-				.toString(nextOrderOrderId) + "\torderId=" + Integer.toString(orderId);
+				.toString(price) + "\ttime=" + new Date(timestamp)
+				+ "\tnextOrderOrderId=" + Integer.toString(nextOrderOrderId) + "\torderId=" + Integer.toString(orderId);
 	}
 
 	public String getClientOrderId() {

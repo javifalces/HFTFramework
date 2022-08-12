@@ -47,7 +47,9 @@ import static com.lambda.investing.model.Util.getDateUTC;
 		this.quantity = executionReport.getLastQuantity();
 		this.price = executionReport.getPrice();
 		this.algorithmInfo = executionReport.getAlgorithmInfo();
+		this.verb = executionReport.getVerb();
 		id = generateId();
+
 	}
 
 	public boolean isTradeValid(Depth lastDepth) {

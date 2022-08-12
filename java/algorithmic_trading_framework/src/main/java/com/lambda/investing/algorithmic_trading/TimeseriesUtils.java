@@ -1,6 +1,5 @@
 package com.lambda.investing.algorithmic_trading;
 
-import com.google.common.primitives.Doubles;
 import javafx.util.Pair;
 import lombok.Getter;
 
@@ -35,12 +34,17 @@ public class TimeseriesUtils {
 	}
 
 	public static double GetVariance(Double[] serie) {
+		return GetVariance(serie, false);
+	}
+
+	public static double GetVariance(Double[] serie, boolean bias) {
 		double mean = GetMean(serie);
 		double sqDiff = 0;
 		for (int i = 0; i < serie.length; i++) {
-			sqDiff += (serie[i] - mean) * (serie[i] - mean);
+			sqDiff += Math.pow((serie[i] - mean), 2);
 		}
-		double output = (double) sqDiff / serie.length;
+		double den = bias ? serie.length - 1 : serie.length;
+		double output = (double) sqDiff / den;
 		return output;
 	}
 
@@ -57,7 +61,11 @@ public class TimeseriesUtils {
 	}
 
 	public static double GetStd(Double[] serie) {
-		return Math.sqrt(GetVariance(serie));
+		return GetStd(serie, false);
+	}
+
+	public static double GetStd(Double[] serie, boolean bias) {
+		return Math.sqrt(GetVariance(serie, bias));
 	}
 
 	public static double GetHampelScore(Double[] serie, double value) {

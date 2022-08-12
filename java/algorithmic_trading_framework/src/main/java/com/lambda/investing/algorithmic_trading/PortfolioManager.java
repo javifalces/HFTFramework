@@ -1,5 +1,6 @@
 package com.lambda.investing.algorithmic_trading;
 
+import com.google.common.collect.BiMap;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
@@ -44,6 +45,9 @@ public class PortfolioManager {
 
 	public long numberOfTrades = 0;
 
+	protected Map<String, String> linkCustomPk;
+	protected Map<String, String> linkCustomPkInversed;
+
 	public PortfolioManager(Algorithm algorithm) {
 		this.algorithm = algorithm;
 		this.isBacktest = this.algorithm.isBacktest;
@@ -52,8 +56,39 @@ public class PortfolioManager {
 	}
 
 	public PnlSnapshot getLastPnlSnapshot(String instrumentPk) {
-		return instrumentPnlSnapshotMap.get(instrumentPk);
+		String key = linkCustomPk.getOrDefault(instrumentPk, instrumentPk);
+		return instrumentPnlSnapshotMap.get(key);
+	}
 
+	public void linkInstruments(String instrumentPk, String customInstrumentPk) {
+		//TODO fix end result is not working very fine
+		linkCustomPk.put(instrumentPk, customInstrumentPk);
+		linkCustomPkInversed.put(customInstrumentPk, instrumentPk);
+	}
+
+	public static Table MERGE_TABLES(Map<Instrument, Table> input) {
+		Table output = null;
+		for (Instrument instrument : input.keySet()) {
+
+			Table table = input.get(instrument);
+			if (output == null) {
+				output = table;
+			} else {
+				output = output.append(table);
+			}
+
+		}
+		return output.sortAscendingOn("date");
+	}
+
+	public String getInstrumentKey(String intrumentPk) {
+		String key = linkCustomPk.getOrDefault(intrumentPk, intrumentPk);
+		return key;
+	}
+
+	public String getInstrumentPK(String keyInstrument) {
+		String key = linkCustomPkInversed.getOrDefault(keyInstrument, keyInstrument);
+		return key;
 	}
 
 	public void setPortfolio(Portfolio portfolio) {
@@ -78,30 +113,38 @@ public class PortfolioManager {
 		instrumentPnlSnapshotMap = new ConcurrentHashMap<>();
 		customColumns = new ConcurrentHashMap<>();
 		customColumnsKeys = new HashSet<>();
+		linkCustomPk = new ConcurrentHashMap<>();
+		linkCustomPkInversed = new ConcurrentHashMap<>();
+		numberOfTrades = 0;
 	}
 
 	public void updateDepth(Depth depth) {
-		PnlSnapshot pnlSnapshot = instrumentPnlSnapshotMap.getOrDefault(depth.getInstrument(), new PnlSnapshotOrders());
+		String key = getInstrumentKey(depth.getInstrument());
+		PnlSnapshot pnlSnapshot = instrumentPnlSnapshotMap.getOrDefault(key, new PnlSnapshotOrders());
 		pnlSnapshot.setBacktest(isBacktest);
 		pnlSnapshot.setPaper(isPaper);
 		pnlSnapshot.updateDepth(depth);
-		instrumentPnlSnapshotMap.put(depth.getInstrument(), pnlSnapshot);
+		instrumentPnlSnapshotMap.put(key, pnlSnapshot);
 
 		updateCustomHistoricals(depth.getInstrument(), depth.getTimestamp(), pnlSnapshot);
 	}
 
 	public void addCurrentCustomColumn(String instrument, String key, Double value) {
-		Map<String, Double> customColumnsInstrument = customColumns.getOrDefault(instrument, new HashMap<>());
+		String keyInstrument = getInstrumentKey(instrument);
+
+		Map<String, Double> customColumnsInstrument = customColumns.getOrDefault(keyInstrument, new HashMap<>());
 		customColumnsInstrument.put(key, value);
-		customColumns.put(instrument, customColumnsInstrument);
+		customColumns.put(keyInstrument, customColumnsInstrument);
 		customColumnsKeys.add(key);
 	}
 
 	private void updateCustomHistoricals(String instrumentPk, long timestamp, PnlSnapshot pnlSnapshot) {
 
 		//check to update customColumns
-		Map<String, Double> customColumnsInstrument = customColumns.get(instrumentPk);
+		String keyInstrument = getInstrumentKey(instrumentPk);
+		Map<String, Double> customColumnsInstrument = customColumns.get(keyInstrument);
 		if (customColumnsInstrument != null) {
+			timestamp = pnlSnapshot.getTimestamp(timestamp);
 			for (Map.Entry<String, Double> entry : customColumnsInstrument.entrySet()) {
 				pnlSnapshot.updateHistoricalsCustom(timestamp, entry.getKey(), entry.getValue());
 			}
@@ -114,26 +157,28 @@ public class PortfolioManager {
 		//				.getOrDefault(executionReport.getInstrument(), new ArrayList<>());
 		//		executionReportList.add(executionReport);
 		//		instrumentToExecutionReportsFilled.put(executionReport.getInstrument(), executionReportList);
+		String keyInstrument = getInstrumentKey(executionReport.getInstrument());
 
-		PnlSnapshot pnlSnapshot = instrumentPnlSnapshotMap
-				.getOrDefault(executionReport.getInstrument(), new PnlSnapshotOrders());
+		PnlSnapshot pnlSnapshot = instrumentPnlSnapshotMap.getOrDefault(keyInstrument, new PnlSnapshotOrders());
 		pnlSnapshot.setBacktest(isBacktest);
 		pnlSnapshot.setPaper(isPaper);
 		pnlSnapshot.setAlgorithmInfo(executionReport.getAlgorithmInfo());
 		pnlSnapshot.updateExecutionReport(executionReport);
 
-		updateCustomHistoricals(executionReport.getInstrument(), executionReport.getTimestampCreation(), pnlSnapshot);
+		updateCustomHistoricals(keyInstrument, executionReport.getTimestampCreation(), pnlSnapshot);
 
-		instrumentPnlSnapshotMap.put(executionReport.getInstrument(), pnlSnapshot);
+		instrumentPnlSnapshotMap.put(keyInstrument, pnlSnapshot);
 		numberOfTrades++;
 
 		return pnlSnapshot;
 	}
 
 	public String summary(Instrument instrument) {
-		PnlSnapshot pnlSnapshot = instrumentPnlSnapshotMap.get(instrument.getPrimaryKey());
+		String keyInstrument = getInstrumentKey(instrument.getPrimaryKey());
+
+		PnlSnapshot pnlSnapshot = instrumentPnlSnapshotMap.get(keyInstrument);
 		if (pnlSnapshot == null) {
-			logger.info("No pnl in {}", instrument.getPrimaryKey());
+			logger.info("No pnl in {}", keyInstrument);
 			return "";
 		}
 		String output = String
@@ -170,7 +215,9 @@ public class PortfolioManager {
 
 			return;
 		}
-		PnlSnapshot pnlSnapshot = instrumentPnlSnapshotMap.get(instrument.getPrimaryKey());
+		String keyInstrument = getInstrumentKey(instrument.getPrimaryKey());
+
+		PnlSnapshot pnlSnapshot = instrumentPnlSnapshotMap.get(keyInstrument);
 
 		//		Table historicalPnl = tradeTable.select("timestamp","historicalRealizedPnl","historicalUnrealizedPnl","historicalTotalPnl");
 
@@ -189,11 +236,10 @@ public class PortfolioManager {
 				"date", // x variable column name
 				"netPosition" // y variable column name
 		);
-		File htmlFilePnl = new File(instrument.getPrimaryKey() + "_" + algorithm.getAlgorithmInfo() + "_pnl.html");
-		File htmlFilePosition = new File(
-				instrument.getPrimaryKey() + "_" + algorithm.getAlgorithmInfo() + "_position.html");
-		Plot.show(figureRealizedPnl, instrument.getPrimaryKey(), htmlFilePnl);
-		Plot.show(figureRPosition, instrument.getPrimaryKey(), htmlFilePosition);
+		File htmlFilePnl = new File(keyInstrument + "_" + algorithm.getAlgorithmInfo() + "_pnl.html");
+		File htmlFilePosition = new File(keyInstrument + "_" + algorithm.getAlgorithmInfo() + "_position.html");
+		Plot.show(figureRealizedPnl, keyInstrument, htmlFilePnl);
+		Plot.show(figureRPosition, keyInstrument, htmlFilePosition);
 		//		try {
 		//			Scanner myReader = new Scanner(htmlFilePnl);
 		//			StringBuilder buffer = new StringBuilder();
@@ -238,10 +284,16 @@ public class PortfolioManager {
 		synchronized (UPDATE_HISTORICAL_LOCK) {
 			Map<Instrument, Table> output = new ConcurrentHashMap<>();
 			try {
+				List<String> instrumentsIterated = new ArrayList<>();
+
 				for (String instrumentPk : instrumentPnlSnapshotMap.keySet()) {
-					Instrument instrument = Instrument.getInstrument(instrumentPk);
+					String instrumentKey = getInstrumentKey(instrumentPk);
+					if (instrumentsIterated.contains(instrumentKey)) {
+						continue;
+					}
+
 					//			summary(instrument);
-					PnlSnapshot pnlSnapshot = instrumentPnlSnapshotMap.get(instrumentPk);
+					PnlSnapshot pnlSnapshot = instrumentPnlSnapshotMap.get(instrumentKey);
 
 					if (numberOfTrades == 0) {
 						logger.warn("no trades detected!");
@@ -263,10 +315,10 @@ public class PortfolioManager {
 					List<Double> historicalPrice = getSortedValuesDouble(pnlSnapshot.historicalPrice);
 					List<Double> historicalQuantity = getSortedValuesDouble(pnlSnapshot.historicalQuantity);
 					List<String> historicalAlgorithmInfo = getSortedValuesString(pnlSnapshot.historicalAlgorithmInfo);
+					List<String> historicalInstrumentPk = getSortedValuesString(pnlSnapshot.historicalInstrumentPk);
 					List<Integer> numberTrades = getSortedValuesInteger(pnlSnapshot.historicalNumberOfTrades);
 					List<String> historicalVerb = getSortedValuesString(pnlSnapshot.historicalVerb);
 					List<String> historicalClOrdId = getSortedValuesString(pnlSnapshot.historicalClOrdId);
-
 					//timestamp conversion
 					Long[] timestampArr = new Long[timestamp.size()];
 					timestampArr = timestamp.toArray(timestampArr);
@@ -280,14 +332,16 @@ public class PortfolioManager {
 					}
 
 					logger.info(
-							"getTradesTable has {} rows -> timestamp:{} verb:{} algorithmInfo:{} fee:{} price:{} quantity:{} netPosition:{} avgOpenPrice:{} netInvestment:{} historicalRealizedPnl:{} historicalUnrealizedPnl:{} historicalTotalPnl:{} numberTrades:{}",
+							"getTradesTable has {} rows -> timestamp:{} verb:{} algorithmInfo:{} fee:{} price:{} quantity:{} netPosition:{} avgOpenPrice:{} netInvestment:{} historicalRealizedPnl:{} historicalUnrealizedPnl:{} historicalTotalPnl:{} numberTrades:{} instrumentPk:{}",
 							dates.length, timestamp.size(), historicalVerb.size(), historicalAlgorithmInfo.size(),
 							historicalFee.size(), historicalPrice.size(), historicalQuantity.size(), netPosition.size(),
 							avgOpenPrice.size(), netInvestment.size(), historicalRealizedPnl.size(),
-							historicalUnrealizedPnl.size(), historicalTotalPnl.size(), numberTrades.size());
+							historicalUnrealizedPnl.size(), historicalTotalPnl.size(), numberTrades.size(),
+							historicalInstrumentPk.size());
 
 					LongColumn timestampColumn = LongColumn.create("timestamp", ArrayUtils.toPrimitive(timestampArr));
 					DateTimeColumn dateTimeColumn = DateTimeColumn.create("date", dates);
+					StringColumn instrumentColumn = StringColumn.create("instrument", historicalInstrumentPk);
 					StringColumn verbColumn = StringColumn.create("verb", historicalVerb);
 					StringColumn algoInfoColumn = StringColumn
 							.create("algorithmInfo", fromStrList(historicalAlgorithmInfo));
@@ -314,7 +368,7 @@ public class PortfolioManager {
 							.addColumns(timestampColumn, dateTimeColumn, clOrdIdColumn, verbColumn, priceColumn,
 									quantityColumn, feeColumn, netPositionColumn, avgOpenPriceColumn,
 									netInvestmentColumn, historicalRealizedPnlColumn, historicalUnrealizedPnltColumn,
-									historicalTotalPnlColumn, numberTradesColumn, algoInfoColumn);
+									historicalTotalPnlColumn, numberTradesColumn, algoInfoColumn, instrumentColumn);
 
 					//add custom columns
 					if (customColumnsKeys.size() > 0) {
@@ -379,7 +433,9 @@ public class PortfolioManager {
 							logger.error("cant save tradestable to {} ", filename, e);
 						}
 					}
+					Instrument instrument = Instrument.getInstrument(getInstrumentPK(instrumentKey));
 					output.put(instrument, output1);
+					instrumentsIterated.add(instrumentKey);
 				}
 			} catch (Exception e) {
 				System.err.println("Error getTradesTable in PortfolioManager , return empty!!! ");

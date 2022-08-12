@@ -1,12 +1,10 @@
 package com.lambda.investing.data_manager.parquet;
-
 import org.apache.parquet.example.data.simple.SimpleGroup;
 import org.apache.parquet.schema.Type;
 
 import java.util.List;
 
 public class Parquet {
-
 	private List<SimpleGroup> data;
 	private List<Type> schema;
 

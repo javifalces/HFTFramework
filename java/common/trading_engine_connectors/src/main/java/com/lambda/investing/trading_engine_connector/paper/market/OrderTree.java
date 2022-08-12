@@ -173,6 +173,7 @@ public class OrderTree {
 		}
 	}
 
+
 	public Double maxPrice() {
 		if (this.depth > 0) {
 			return this.priceTree.lastKey();

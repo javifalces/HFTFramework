@@ -119,18 +119,29 @@ public class QuoteManager implements ExecutionReportListener, Runnable {
 	}
 
 	private void updateQuote() throws LambdaTradingException {
+
 		checkQuoteRequest(this.lastQuoteRequest);
 		LambdaTradingException ex = null;
 		try {
-			bidQuoteSideManager.quoteRequest(this.lastQuoteRequest);
-			lastClOrdIdsSent.addAll(askQuoteSideManager.getLastClOrdIdSent());
+			Date nextWakeup = bidQuoteSideManager.getSleepUntil();
+			if (nextWakeup == null || nextWakeup.getTime() < algorithm.getCurrentTimestamp()) {
+				bidQuoteSideManager.quoteRequest(this.lastQuoteRequest);
+				lastClOrdIdsSent.addAll(bidQuoteSideManager.getLastClOrdIdSent());
+			} else {
+				logger.info("sleeping bid from {} until {}", algorithm.getCurrentTime(), nextWakeup);
+			}
 
 		} catch (Exception e) {
 			logger.error("bidQuoteSideManager error", e);
 		}
 		try {
-			askQuoteSideManager.quoteRequest(this.lastQuoteRequest);
-			lastClOrdIdsSent.addAll(askQuoteSideManager.getLastClOrdIdSent());
+			Date nextWakeup = askQuoteSideManager.getSleepUntil();
+			if (nextWakeup == null || nextWakeup.getTime() < algorithm.getCurrentTimestamp()) {
+				askQuoteSideManager.quoteRequest(this.lastQuoteRequest);
+				lastClOrdIdsSent.addAll(askQuoteSideManager.getLastClOrdIdSent());
+			} else {
+				logger.info("sleeping ask from {} until {}", algorithm.getCurrentTime(), nextWakeup);
+			}
 
 		} catch (Exception e) {
 			logger.error("askQuoteSideManager error", e);
@@ -202,14 +213,19 @@ public class QuoteManager implements ExecutionReportListener, Runnable {
 	}
 
 	@Override public boolean onExecutionReportUpdate(ExecutionReport executionReport) {
-		if (executionReport.getVerb().equals(Verb.Buy)) {
-			bidQuoteSideManager.onExecutionReportUpdate(executionReport);
+		Verb verb = executionReport.getVerb();
+		if (verb != null) {
+			if (verb.equals(Verb.Buy)) {
+				bidQuoteSideManager.onExecutionReportUpdate(executionReport);
+			}
+			if (verb.equals(Verb.Sell)) {
+				askQuoteSideManager.onExecutionReportUpdate(executionReport);
+			}
+			return true;
+		} else {
+			logger.warn("ER with verb Null received! {}", executionReport);
+			return false;
 		}
-		if (executionReport.getVerb().equals(Verb.Sell)) {
-			askQuoteSideManager.onExecutionReportUpdate(executionReport);
-		}
-		return true;
-
 	}
 
 	@Override public boolean onInfoUpdate(String header, String message) {

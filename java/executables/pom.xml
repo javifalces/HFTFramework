@@ -14,10 +14,17 @@
     <packaging>pom</packaging>
 
     <modules>
+        <module>MockMarketDataPublisher</module>
+        <module>ZeroMqMarketDataListener</module>
+        <module>ZeroMQPersistorMarketDataConnector</module>
         <module>BinanceEngine</module>
         <module>Backtest</module>
+        <module>MetatraderEngine</module>
         <module>AlgoTradingZeroMq</module>
+        <module>XChangeEngine</module>
     </modules>
+
+
 
 
 </project>

@@ -71,6 +71,10 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
 		this.paperTradingEngine.init();
 	}
 
+	public void reset() {
+		this.paperTradingEngine.reset();
+	}
+
 	public abstract void setDemoTrading();
 
 	public void setPaperTrading(MarketDataProvider marketDataProvider) {
@@ -101,7 +105,9 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
 			this.paperTradingEngine.setPaperConnectorMarketDataAndExecutionReportPublisher(paperConnectorPublisher);
 			this.paperTradingEngine.init();
 
-		} else {
+		} else
+
+		{
 			logger.error(
 					"cant be paper trading on other type of MarketDataProvider as ZeroMqMarketDataConnector or OrdinaryMarketDataProvider");
 		}
@@ -156,7 +162,7 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
 				logger.warn("order already processed {}-> reject", orderRequest.getClientOrderId());
 				return;
 			} else {
-				lastOrderRequestClOrdId.add(orderRequest.getClientOrderId());
+				lastOrderRequestClOrdId.offer(orderRequest.getClientOrderId());
 			}
 
 			if (isPaperTrading && paperTradingEngine != null) {

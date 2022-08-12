@@ -48,6 +48,16 @@ public class ExecutionReport {
 					+ ", verb=" + verb + ", timestampCreation=" + timestampCreation + '}';
 
 		}
+		if (executionReportStatus.equals(ExecutionReportStatus.PartialFilled) || executionReportStatus
+				.equals(ExecutionReportStatus.CompletellyFilled)) {
+			return "ExecutionReport{" + "executionReportStatus='" + executionReportStatus + '\'' + ", instrument='"
+					+ instrument + '\'' + ", verb=" + verb + '\'' + ", price=" + price + ", quantity=" + quantity
+					+ ", lastQuantity=" + lastQuantity + ", quantityFill=" + quantityFill + '\'' + ", freeText='"
+					+ freeText + '\'' + ", algorithmInfo='" + algorithmInfo + '\'' + ", clientOrderId='" + clientOrderId
+					+ '\'' + ", origClientOrderId='" + origClientOrderId + '\'' + ", rejectReason='" + rejectReason
+					+ '\'' + ", timestampCreation=" + timestampCreation + '}';
+
+		}
 		return "ExecutionReport{" + "executionReportStatus='" + executionReportStatus + '\'' + ", instrument='"
 				+ instrument + '\'' + ", price=" + price + ", quantity=" + quantity + ", lastQuantity=" + lastQuantity
 				+ ", quantityFill=" + quantityFill + '\'' + ", freeText='" + freeText + '\'' + ", algorithmInfo='"

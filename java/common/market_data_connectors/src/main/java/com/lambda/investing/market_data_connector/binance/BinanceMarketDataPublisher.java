@@ -241,6 +241,7 @@ public class BinanceMarketDataPublisher extends AbstractMarketDataConnectorPubli
 				bids = ArrayUtils.subarray(bids, 0, indexBid);
 			}
 
+
 			if (anyError && (indexAsk < MIN_VALID_DEPTH || indexBid < MIN_VALID_DEPTH)) {
 				logger.error("Depth is very small with errors bid_depth:{}  ask_depth:{} ", indexBid, indexAsk);
 				return;

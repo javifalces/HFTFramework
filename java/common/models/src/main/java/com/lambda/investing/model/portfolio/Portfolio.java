@@ -70,6 +70,7 @@ import java.util.Map;
 		return getPortfolio(path, false);
 	}
 
+
 	public void clear() {
 		portfolioInstruments.clear();
 		long timestampLastUpdate = 0;
@@ -103,6 +104,8 @@ import java.util.Map;
 			new Thread(this, "portfolio_autosave").start();
 		}
 	}
+
+
 
 	public void updateTrade(ExecutionReport executionReport) {
 		if (executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.PartialFilled) || executionReport

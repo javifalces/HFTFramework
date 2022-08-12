@@ -15,6 +15,7 @@ public class Trade {
 	private String buyerClientOrderId;
 	private String sellerClientOrderId;
 
+
 	public Trade(long time, double price, double qty, int provider, int taker, int buyer, int seller, int orderHit,
 			String buyerAlgorithmInfo, String sellerAlgorithmInfo, String buyerClientOrderId,
 			String sellerClientOrderId) {

@@ -108,8 +108,9 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
 		//					.getPrimaryKey() + SUFFIX_SEPARATOR + persistSuffix + File.separator + "date=" + dateFormat
 		//					.format(date) + File.separator + "data.parquet";
 		//		} else {
-		return parquetDataPath + File.separator + "type=" + type + File.separator + "instrument=" + instrument
-				.getPrimaryKey() + File.separator + "date=" + dateFormat.format(date) + File.separator + "data.parquet";
+			return parquetDataPath + File.separator + "type=" + type + File.separator + "instrument=" + instrument
+					.getPrimaryKey() + File.separator + "date=" + dateFormat.format(date) + File.separator
+					+ "data.parquet";
 		//		}
 	}
 
@@ -157,8 +158,8 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
 		//			return dataPath + File.separator + instrument.getPrimaryKey() + SUFFIX_SEPARATOR + this.persistSuffix + "_"
 		//					+ typeMessage.name().toLowerCase() + "_" + dateFormat.format(calendar.getTime()) + ".csv";
 		//		} else {
-		return dataPath + File.separator + instrument.getPrimaryKey() + "_" + typeMessage.name().toLowerCase() + "_"
-				+ dateFormat.format(calendar.getTime()) + ".csv";
+			return dataPath + File.separator + instrument.getPrimaryKey() + "_" + typeMessage.name().toLowerCase() + "_"
+					+ dateFormat.format(calendar.getTime()) + ".csv";
 		//		}
 	}
 
@@ -366,8 +367,10 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
 					List<String> filesToProcess = null;
 					if (persistParquet) {
 						filesToProcess = createParquets(csvFilesFound);
+						logger.info("{} files persisted into parquets", filesToProcess.size());
 					} else {
 						filesToProcess = moveFilesParquetFolder(csvFilesFound);
+						logger.info("{} files moved", filesToProcess.size());
 					}
 
 					markAsProcessed(filesToProcess);
@@ -411,6 +414,63 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
 			File file = new File(filepath);
 			Path filePath = file.toPath();
 			String outputPathFile = outputPath + File.separator + (filePath.getFileName().toString());
+
+			String filename = file.getName();
+			String name = filename.split("\\.")[0];
+			String[] csvFileSplitted = name.split("_");
+
+			//TODO something better on instruments with isin!
+			int index = 0;
+			String instrumentPK = csvFileSplitted[index];
+
+			if (csvFileSplitted.length == 4) {
+				instrumentPK = csvFileSplitted[index] + "_" + csvFileSplitted[index + 1];
+				index = 2;
+			}
+			if (csvFileSplitted.length == 5) {
+				instrumentPK =
+						csvFileSplitted[index] + "_" + csvFileSplitted[index + 1] + "_" + csvFileSplitted[index + 2];
+				index = 3;
+			}
+
+			//			if (persistSuffix != null && instrumentPK.contains(SUFFIX_SEPARATOR)) {
+			//				//split with broker
+			//				String[] splitInstrumentPk = instrumentPK.split(SUFFIX_SEPARATOR);
+			//				instrumentPK = splitInstrumentPk[0];
+			//				String suffix = splitInstrumentPk[1].trim();
+			//				if (!persistSuffix.equalsIgnoreCase(suffix)) {
+			//					//not my file
+			//					continue;
+			//				}
+			//			} else if (persistSuffix != null && !instrumentPK.contains(SUFFIX_SEPARATOR)) {
+			//				//not my file
+			//				continue;
+			//			}
+			if (ignoredInstruments.contains(instrumentPK)) {
+				continue;
+			}
+			Instrument instrument = Instrument.getInstrument(instrumentPK);
+			if (instrument == null) {
+				logger.warn("cant find instrument for pk {} -> add to ignore list", instrumentPK);
+				ignoredInstruments.add(instrumentPK);
+				continue;
+			}
+			//TODO something better
+
+			String type = csvFileSplitted[index];
+			String dateStr = csvFileSplitted[index + 1];
+			Date date = null;
+			try {
+				date = dateFormat.parse(dateStr);
+			} catch (ParseException e) {
+				logger.error("cant parse date in {}", filepath);
+				continue;
+			}
+
+			if (date.getDay() == new Date().getDay() && date.getMonth() == new Date().getMonth()) {
+				logger.error("date from file is same as today in {}-> skip it", filepath);
+				continue;
+			}
 
 			//			using rename
 			//			boolean outputRename = file.renameTo(new File(outputPathFile));
@@ -471,7 +531,7 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
 		if (!basePath.exists()) {
 			basePath.mkdirs();
 		}
-		logger.info("markAsProcessed {} files", filesProcessed.size());
+		logger.info("markAsProcessed {} files=> move to {}", filesProcessed.size(), processedPath);
 		Map<String, ZipOutputStream> dateToZos = new HashMap<>();
 		for (String filepath : filesProcessed) {
 			File file = new File(filepath);
@@ -481,7 +541,9 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
 
 			boolean outputRename = true;
 			try {
+				logger.info("moving {} to {} (replace)", filePath, outputPathFile.toPath());
 				Files.copy(filePath, outputPathFile.toPath(), REPLACE_EXISTING);
+
 				Files.delete(filePath);
 			} catch (Exception e) {
 				outputRename = false;
@@ -551,7 +613,11 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
 			//to pass only one per day at 12:00
 			daysAlreadyProcessed.add(calendar.getTime().getDay());
 		}
+		int counter = 0;
 		for (String csvFile : csvFilesFound) {
+			logger.info("creating parquet file {}/{}", counter, csvFilesFound.size());
+			counter++;
+
 			File file = new File(csvFile);
 			String filename = file.getName();
 			String name = filename.split("\\.")[0];
@@ -602,6 +668,15 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
 				date = dateFormat.parse(dateStr);
 			} catch (ParseException e) {
 				logger.error("cant parse date in {}", csvFile);
+				continue;
+			}
+			if (date == null) {
+				logger.error("date from file is null in {}", csvFile);
+				continue;
+			}
+
+			if (date.getDay() == new Date().getDay() && date.getMonth() == new Date().getMonth()) {
+				logger.error("date from file is same as today in {}-> skip it", csvFile);
 				continue;
 			}
 
@@ -705,6 +780,7 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
 			}
 
 		}
+		logger.info("finished creating {} parquets ", filesProcessed.size());
 		return filesProcessed;
 	}
 

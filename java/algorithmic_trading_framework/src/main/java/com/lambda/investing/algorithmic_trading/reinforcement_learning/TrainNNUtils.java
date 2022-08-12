@@ -151,6 +151,15 @@ public class TrainNNUtils {
 
 	}
 
+	/**
+	 * Get array of states and action rewards that reward has some rewards !=0
+	 *
+	 * @param inputWithTarget
+	 * @param stateNumberOfColumns
+	 * @param actions
+	 * @param cleanIt
+	 * @return
+	 */
 	public static double[][] getArrayValid(double[][] inputWithTarget, int stateNumberOfColumns, int actions,
 			boolean cleanIt) {
 		double[][] targetRaw = getColumnsArray(inputWithTarget, stateNumberOfColumns, stateNumberOfColumns + actions);
@@ -176,6 +185,14 @@ public class TrainNNUtils {
 		return outputArr;
 	}
 
+	/**
+	 * Get array of states and action rewards that reward has some rewards !=0 (used only when train on data)
+	 *
+	 * @param inputWithTarget
+	 * @param stateNumberOfColumns
+	 * @param actions
+	 * @return
+	 */
 	@Deprecated public static double[][] getArrayValid(double[][] inputWithTarget, int stateNumberOfColumns,
 			int actions) {
 		return getArrayValid(inputWithTarget, stateNumberOfColumns, actions, false);
@@ -191,9 +208,9 @@ public class TrainNNUtils {
 			return trainOnDataStandard(memoryPath, actionColumns, stateColumns, outputModelPath, learningRateNN,
 					momentumNesterov, nEpoch, batchSize, maxBatchSize, l2, l1, trainingStats, isRNN,
 					isHyperParameterTuning, rnnHorizon);
-		} else if (trainType == TrainType.custom_actor_critic) {
-			return trainOnDataCustomActorCritic(memoryPath, actionColumns, stateColumns, outputModelPath,
-					learningRateNN, momentumNesterov, nEpoch, batchSize, maxBatchSize, l2, l1, trainingStats, isRNN,
+		} else if (trainType == TrainType.reinforce) {
+			return trainOnDataReinforce(memoryPath, actionColumns, stateColumns, outputModelPath, learningRateNN,
+					momentumNesterov, nEpoch, batchSize, maxBatchSize, l2, l1, trainingStats, isRNN,
 					isHyperParameterTuning, rnnHorizon);
 		} else {
 			System.err.println("trainType method not found " + trainType);
@@ -226,16 +243,22 @@ public class TrainNNUtils {
 			batchSize = Math.min(512, memoryData.length / 2);
 		}
 
-		Dl4jMemoryReplayModel memoryReplayModel = new Dl4jMemoryReplayModel(outputModelPath, learningRateNN,
-				momentumNesterov, nEpoch, batchSize, maxBatchSize, l2, l1, TRAIN_FROM_FILE_MODEL, isRNN);
+		Dl4jRegressionMemoryReplayModel memoryReplayModel = null;
+		if(!isRNN) {
+			memoryReplayModel = new Dl4jRegressionMemoryReplayModel(outputModelPath, learningRateNN,
+					momentumNesterov, nEpoch, batchSize, maxBatchSize, l2, l1, TRAIN_FROM_FILE_MODEL);
+		}else{
+			memoryReplayModel = new Dl4jLSTMMemoryReplayModel(outputModelPath, learningRateNN,
+					momentumNesterov, nEpoch, batchSize, maxBatchSize, l2, l1, TRAIN_FROM_FILE_MODEL);
+		}
 		System.out.println("training standard prediction/target....");
 		if (trainingStats != 0) {
 			memoryReplayModel.setTrainingStats(true);
 		}
 		if (isHyperParameterTuning) {
 			System.out.println("Hyperparameter tuning detected!  activate EARLY_STOPPING and disable training stats");
-			Dl4jMemoryReplayModel.HYPERPARAMETER_TUNING = true;
-			Dl4jMemoryReplayModel.EARLY_STOPPING = true;
+			Dl4jRegressionMemoryReplayModel.PARAMETER_TUNING_ENABLE_DEFAULT = true;
+			Dl4jRegressionMemoryReplayModel.EARLY_STOPPING_ENABLE_DEFAULT = true;
 			memoryReplayModel.setTrainingStats(false);
 		}
 
@@ -252,7 +275,7 @@ public class TrainNNUtils {
 
 	}
 
-	private static boolean trainOnDataCustomActorCritic(String memoryPath, int actionColumns, int stateColumns,
+	private static boolean trainOnDataReinforce(String memoryPath, int actionColumns, int stateColumns,
 			String outputModelPath, double learningRateNN, double momentumNesterov, int nEpoch, int batchSize,
 			int maxBatchSize, double l2, double l1, int trainingStats, boolean isRNN, boolean isHyperParameterTuning,
 			int rnnHorizon) throws IOException {
@@ -280,14 +303,14 @@ public class TrainNNUtils {
 		System.out.println("training prediction....");
 		Dl4jClassificationMemoryReplayModel predictMemoryReplayModel = new Dl4jClassificationMemoryReplayModel(
 				outputModelPath, learningRateNN, momentumNesterov, nEpoch, batchSize, maxBatchSize, l2, l1,
-				TRAIN_FROM_FILE_MODEL, isRNN);
+				TRAIN_FROM_FILE_MODEL);
 		if (trainingStats != 0) {
 			predictMemoryReplayModel.setTrainingStats(true);
 		}
 		if (isHyperParameterTuning) {
 			System.out.println("Hyperparameter tuning detected!  activate EARLY_STOPPING and disable training stats");
-			Dl4jClassificationMemoryReplayModel.HYPERPARAMETER_TUNING = true;
-			Dl4jClassificationMemoryReplayModel.EARLY_STOPPING = true;
+			Dl4jClassificationMemoryReplayModel.PARAMETER_TUNING_ENABLE_DEFAULT = true;
+			Dl4jClassificationMemoryReplayModel.EARLY_STOPPING_ENABLE_DEFAULT = true;
 			predictMemoryReplayModel.setTrainingStats(false);
 		}
 
@@ -302,15 +325,22 @@ public class TrainNNUtils {
 		//TARGET -> classification
 		System.out.println("training target....");
 		String targetOutput = outputModelPath.replace("predict", "target");
-		Dl4jMemoryReplayModel targetMemoryReplayModel = new Dl4jMemoryReplayModel(targetOutput, learningRateNN,
-				momentumNesterov, nEpoch, batchSize, maxBatchSize, l2, l1, TRAIN_FROM_FILE_MODEL, isRNN);
+		Dl4jRegressionMemoryReplayModel targetMemoryReplayModel = null;
+		if(!isRNN) {
+			targetMemoryReplayModel = new Dl4jRegressionMemoryReplayModel(targetOutput, learningRateNN,
+					momentumNesterov, nEpoch, batchSize, maxBatchSize, l2, l1, TRAIN_FROM_FILE_MODEL);
+		}else{
+			targetMemoryReplayModel = new Dl4jLSTMMemoryReplayModel(targetOutput, learningRateNN,
+					momentumNesterov, nEpoch, batchSize, maxBatchSize, l2, l1, TRAIN_FROM_FILE_MODEL);
+		}
+
 		if (trainingStats != 0) {
 			targetMemoryReplayModel.setTrainingStats(true);
 		}
 		if (isHyperParameterTuning) {
 			System.out.println("Hyperparameter tuning detected!  activate EARLY_STOPPING and disable training stats");
-			Dl4jMemoryReplayModel.HYPERPARAMETER_TUNING = true;
-			Dl4jMemoryReplayModel.EARLY_STOPPING = true;
+			Dl4jRegressionMemoryReplayModel.PARAMETER_TUNING_ENABLE_DEFAULT = true;
+			Dl4jRegressionMemoryReplayModel.EARLY_STOPPING_ENABLE_DEFAULT = true;
 			targetMemoryReplayModel.setTrainingStats(false);
 		}
 		logger.info("starting training target model with {} epoch on {} batch", nEpoch, batchSize);

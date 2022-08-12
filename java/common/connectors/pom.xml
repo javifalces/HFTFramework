@@ -15,6 +15,7 @@
     <artifactId>connectors</artifactId>
 
 
+
     <dependencies>
         <dependency>
             <groupId>com.lambda.investing</groupId>
@@ -52,6 +53,7 @@
         </dependency>
 
     </dependencies>
+
 
 
 </project>

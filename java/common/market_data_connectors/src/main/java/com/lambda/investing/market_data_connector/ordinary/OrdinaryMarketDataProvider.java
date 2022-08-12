@@ -12,7 +12,7 @@ import com.lambda.investing.model.messaging.TypeMessage;
 import lombok.Getter;
 import lombok.Setter;
 
-import javax.annotation.PostConstruct;
+
 
 @Getter @Setter public class OrdinaryMarketDataProvider extends AbstractMarketDataProvider
 		implements ConnectorListener {
@@ -27,7 +27,7 @@ import javax.annotation.PostConstruct;
 		this.connectorConfiguration = connectorConfiguration;
 	}
 
-	@PostConstruct public void init() {
+	public void init() {
 
 		this.ordinaryConnectorPublisherProvider.register(connectorConfiguration, this);
 

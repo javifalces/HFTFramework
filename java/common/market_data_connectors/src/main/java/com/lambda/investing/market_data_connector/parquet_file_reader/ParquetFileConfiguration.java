@@ -88,8 +88,8 @@ import static com.lambda.investing.data_manager.csv.CSVUtils.PATH_TO_INSTRUMENT;
 	}
 
 	private String getPath(String type, String date, String instrumentPk) {
-		return Configuration.getDataPath() + File.separator + "type=" + type + File.separator + "instrument="
-				+ instrumentPk + File.separator + "date=" + date + File.separator + "data.parquet";
+		return Configuration.getDataPath() + File.separator + "type=" + type + File.separator + "instrument=" + instrumentPk
+				+ File.separator + "date=" + date + File.separator + "data.parquet";
 	}
 
 	private void setParquetFilesPath() {
@@ -104,6 +104,10 @@ import static com.lambda.investing.data_manager.csv.CSVUtils.PATH_TO_INSTRUMENT;
 		this.datesToLoad = getDaysBetweenDates(startTime, endTime);
 		for (Date date : this.datesToLoad) {
 			for (Instrument instrument : instruments) {
+				if (instrument == null) {
+					System.out.println("null instrument detected! -> skip it");
+					continue;
+				}
 				String depthFile = getPath(TypeMessage.depth.name(), dateFormat.format(date),
 						instrument.getPrimaryKey());
 				File depth = new File(depthFile);

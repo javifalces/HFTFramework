@@ -49,6 +49,7 @@ public class TickTimeSeries extends ApplicationFrame {
 		//Add JChart
 		depthsTab.add(title, chartPanel);
 
+
 	}
 
 	private ChartPanel createJPanel() {

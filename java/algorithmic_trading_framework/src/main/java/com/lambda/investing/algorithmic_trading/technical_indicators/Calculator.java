@@ -1,6 +1,7 @@
 package com.lambda.investing.algorithmic_trading.technical_indicators;
 
 import com.lambda.investing.algorithmic_trading.Algorithm;
+import com.lambda.investing.algorithmic_trading.ArrayUtils;
 import com.lambda.investing.model.candle.Candle;
 import com.tictactec.ta.lib.Core;
 import com.tictactec.ta.lib.MInteger;
@@ -62,7 +63,7 @@ public class Calculator {
 		double[] output = new double[closePrices.length];
 		MInteger begin = new MInteger();
 		MInteger length = new MInteger();
-
+		//ema(int startIdx, int endIdx, double[] inReal, int optInTimePeriod, MInteger outBegIdx, MInteger outNBElement, double[] outReal)
 		RetCode retCode = CORE.ema(0, closePrices.length - 1, closePrices, period, begin, length, output);
 		if (retCode.equals(RetCode.Success)) {
 			//get the last value
@@ -77,6 +78,38 @@ public class Calculator {
 			return outputVal;
 		} else {
 			logger.error("cant calculate EMA -> {}", retCode);
+			return closePrices[closePrices.length - 1];
+		}
+	}
+
+	/***
+	 * stddev is a rolling biased stddev of period optInTimePeriod that is multiplied by optInNbDev. So this function results in an array of stdevs made for each input array value considering subarray with length of optInTimePeriod.
+	 * https://sourceforge.net/p/ta-lib/code/HEAD/tree/trunk/ta-lib/c/src/ta_func/ta_VAR.c#l302
+	 * @param closePrices
+	 * @param stds
+	 * @param period
+	 * @return
+	 */
+	public static double StdCalculate(double[] closePrices, double stds, int period) {
+		double[] output = new double[closePrices.length];
+		MInteger begin = new MInteger();
+		MInteger length = new MInteger();
+		//		//ema(int startIdx, int endIdx, double[] inReal, int optInTimePeriod, MInteger outBegIdx, MInteger outNBElement, double[] outReal)
+		//		  stdDev(int startIdx, int endIdx, double[] inReal, int optInTimePeriod, double optInNbDev, MInteger outBegIdx, MInteger outNBElement, double[] outReal)
+		RetCode retCode = CORE.stdDev(0, closePrices.length - 1, closePrices, period, stds, begin, length, output);
+		if (retCode.equals(RetCode.Success)) {
+			//get the last value
+			double outputVal = closePrices[closePrices.length - 1];/// to avoid buying on error!
+			for (int i = 0; i < output.length; i++) {
+				//take the last value != 0
+				if (output[i] == 0) {
+					break;
+				}
+				outputVal = output[i];
+			}
+			return outputVal;
+		} else {
+			logger.error("cant calculate STD -> {}", retCode);
 			return closePrices[closePrices.length - 1];
 		}
 	}
@@ -137,6 +170,7 @@ public class Calculator {
 		}
 	}
 
+
 	public static double ATRCalculate(double[] closePrices, double[] highPrices, double[] lowPrices, int period) {
 		double[] output = new double[closePrices.length];
 		MInteger begin = new MInteger();
@@ -158,6 +192,42 @@ public class Calculator {
 			logger.error("cant calculate ATR -> {}", retCode);
 			return closePrices[closePrices.length - 1];
 		}
+	}
+
+	public static boolean IsMonotonicIncreasing(double[] numbers) {
+		int lastCmp = 0;
+		if (ArrayUtils.sum(numbers) == 0) {
+			return false;
+		}
+		for (int i = 1; i < numbers.length; i++) {
+			int cmp = Double.compare(numbers[i], numbers[i - 1]);
+
+			if (lastCmp == 0) {
+				lastCmp = cmp;
+			} else if (cmp != 0 && ((cmp > 0) != (lastCmp > 0))) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	public static boolean IsMonotonicDecreasing(double[] numbers) {
+		int lastCmp = 0;
+		if (ArrayUtils.sum(numbers) == 0) {
+			return false;
+		}
+		for (int i = 1; i < numbers.length; i++) {
+			int cmp = Double.compare(numbers[i], numbers[i - 1]);
+
+			if (lastCmp == 0) {
+				lastCmp = cmp;
+			} else if (cmp != 0 && ((cmp < 0) != (lastCmp < 0))) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 }

@@ -7,7 +7,7 @@ import lombok.ToString;
 @Getter @Setter @ToString public class Command {
 
 	public enum ClassMessage {
-		start, stop;
+		start, stop, finishedBacktest;
 	}
 
 	public Command(String message) {

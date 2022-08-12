@@ -48,6 +48,15 @@ public class OrderMatchEngine extends OrderbookManager {
 		fastOrderMap = new ConcurrentHashMap<>();
 	}
 
+	public void reset() {
+		currentTimestamp = 0L;
+		timeToNextUpdateMs = 0L;
+		bidSide.clear();
+		askSide.clear();
+		executionReportMap.clear();
+		fastOrderMap.clear();
+	}
+
 	private void removeMMOrdersDepth(Verb verb) {
 
 		NavigableMap<Double, List<FastOrder>> navigableMapTo = bidSide;
@@ -239,6 +248,7 @@ public class OrderMatchEngine extends OrderbookManager {
 		Verb verb = trade.getVerb();
 		if (verb == null) {
 			verb = inferVerbFromTrade(trade);
+			trade.setVerb(verb);//inferring verb side from trade
 		}
 
 		if (verb != null && verb.equals(Verb.Buy) && askSide.size() > 0) {
@@ -293,7 +303,7 @@ public class OrderMatchEngine extends OrderbookManager {
 					}
 
 				}
-				if (qtyTrade == 0) {
+				if (qtyTrade <= 0) {
 					//will be notified from ER
 					return true;
 				}
@@ -348,7 +358,7 @@ public class OrderMatchEngine extends OrderbookManager {
 						paperTradingEngineConnector.notifyTrade(trade);
 					}
 				}
-				if (qtyTrade == 0) {
+				if (qtyTrade <= 0) {
 					//will be notified from ER
 					return true;
 				}
@@ -357,7 +367,7 @@ public class OrderMatchEngine extends OrderbookManager {
 
 		}
 
-		if (!tradeNotified) {
+		if (!tradeNotified && qtyTrade > 0) {
 			//something not in algos
 			trade.setQuantity(qtyTrade);
 			paperTradingEngineConnector.notifyTrade(trade);
@@ -586,12 +596,10 @@ public class OrderMatchEngine extends OrderbookManager {
 							//notify counterparty
 							if (!fastOrder.algorithm.equalsIgnoreCase(MARKET_MAKER_ALGORITHM_INFO)) {
 								ExecutionReport otherExecutionReport = getExecutionReport(fastOrder.orderRequest);
-								if (otherExecutionReport.getExecutionReportStatus()
-										.equals(ExecutionReportStatus.CompletellyFilled)) {
+								if (otherExecutionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled)) {
 									continue;
 								}
-								if (otherExecutionReport.getExecutionReportStatus()
-										.equals(ExecutionReportStatus.Rejected)) {
+								if (otherExecutionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Rejected)) {
 									continue;
 								}
 								double priceExecuted = isSelling ?
@@ -705,6 +713,7 @@ public class OrderMatchEngine extends OrderbookManager {
 		}
 		return null;
 	}
+
 
 	private void updateFastOrderMap(FastOrder fastOrder) {
 		if (fastOrder.orderRequest.getOrderRequestAction().equals(OrderRequestAction.Send) || fastOrder.orderRequest
@@ -866,6 +875,9 @@ public class OrderMatchEngine extends OrderbookManager {
 												.setExecutionReportStatus(ExecutionReportStatus.CompletellyFilled);
 									}
 								}
+
+
+
 
 								executionReportMap.put(executionReport.getClientOrderId(), executionReport);
 

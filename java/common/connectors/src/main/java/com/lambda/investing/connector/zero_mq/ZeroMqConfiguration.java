@@ -8,12 +8,12 @@ import lombok.Setter;
 import lombok.ToString;
 
 import com.lambda.investing.model.asset.*;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-@Getter @Setter @ToString public class ZeroMqConfiguration implements ConnectorConfiguration {
+@Getter @Setter @ToString
+public class ZeroMqConfiguration implements ConnectorConfiguration {
 
 	private String host;
 	private String topic;
@@ -28,7 +28,7 @@ import java.util.Objects;
 		this.port = zeroMqConfiguration.getPort();
 	}
 
-	public ZeroMqConfiguration(String host, int port, String topic) {
+	public ZeroMqConfiguration(String host,int port,String topic) {
 		this.host = host;
 		this.topic = topic;
 		this.port = port;
@@ -36,17 +36,15 @@ import java.util.Objects;
 
 	/**
 	 * For creation of a list of topics of the instrument
-	 *
 	 * @param host
 	 * @param port
 	 * @param instrument
 	 * @return
 	 */
-	public static List<ZeroMqConfiguration> getMarketDataZeroMqConfiguration(String host, int port,
-			Instrument instrument) {
+	public static List<ZeroMqConfiguration> getMarketDataZeroMqConfiguration(String host,int port,Instrument instrument){
 		List<ZeroMqConfiguration> output = new ArrayList<>();
 
-		for (TypeMessage typeMessage : TypeMessage.values()) {
+		for(TypeMessage typeMessage:TypeMessage.values()) {
 			output.add(new ZeroMqConfiguration(host, port, TopicUtils.getTopic(instrument, typeMessage)));
 		}
 

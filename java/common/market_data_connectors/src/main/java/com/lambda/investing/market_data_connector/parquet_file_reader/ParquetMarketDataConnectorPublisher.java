@@ -1,5 +1,6 @@
 package com.lambda.investing.market_data_connector.parquet_file_reader;
 
+import com.lambda.investing.Configuration;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorPublisher;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorPublisherProvider;
@@ -22,7 +23,7 @@ import org.apache.logging.log4j.Logger;
 import tech.tablesaw.api.Row;
 import tech.tablesaw.api.Table;
 
-import javax.annotation.PostConstruct;
+
 import java.io.File;
 import java.text.DecimalFormat;
 import java.time.Duration;
@@ -34,12 +35,15 @@ import static com.lambda.investing.data_manager.csv.CSVUtils.NameRowPair;
 import static com.lambda.investing.data_manager.csv.CSVUtils.sleepDifference;
 
 public class ParquetMarketDataConnectorPublisher extends AbstractMarketDataConnectorPublisher implements Runnable {
-
+	public static boolean PAUSE = false;
+	public static boolean BUCLE_RUN = false;
 	private static boolean PICKLE_CACHE = false;
 
 	public static String ALGORITHM_INFO_MM = "MarketMaker_Parquet";
 	public static String TOPIC_COMMAND = "command";
 	public static Command STOP_COMMAND = new Command(Command.ClassMessage.stop.name());
+
+	public static Command FINISHED_BACKTEST_COMMAND = new Command(Command.ClassMessage.finishedBacktest.name());
 	public static Command START_COMMAND = new Command(Command.ClassMessage.start.name());
 
 	private ParquetFileConfiguration parquetFileConfiguration;
@@ -68,7 +72,7 @@ public class ParquetMarketDataConnectorPublisher extends AbstractMarketDataConne
 		//		enable=true;
 	}
 
-	@PostConstruct public void init() {
+	public void init() {
 		startBacktest();
 	}
 
@@ -163,7 +167,27 @@ public class ParquetMarketDataConnectorPublisher extends AbstractMarketDataConne
 
 		Date firstDate = this.dates.get(0);
 		NavigableMap<Long, NameRowPair> readingTableDate = readingTable.get(firstDate);
-		Map.Entry<Long, NameRowPair> entry = readingTableDate.entrySet().iterator().next();
+		if (readingTableDate == null || readingTableDate.size() == 0) {
+			System.err.println(
+					"Error readingTableDate is null or size 0!! and readingTable size is " + readingTable.size()
+							+ " check LAMBDA_DATA_PATH to " + Configuration.getDataPath());
+
+			logger.error("Error readingTableDate is null  or size 0!! and readingTable size is " + readingTable.size()
+					+ " check LAMBDA_DATA_PATH to " + Configuration.getDataPath());
+			System.exit(-1);
+		}
+		Map.Entry<Long, NameRowPair> entry = null;
+		try {
+			entry = readingTableDate.entrySet().iterator().next();
+		} catch (NoSuchElementException e) {
+			System.err.println("NoSuchElementException getting readingTableDate of size " + readingTableDate.size()
+					+ " check LAMBDA_DATA_PATH to " + Configuration.getDataPath());
+
+			logger.error("NoSuchElementException getting readingTableDate of size {} from {}", readingTableDate.size(),
+					Configuration.getDataPath(), e);
+
+			System.exit(-1);
+		}
 		long timeStamp = entry.getKey();
 		START_COMMAND.setTimestamp(timeStamp);
 		notifyCommand(TOPIC_COMMAND, START_COMMAND);
@@ -206,6 +230,17 @@ public class ParquetMarketDataConnectorPublisher extends AbstractMarketDataConne
 					Duration.ZERO)) {
 
 				for (Map.Entry<Long, NameRowPair> entrySet : readingTableDate.entrySet()) {
+
+					while (PAUSE) {
+						//pause is to wait RL4j
+						try {
+							Thread.sleep(500);
+						} catch (InterruptedException e) {
+//							throw new RuntimeException(e);
+						}
+					}
+
+
 					try {
 						timeStamp = entrySet.getKey();
 						pb.step();
@@ -233,6 +268,7 @@ public class ParquetMarketDataConnectorPublisher extends AbstractMarketDataConne
 							long nextTimeStamp = readingTableDate.higherEntry(timeStamp).getKey();
 							timeToNextUpdateMs = nextTimeStamp - timeStamp;
 						}
+
 
 						try {
 							if (parquetFileConfiguration.isInDepthFiles(name)) {
@@ -273,12 +309,27 @@ public class ParquetMarketDataConnectorPublisher extends AbstractMarketDataConne
 			}
 		}
 
-		System.out.println("Finished reading backtest CSV ");
-		logger.info("************************* END OF CSV ***************");
+		System.out.println("Finished reading backtest Parquet ");
+		logger.info("************************* END OF Parquets ***************");
 		logger.info("End of {} reading table", this.getClass().getSimpleName());
 		STOP_COMMAND.setTimestamp(timeStamp);
 		notifyCommand(TOPIC_COMMAND, STOP_COMMAND);
+
+		FINISHED_BACKTEST_COMMAND.setTimestamp(timeStamp);
+		notifyCommand(TOPIC_COMMAND, FINISHED_BACKTEST_COMMAND);
+
 		notifyEndOfFile();
+
+		if (BUCLE_RUN) {
+//			//wait finished everything
+//			try {
+//				Thread.sleep(1000);
+//			} catch (InterruptedException e) {
+//				throw new RuntimeException(e);
+//			}
+			logger.info("repeat backtest Parquet -> ");
+			this.run();
+		}
 
 	}
 

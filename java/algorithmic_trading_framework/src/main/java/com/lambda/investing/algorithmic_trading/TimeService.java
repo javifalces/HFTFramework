@@ -44,19 +44,28 @@ public class TimeService implements TimeServiceIfc {
 		this.calendar.setTimeInMillis(currentTimestamp);
 	}
 
-	@Override public Calendar getCalendar() {
+	@Override
+	public Calendar getCalendar() {
 		return calendar;
 	}
 
-	@Override public void sleepMs(long msToSleep) throws InterruptedException {
+	@Override
+	public void sleepMs(long msToSleep) throws InterruptedException {
 		Thread.sleep(msToSleep);
 	}
 
-	@Override public String getCurrentTimezone() {
+	@Override
+	public void reset() {
+		this.currentTimestamp = 0;
+	}
+
+	@Override
+	public String getCurrentTimezone() {
 		return this.timezone;
 	}
 
-	@Override public Date getCurrentTime() {
+	@Override
+	public Date getCurrentTime() {
 		updateTimestamp();
 		return calendar.getTime();
 	}

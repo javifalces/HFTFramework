@@ -96,9 +96,9 @@
                                     <generateDirectory>${project.basedir}/src/main/java</generateDirectory>
                                     <plugins>
                                         <!--<plugin>-->
-                                        <!--<groupId>org.jvnet.jaxb2_commons</groupId>-->
-                                        <!--<artifactId>jaxb2-basics</artifactId>-->
-                                        <!--<version>${jaxb2.version}</version>-->
+                                            <!--<groupId>org.jvnet.jaxb2_commons</groupId>-->
+                                            <!--<artifactId>jaxb2-basics</artifactId>-->
+                                            <!--<version>${jaxb2.version}</version>-->
                                         <!--</plugin>-->
                                         <plugin>
                                             <groupId>org.jvnet.jaxb2_commons</groupId>
@@ -108,9 +108,9 @@
 
 
                                         <!--<plugin>-->
-                                        <!--<groupId>org.jvnet.jaxb2_commons</groupId>-->
-                                        <!--<artifactId>jaxb2-basics-annotate</artifactId>-->
-                                        <!--<version>${jaxb2.version}</version>-->
+                                            <!--<groupId>org.jvnet.jaxb2_commons</groupId>-->
+                                            <!--<artifactId>jaxb2-basics-annotate</artifactId>-->
+                                            <!--<version>${jaxb2.version}</version>-->
                                         <!--</plugin>-->
                                     </plugins>
                                 </configuration>

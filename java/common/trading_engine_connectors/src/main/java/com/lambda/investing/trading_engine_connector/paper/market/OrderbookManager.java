@@ -66,26 +66,31 @@ public class OrderbookManager {
 			}
 		};
 
-		algosCacheOrderRequest = new LinkedHashMap<String, OrderRequest>(MAX_SIZE_CACHE_ALGOS_CLIENT_ORDER_ID) {
+        algosCacheOrderRequest = new LinkedHashMap<String, OrderRequest>(MAX_SIZE_CACHE_ALGOS_CLIENT_ORDER_ID) {
 
-			@Override protected boolean removeEldestEntry(Map.Entry<String, OrderRequest> entry) {
-				return size() > MAX_SIZE_CACHE_ALGOS_CLIENT_ORDER_ID;
-			}
-		};
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, OrderRequest> entry) {
+                return size() > MAX_SIZE_CACHE_ALGOS_CLIENT_ORDER_ID;
+            }
+        };
 
-		orderId = new AtomicInteger();
-	}
+        orderId = new AtomicInteger();
+    }
 
-	public void setVerbose(boolean verbose) {
-		this.verbose = verbose;
-	}
+    public void reset() {
+        this.orderbook.reset();
+    }
 
-	public Orderbook getOrderbook() {
-		return orderbook;
-	}
+    public void setVerbose(boolean verbose) {
+        this.verbose = verbose;
+    }
 
-	private int generateOrderId(String clientOrderId) {
-		int output = orderId.getAndIncrement();
+    public Orderbook getOrderbook() {
+        return orderbook;
+    }
+
+    private int generateOrderId(String clientOrderId) {
+        int output = orderId.getAndIncrement();
 		clientOrderIdToOrdId.put(clientOrderId, output);
 		ordIdToClientOrderId.put(output, clientOrderId);
 		return output;
@@ -361,6 +366,7 @@ public class OrderbookManager {
 			//for market orders
 			executionReport.setPrice(trade.getPrice());
 		}
+
 
 	}
 

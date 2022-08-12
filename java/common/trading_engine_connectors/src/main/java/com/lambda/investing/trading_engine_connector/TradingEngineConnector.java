@@ -11,12 +11,14 @@ import com.lambda.investing.model.trading.OrderRequest;
  */
 public interface TradingEngineConnector {
 
-	void register(String id, ExecutionReportListener executionReportListener);
+    void register(String id, ExecutionReportListener executionReportListener);
 
-	void deregister(String id, ExecutionReportListener executionReportListener);
+    void deregister(String id, ExecutionReportListener executionReportListener);
 
-	boolean orderRequest(OrderRequest orderRequest);
+    boolean orderRequest(OrderRequest orderRequest);
 
-	void requestInfo(String info);
+    void requestInfo(String info);
+
+    void reset();
 
 }

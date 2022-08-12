@@ -26,7 +26,7 @@
     </bean>
 
     <bean id="connectorPublisher" class="com.lambda.investing.connector.zero_mq.ZeroMqPublisher">
-        <constructor-arg index="0" value="metatraderConnectorPublisher"/>
+        <constructor-arg index="0" value="zeroMqConnectorPublisher"/>
         <constructor-arg index="1" value="0"/>
     </bean>
 
@@ -46,7 +46,7 @@
     </bean>
 
     <bean id="orderRequestConnectorPublisher" class="com.lambda.investing.connector.zero_mq.ZeroMqPublisher">
-        <constructor-arg index="0" value="binanceOrderRequestPublisher"/>
+        <constructor-arg index="0" value="zeroMQRequestPublisher"/>
         <constructor-arg index="1" value="1"/>
     </bean>
 

@@ -13,7 +13,6 @@ import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.security.acl.LastOwnerException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -241,8 +240,8 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore
 
 		} else {
 			//modify it by default
-			timestampIn += 1;
-		}
+				timestampIn += 1;
+			}
 		//		}
 		return timestampIn;
 	}

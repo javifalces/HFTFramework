@@ -11,6 +11,14 @@ import java.util.UUID;
 public class PnlSnapshotTest {
 
 	String instrumentPk = "btceur_binance";
+	String algoInfo = "testPnl";
+
+	public PnlSnapshotTest() {
+		Instrument testInstrument = new Instrument();
+		testInstrument.setPrimaryKey(this.instrumentPk);
+		testInstrument.setMarket("binance");
+		testInstrument.addMap();
+	}
 
 	private ExecutionReport createExecutionReport(Verb verb, double price, double quantity) {
 		OrderRequest orderRequest = new OrderRequest();
@@ -20,6 +28,7 @@ public class PnlSnapshotTest {
 		orderRequest.setQuantity(quantity);
 		orderRequest.setQuantity(quantity);
 		orderRequest.setInstrument(instrumentPk);
+		orderRequest.setAlgorithmInfo(algoInfo);
 		orderRequest.setClientOrderId(UUID.randomUUID().toString());
 
 		ExecutionReport executionReport = new ExecutionReport(orderRequest);
@@ -56,6 +65,7 @@ public class PnlSnapshotTest {
 
 	@Test public void testPnlUpdatesClosePosition() {
 		PnlSnapshot pnlSnapshot = new PnlSnapshot();
+		pnlSnapshot.setAlgorithmInfo(algoInfo);
 		//buy 100@101
 		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Buy, 101, 100));
 		Assert.assertEquals(10100, pnlSnapshot.netInvestment, 0.0001);
@@ -70,6 +80,7 @@ public class PnlSnapshotTest {
 		Assert.assertEquals(-200, pnlSnapshot.totalPnl, 0.0001);
 		Assert.assertEquals(10100, pnlSnapshot.netInvestment, 0.0001);
 
+
 		//sell 100@99
 		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Sell, 99, 100));
 		Assert.assertEquals(-200, pnlSnapshot.realizedPnl, 0.0001);
@@ -81,6 +92,7 @@ public class PnlSnapshotTest {
 
 	@Test public void testPnlOrderedUpdatesClosePosition() {
 		PnlSnapshot pnlSnapshot = new PnlSnapshotOrders();
+		pnlSnapshot.setAlgorithmInfo(algoInfo);
 		//buy 100@101
 		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Buy, 101, 100));
 		Assert.assertEquals(10100, pnlSnapshot.netInvestment, 0.0001);
@@ -106,6 +118,7 @@ public class PnlSnapshotTest {
 
 	@Test public void testPnlOrderedUpdatesClosePositionInvert() {
 		PnlSnapshot pnlSnapshot = new PnlSnapshotOrders();
+		pnlSnapshot.setAlgorithmInfo(algoInfo);
 		//sell 100@101
 		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Sell, 101, 100));
 		Assert.assertEquals(10100, pnlSnapshot.netInvestment, 0.0001);
@@ -152,6 +165,7 @@ public class PnlSnapshotTest {
 	@Test public void testPnlOrderedUpdatesOpenPosition() {
 		PnlSnapshotOrders pnlSnapshot = new PnlSnapshotOrders();
 		//buy 100@101
+		pnlSnapshot.setAlgorithmInfo(algoInfo);
 		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Buy, 101, 100));
 
 		/// last depth received best bid 99
@@ -169,6 +183,7 @@ public class PnlSnapshotTest {
 
 	@Test public void testPnlUpdatesIncreasingOpenPosition() {
 		PnlSnapshot pnlSnapshot = new PnlSnapshot();
+		pnlSnapshot.setAlgorithmInfo(algoInfo);
 		//buy 100@101
 		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Buy, 101, 100));
 		/// last depth received best bid 99
@@ -206,6 +221,7 @@ public class PnlSnapshotTest {
 
 	@Test public void testPnlOrderedUpdatesIncreasingOpenPosition() {
 		PnlSnapshotOrders pnlSnapshot = new PnlSnapshotOrders();
+		pnlSnapshot.setAlgorithmInfo(algoInfo);
 		//buy 100@101
 		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Buy, 101, 100));
 		/// last depth received best bid 99
@@ -244,6 +260,7 @@ public class PnlSnapshotTest {
 
 	@Test public void testPnlOrderedUpdatesIncreasingOpenPositionInvert() {
 		PnlSnapshotOrders pnlSnapshot = new PnlSnapshotOrders();
+		pnlSnapshot.setAlgorithmInfo(algoInfo);
 		//sell 100@101
 		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Sell, 101, 100));
 		/// last depth received best bid 99
@@ -284,6 +301,7 @@ public class PnlSnapshotTest {
 
 	@Test public void testPnlUpdatesChangeSide() {
 		PnlSnapshot pnlSnapshot = new PnlSnapshot();
+		pnlSnapshot.setAlgorithmInfo(algoInfo);
 		//buy 100@101
 		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Buy, 101, 100));
 		/// last depth received best bid 99
@@ -300,6 +318,7 @@ public class PnlSnapshotTest {
 
 	@Test public void testPnlOrdersUpdatesChangeSide() {
 		PnlSnapshotOrders pnlSnapshot = new PnlSnapshotOrders();
+		pnlSnapshot.setAlgorithmInfo(algoInfo);
 		//buy 100@101
 		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Buy, 101, 100));
 		/// last depth received best bid 99
@@ -316,6 +335,7 @@ public class PnlSnapshotTest {
 
 	@Test public void testPnlOrdersUpdatesChangeSideInvert() {
 		PnlSnapshotOrders pnlSnapshot = new PnlSnapshotOrders();
+		pnlSnapshot.setAlgorithmInfo(algoInfo);
 		//buy 100@101
 		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Sell, 101, 100));
 		/// last depth received best bid 99

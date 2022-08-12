@@ -16,7 +16,6 @@ import com.lambda.investing.model.portfolio.Portfolio;
 import com.lambda.investing.model.trading.*;
 import com.lambda.investing.trading_engine_connector.AbstractBrokerTradingEngine;
 import com.lambda.investing.trading_engine_connector.ExecutionReportListener;
-import com.lambda.investing.trading_engine_connector.TradingEngineConnector;
 import com.lambda.investing.trading_engine_connector.ZeroMqTradingEngineConnector;
 import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
@@ -112,9 +111,11 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 	protected AlgorithmNotifier algorithmNotifier;
 
 	protected boolean isBacktest = false;
+
+	protected boolean saveBacktestOutputTrades = true;
 	protected boolean isPaper = false;
 	protected TimeServiceIfc timeService;
-	private AlgorithmState algorithmState = AlgorithmState.NOT_INITIALIZED;
+	protected AlgorithmState algorithmState = AlgorithmState.NOT_INITIALIZED;
 
 	public boolean isReady() {
 		return getAlgorithmState().equals(AlgorithmState.STARTED);
@@ -130,13 +131,13 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 
 	public Map<String, ExecutionReport> clientOrderIdLastCompletelyFillReceived;
 	private static int HISTORICAL_TRADES_SAVE = 50;
-	private boolean plotStopHistorical = true;
+	private boolean plotStopHistorical = false;
 	protected boolean exitOnStop = true;
 	private int lastCurrentDay = 0;
 	//	private List<String> pendingToRemoveClientOrderId;
-	private Map<String, QuoteManager> instrumentQuoteManagerMap;
+	private Map<String, QuoteManager> instrumentQuoteManagerMap = new ConcurrentHashMap<>();
 
-	private Map<String, OrderRequest> clientOrderIdToCancelWhenActive;
+	private Map<String, OrderRequest> clientOrderIdToCancelWhenActive = new ConcurrentHashMap<>();
 	private CandleFromTickUpdater candleFromTickUpdater;
 	public static final Object EXECUTION_REPORT_LOCK = new Object();
 	protected Set<Instrument> instruments = new HashSet<>();
@@ -161,7 +162,33 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 
 	protected double getParameterDoubleOrDefault(Map<String, Object> parameters, String key, double defaultValue) {
 		String value = String.valueOf(parameters.getOrDefault(key, String.valueOf(defaultValue)));
-		if (value.equalsIgnoreCase("null")) {
+		if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
+			return defaultValue;
+		}
+		try {
+			return Double.valueOf(value);
+		} catch (Exception e) {
+			System.err.println(String.format("wrong parameter %s with value %s", key, value));
+			throw e;
+		}
+	}
+
+	public void setSaveBacktestOutputTrades(boolean saveBacktestOutputTrades) {
+		this.saveBacktestOutputTrades = saveBacktestOutputTrades;
+	}
+
+	protected double getParameterDoubleOrDefault(Map<String, Object> parameters, String key, String secondKey,
+												 double defaultValue) {
+		if (!parameters.containsKey(key)) {
+			double output = getParameterDoubleOrDefault(parameters, secondKey, defaultValue);
+			if (output != defaultValue) {
+				logger.warn("deprecated parameter key: {} better use {}", secondKey, key);
+			}
+			return output;
+		}
+
+		String value = String.valueOf(parameters.getOrDefault(key, String.valueOf(defaultValue)));
+		if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
 			return defaultValue;
 		}
 		try {
@@ -183,9 +210,47 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 		}
 	}
 
+	protected double getParameterDouble(Map<String, Object> parameters, String key, String secondKey) {
+		if (!parameters.containsKey(key)) {
+			logger.warn("deprecated parameter key: {} better use {}", secondKey, key);
+			return getParameterDouble(parameters, secondKey);
+		}
+
+		String value = String.valueOf(parameters.get(key));
+
+		try {
+			return Double.valueOf(value);
+		} catch (Exception e) {
+			System.err.println(String.format("wrong parameter %s with value %s", key, value));
+			throw e;
+		}
+	}
+
 	protected int getParameterIntOrDefault(Map<String, Object> parameters, String key, int defaultValue) {
 		String value = String.valueOf(parameters.getOrDefault(key, String.valueOf(defaultValue)));
-		if (value.equalsIgnoreCase("null")) {
+		if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
+			return defaultValue;
+		}
+		try {
+			return (int) Math.round(Double.valueOf(value));
+		} catch (Exception e) {
+			System.err.println(String.format("wrong parameter %s with value %s", key, value));
+			throw e;
+		}
+	}
+
+	protected int getParameterIntOrDefault(Map<String, Object> parameters, String key, String secondKey,
+			int defaultValue) {
+		if (!parameters.containsKey(key)) {
+			int output = getParameterIntOrDefault(parameters, secondKey, defaultValue);
+			if (output != defaultValue) {
+				logger.warn("deprecated parameter key: {} better use {}", secondKey, key);
+			}
+			return output;
+		}
+
+		String value = String.valueOf(parameters.getOrDefault(key, String.valueOf(defaultValue)));
+		if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
 			return defaultValue;
 		}
 		try {
@@ -197,6 +262,27 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 	}
 
 	protected int getParameterInt(Map<String, Object> parameters, String key) {
+
+		String value = String.valueOf(parameters.get(key));
+
+		try {
+			return (int) Math.round(Double.valueOf(value));
+		} catch (Exception e) {
+			System.err.println(String.format("wrong parameter %s with value %s", key, value));
+			throw e;
+		}
+
+	}
+
+	protected int getParameterInt(Map<String, Object> parameters, String key, String secondKey) {
+		if (!parameters.containsKey(key)) {
+			int output = getParameterIntOrDefault(parameters, secondKey, -666);
+			if (output != -666) {
+				logger.warn("deprecated parameter key: {} better use {}", secondKey, key);
+			}
+			return output;
+		}
+
 		String value = String.valueOf(parameters.get(key));
 
 		try {
@@ -220,9 +306,48 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 		return output;
 	}
 
+	protected String getParameterString(Map<String, Object> parameters, String key, String secondKey) {
+		if (!parameters.containsKey(key)) {
+			String output = getParameterString(parameters, secondKey);
+			if (output != null) {
+				logger.warn("deprecated parameter key: {} better use {}", secondKey, key);
+			}
+			return output;
+		}
+
+
+		String output = String.valueOf(parameters.get(key));
+		if (output.equalsIgnoreCase("null")) {
+			return null;
+		}
+		return output;
+	}
+
 	protected String getParameterStringOrDefault(Map<String, Object> parameters, String key, String defaultValue) {
 		String value = String.valueOf(parameters.getOrDefault(key, defaultValue));
-		if (value.equalsIgnoreCase("null")) {
+		if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
+			return defaultValue;
+		}
+		try {
+			return value;
+		} catch (Exception e) {
+			System.err.println(String.format("wrong parameter %s with value %s", key, value));
+			throw e;
+		}
+	}
+
+	protected String getParameterStringOrDefault(Map<String, Object> parameters, String key, String secondKey,
+			String defaultValue) {
+		if (!parameters.containsKey(key)) {
+			String output = getParameterStringOrDefault(parameters, secondKey, defaultValue);
+			if (!output.equals(defaultValue)) {
+				logger.warn("deprecated parameter key: {} better use {}", secondKey, key);
+			}
+			return output;
+		}
+
+		String value = String.valueOf(parameters.getOrDefault(key, defaultValue));
+		if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
 			return defaultValue;
 		}
 		try {
@@ -235,7 +360,7 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 
 	protected String[] getParameterArrayString(Map<String, Object> parameters, String key) {
 		String value = String.valueOf(parameters.get(key));
-		if (value.equalsIgnoreCase("null")) {
+		if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
 			return null;
 		}
 		if (value == null || value.trim().isEmpty()) {
@@ -246,8 +371,14 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 			value = value.replace(START_ARRAY_PARAMETERS, "").replace(END_ARRAY_PARAMETERS, "");
 			if (!value.contains(SEPARATOR_ARRAY_PARAMETERS)) {
 				parameters.put(key, value);
-				String valueIn = getParameterString(parameters, key);
-				output = new String[] { valueIn };
+				try {
+					String valueIn = getParameterString(parameters, key);
+					output = new String[] { valueIn };
+				} catch (Exception e) {
+					logger.error("error reading getParameterArrayString on key {} and value {} -> return null", key,
+							value, e);
+					return null;
+				}
 			} else {
 				String[] splitted = value.split(SEPARATOR_ARRAY_PARAMETERS);
 				output = new String[splitted.length];
@@ -264,7 +395,7 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 
 	protected double[] getParameterArrayDouble(Map<String, Object> parameters, String key) {
 		String value = String.valueOf(parameters.get(key));
-		if (value.equalsIgnoreCase("null")) {
+		if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
 			return null;
 		}
 		try {
@@ -272,8 +403,15 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 			value = value.replace(START_ARRAY_PARAMETERS, "").replace(END_ARRAY_PARAMETERS, "");
 			if (!value.contains(SEPARATOR_ARRAY_PARAMETERS)) {
 				parameters.put(key, value);
-				double valueIn = getParameterDouble(parameters, key);
-				output = new double[] { valueIn };
+				try {
+					double valueIn = getParameterDouble(parameters, key);
+					output = new double[] { valueIn };
+				} catch (Exception e) {
+					logger.error("error reading getParameterArrayDouble on key {} and value {} -> return null", key,
+							value, e);
+					return null;
+					//					output = new double[0];
+				}
 			} else {
 				String[] splitted = value.split(SEPARATOR_ARRAY_PARAMETERS);
 				output = new double[splitted.length];
@@ -290,7 +428,7 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 
 	protected int[] getParameterArrayInt(Map<String, Object> parameters, String key) {
 		String value = String.valueOf(parameters.get(key));
-		if (value.equalsIgnoreCase("null")) {
+		if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
 			return null;
 		}
 		try {
@@ -298,8 +436,14 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 			value = value.replace(START_ARRAY_PARAMETERS, "").replace(END_ARRAY_PARAMETERS, "");
 			if (!value.contains(SEPARATOR_ARRAY_PARAMETERS)) {
 				parameters.put(key, value);
-				int valueIn = getParameterInt(parameters, key);
-				output = new int[] { valueIn };
+				try {
+					int valueIn = getParameterInt(parameters, key);
+					output = new int[] { valueIn };
+				} catch (Exception e) {
+					logger.error("error reading getParameterArrayInt on key {} and value {} -> return null", key, value,
+							e);
+					return null;
+				}
 			} else {
 				String[] splitted = value.split(SEPARATOR_ARRAY_PARAMETERS);
 				output = new int[splitted.length];
@@ -371,7 +515,6 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 					}
 				});
 		algorithmNotifier = new AlgorithmNotifier(this, 3);
-		reset();
 
 	}
 
@@ -426,9 +569,9 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 	//Parameter settings
 	public void setParameters(Map<String, Object> parameters) {
 		this.parameters = parameters;
-		this.firstHourOperatingIncluded = getParameterIntOrDefault(parameters, "first_hour",
+		this.firstHourOperatingIncluded = getParameterIntOrDefault(parameters, "firstHour", "first_hour",
 				FIRST_HOUR_DEFAULT);//UTC time 6 -9
-		this.lastHourOperatingIncluded = getParameterIntOrDefault(parameters, "last_hour",
+		this.lastHourOperatingIncluded = getParameterIntOrDefault(parameters, "lastHour", "last_hour",
 				LAST_HOUR_DEFAULT);//UTC  18-21
 
 		if (this.firstHourOperatingIncluded != FIRST_HOUR_DEFAULT
@@ -445,7 +588,8 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 	}
 
 	protected void setSeed(long seed) {
-		SET_RANDOM_GENERATOR(seed);
+		logger.info("setting seed from algorithm to {}", seed);
+		SET_RANDOM_SEED(seed);
 	}
 
 	public void setParameter(String name, Object value) {
@@ -464,14 +608,11 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 			}
 			this.algorithmConnectorConfiguration.getTradingEngineConnector().register(this.algorithmInfo, this);
 			this.algorithmConnectorConfiguration.getMarketDataProvider().register(this);
-			reset();
+
 			this.seed = getParameterIntOrDefault(parameters, "seed", 0);//load it here for initialization
 			if (this.seed != 0) {
 				setSeed(this.seed);
 			}
-
-			//			SET_MULTITHREAD_CONFIGURATION(Configuration.MULTITHREADING_CORE);
-			//			SET_DELAY_ORDER_BACKTEST_MS(Configuration.DELAY_ORDER_BACKTEST_MS);
 
 			algorithmState = AlgorithmState.INITIALIZED;
 			logger.info("[{}]initialized  {}\n{}", getCurrentTime(), algorithmInfo);
@@ -549,32 +690,43 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 						System.err.println(Configuration
 								.formatLog("something goes wrong on {} stop function", instrumentPk, e.getMessage()));
 					}
-				}
+                }
 
-			}
-		}
-	}
+            }
+        }
+    }
 
-	public Depth getLastDepth(Instrument instrument) {
-		return getInstrumentManager(instrument.getPrimaryKey()).getLastDepth();
-	}
+    public Depth getLastDepth(Instrument instrument) {
+        return getInstrumentManager(instrument.getPrimaryKey()).getLastDepth();
+    }
 
-	public void reset() {
-		logger.info("[{}]Reset algorithm {}", getCurrentTime(), algorithmInfo);
-		//		this.portfolioManager.reset();//will reset trades!
-		clientOrderIdLastCompletelyFillReceived.clear();
-		for (InstrumentManager instrumentManager : instrumentToManager.values()) {
-			instrumentManager.reset();
-		}
-		clientOrderIdToCancelWhenActive = new ConcurrentHashMap<>();
-		for (QuoteManager quoteManager : instrumentQuoteManagerMap.values()) {
-			quoteManager.reset();
-		}
-		this.parameters = new ConcurrentHashMap<>(defaultParameters);
-		depthReceived = new AtomicInteger(0);
-		tradeReceived = new AtomicInteger(0);
-		//		pendingToRemoveClientOrderId = new ArrayList<>();
-	}
+
+    /**
+     * Method that will be called every day and should restart all to start new fresh day
+     */
+    public void resetAlgorithm() {
+        logger.info("[{}]Reset algorithm {}", getCurrentTime(), algorithmInfo);
+        //		this.portfolioManager.reset();//will reset trades!
+        clientOrderIdLastCompletelyFillReceived.clear();
+        for (InstrumentManager instrumentManager : instrumentToManager.values()) {
+            instrumentManager.reset();
+        }
+		clientOrderIdToCancelWhenActive.clear();
+        for (QuoteManager quoteManager : instrumentQuoteManagerMap.values()) {
+            quoteManager.reset();
+        }
+        depthReceived = new AtomicInteger(0);
+        tradeReceived = new AtomicInteger(0);
+
+        if (algorithmConnectorConfiguration != null) {
+            algorithmConnectorConfiguration.getMarketDataProvider().reset();
+            algorithmConnectorConfiguration.getTradingEngineConnector().reset();
+        }
+		timeService.reset();
+		algorithmState = AlgorithmState.INITIALIZED;
+		lastCurrentDay = 0;
+    }
+
 
 	//trading
 
@@ -678,44 +830,65 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 		return false;
 	}
 
-	protected boolean checkOperationalTime() {
-		if (inOperationalTime()) {
-			if (getAlgorithmState().equals(AlgorithmState.STOPPED)) {
-				logger.info(
-						"[{}] inOperationalTime firstHourOperatingIncluded:{} lastHourOperatingIncluded:{} => start ",
-						getCurrentTime(), firstHourOperatingIncluded, lastHourOperatingIncluded);
-			}
-			start();
-			return true;
-		} else {
+    protected boolean isEndOfBacktestDay() {
+        int hour = getCurrentTimeHour();
+        if (hour >= firstHourOperatingIncluded && hour >= lastHourOperatingIncluded) {
+            return true;
+        }
+        return false;
+
+
+    }
+
+    protected boolean checkOperationalTime() {
+        if (inOperationalTime()) {
+            if (getAlgorithmState().equals(AlgorithmState.STOPPED)) {
+                logger.info(
+                        "[{}] inOperationalTime firstHourOperatingIncluded:{} lastHourOperatingIncluded:{} => start ",
+                        getCurrentTime(), firstHourOperatingIncluded, lastHourOperatingIncluded);
+            }
+            start();
+            return true;
+        } else {
 			if (getAlgorithmState().equals(AlgorithmState.STARTED)) {
 				logger.info(
 						"[{}] not inOperationalTime firstHourOperatingIncluded:{} lastHourOperatingIncluded:{} => stop ",
 						getCurrentTime(), firstHourOperatingIncluded, lastHourOperatingIncluded);
 			}
 			stop();
-		}
-		if (lastCurrentDay == 0) {
-			lastCurrentDay = getCurrentTimeDay();
-		}
-		if (lastCurrentDay != getCurrentTimeDay()) {
-			logger.info("change of day detected-> reset");
-			//			System.out.println("new day detected " + algorithmInfo);
-			lastCurrentDay = getCurrentTimeDay();
-			reset();
+
+
 		}
 
-		return false;
-	}
+        //check change of day
+        if (lastCurrentDay == 0) {
+            lastCurrentDay = getCurrentTimeDay();
+        } else if (lastCurrentDay != getCurrentTimeDay()) {
+            logger.info("{} change of day detected {} - {}", getCurrentTime(), lastCurrentDay, getCurrentTimeDay());
+            lastCurrentDay = getCurrentTimeDay();
+            onNewDay();
+        }
 
-	private void updateAllActiveOrders(ExecutionReport executionReport) {
-		boolean isActive =
-				executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Active) || executionReport
-						.getExecutionReportStatus().equals(ExecutionReportStatus.PartialFilled);
-		boolean isInactive =
-				executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Cancelled) || executionReport
-						.getExecutionReportStatus().equals(ExecutionReportStatus.Rejected) || executionReport
-						.getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled);
+        return false;
+    }
+
+    protected void onEndOfBacktestDay() {
+//		algorithmState = AlgorithmState.FINISHED;//for rl4j to know when backtest is finished
+    }
+
+    protected void onNewDay() {
+        //reset the algo
+        resetAlgorithm();
+    }
+
+    private void updateAllActiveOrders(ExecutionReport executionReport) {
+        boolean isActive =
+                executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Active) || executionReport
+                        .getExecutionReportStatus().equals(ExecutionReportStatus.PartialFilled);
+        boolean isInactive =
+                executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Cancelled) || executionReport
+                        .getExecutionReportStatus().equals(ExecutionReportStatus.Rejected) || executionReport
+                        .getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled);
 
 		boolean isCancelRejected = executionReport.getExecutionReportStatus()
 				.equals(ExecutionReportStatus.CancelRejected);
@@ -1017,16 +1190,16 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 		checkDepth(depth);
 		//update cache
 		portfolioManager.updateDepth(depth);
+		algorithmNotifier.notifyObserversOnUpdateDepth(depth);//to stateManager - to state
 
 		if (!checkOperationalTime()) {
 			return false;
 		}
+
 		InstrumentManager instrumentManager = getInstrumentManager(depth.getInstrument());
 		instrumentManager.setLastDepth(depth);
 		addStatistics(RECEIVE_STATS + " depth");
 		depthReceived.incrementAndGet();
-
-		algorithmNotifier.notifyObserversOnUpdateDepth(depth);//to stateManager - to state
 
 		hedgeManager.onDepthUpdate(depth);
 		return true;
@@ -1106,8 +1279,9 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 
 	@Override public boolean onCommandUpdate(Command command) {
 		//Command received from backtest
+		boolean isNotStop = !command.getMessage().equalsIgnoreCase(Command.ClassMessage.stop.name());
 		long timestamp = command.getTimestamp();
-		if (timestamp != 0 && isBacktest) {
+		if (timestamp != 0 && isBacktest && isNotStop) {
 			timeService.setCurrentTimestamp(timestamp);
 		}
 		if (!isBacktest) {
@@ -1116,14 +1290,23 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 
 		logger.info("command received {}  ", command.getMessage());
 		if (command.getMessage().equalsIgnoreCase(Command.ClassMessage.stop.name())) {
-			String basePath = BASE_PATH_OUTPUT + File.separator + "trades_table_" + algorithmInfo;
-			logger.info("Stop received => saving {} trades in {}.csv", portfolioManager.numberOfTrades, basePath);
-			if (isBacktest) {
-				File file = new File(basePath).getParentFile();
-				file.mkdirs();//create if not exist
+            String basePath = BASE_PATH_OUTPUT + File.separator + "trades_table_" + algorithmInfo;
+            logger.info("Stop received => saving {} trades in {}.csv", portfolioManager.numberOfTrades, basePath);
+            if (isBacktest) {
+                if (saveBacktestOutputTrades) {
+                    File file = new File(basePath).getParentFile();
+                    file.mkdirs();//create if not exist
 
-				Map<Instrument, Table> tradesTable = portfolioManager.getTradesTable(basePath);
-				printBacktestResults(tradesTable);
+                    Map<Instrument, Table> tradesTable = portfolioManager.getTradesTable(basePath);
+                    printBacktestResults(tradesTable);
+                } else {
+                    for (Instrument instrument : instruments) {
+                        String output = (portfolioManager.summary(instrument));
+                        System.out.println(instrument);
+                        System.out.println(output);
+
+                    }
+                }
 			}
 			if (plotStopHistorical) {
 				try {
@@ -1141,6 +1324,10 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
 			if (isBacktest && exitOnStop) {
 				System.exit(0);
 			}
+		}
+
+		if (command.getMessage().equalsIgnoreCase(Command.ClassMessage.finishedBacktest.name())) {
+			onEndOfBacktestDay();
 		}
 
 		if (command.getMessage().equalsIgnoreCase(Command.ClassMessage.start.name())) {

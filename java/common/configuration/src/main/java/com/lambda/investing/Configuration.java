@@ -14,7 +14,7 @@ public class Configuration {
 	}
 
 	public static MULTITHREAD_CONFIGURATION MULTITHREADING_CORE = MULTITHREAD_CONFIGURATION.MULTITHREADING;//by default multithreading
-
+	public static boolean FEES_COMMISSIONS_INCLUDED = true;//by default we have commissions set by instruments.xmls
 	public static long DELAY_ORDER_BACKTEST_MS = 65;
 	//backtest engine
 	public static int BACKTEST_THREADS_PUBLISHING_MARKETDATA = 0;//used to publish from parquet and csv file!
@@ -54,7 +54,13 @@ public class Configuration {
 		DELAY_ORDER_BACKTEST_MS = delayOrderMs;
 	}
 
-	public static void SET_RANDOM_GENERATOR(long seed) {
+	public static void SET_FEES_COMMISSIONS_INCLUDED(boolean feesCommissionsIncluded) {
+		System.out.println("SET_FEES_COMMISSIONS_INCLUDED to " + feesCommissionsIncluded);
+		logger.info("SET_FEES_COMMISSIONS_INCLUDED to {}", feesCommissionsIncluded);
+		FEES_COMMISSIONS_INCLUDED = feesCommissionsIncluded;
+	}
+
+	public static void SET_RANDOM_SEED(long seed) {
 		if (seed != RANDOM_SEED) {
 			System.out.println("SET SEED " + seed);
 			logger.info("SET SEED {}", seed);
@@ -79,9 +85,10 @@ public class Configuration {
 		return IS_DEBUGGING;
 	}
 
-	public static String getDataPath() {
+	public static String getDataPath(){
 		return getEnvOrDefault("LAMBDA_DATA_PATH", "X:\\");
 	}
+
 
 	public static String DATA_PATH = getDataPath();
 

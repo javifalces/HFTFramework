@@ -16,9 +16,9 @@ import java.util.List;
 
 import static com.lambda.investing.market_data_connector.AbstractMarketDataProvider.GSON;
 
-public abstract class AbstractMarketDataConnectorPublisher implements MarketDataConnectorPublisher {
+public  abstract class AbstractMarketDataConnectorPublisher implements MarketDataConnectorPublisher {
 
-	protected boolean enable = true;
+	protected boolean enable=true;
 	protected ConnectorConfiguration connectorConfiguration;
 	protected ConnectorPublisher connectorPublisher;
 	protected Statistics statistics;
@@ -35,11 +35,10 @@ public abstract class AbstractMarketDataConnectorPublisher implements MarketData
 		this.statistics = statistics;
 	}
 
-	public AbstractMarketDataConnectorPublisher(ConnectorConfiguration connectorConfiguration,
-			ConnectorPublisher connectorPublisher) {
+	public AbstractMarketDataConnectorPublisher(ConnectorConfiguration connectorConfiguration,ConnectorPublisher connectorPublisher) {
 		//		this.statistics = new Statistics(headerStatistics,sleepStatistics);
-		this.connectorConfiguration = connectorConfiguration;
-		this.connectorPublisher = connectorPublisher;
+		this.connectorConfiguration=connectorConfiguration;
+		this.connectorPublisher=connectorPublisher;
 		if (connectorPublisher instanceof ZeroMqPublisher) {
 			isZeroMq = true;
 		}
@@ -74,25 +73,27 @@ public abstract class AbstractMarketDataConnectorPublisher implements MarketData
 	}
 
 	@Override public void start() {
-		enable = true;
+		enable=true;
 	}
 
 	@Override public void stop() {
-		enable = false;
+		enable=false;
 	}
 
-	@Override public void notifyDepth(String topic, Depth depth) {
-		String depthJson = GSON.toJson(depth);
-		topic = topic + "." + TypeMessage.depth.name();
+
+
+	@Override public void notifyDepth(String topic,Depth depth) {
+		String depthJson =GSON.toJson(depth);
+		topic=topic+"."+TypeMessage.depth.name();
 		//		logger.debug("notify DEPTH {}",depth.toString());
 		connectorPublisher.publish(connectorConfiguration, TypeMessage.depth, topic, depthJson);
 		if (statistics != null)
 			statistics.addStatistics(topic);
 	}
 
-	@Override public void notifyTrade(String topic, Trade trade) {
-		String tradeJson = GSON.toJson(trade);
-		topic = topic + "." + TypeMessage.trade.name();
+	@Override public void notifyTrade(String topic,Trade trade) {
+		String tradeJson =GSON.toJson(trade);
+		topic=topic+"."+TypeMessage.trade.name();
 		//		logger.debug("notify TRADE {}",trade.toString());
 		connectorPublisher.publish(connectorConfiguration, TypeMessage.trade, topic, tradeJson);
 		if (statistics != null)

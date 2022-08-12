@@ -6,19 +6,18 @@ import org.apache.logging.log4j.Logger;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class Statistics implements Runnable {
+public class Statistics implements Runnable{
 
 	private long sleepMs;
 	private boolean enable;
-	private Map<String, Long> topicToCounter;
+	private Map<String,Long> topicToCounter;
 	private String header;
 	protected Logger logger = LogManager.getLogger(Statistics.class);
-
-	public Statistics(String header, long sleepMs) {
-		this.header = header;
+	public Statistics(String header,long sleepMs) {
+		this.header=header;
 		this.sleepMs = sleepMs;
-		topicToCounter = new ConcurrentHashMap<>();
-		enable = true;
+		topicToCounter= new ConcurrentHashMap<>();
+		enable=true;
 		if (sleepMs > 0) {
 			Thread thread = new Thread(this, "Statistics");
 			thread.setPriority(Thread.MIN_PRIORITY);
@@ -26,10 +25,10 @@ public class Statistics implements Runnable {
 		}
 	}
 
-	public void addStatistics(String topic) {
-		long counter = topicToCounter.getOrDefault(topic, 0L);
-		long newCounter = counter + 1;
-		topicToCounter.put(topic, newCounter);
+	public void addStatistics(String topic){
+		long counter = topicToCounter.getOrDefault(topic,0L);
+		long newCounter=counter+1;
+		topicToCounter.put(topic,newCounter);
 	}
 
 	public void setStatistics(String topic, long counter) {
@@ -37,7 +36,7 @@ public class Statistics implements Runnable {
 	}
 
 	private void printCurrentStatistics() {
-		if (topicToCounter.size() > 0) {
+		if (topicToCounter.size()>0) {
 			logger.info("******** {} ********", header);
 			for (Map.Entry<String, Long> entry : topicToCounter.entrySet()) {
 				logger.info("\t{}:\t{}", entry.getKey(), entry.getValue());
@@ -46,9 +45,11 @@ public class Statistics implements Runnable {
 		}
 	}
 
+
 	@Override public void run() {
 
-		while (enable) {
+		while(enable){
+
 
 			printCurrentStatistics();
 
@@ -60,5 +61,6 @@ public class Statistics implements Runnable {
 		}
 
 	}
+
 
 }

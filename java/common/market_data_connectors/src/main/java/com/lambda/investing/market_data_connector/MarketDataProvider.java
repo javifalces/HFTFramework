@@ -6,4 +6,7 @@ public interface MarketDataProvider {
 
 	void deregister(MarketDataListener listener);
 
+	void reset();
+
+
 }

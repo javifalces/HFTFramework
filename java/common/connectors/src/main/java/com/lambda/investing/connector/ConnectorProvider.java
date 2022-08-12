@@ -6,4 +6,5 @@ public interface ConnectorProvider {
 
 	void deregister(ConnectorConfiguration configuration, ConnectorListener listener);
 
+
 }

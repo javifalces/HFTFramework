@@ -7,6 +7,7 @@ import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.Verb;
 
+import java.util.List;
 import java.util.Set;
 
 public interface HedgeManager {

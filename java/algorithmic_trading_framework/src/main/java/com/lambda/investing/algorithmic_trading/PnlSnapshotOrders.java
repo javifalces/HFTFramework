@@ -1,5 +1,6 @@
 package com.lambda.investing.algorithmic_trading;
 
+import com.lambda.investing.Configuration;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.trading.ExecutionReport;
@@ -45,9 +46,11 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 			//first the lowest price bought
 			double initialPrice = price;
 			double qtyBuy = priceMap.get(initialPrice);
-			double entryFee = feeMap.get(initialPrice);
+
+			double entryFee = feeMap.getOrDefault(initialPrice, 0.0);
 			double exitFee = lastFee;
 			double totalFee = entryFee + exitFee;
+
 			double minPositionAbs = Math.min(Math.abs(qtyBuy), Math.abs(netPosition));
 			double realizedPnlTemp = (lastPrice - initialPrice) * minPositionAbs * sidePosition * leverage;
 			//include fees!
@@ -147,16 +150,22 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 		lastClOrdId = executionReport.getClientOrderId();
 		instrumentPk = executionReport.getInstrument();
 
-		lastPrice = Math.min(lastPrice, maxExecutionPriceValid);
-		lastPrice = Math.max(lastPrice, minExecutionPriceValid);
-		if (lastPrice == maxExecutionPriceValid || lastPrice == minExecutionPriceValid) {
-			logger.warn("{} ER price {} bounded to max or min value {}", executionReport.getClientOrderId(),
-					executionReport.getPrice(), lastPrice);
-		}
+		//		lastPrice = Math.min(lastPrice, maxExecutionPriceValid);
+		//		lastPrice = Math.max(lastPrice, minExecutionPriceValid);
+		//		if (lastPrice == maxExecutionPriceValid || lastPrice == minExecutionPriceValid) {
+		//			logger.warn("{} ER price {} bounded to max or min value {}", executionReport.getClientOrderId(),
+		//					executionReport.getPrice(), lastPrice);
+		//		}
 
 		Instrument instrument = Instrument.getInstrument(executionReport.getInstrument());
 		boolean isTaker = isTaker(instrument, executionReport.getPrice(), executionReport.getVerb());
-		lastFee = instrument.calculateFee(isTaker, executionReport.getPrice(), executionReport.getLastQuantity());
+
+		double closeFee = 0.0;
+		if (Configuration.FEES_COMMISSIONS_INCLUDED) {
+			closeFee = instrument.calculateFee(isTaker, executionReport.getPrice(), executionReport.getLastQuantity());
+		}
+		lastFee = closeFee;
+
 		realizedFees += lastFee;
 
 		double leverage = DEFAULT_LEVERAGE;
@@ -179,7 +188,7 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 			//closed position
 			double remainQty = updateClosePosition(executionReport, leverage);
 			netPosition = newPosition;
-			//			lastQuantity = remainQty;
+//			lastQuantity = remainQty;
 			if (remainQty == 0) {
 				isClosePosition = true;
 				if (netPosition > 0) {
@@ -294,7 +303,11 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 		//supposing maker fees!
 		Verb verbEntry = netPosition > 0 ? Verb.Buy : Verb.Sell;
 		//		double entryFee = instrument.calculateFee(false, initialPrice, netPosition);
-		double exitFee = instrument.calculateFee(true, lastPriceForUnrealized, netPosition);
+		double exitFee = 0.0;
+		if (Configuration.FEES_COMMISSIONS_INCLUDED) {
+			exitFee = instrument.calculateFee(true, lastPriceForUnrealized, netPosition);
+		}
+
 		unrealizedFees = exitFee;
 
 		double unrealizedPnlProposal = ((lastPriceForUnrealized - initialPrice) * netPosition);

@@ -10,7 +10,6 @@ import java.util.Date;
 import java.util.TimeZone;
 
 public class Util {
-
 	public static Gson GSON_STRING = new GsonBuilder()
 			.excludeFieldsWithModifiers(Modifier.STATIC, Modifier.TRANSIENT, Modifier.VOLATILE, Modifier.FINAL)
 			.serializeSpecialFloatingPointValues().create();
@@ -29,5 +28,8 @@ public class Util {
 		Date date = UTC_CALENDAR.getTime();
 		return PYTHON_DATAFRAME_FORMAT.format(date);
 	}
+
+
+
 
 }

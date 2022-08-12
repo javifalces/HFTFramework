@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.Scanner;
 
 public class CSVDataManager implements DataManager {
-
 	Logger logger = LogManager.getLogger(CSVDataManager.class);
 
 	public static String readCSV(String filepath) throws IOException {

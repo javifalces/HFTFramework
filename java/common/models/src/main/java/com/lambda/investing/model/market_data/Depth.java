@@ -19,7 +19,7 @@ public class Depth extends CSVable implements Cloneable {
 	public static String ALGORITHM_INFO_MM = "MarketMaker_CSV";
 
 	private static Calendar UTC_CALENDAR = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
-	public static int MAX_DEPTH = 10;
+	public static int MAX_DEPTH = 5;
 	public static int MAX_DEPTH_CSV = 5;
 
 	//	private transient Instrument instrument;
@@ -384,13 +384,14 @@ public class Depth extends CSVable implements Cloneable {
 	public double getImbalance() {
 		double bidVolTotal = 0.;
 		double askVolTotal = 0.;
-		for (int level = 0; level < getLevels(); level++) {
+		for (int level = 0; level < getBidLevels(); level++) {
 			try {
 				bidVolTotal += bidsQuantities[level];
 			} catch (IndexOutOfBoundsException e) {
 
 			}
-
+		}
+		for (int level = 0; level < getAskLevels(); level++) {
 			try {
 				askVolTotal += asksQuantities[level];
 			} catch (IndexOutOfBoundsException e) {
@@ -406,19 +407,22 @@ public class Depth extends CSVable implements Cloneable {
 	public double getTotalVolume() {
 		double bidVolTotal = 0.;
 		double askVolTotal = 0.;
-		for (int level = 0; level < getLevels(); level++) {
+		for (int level = 0; level < getBidLevels(); level++) {
 			try {
 				bidVolTotal += bidsQuantities[level];
 			} catch (IndexOutOfBoundsException e) {
 
 			}
+		}
 
+		for (int level = 0; level < getAskLevels(); level++) {
 			try {
 				askVolTotal += asksQuantities[level];
 			} catch (IndexOutOfBoundsException e) {
 
 			}
 		}
+
 		if ((bidVolTotal + askVolTotal) == 0) {
 			return 0.0;
 		}
@@ -427,7 +431,7 @@ public class Depth extends CSVable implements Cloneable {
 
 	public double getBidVolume() {
 		double bidVolTotal = 0.;
-		for (int level = 0; level < getLevels(); level++) {
+		for (int level = 0; level < getBidLevels(); level++) {
 			try {
 				bidVolTotal += bidsQuantities[level];
 			} catch (IndexOutOfBoundsException e) {
@@ -439,7 +443,7 @@ public class Depth extends CSVable implements Cloneable {
 
 	public double getAskVolume() {
 		double askVolTotal = 0.;
-		for (int level = 0; level < getLevels(); level++) {
+		for (int level = 0; level < getAskLevels(); level++) {
 			try {
 				askVolTotal += asksQuantities[level];
 			} catch (IndexOutOfBoundsException e) {

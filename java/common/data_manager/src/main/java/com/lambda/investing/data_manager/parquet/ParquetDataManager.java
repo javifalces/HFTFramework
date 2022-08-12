@@ -35,7 +35,7 @@ public class ParquetDataManager implements DataManager {
 
 	private String cacheBasePath = null;
 
-	private static CompressionCodecName PARQUET_COMPRESSION = CompressionCodecName.GZIP;
+	private static CompressionCodecName PARQUET_COMPRESSION = CompressionCodecName.SNAPPY;
 
 	public static void disableWarning() {
 		System.err.close();
@@ -87,17 +87,19 @@ public class ParquetDataManager implements DataManager {
 			} catch (Exception e) {
 				logger.error("Error setEnv {} with {} ", "HADOOP_HOME", resourcesHadoop, e);
 			}
+			logger.info("WIN System detected with HADOOP_HOME on {}", System.getenv("HADOOP_HOME"));
 
 		} else {
 			//Install
+
 			if (System.getenv("HADOOP_HOME") == null) {
 				logger.warn("HADOOP_HOME not detected in unix!");
 				logger.warn("wget https://www-eu.apache.org/dist/hadoop/common/hadoop-3.3.0/hadoop-3.3.0.tar.gz");
 				logger.warn("sudo mv hadoop-3.3.0 /opt/hadoop");
 				logger.warn("tar xzf hadoop-3.3.0.tar.gz");
 				logger.warn("export HADOOP_HOME=/opt/hadoop");
-
 			}
+			logger.info("UNIX System detected with HADOOP_HOME on {}", System.getenv("HADOOP_HOME"));
 
 		}
 
@@ -163,7 +165,6 @@ public class ParquetDataManager implements DataManager {
 		return output;
 
 	}
-
 	@Override public <T extends CSVable> tech.tablesaw.api.Table getData(String filepath, Class<T> objectType)
 			throws Exception {
 
@@ -181,6 +182,8 @@ public class ParquetDataManager implements DataManager {
 				return cachePathObj;
 			}
 		}
+
+
 
 		Configuration conf = new Configuration();
 		Table output = null;
@@ -298,16 +301,16 @@ public class ParquetDataManager implements DataManager {
 		try (ParquetWriter<Object> writer = AvroParquetWriter.<Object>builder(dataFilePath).withSchema(schema)
 				.withDataModel(ReflectData.get()).withConf(new Configuration())
 				.withCompressionCodec(PARQUET_COMPRESSION).withWriteMode(OVERWRITE).build()) {
-			logger.debug("writing parquet if {} rows with compression {} into ", objectList.size(),
+			logger.debug("writing parquet of {} rows with compression {} into {}", objectList.size(),
 					PARQUET_COMPRESSION.name(), filepath);
 			for (T csvableRow : objectList) {
 				if (csvableRow instanceof CSVable) {
 					writer.write(csvableRow.getParquetObject());
 				}
 			}
-			logger.debug("writing parquet finished {}", filepath);
+			logger.debug("writed {} rows parquet finished {}", objectList.size(), filepath);
 		} catch (IOException ex) {
-			logger.error("Error saving to parquet {} ", filepath, ex);
+			logger.error("Error saving {} rows to parquet {} ", objectList.size(), filepath, ex);
 			return false;
 		}
 		return true;

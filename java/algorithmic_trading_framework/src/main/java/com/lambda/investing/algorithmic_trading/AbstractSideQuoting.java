@@ -20,14 +20,23 @@ public abstract class AbstractSideQuoting extends SingleInstrumentAlgorithm {
 	protected enum Style {
 		aggressive,//market orders
 		passive,//on the mid price
-		conservative//on quote level
+		level,//based on levelToQuote
 	}
 
+	protected boolean fromDQN = false;
 	protected static Logger logger = LogManager.getLogger(AbstractSideQuoting.class);
-	protected static int DEFAULT_QUEUE_TRADE_SIZE_MINUTES = 60;
+	protected static int DEFAULT_QUEUE_TRADE_SIZE_MINUTES = 128;
 
-	protected double quantityBuy;
-	protected double quantitySell;
+	public double getQuantityBuy() {
+		return quantityBuy;
+	}
+
+	public double getQuantitySell() {
+		return quantitySell;
+	}
+
+	public double quantityBuy;
+	public double quantitySell;
 	protected Verb verb;
 	protected Map<Verb, Boolean> entryWaitingER = new ConcurrentHashMap<>();
 	protected Map<Verb, Boolean> exitWaitingER = new ConcurrentHashMap<>();
@@ -46,7 +55,7 @@ public abstract class AbstractSideQuoting extends SingleInstrumentAlgorithm {
 	protected Verb lastFilledVerb = null;
 	protected String style = "aggressive";//passive conservative
 	protected boolean exitAggressive = true;
-	protected CandleType candleTypeBusiness = CandleType.mid_time_1_min;
+	protected CandleType candleTypeBusiness = CandleType.mid_time_seconds_threshold;
 
 	protected long lastTimestampSendOrderRequest = 0;
 
@@ -59,6 +68,26 @@ public abstract class AbstractSideQuoting extends SingleInstrumentAlgorithm {
 	public AbstractSideQuoting(String algorithmInfo, Map<String, Object> parameters) {
 		super(algorithmInfo, parameters);
 		constructorAbstract(parameters);
+	}
+
+	public boolean isFromDQN() {
+		return fromDQN;
+	}
+
+	public void setFromDQN(boolean fromDQN) {
+		this.fromDQN = fromDQN;
+	}
+
+	public void setLevelToQuote(int levelToQuote) {
+		this.levelToQuote = levelToQuote;
+	}
+
+	public void setCandleTypeBusiness(CandleType candleTypeBusiness) {
+		this.candleTypeBusiness = candleTypeBusiness;
+	}
+
+	public boolean isReady() {
+		return isReady;
 	}
 
 	protected void constructorAbstract(Map<String, Object> parameters) {
@@ -105,14 +134,15 @@ public abstract class AbstractSideQuoting extends SingleInstrumentAlgorithm {
 	public abstract String printAlgo();
 
 	@Override public void onUpdateCandle(Candle candle) {
+
 		if (!candleTypeBusiness.equals(candle.getCandleType()) || !candle.getInstrumentPk()
 				.equals(this.instrument.getPrimaryKey())) {
 			//skip other type of candles
 			return;
 		}
 
-		queueTrades.add(candle.getClose());
-		queueTradeCandles.add(candle);
+		queueTrades.offer(candle.getClose());
+		queueTradeCandles.offer(candle);
 		setCandleSideRules(candle);
 	}
 
@@ -126,7 +156,15 @@ public abstract class AbstractSideQuoting extends SingleInstrumentAlgorithm {
 
 	}
 
-	protected void setSide(Verb verb) {
+	public Verb getSide() {
+		Verb output = this.verb;
+		if (changeSide) {
+			output = Verb.OtherSideVerb(this.verb);
+		}
+		return output;
+	}
+
+	public void setSide(Verb verb) {
 		if (verb == null) {
 			if (!style.equalsIgnoreCase(Style.aggressive.toString())) {
 				if (this.verb != null) {
@@ -136,6 +174,13 @@ public abstract class AbstractSideQuoting extends SingleInstrumentAlgorithm {
 
 				sideActive.put(Verb.Buy, false);
 				sideActive.put(Verb.Sell, false);
+				if (instrument != null) {
+					Depth depth = getLastDepth(instrument);
+					if (depth != null) {
+						updateQuote(depth);
+					}
+				}
+
 			}
 			//			sideActive.clear();
 			//			this.spreadMultiplier = this.spreadMultiplierDefault * 10;
@@ -165,6 +210,9 @@ public abstract class AbstractSideQuoting extends SingleInstrumentAlgorithm {
 				.getOrDefault(Verb.Sell, false));
 	}
 
+
+
+
 	protected void closePosition() {
 
 		//		Verb closeVerb = Verb.OtherSideVerb(verb);
@@ -174,8 +222,14 @@ public abstract class AbstractSideQuoting extends SingleInstrumentAlgorithm {
 			return;
 		}
 		Verb closeVerb = position > 0 ? Verb.Sell : Verb.Buy;
-		double quantity = Math.abs(position);
 
+		//avoid close with our position counter
+		double quantityQuoted = position > 0 ? quantityBuy : quantitySell;
+		if (changeSide) {
+			quantityQuoted = position > 0 ? quantitySell : quantityBuy;
+		}
+
+		double quantity = Math.min(Math.abs(position), quantityQuoted);
 		setSide(null);
 		this.verb = null;//just in case with aggressive
 		OrderRequest orderRequest = createMarketOrderRequest(instrument, closeVerb, quantity);
@@ -233,6 +287,36 @@ public abstract class AbstractSideQuoting extends SingleInstrumentAlgorithm {
 
 	public abstract void setCandleSideRules(Candle candle);
 
+	protected double GetLevelPrice(Verb verb, Depth depth) {
+		double output = depth.getMidPrice();
+		if (verb.equals(Verb.Buy)) {
+			if (levelToQuote > 0) {
+				//level
+				int levelBid = Math.min(depth.getBidLevels(), levelToQuote);
+				output = depth.getBids()[levelBid - 1];
+			}
+
+			if (levelToQuote < 0) {
+				//cross the spread
+				output = depth.getBestAsk() + instrument.getPriceTick() * 5;
+			}
+		}
+
+		if (verb.equals(Verb.Sell)) {
+			if (levelToQuote > 0) {
+				//conservative
+				int levelAsk = Math.min(depth.getAskLevels(), levelToQuote);
+				output = depth.getAsks()[levelAsk - 1];
+			}
+			if (levelToQuote < 0) {
+				//cross the spread
+				output = depth.getBestBid() - instrument.getPriceTick() * 5;
+			}
+		}
+
+		return output;
+	}
+
 	private void updateQuote(Depth depth) {
 		double bidQuantity = 0;
 		double askQuantity = 0;
@@ -241,30 +325,37 @@ public abstract class AbstractSideQuoting extends SingleInstrumentAlgorithm {
 		//create quote request
 		QuoteRequest quoteRequest = createQuoteRequest(this.instrument);
 		quoteRequest.setQuoteRequestAction(QuoteRequestAction.On);
+		String freeText = null;
+		if (levelToQuote < 0) {
+			freeText = "market";
+		}//for metatrader
 		if (verb == null) {
 			quoteRequest.setQuoteRequestAction(QuoteRequestAction.Off);
 		} else {
 			if (verb.equals(Verb.Sell)) {
-				if (style.equalsIgnoreCase(Style.conservative.toString())) {
-					int levelAsk = Math.max(depth.getAskLevels(), levelToQuote);
-					askPrice = depth.getAsks()[levelAsk - 1];
+				if (style.equalsIgnoreCase(Style.level.toString())) {
+					//					int levelAsk = Math.max(depth.getAskLevels(), levelToQuote);
+					//					askPrice = depth.getAsks()[levelAsk - 1];
+					askPrice = GetLevelPrice(verb, depth);
 				} else if (style.equalsIgnoreCase(Style.passive.toString())) {
 					askPrice = depth.getMidPrice();
 				} else {
-					System.err.println("style not found   aggressive ,conservative or passive  !! " + style);
-					logger.error("style not found  aggressive ,conservative or passive !! " + style);
+					System.err.println("style not found   aggressive ,level or passive  !! " + style);
+					logger.error("style not found  aggressive ,level or passive !! " + style);
 				}
 				askQuantity = this.quantitySell;
 			}
 			if (verb.equals(Verb.Buy)) {
-				if (style.equalsIgnoreCase(Style.conservative.toString())) {
-					int levelBid = Math.max(depth.getBidLevels(), levelToQuote);
-					bidPrice = depth.getBids()[levelBid - 1];
+				if (style.equalsIgnoreCase(Style.level.toString())) {
+					//					int levelBid = Math.max(depth.getBidLevels(), levelToQuote);
+					//					bidPrice = depth.getBids()[levelBid - 1];
+					bidPrice = GetLevelPrice(verb, depth);
+
 				} else if (style.equalsIgnoreCase(Style.passive.toString())) {
 					bidPrice = depth.getMidPrice();
 				} else {
-					System.err.println("style not found  aggressive ,conservative or passive !! " + style);
-					logger.error("style not found  aggressive ,conservative or passive !! " + style);
+					System.err.println("style not found  aggressive ,level or passive !! " + style);
+					logger.error("style not found  aggressive ,level or passive !! " + style);
 				}
 				bidQuantity = this.quantityBuy;
 			}
@@ -287,6 +378,7 @@ public abstract class AbstractSideQuoting extends SingleInstrumentAlgorithm {
 		quoteRequest.setAskPrice(askPrice);
 		quoteRequest.setBidQuantity(bidQuantity);
 		quoteRequest.setAskQuantity(askQuantity);
+		quoteRequest.setFreeText(freeText);
 
 		try {
 			sendQuoteRequest(quoteRequest);
@@ -305,7 +397,6 @@ public abstract class AbstractSideQuoting extends SingleInstrumentAlgorithm {
 		quoteRequest.setQuoteRequestAction(QuoteRequestAction.Off);
 		sendQuoteRequest(quoteRequest);
 	}
-
 	@Override public boolean onDepthUpdate(Depth depth) {
 		if (!depth.getInstrument().equals(instrument.getPrimaryKey())) {
 			return false;
@@ -360,6 +451,11 @@ public abstract class AbstractSideQuoting extends SingleInstrumentAlgorithm {
 	}
 
 	@Override public boolean onExecutionReportUpdate(ExecutionReport executionReport) {
+		boolean continueProcessing = super.onExecutionReportUpdate(executionReport);
+		if (!continueProcessing) {
+			return false;
+		}
+
 		Verb ErVerb = executionReport.getVerb();
 		boolean isTrade = executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled)
 				|| executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.PartialFilled);
@@ -392,10 +488,6 @@ public abstract class AbstractSideQuoting extends SingleInstrumentAlgorithm {
 			}
 		}
 
-		boolean continueProcessing = super.onExecutionReportUpdate(executionReport);
-		if (!continueProcessing) {
-			return false;
-		}
 		//		logger.info("onExecutionReportUpdate  {}  {}:  {}", executionReport.getExecutionReportStatus(),
 		//				executionReport.getClientOrderId(), executionReport.getRejectReason());
 
@@ -433,5 +525,13 @@ public abstract class AbstractSideQuoting extends SingleInstrumentAlgorithm {
 			}
 		}
 		return true;
+	}
+
+	@Override protected void addToPersist(ExecutionReport executionReport) {
+		if (fromDQN) {
+			//already added from DQNAbstractSide
+			return;
+		}
+		super.addToPersist(executionReport);
 	}
 }

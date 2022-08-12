@@ -1,10 +1,14 @@
 package com.lambda.investing.algorithmic_trading;
 
 import EDU.oswego.cs.dl.util.concurrent.ConcurrentHashMap;
+import com.lambda.investing.algorithmic_trading.reinforcement_learning.state.StateManager;
+import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.candle.Candle;
 import com.lambda.investing.model.candle.CandleType;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -15,22 +19,56 @@ public class CandleFromTickUpdater {
 
 	protected static double DEFAULT_MAX_PRICE = -9E9;
 	protected static double DEFAULT_MIN_PRICE = 9E9;
-	public static double VOLUME_TRESHOLD_DEFAULT = 200E6;//200M
+	protected static double DEFAULT_MAX_VOLUME = -9E9;
+	protected static double DEFAULT_MIN_VOLUME = 9E9;
+
+	public static double VOLUME_THRESHOLD_DEFAULT = 200E6;//200M
+	public static int SECONDS_THRESHOLD_DEFAULT = 56;//to be faster than the rest
 	protected List<CandleListener> observers;
 	protected Map<String, CandleFromTickUpdaterInstrument> instrumentPkToTickCreator;
-	protected double volumeTreshold = VOLUME_TRESHOLD_DEFAULT;
+	protected double volumeThreshold = VOLUME_THRESHOLD_DEFAULT;
+	protected int secondsThreshold = SECONDS_THRESHOLD_DEFAULT;
+	protected static Logger logger = LogManager.getLogger(CandleFromTickUpdater.class);
 
 	public CandleFromTickUpdater() {
 		observers = new ArrayList<>();
 		instrumentPkToTickCreator = new ConcurrentHashMap();
+		logger = LogManager.getLogger(CandleFromTickUpdater.class);
 	}
 
-	public void setVolumeTreshold(double volumeTreshold) {
-		this.volumeTreshold = volumeTreshold;
+	public void setVolumeThreshold(double volumeThreshold) {
+		logger.info("set volumeThreshold candles={} ", volumeThreshold);
+		this.volumeThreshold = volumeThreshold;
+	}
+
+	public void setSecondsThreshold(int secondsThreshold) {
+		logger.info("set setSecondsThreshold time={} ", secondsThreshold);
+		this.secondsThreshold = secondsThreshold;
 	}
 
 	public void register(CandleListener candleListener) {
+
 		observers.add(candleListener);
+
+		if (observers.size() > 1) {
+			int initialSize = observers.size();
+			//register in order -> first state Managers
+			List<CandleListener> listenersOut = new ArrayList<>();
+			for (CandleListener candleListener1 : observers) {
+				if (candleListener1 instanceof StateManager) {
+					listenersOut.add(candleListener1);
+				}
+			}
+			//then the rest
+			for (CandleListener candleListener1 : observers) {
+				if (!listenersOut.contains(candleListener1)) {
+					listenersOut.add(candleListener1);
+				}
+			}
+			assert initialSize == listenersOut.size();
+			this.observers = listenersOut;
+		}
+
 	}
 
 	protected void notifyListeners(Candle candle) {
@@ -70,16 +108,23 @@ public class CandleFromTickUpdater {
 		private double minPriceMinuteMid = DEFAULT_MIN_PRICE;
 		private double openPriceMinuteMid = -1.;
 
-		private double lastCumVolumeDepthCandle = DEFAULT_MIN_PRICE;
+		private double lastCumVolumeCandle = DEFAULT_MIN_PRICE;
 		private double maxPriceVolumeDepthCandle = DEFAULT_MAX_PRICE;
 		private double minPriceVolumeDepthCandle = DEFAULT_MIN_PRICE;
+		private double maxVolumeDepthCandle = DEFAULT_MAX_VOLUME;
+		private double minVolumeDepthCandle = DEFAULT_MAX_VOLUME;
+
 		private double openPriceVolumeDepthCandle = -1.;
+		private double openVolumeVolumeDepthCandle = -1.;
 
 		private Date lastTimestampDepthCandle = null;
 		private final String instrumentPk;
+		private Instrument instrument;
+		private Depth lastDepth = null;
 
 		public CandleFromTickUpdaterInstrument(String instrumentPk) {
 			this.instrumentPk = instrumentPk;
+			this.instrument = Instrument.getInstrument(this.instrumentPk);
 
 		}
 
@@ -113,7 +158,7 @@ public class CandleFromTickUpdater {
 			minPriceMinuteTrade = trade.getPrice();
 		}
 
-		private void generateMidMinuteCandle(Depth depth) {
+		private void generateMidSecondsCandle(Depth depth) {
 
 			Date date = new Date(depth.getTimestamp());
 			if (openPriceMinuteMid == -1) {
@@ -133,8 +178,8 @@ public class CandleFromTickUpdater {
 			assert minPriceMinuteMid <= openPriceMinuteMid;
 			assert minPriceMinuteMid <= depth.getMidPrice();
 
-			Candle candle = new Candle(CandleType.mid_time_1_min, instrumentPk, openPriceMinuteMid, maxPriceMinuteMid,
-					minPriceMinuteMid, depth.getMidPrice());
+			Candle candle = new Candle(CandleType.mid_time_seconds_threshold, instrumentPk, openPriceMinuteMid,
+					maxPriceMinuteMid, minPriceMinuteMid, depth.getMidPrice());
 
 			//		algorithmToNotify.onUpdateCandle(candle);
 			notifyListeners(candle);
@@ -152,24 +197,44 @@ public class CandleFromTickUpdater {
 				openPriceVolumeDepthCandle = depth.getMidPrice();
 				maxPriceVolumeDepthCandle = depth.getMidPrice();
 				minPriceVolumeDepthCandle = depth.getMidPrice();
-				lastCumVolumeDepthCandle = 0;//restart
+
+				openVolumeVolumeDepthCandle = depth.getTotalVolume();
+				maxVolumeDepthCandle = depth.getTotalVolume();
+				minVolumeDepthCandle = depth.getTotalVolume();
+
+				lastCumVolumeCandle = 0;//restart
 				return;
 			}
 
 			maxPriceVolumeDepthCandle = Math.max(maxPriceVolumeDepthCandle, depth.getMidPrice());
 			minPriceVolumeDepthCandle = Math.min(minPriceVolumeDepthCandle, depth.getMidPrice());
+
+			maxVolumeDepthCandle = Math.max(maxVolumeDepthCandle, depth.getTotalVolume());
+			minVolumeDepthCandle = Math.max(minVolumeDepthCandle, depth.getTotalVolume());
+
 			assert maxPriceVolumeDepthCandle >= minPriceVolumeDepthCandle;
 			assert maxPriceVolumeDepthCandle >= openPriceVolumeDepthCandle;
 			assert maxPriceVolumeDepthCandle >= depth.getMidPrice();
 			assert maxPriceVolumeDepthCandle <= openPriceVolumeDepthCandle;
 			assert maxPriceVolumeDepthCandle <= depth.getMidPrice();
 
-			Candle candle = new Candle(CandleType.volume_treshold_depth, instrumentPk, openPriceVolumeDepthCandle,
-					maxPriceVolumeDepthCandle, minPriceVolumeDepthCandle, depth.getMidPrice());
+			assert maxVolumeDepthCandle >= depth.getTotalVolume();
+			assert maxVolumeDepthCandle >= minVolumeDepthCandle;
+			assert maxVolumeDepthCandle >= openVolumeVolumeDepthCandle;
+			assert minVolumeDepthCandle <= depth.getTotalVolume();
+			assert minVolumeDepthCandle <= openVolumeVolumeDepthCandle;
+
+			Candle candle = new Candle(CandleType.volume_threshold_depth, instrumentPk, openPriceVolumeDepthCandle,
+					maxPriceVolumeDepthCandle, minPriceVolumeDepthCandle, depth.getMidPrice(), maxVolumeDepthCandle,
+					minVolumeDepthCandle, openVolumeVolumeDepthCandle, depth.getTotalVolume());
 
 			//		algorithmToNotify.onUpdateCandle(candle);
 			notifyListeners(candle);
-			lastCumVolumeDepthCandle = 0;
+			lastCumVolumeCandle = 0;
+			openVolumeVolumeDepthCandle = depth.getTotalVolume();
+			maxVolumeDepthCandle = depth.getTotalVolume();
+			minVolumeDepthCandle = depth.getTotalVolume();
+
 			openPriceVolumeDepthCandle = depth.getMidPrice();
 			maxPriceVolumeDepthCandle = depth.getMidPrice();
 			minPriceVolumeDepthCandle = depth.getMidPrice();
@@ -219,8 +284,8 @@ public class CandleFromTickUpdater {
 				diffSeconds = diffInMillies / 1000;
 			}
 
-			if (lastTimestampMinuteMidCandle == null || diffSeconds >= 56) {//to be earlier than the rest
-				generateMidMinuteCandle(depth);
+			if (lastTimestampMinuteMidCandle == null || diffSeconds >= secondsThreshold) {//to be earlier than the rest
+				generateMidSecondsCandle(depth);
 			} else {
 				try {
 					maxPriceMinuteMid = Math.max(maxPriceMinuteMid, depth.getMidPrice());
@@ -231,18 +296,21 @@ public class CandleFromTickUpdater {
 			}
 
 			//// volume candle
-			if (lastCumVolumeDepthCandle == DEFAULT_MIN_PRICE) {
+			if (lastCumVolumeCandle == DEFAULT_MIN_PRICE) {
 				//initial update
 				generateDepthVolumeCandle(depth);
 			}
 
-			double totalVolume = depth.getBestAskQty() + depth.getBestBidQty();
-			lastCumVolumeDepthCandle += totalVolume;
-			if (lastCumVolumeDepthCandle > volumeTreshold) {
-				generateDepthVolumeCandle(depth);
-				lastCumVolumeDepthCandle = 0;//just in case
+			if (instrument.isFX()) {
+				double totalVolume = depth.getBestAskQty() + depth.getBestBidQty();
+				lastCumVolumeCandle += totalVolume;
+				if (lastCumVolumeCandle > volumeThreshold) {
+					generateDepthVolumeCandle(depth);
+					lastCumVolumeCandle = 0;//just in case
+				}
 			}
 
+			lastDepth = depth;
 			return true;
 		}
 
@@ -267,6 +335,23 @@ public class CandleFromTickUpdater {
 			} else {
 				maxPriceHourTrade = Math.max(maxPriceHourTrade, trade.getPrice());
 				minPriceHourTrade = Math.min(minPriceHourTrade, trade.getPrice());
+			}
+
+			//volume candle
+
+			boolean weCreatedFirstDepth = lastCumVolumeCandle != DEFAULT_MIN_PRICE;
+			if (!instrument.isFX() && weCreatedFirstDepth) {
+				double totalVolume = trade.getQuantity();
+				if (totalVolume <= 0) {
+					logger.warn("ignored trade volume {}<=0  {}", totalVolume, trade);
+				} else {
+					lastCumVolumeCandle += totalVolume;
+					if (lastCumVolumeCandle > volumeThreshold) {
+
+						generateDepthVolumeCandle(lastDepth);
+						lastCumVolumeCandle = 0;//just in case
+					}
+				}
 			}
 
 			return true;

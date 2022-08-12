@@ -2,7 +2,7 @@ package com.lambda.investing.algorithmic_trading.reinforcement_learning.q_learn;
 
 import com.google.common.primitives.Doubles;
 import com.lambda.investing.Configuration;
-import com.lambda.investing.algorithmic_trading.reinforcement_learning.Dl4jMemoryReplayModel;
+import com.lambda.investing.algorithmic_trading.reinforcement_learning.Dl4jRegressionMemoryReplayModel;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.q_learn.exploration_policy.EpsilonGreedyExploration;
 import org.junit.Assert;
 import org.junit.Before;
@@ -27,9 +27,9 @@ public class DeepQLearningTest {
 	String predictionPath = Configuration.TEMP_PATH + File.separator + "predictionJunit.model";
 	String targetPath = Configuration.TEMP_PATH + File.separator + "targetJunit.model";
 
-	Dl4jMemoryReplayModel predictionModel = new Dl4jMemoryReplayModel(predictionPath, learningRate, 0.9, 50, batchSize,
+	Dl4jRegressionMemoryReplayModel predictionModel = new Dl4jRegressionMemoryReplayModel(predictionPath, learningRate, 0.9, 50, batchSize,
 			maxBatchSize, l2, l1, false);
-	Dl4jMemoryReplayModel targetModel = new Dl4jMemoryReplayModel(targetPath, learningRate, 0.9, 50, batchSize,
+	Dl4jRegressionMemoryReplayModel targetModel = new Dl4jRegressionMemoryReplayModel(targetPath, learningRate, 0.9, 50, batchSize,
 			maxBatchSize, l2, l1, false);
 
 	DeepQLearning deepQLearning;

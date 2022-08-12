@@ -26,4 +26,6 @@ public interface TimeServiceIfc {
 	Calendar getCalendar();
 
 	void sleepMs(long msToSleep) throws InterruptedException;
+
+	void reset();
 }

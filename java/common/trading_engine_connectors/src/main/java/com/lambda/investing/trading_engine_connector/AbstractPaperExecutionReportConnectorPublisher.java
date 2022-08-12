@@ -5,7 +5,8 @@ import lombok.Getter;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-@Getter public abstract class AbstractPaperExecutionReportConnectorPublisher implements ExecutionReportPublisher {
+@Getter
+public abstract class AbstractPaperExecutionReportConnectorPublisher implements ExecutionReportPublisher {
 
 	private TradingEngineConnector tradingEngineConnector;
 

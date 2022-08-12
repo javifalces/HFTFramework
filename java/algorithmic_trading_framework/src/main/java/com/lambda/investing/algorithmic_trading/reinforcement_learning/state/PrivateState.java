@@ -1,5 +1,7 @@
 package com.lambda.investing.algorithmic_trading.reinforcement_learning.state;
 
+import com.google.common.collect.BiMap;
+import com.google.common.collect.HashBiMap;
 import com.lambda.investing.algorithmic_trading.PnlSnapshot;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.MatrixRoundUtils;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.ScoreEnum;
@@ -27,7 +29,7 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Ma
 	private static boolean QUANTITY_RELATIVE = true;
 	private static boolean DELTA_STATES = false;
 
-	private static String[] COLUMNS_PATTERN = new String[] { "inventory", "score" };
+	public static String[] COLUMNS_PATTERN = new String[] { "inventory" };
 
 	private ScoreEnum scoreEnumColumn;
 	private int horizonSave;
@@ -47,7 +49,7 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Ma
 		this.scoreEnumColumn = scoreEnum;
 		this.horizonSave = horizonSave;
 		this.tickMs = tickMs;
-		this.numberOfColumns = getColumns().size();
+		calculateNumberOfColumns();
 		if (minNumber >= maxNumber) {
 			logger.warn("privateState minNumber {} maxNumber {} is wrong -> set default ", minNumber, maxNumber);
 			maxNumber = MAX_NUMBER;
@@ -68,6 +70,10 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Ma
 
 	}
 
+	@Override public void calculateNumberOfColumns() {
+		setNumberOfColumns(getColumns().size());
+	}
+
 	@Override public List<String> getColumns() {
 		List<String> out = new ArrayList<>();
 		for (int horizonTick = 0; horizonTick < horizonSave; horizonTick++) {
@@ -78,11 +84,20 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Ma
 		return out;
 	}
 
-	@Override public int getNumberStates() {
+	@Override
+	public int getNumberStates() {
 		return MatrixRoundUtils.getNumberStates(valuesPerColum, horizonSave * COLUMNS_PATTERN.length);
 	}
 
-	@Override public boolean isReady() {
+	@Override
+	public synchronized void reset() {
+		inventoryBuffer.clear();
+		scoreBuffer.clear();
+		lastTickSave = 0;
+	}
+
+	@Override
+	public synchronized boolean isReady() {
 
 		if (DELTA_STATES) {
 			if (this.inventoryBuffer.size() < this.horizonSave + 1 || this.scoreBuffer.size() < this.horizonSave + 1) {
@@ -96,6 +111,7 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Ma
 			}
 		}
 		return true;
+
 
 	}
 
@@ -126,13 +142,13 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Ma
 		if (QUANTITY_RELATIVE) {
 			score = score / quantity;
 		}
-		scoreBuffer.add(score);
+		scoreBuffer.offer(score);
 
 		double position = pnlSnapshot.netPosition;
 		if (QUANTITY_RELATIVE) {
 			position = position / quantity;
 		}
-		inventoryBuffer.add(position);
+		inventoryBuffer.offer(position);
 
 		lastTickSave = pnlSnapshot.getLastTimestampUpdate();
 	}
@@ -151,16 +167,17 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Ma
 
 		if (DELTA_STATES) {
 			outputList.addAll(getDiffQueue(inventoryBuffer));
-			outputList.addAll(getDiffQueue(scoreBuffer));
+			//			outputList.addAll(getDiffQueue(scoreBuffer));
 		} else {
 			outputList.addAll(inventoryBuffer);
-			outputList.addAll(scoreBuffer);
+			//			outputList.addAll(scoreBuffer);
 		}
 
 		double[] outputArr = outputList.stream().mapToDouble(Double::doubleValue).toArray();
 		outputArr = getFilteredState(outputArr);//get filter
 		return outputArr;
 	}
+
 
 	@Override public int getCurrentStatePosition() {
 		double[] currentStateArr = getCurrentState();//filtered

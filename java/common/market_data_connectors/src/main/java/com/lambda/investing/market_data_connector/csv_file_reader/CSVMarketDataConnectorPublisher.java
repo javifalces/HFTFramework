@@ -18,7 +18,6 @@ import tech.tablesaw.api.Row;
 import tech.tablesaw.api.Table;
 import me.tongfei.progressbar.*;
 
-import javax.annotation.PostConstruct;
 import java.util.*;
 
 import static com.lambda.investing.data_manager.csv.CSVUtils.*;
@@ -48,7 +47,7 @@ public class CSVMarketDataConnectorPublisher extends AbstractMarketDataConnector
 		this.setStatistics(null);//disable statistics
 	}
 
-	@PostConstruct public void init() {
+	public void init() {
 		try {
 			loadFilesMemory();
 			enable = false;
@@ -133,6 +132,7 @@ public class CSVMarketDataConnectorPublisher extends AbstractMarketDataConnector
 						long nextTimeStamp = readingTable.higherEntry(timeStamp).getKey();
 						timeToNextUpdateMs = nextTimeStamp - timeStamp;
 					}
+
 
 					try {
 						if (CSVFileConfiguration.isInDepthFiles(name)) {

@@ -2,7 +2,6 @@ package com.lambda.investing.algorithmic_trading.tester;
 
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
 import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
-import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.exception.LambdaTradingException;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.trading.ExecutionReport;
@@ -19,9 +18,9 @@ public class RandomMarketTester extends SingleInstrumentAlgorithm {
 	private double quantity = 0.01;
 
 	public RandomMarketTester(AlgorithmConnectorConfiguration algorithmConnectorConfiguration, String algorithmInfo,
-			Map<String, Object> parameters) {
-		super(algorithmConnectorConfiguration, algorithmInfo, parameters);
-	}
+                              Map<String, Object> parameters) {
+        super(algorithmConnectorConfiguration, algorithmInfo, parameters);
+    }
 
 	public RandomMarketTester(String algorithmInfo, Map<String, Object> parameters) {
 		super(algorithmInfo, parameters);

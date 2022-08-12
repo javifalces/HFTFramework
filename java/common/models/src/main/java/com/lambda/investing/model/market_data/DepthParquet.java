@@ -18,7 +18,6 @@ import lombok.Setter;
 	public int getLevels() {
 		return MAX_LEVELS_PARQUET;
 	}
-
 	public DepthParquet() {
 	}
 

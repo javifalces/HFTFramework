@@ -6,11 +6,9 @@ import com.lambda.investing.model.market_data.Trade;
 public interface MarketDataConnectorPublisher {
 
 	void start();
-
 	void stop();
 
-	void notifyDepth(String topic, Depth depth);
-
-	void notifyTrade(String topic, Trade trade);
+	void notifyDepth(String topic,Depth depth);
+	void notifyTrade(String topic,Trade trade);
 
 }

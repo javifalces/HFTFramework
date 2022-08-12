@@ -1,0 +1,270 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>parent_pom</artifactId>
+        <groupId>com.lambda.investing</groupId>
+        <version>0.0.0-SNAPSHOT</version>
+        <relativePath>../../parent_pom/pom.xml</relativePath>
+    </parent>
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>machine_learning</artifactId>
+
+    <properties>
+        <deeplearning4j.version>1.0.0-M1</deeplearning4j.version>
+        <deeplearning4j.rl4j.version>1.0.0-M1</deeplearning4j.rl4j.version>
+        <cuda.version>11.2-8.1-1.5.5</cuda.version>
+        <weka.version>3.8.4</weka.version>
+    </properties>
+
+    <dependencies>
+
+        <!--        <dependency>-->
+        <!--            <groupId>org.apache.logging.log4j</groupId>-->
+        <!--            <artifactId>log4j-api</artifactId>-->
+        <!--            <version>2.11.2</version>-->
+        <!--        </dependency>-->
+
+        <!--        <dependency>-->
+        <!--            <groupId>org.apache.logging.log4j</groupId>-->
+        <!--            <artifactId>log4j-core</artifactId>-->
+        <!--            <version>2.11.2</version>-->
+        <!--        </dependency>-->
+
+        <!-- https://mvnrepository.com/artifact/com.github.fracpete/inetutils4j -->
+        <dependency>
+            <groupId>com.github.fracpete</groupId>
+            <artifactId>inetutils4j</artifactId>
+            <version>0.0.2</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-math3</artifactId>
+            <version>3.6.1</version>
+        </dependency>
+
+        <!--        WEKA-->
+        <dependency>
+            <groupId>nz.ac.waikato.cms.weka</groupId>
+            <artifactId>weka-stable</artifactId>
+            <version>${weka.version}</version>
+        </dependency>
+        <!--        <dependency>-->
+        <!--            <groupId>nz.ac.waikato.cms.weka</groupId>-->
+        <!--            <artifactId>weka-dev</artifactId>-->
+        <!--            <version>${weka.version}</version>-->
+        <!--        </dependency>-->
+        <!--        <dependency>-->
+        <!--            <groupId>nz.ac.waikato.cms.weka</groupId>-->
+        <!--            <artifactId>LibSVM</artifactId>-->
+        <!--            <version>${weka.version}</version>-->
+        <!--        </dependency>-->
+
+        <!--        <dependency>-->
+        <!--            <groupId>nz.ac.waikato.cms.weka</groupId>-->
+        <!--            <artifactId>rotationForest</artifactId>-->
+        <!--            <version>1.0.3</version>-->
+        <!--        </dependency>-->
+
+
+        <!--deeplearning4j ML models-->
+        <dependency>
+            <groupId>org.deeplearning4j</groupId>
+            <artifactId>deeplearning4j-core</artifactId>
+            <version>${deeplearning4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.deeplearning4j</groupId>
+            <artifactId>deeplearning4j-modelimport</artifactId>
+            <version>${deeplearning4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.nd4j</groupId>
+            <artifactId>nd4j-native-platform</artifactId>
+            <version>${deeplearning4j.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.deeplearning4j</groupId>
+            <artifactId>rl4j-core</artifactId>
+            <version>${deeplearning4j.rl4j.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>ch.qos.logback</groupId>
+                    <artifactId>logback-classic</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-api</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>org.deeplearning4j</groupId>
+            <artifactId>rl4j-gym</artifactId>
+            <version>${deeplearning4j.rl4j.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>ch.qos.logback</groupId>
+                    <artifactId>logback-classic</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-api</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!--        <dependency>-->
+        <!--            <groupId>org.deeplearning4j</groupId>-->
+        <!--            <artifactId>rl4j-malmo</artifactId>-->
+        <!--            <version>${deeplearning4j.rl4j.version}</version>-->
+        <!--        </dependency>-->
+
+        <!--        <dependency>-->
+        <!--            <groupId>com.microsoft.msr.malmo</groupId>-->
+        <!--            <artifactId>MalmoJavaJar</artifactId>-->
+        <!--            <version>0.30.0</version>-->
+        <!--        </dependency>-->
+
+        <dependency>
+            <groupId>org.datavec</groupId>
+            <artifactId>datavec-api</artifactId>
+            <version>${deeplearning4j.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.deeplearning4j</groupId>
+            <artifactId>deeplearning4j-ui</artifactId>
+            <version>${deeplearning4j.version}</version>
+        </dependency>
+
+        <!--        <dependency>-->
+        <!--            <groupId>org.deeplearning4j</groupId>-->
+        <!--            <artifactId>arbiter-deeplearning4j</artifactId>-->
+        <!--            <version>${deeplearning4j.version}</version>-->
+        <!--        </dependency>-->
+        <!--        <dependency>-->
+        <!--            <groupId>org.deeplearning4j</groupId>-->
+        <!--            <artifactId>arbiter-ui</artifactId>-->
+        <!--            <version>${deeplearning4j.version}</version>-->
+        <!--        </dependency>-->
+
+        <!-- https://mvnrepository.com/artifact/org.deeplearning4j/deeplearning4j-parallel-wrapper -->
+        <dependency>
+            <groupId>org.deeplearning4j</groupId>
+            <artifactId>deeplearning4j-parallel-wrapper</artifactId>
+            <version>${deeplearning4j.version}</version>
+        </dependency>
+
+
+        <dependency>
+            <groupId>org.deeplearning4j</groupId>
+            <artifactId>deeplearning4j-zoo</artifactId>
+            <version>${deeplearning4j.version}</version>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/org.reflections/reflections -->
+        <dependency>
+            <groupId>org.reflections</groupId>
+            <artifactId>reflections</artifactId>
+            <version>0.9.10</version>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/edu.cmu.cs/ark-tweet-nlp -->
+        <dependency>
+            <groupId>edu.cmu.cs</groupId>
+            <artifactId>ark-tweet-nlp</artifactId>
+            <version>0.3.2</version>
+        </dependency>
+
+
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>openblas</artifactId>
+            <!--            0.2.19-1.3-->
+            <version>0.3.9-1-1.5.3</version>
+        </dependency>
+
+        <!--ONNX ML Models-->
+        <dependency>
+            <groupId>com.microsoft.onnxruntime</groupId>
+            <artifactId>onnxruntime</artifactId>
+            <version>1.9.0</version>
+        </dependency>
+
+    </dependencies>
+
+    <profiles>
+        <profile>
+            <id>cpu</id>
+        </profile>
+
+        <profile>
+            <id>gpu</id>
+            <!-- Nvidia GPU Cuda must be installed! -->
+            <!--
+                CUDA v11.2+ installed and configured https://developer.nvidia.com/cuda-downloads
+                cuDNN (short for CUDA Deep Neural Network) installed and configured
+
+
+                Add to path folder of GPU(not used shortcuts with % %(not working)):
+                * C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2\extras\CUPTI\lib64
+                * C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2\extras\CUPTI\include
+                * C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2\bin
+                * C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.2\libnvvp
+
+                nvcc -version on cmd must show ->
+
+                nvcc: NVIDIA (R) Cuda compiler driver
+                Copyright (c) 2005-2020 NVIDIA Corporation
+                Built on Mon_Nov_30_19:15:10_Pacific_Standard_Time_2020
+                Cuda compilation tools, release 11.2, V11.2.67
+                Build cuda_11.2.r11.2/compiler.29373293_0
+            -->
+
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <dependencies>
+
+                <dependency>
+                    <groupId>org.bytedeco</groupId>
+                    <artifactId>cuda</artifactId>
+                    <version>${cuda.version}</version>
+                </dependency>
+
+
+                <!--CUDA deeplearning4j-->
+                <!--                https://deeplearning4j.konduit.ai/multi-project/explanation/configuration/backends/cudnn#using-cudnn-via-nd4j-->
+                <dependency>
+                    <groupId>org.nd4j</groupId>
+                    <artifactId>nd4j-cuda-11.2</artifactId>
+                    <version>${deeplearning4j.version}</version>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>org.bytedeco.javacpp-presets</groupId>
+                            <artifactId>mkl-dnn</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+
+
+                <dependency>
+                    <groupId>org.deeplearning4j</groupId>
+                    <artifactId>deeplearning4j-cuda-11.2</artifactId>
+                    <version>${deeplearning4j.version}</version>
+                </dependency>
+
+
+            </dependencies>
+        </profile>
+    </profiles>
+
+
+</project>

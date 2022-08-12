@@ -10,10 +10,12 @@ public class AvellanedaActionTest {
 	AvellanedaAction avellanedaAction;
 
 	public AvellanedaActionTest() {
-		int[] windowsTicks = new int[] { 1, 5, 6 };
-		double[] skewPricePct = new double[] { 1., 0.9, 1.1 };
-		double[] riskAversion = new double[] { 0.1, 0.5, 0.9 };
-		this.avellanedaAction = new AvellanedaAction(windowsTicks, skewPricePct, riskAversion);
+		int[] windowsTicks = new int[]{1, 5, 6};
+		double[] skewPricePct = new double[]{1., 0.9, 1.1};
+		double[] riskAversion = new double[]{0.1, 0.5, 0.9};
+		double[] kDefault = new double[]{0.3};
+		double[] aDefault = new double[]{0.9};
+		this.avellanedaAction = new AvellanedaAction(windowsTicks, skewPricePct, riskAversion, kDefault, aDefault);
 	}
 
 	@Test public void testGetActionIndex() {

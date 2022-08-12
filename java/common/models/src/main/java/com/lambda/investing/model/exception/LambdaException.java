@@ -1,7 +1,7 @@
 package com.lambda.investing.model.exception;
 
-public class LambdaException extends Exception {
 
+public class LambdaException extends Exception {
 	public LambdaException(String errorMessage) {
 		super(errorMessage);
 	}

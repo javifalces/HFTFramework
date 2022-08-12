@@ -1,0 +1,1 @@
+weka.gui.GUIChooser.GUIChooserMenuPlugin=weka.dl4j.IsGPUAvailable

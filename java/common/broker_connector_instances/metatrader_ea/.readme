@@ -1,0 +1,7 @@
+ copy in the ea folder -> C:\Users\javif\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\MQL5
+
+ On MT5
+ https://github.com/darwinex/dwx-zeromq-connector/pull/45
+ https://github.com/dingmaotu/mql-zmq
+ https://github.com/dingmaotu/mql4-lib
+ activate service lambda_zeromq_gateway ..... if you want more symbols to notify add to the source code

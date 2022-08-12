@@ -1,5 +1,6 @@
 package com.lambda.investing.trading_engine_connector.metatrader.models;
 
+import com.google.common.collect.BiMap;
 import com.lambda.investing.model.trading.OrderRequest;
 import com.lambda.investing.model.trading.OrderRequestAction;
 import com.lambda.investing.model.trading.OrderType;
@@ -11,6 +12,7 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Getter @Setter public class MTOrder {
 

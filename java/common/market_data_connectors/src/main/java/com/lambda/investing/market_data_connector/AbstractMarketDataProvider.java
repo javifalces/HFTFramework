@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public abstract class AbstractMarketDataProvider implements MarketDataProvider {
 
 	protected static int QUEUE_FINAL_STATES_SIZE = 300;
-	private static boolean CHECK_TIMESTAMPS_RECEIVED = true;//checking if the last timestamp is this one!
+	public static boolean CHECK_TIMESTAMPS_RECEIVED = true;//checking if the last timestamp is this one!
 	private Map<String, Long> lastDepthReceived;
 	private Map<String, Long> lastTradeSentReceived;
 
@@ -50,11 +50,17 @@ public abstract class AbstractMarketDataProvider implements MarketDataProvider {
 		lastRejClOrdId = EvictingQueue.create(QUEUE_FINAL_STATES_SIZE);
 	}
 
+	public void reset() {
+		lastDepthReceived.clear();
+		lastTradeSentReceived.clear();
+	}
+
 	public void setStatisticsReceived(Statistics statisticsReceived) {
 		this.statisticsReceived = statisticsReceived;
 	}
 
-	@Override public void register(MarketDataListener listener) {
+	@Override
+	public void register(MarketDataListener listener) {
 
 		listenersManager.put(listener, "");
 	}
@@ -116,20 +122,27 @@ public abstract class AbstractMarketDataProvider implements MarketDataProvider {
 		Queue<String> checkList = lastActiveClOrdId;
 		if (executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Active)) {
 			checkList = lastActiveClOrdId;
-		}
-		if (executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled)) {
+		} else if (executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled)) {
 			checkList = lastCfClOrdId;
-		}
-		if (executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Rejected) || executionReport
+		} else if (executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Rejected) || executionReport
 				.getExecutionReportStatus().equals(ExecutionReportStatus.CancelRejected)) {
 			checkList = lastRejClOrdId;
+		} else {
+			//partials filled dont check it
+			return true;
+		}
+
+		if (checkList.size() > QUEUE_FINAL_STATES_SIZE * 2) {
+			logger.warn("something is wrong on checkER queues!!! {} >{} return as valid", checkList.size(),
+					QUEUE_FINAL_STATES_SIZE);
+			return true;
 		}
 
 		if (checkList.contains(executionReport.getClientOrderId())) {
 			//already processed
 			return false;
 		} else {
-			checkList.add(executionReport.getClientOrderId());
+			checkList.offer(executionReport.getClientOrderId());
 			return true;
 		}
 
@@ -142,5 +155,6 @@ public abstract class AbstractMarketDataProvider implements MarketDataProvider {
 		}
 
 	}
+
 
 }

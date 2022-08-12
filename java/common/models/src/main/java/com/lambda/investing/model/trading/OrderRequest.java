@@ -33,16 +33,17 @@ import lombok.ToString;
 		return orderRequest;
 	}
 
+
 	@Override public String toString() {
 		if (orderRequestAction.equals(OrderRequestAction.Send) && quantity > 0) {
 			String output = String
-					.format("Send %s %s ->%s [%s]%.4f@%.5f", instrument, algorithmInfo, verb, clientOrderId, quantity,
+					.format("Send %s %s ->%s [%s]%.4f@%f", instrument, algorithmInfo, verb, clientOrderId, quantity,
 							price);
 			return output;
 		} else if (orderRequestAction.equals(OrderRequestAction.Modify) && quantity > 0) {
 			String output = String
-					.format("Modification %s %s %s->%s [%s]%.4f@%.5f", instrument, algorithmInfo, origClientOrderId,
-							verb, clientOrderId, quantity, price);
+					.format("Modification %s %s %s->%s [%s]%.4f@%f", instrument, algorithmInfo, origClientOrderId, verb,
+							clientOrderId, quantity, price);
 			return output;
 		} else if (quantity == 0 || orderRequestAction.equals(OrderRequestAction.Cancel)) {
 			String output = String

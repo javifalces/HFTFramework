@@ -1,28 +1,13 @@
 package com.lambda.investing.algo_trading;
 
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
+
+import com.lambda.investing.algorithmic_trading.AlgorithmCreationUtils;
 import com.lambda.investing.algorithmic_trading.AlgorithmUtils;
-import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
-import com.lambda.investing.algorithmic_trading.avellaneda_stoikov.AvellanedaStoikov;
-import com.lambda.investing.algorithmic_trading.avellaneda_stoikov_dqn.AvellanedaStoikovDQNMarket;
-//import com.lambda.investing.algorithmic_trading.avellaneda_stoikov_dqn.RSI;
-//import com.lambda.investing.algorithmic_trading.avellaneda_stoikov_dqn.SMACross;
-import com.lambda.investing.algorithmic_trading.avellaneda_stoikov_q_learn.AvellanedaStoikovQLearn;
-import com.lambda.investing.algorithmic_trading.constant_spread.ConstantSpreadAlgorithm;
-import com.lambda.investing.algorithmic_trading.constant_spread.LinearConstantSpreadAlgorithm;
-//import com.lambda.investing.algorithmic_trading.mean_reversion.DQNRSISideQuoting;
-//import com.lambda.investing.algorithmic_trading.mean_reversion.RSISideQuoting;
-//import com.lambda.investing.algorithmic_trading.statistical_arbitrage.StatisticalArbitrageAlgorithm;
-//import com.lambda.investing.algorithmic_trading.statistical_arbitrage.StatisticalArbitrageQuotingAlgorithm;
-import com.lambda.investing.backtest_engine.BacktestConfiguration;
-import com.lambda.investing.model.asset.Instrument;
 import lombok.Getter;
-import lombok.Setter;
+
 import lombok.ToString;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 @Getter @ToString
@@ -67,7 +52,7 @@ import java.util.Map;
 	public com.lambda.investing.algorithmic_trading.Algorithm getAlgorithm(
 			AlgorithmConnectorConfiguration algorithmConnectorConfiguration) {
 		Map<String, Object> parametersAsString = AlgorithmUtils.getParameters(parameters);
-		return AlgorithmUtils.getAlgorithm(algorithmConnectorConfiguration, algorithmName, parametersAsString);
+		return AlgorithmCreationUtils.getAlgorithm(algorithmConnectorConfiguration, algorithmName, parametersAsString);
 	}
 
 }

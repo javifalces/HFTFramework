@@ -56,7 +56,8 @@ public class BinanceBrokerTradingEngine extends AbstractBrokerTradingEngine
 			TradingEngineConfiguration tradingEngineConfiguration) {
 
 		super(orderRequestListenerConnectorConfiguration, orderRequestListenerConnectorProvider,
-				executionReportConnectorConfiguration, executionReportConnectorPublisher);
+				executionReportConnectorConfiguration,
+				executionReportConnectorPublisher);
 
 		clientOrderIdToOrderRequest = new ConcurrentHashMap<>();
 		modificationCancelIdGenerated = new ConcurrentHashMap<>();

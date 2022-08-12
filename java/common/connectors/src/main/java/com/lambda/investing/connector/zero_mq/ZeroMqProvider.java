@@ -77,6 +77,7 @@ public class ZeroMqProvider implements ConnectorProvider {
 		socketReq.setHWM(1);
 		socketReq.setLinger(0);
 
+
 		this.threadsListening = threadsListening;
 		//ThreadPool initialiting
 
@@ -93,6 +94,7 @@ public class ZeroMqProvider implements ConnectorProvider {
 		if (this.threadsListening < 0) {
 			onUpdateExecutorService = (ThreadPoolExecutor) Executors.newCachedThreadPool(namedThreadFactory);
 		}
+
 
 	}
 
@@ -154,7 +156,6 @@ public class ZeroMqProvider implements ConnectorProvider {
 		//		String replyStr=new String(reply);
 
 	}
-
 	protected void onUpdate(TypeMessage typeMessage, String message, String topic, long timestamp) throws IOException {
 		if (typeMessage != null && typeMessage.equals(TypeMessage.command)) {
 			answerRep("OK");

@@ -12,9 +12,8 @@ import org.apache.commons.lang3.ArrayUtils;
 import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.curator.shaded.com.google.common.collect.Queues;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Queue;
+import java.time.ZoneId;
+import java.util.*;
 
 import static com.lambda.investing.algorithmic_trading.reinforcement_learning.MatrixRoundUtils.*;
 
@@ -30,14 +29,17 @@ public class MarketState extends AbstractState {
 	protected static double MARKET_MAX_NUMBER = 10.;
 	protected static double MARKET_MIN_NUMBER = -10.;
 
-	protected static String[] PRIVATE_COLUMNS_PATTERN = new String[] { "inventory", "score" };
 
-	protected static String[] MARKET_COLUMNS_PATTERN = new String[] { "bid_price", "ask_price", "bid_qty", "ask_qty",
-			"spread", "midprice", "imbalance", "microprice", "last_close_price", "last_close_qty" };
+	protected static String[] MARKET_COLUMNS_PATTERN = new String[]{"bid_price", "ask_price", "bid_qty", "ask_qty",
+			"spread", "midprice", "imbalance", "microprice", "last_close_price", "last_close_qty"};
 
-	protected static String[] CANDLE_COLUMNS_PATTERN = new String[] { "open", "high", "low", "close" };
+	protected static String[] CANDLE_COLUMNS_PATTERN = new String[]{"open", "high", "low", "close"};
 
-	protected static String[] CANDLE_INDICATORS = new String[] { "ma", "std", "max", "min" };
+	protected static String[] CANDLE_INDICATORS = new String[]{"ma", "std", "max", "min"};
+
+	public static String[] PRIVATE_COLUMNS = new String[]{"inventory", "unrealized", "realized"};
+	public static String[] INDIVIDUAL_COLUMNS = new String[]{"minutesToFinish"};
+
 	private double lastCandlesMA, lastCandleStd, lastCandleMax, lastCandleMin = Double.NaN;
 	//private buffer
 	private ScoreEnum scoreEnumColumn;
@@ -48,7 +50,7 @@ public class MarketState extends AbstractState {
 	private int privateNumberDecimals, marketNumberDecimals, candleNumberDecimals;
 	private double privateMinNumber, privateMaxNumber, marketMinNumber, marketMaxNumber, candleMinNumber, candleMaxNumber;
 
-	private Queue<Double> inventoryBuffer, scoreBuffer;
+	private Queue<Double> inventoryBuffer, scoreBuffer, unrealizedPnlBuffer, realizedPnlBuffer;
 	private double quantity;
 
 	//market buffer
@@ -61,12 +63,15 @@ public class MarketState extends AbstractState {
 	private CandleType candleType;
 	private boolean disableLastClose = false;
 	protected Instrument instrument;
+	protected int lastHourOperatingIncluded;
 
+	protected long lastTimestamp = 0;
+	protected double lastMidPrice = 0.0;
 	public MarketState(Instrument instrument, ScoreEnum scoreEnumColumn, int privateHorizonSave, int marketHorizonSave,
-			int candleHorizonSave, long privateTickMs, long marketTickMs, int privateNumberDecimals,
-			int marketNumberDecimals, int candleNumberDecimals, double privateMinNumber, double privateMaxNumber,
-			double marketMinNumber, double marketMaxNumber, double candleMinNumber, double candleMaxNumber,
-			double quantity, CandleType candleType) {
+					   int candleHorizonSave, long privateTickMs, long marketTickMs, int privateNumberDecimals,
+					   int marketNumberDecimals, int candleNumberDecimals, double privateMinNumber, double privateMaxNumber,
+					   double marketMinNumber, double marketMaxNumber, double candleMinNumber, double candleMaxNumber,
+					   double quantity, CandleType candleType, int lastHourOperatingIncluded) {
 		super(privateNumberDecimals);
 		this.instrument = instrument;
 		this.scoreEnumColumn = scoreEnumColumn;
@@ -130,7 +135,7 @@ public class MarketState extends AbstractState {
 		if (candleMinNumber == candleMaxNumber && candleMinNumber == -1) {
 			logger.warn("candleState are not going to be bound {} {} when is -1 ", candleMinNumber, candleMaxNumber);
 		}
-
+		this.lastHourOperatingIncluded = lastHourOperatingIncluded;
 		this.privateMinNumber = privateMinNumber;
 		this.privateMaxNumber = privateMaxNumber;
 
@@ -146,9 +151,22 @@ public class MarketState extends AbstractState {
 		if (PRIVATE_DELTA_STATES) {
 			inventoryBuffer = Queues.synchronizedQueue(EvictingQueue.create(this.privateHorizonSave + 1));
 			scoreBuffer = Queues.synchronizedQueue(EvictingQueue.create(this.privateHorizonSave + 1));
+			realizedPnlBuffer = Queues.synchronizedQueue(EvictingQueue.create(this.privateHorizonSave + 1));
+			unrealizedPnlBuffer = Queues.synchronizedQueue(EvictingQueue.create(this.privateHorizonSave + 1));
 		} else {
 			inventoryBuffer = Queues.synchronizedQueue(EvictingQueue.create(this.privateHorizonSave));
 			scoreBuffer = Queues.synchronizedQueue(EvictingQueue.create(this.privateHorizonSave));
+			realizedPnlBuffer = Queues.synchronizedQueue(EvictingQueue.create(this.privateHorizonSave));
+			unrealizedPnlBuffer = Queues.synchronizedQueue(EvictingQueue.create(this.privateHorizonSave));
+		}
+
+		int index = 0;
+		while (index < this.privateHorizonSave + 1) {
+			inventoryBuffer.offer(0.0);
+			scoreBuffer.offer(0.0);
+			realizedPnlBuffer.offer(0.0);
+			unrealizedPnlBuffer.offer(0.0);
+			index++;
 		}
 
 		//market
@@ -170,7 +188,7 @@ public class MarketState extends AbstractState {
 			candlesLow = Queues.synchronizedQueue(EvictingQueue.create(this.candleHorizonSave));
 			candlesClose = Queues.synchronizedQueue(EvictingQueue.create(this.candleHorizonSave));
 		}
-		numberOfColumns = getColumns().size();
+		calculateNumberOfColumns();
 
 	}
 
@@ -188,17 +206,32 @@ public class MarketState extends AbstractState {
 		}
 		List<String> output = new ArrayList<>();
 		//private
-		for (int colIndex = 0; colIndex < PRIVATE_COLUMNS_PATTERN.length; colIndex++) {
+		for (int colIndex = 0; colIndex < PRIVATE_COLUMNS.length; colIndex++) {
 			for (int horizonTick = privateHorizonSave - 1; horizonTick >= 0; horizonTick--) {
-				output.add(PRIVATE_COLUMNS_PATTERN[colIndex] + "_" + String.valueOf(horizonTick));
+				output.add(PRIVATE_COLUMNS[colIndex] + "_" + String.valueOf(horizonTick));
 			}
 		}
 		return output;
 	}
 
-	@Override public List<String> getColumns() {
+	public List<String> getIndividualColumns() {
+		List<String> output = new ArrayList<>();
+		output.addAll(Arrays.asList(INDIVIDUAL_COLUMNS));
+		return output;
+	}
+
+	@Override
+	public void calculateNumberOfColumns() {
+		setNumberOfColumns(getColumns().size());
+	}
+
+	@Override
+	public List<String> getColumns() {
 		//private
 		List<String> output = getPrivateColumns();
+		//individual
+		output.addAll(getIndividualColumns());
+
 
 		//market
 		for (int colIndex = 0; colIndex < MARKET_COLUMNS_PATTERN.length; colIndex++) {
@@ -220,33 +253,82 @@ public class MarketState extends AbstractState {
 				output.add(CANDLE_INDICATORS[colIndex]);
 			}
 		}
+
+
 		return output;
 	}
 
-	@Override public int getNumberStates() {
+	@Override
+	public int getNumberStates() {
 		logger.warn("we are asking number of states to marketState!!");
 		return Integer.MAX_VALUE;
 	}
 
-	@Override public boolean isReady() {
+	@Override
+	public synchronized void reset() {
+		inventoryBuffer.clear();
+		scoreBuffer.clear();
+		unrealizedPnlBuffer.clear();
+		realizedPnlBuffer.clear();
+		bidPriceBuffer.clear();
+		askPriceBuffer.clear();
+		bidQtyBuffer.clear();
+		askQtyBuffer.clear();
+		spreadBuffer.clear();
+		midpriceBuffer.clear();
+		imbalanceBuffer.clear();
+		micropriceBuffer.clear();
+		lastClosePriceBuffer.clear();
+		lastCloseQuantityBuffer.clear();
+		candlesOpen.clear();
+		candlesHigh.clear();
+		candlesLow.clear();
+		candlesClose.clear();
+		lastTimestamp = 0;
+		lastMarketTickSave = 0;
+		lastPrivateTickSave = 0;
+
+		//fill private states
+		int index = 0;
+		while (index < this.privateHorizonSave + 1) {
+			inventoryBuffer.offer(0.0);
+			scoreBuffer.offer(0.0);
+			realizedPnlBuffer.offer(0.0);
+			unrealizedPnlBuffer.offer(0.0);
+			index++;
+		}
+
+
+	}
+
+	@Override
+	public synchronized boolean isReady() {
 		boolean privateIsReady = true;
 
 		if (!REMOVE_PRIVATE_STATE) {
 			///only check it if its false
 			if (PRIVATE_DELTA_STATES) {
 				if (this.inventoryBuffer.size() < this.privateHorizonSave + 1
-						|| this.scoreBuffer.size() < this.privateHorizonSave + 1) {
+						|| this.scoreBuffer.size() < this.privateHorizonSave + 1
+						|| this.unrealizedPnlBuffer.size() < this.privateHorizonSave + 1
+						|| this.realizedPnlBuffer.size() < this.privateHorizonSave + 1
+				) {
 					//				logger.error("not enough states received {}< {} ", this.inventoryBuffer.size(), this.horizonSave + 1);
 					privateIsReady = false;
 				}
 			} else {
 				if (this.inventoryBuffer.size() < this.privateHorizonSave
-						|| this.scoreBuffer.size() < this.privateHorizonSave) {
+						|| this.scoreBuffer.size() < this.privateHorizonSave
+						|| this.unrealizedPnlBuffer.size() < this.privateHorizonSave
+						|| this.realizedPnlBuffer.size() < this.privateHorizonSave
+				) {
 					//				logger.error("not enough states received {}< {} ", this.inventoryBuffer.size(), this.horizonSave);
 					privateIsReady = false;
 				}
 			}
 		}
+
+		boolean individualIsReady = this.lastTimestamp != 0;
 
 		boolean marketIsReady = true;
 		if (!disableLastClose) {
@@ -284,7 +366,7 @@ public class MarketState extends AbstractState {
 		//			privateIsReady = true;
 		//		}
 
-		return candleIsReady && marketIsReady && privateIsReady;
+		return candleIsReady && marketIsReady && privateIsReady && individualIsReady;
 
 	}
 
@@ -344,8 +426,14 @@ public class MarketState extends AbstractState {
 			if (!trade.getInstrument().equals(instrument.getPrimaryKey())) {
 				return;
 			}
-
-			lastClosePriceBuffer.offer(trade.getPrice());
+			if (trade.getTimestamp() > lastTimestamp) {
+				lastTimestamp = trade.getTimestamp();
+			}
+			double price = trade.getPrice();
+			if (MARKET_MIDPRICE_RELATIVE) {
+				price = trade.getPrice() - lastMidPrice;
+			}
+			lastClosePriceBuffer.offer(price);
 			lastCloseQuantityBuffer.offer(trade.getQuantity());
 		}
 	}
@@ -362,6 +450,9 @@ public class MarketState extends AbstractState {
 		}
 		scoreBuffer.offer(score);
 
+		unrealizedPnlBuffer.offer(pnlSnapshot.unrealizedPnl / quantity);
+		realizedPnlBuffer.offer(pnlSnapshot.realizedPnl / quantity);
+
 		double position = pnlSnapshot.netPosition;
 		if (PRIVATE_QUANTITY_RELATIVE) {
 			position = position / quantity;
@@ -371,7 +462,18 @@ public class MarketState extends AbstractState {
 		lastPrivateTickSave = pnlSnapshot.getLastTimestampUpdate();
 	}
 
-	@Override public synchronized void updateDepthState(Depth depth) {
+	private int getTt(long timestamp) {
+		Calendar calendar = Calendar.getInstance(TimeZone.getTimeZone(ZoneId.of("UTC")));
+		calendar.setTimeInMillis(timestamp);
+
+		int currentTimeMins = calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE);
+		int lastHourMins = (lastHourOperatingIncluded + 1) * 60;
+		int output = lastHourMins - currentTimeMins;
+		return output;
+	}
+
+	@Override
+	public synchronized void updateDepthState(Depth depth) {
 		if ((depth.getTimestamp() - lastMarketTickSave) < marketTickMs) {
 			//not enough time to save it
 			return;
@@ -379,6 +481,10 @@ public class MarketState extends AbstractState {
 
 		if (!depth.getInstrument().equals(instrument.getPrimaryKey())) {
 			return;
+		}
+
+		if (depth.getTimestamp() > lastTimestamp) {
+			lastTimestamp = depth.getTimestamp();
 		}
 
 		//		Instrument instrument = Instrument.getInstrument(depth.getInstrument());
@@ -394,6 +500,7 @@ public class MarketState extends AbstractState {
 		double microPrice = depth.getMicroPrice();
 		double imbalance = depth.getImbalance();
 		double spread = depth.getSpread();
+		lastMidPrice = midPrice;
 
 		if (MARKET_MIDPRICE_RELATIVE) {
 			bid = Math.abs(bid - midPrice);
@@ -420,18 +527,31 @@ public class MarketState extends AbstractState {
 		List<Double> outputList = new ArrayList<>(this.numberOfColumns);
 		if (PRIVATE_DELTA_STATES) {
 			outputList.addAll(getDiffQueue(inventoryBuffer));
-			outputList.addAll(getDiffQueue(scoreBuffer));
+			//			outputList.addAll(getDiffQueue(scoreBuffer));
+			outputList.addAll(getDiffQueue(unrealizedPnlBuffer));
+			outputList.addAll(getDiffQueue(realizedPnlBuffer));
 		} else {
 			outputList.addAll(inventoryBuffer);
-			outputList.addAll(scoreBuffer);
+			//			outputList.addAll(scoreBuffer);
+			outputList.addAll(unrealizedPnlBuffer);
+			outputList.addAll(realizedPnlBuffer);
 		}
 		if (outputList.size() == 0) {
 			return null;
 		}
 
+
 		double[] outputArr = outputList.stream().mapToDouble(Double::doubleValue).toArray();
 		outputArr = getRoundedState(outputArr, privateMaxNumber, privateMinNumber, privateNumberDecimals);
 		return outputArr;
+	}
+
+	private double[] getIndividualState() {
+		int minutesToFinish = getTt(lastTimestamp);
+		List<Double> outputList = new ArrayList<>();
+
+		outputList.add((double) minutesToFinish);
+		return com.lambda.investing.algorithmic_trading.ArrayUtils.DoubleListToPrimitiveArray(outputList);
 	}
 
 	private double[] getMarketState() {
@@ -451,6 +571,7 @@ public class MarketState extends AbstractState {
 				outputList.addAll(lastClosePriceBuffer);
 				outputList.addAll(lastCloseQuantityBuffer);
 			}
+
 		} catch (Exception e) {
 			logger.error("error getting marketState ", e);
 			outputList.clear();
@@ -458,13 +579,13 @@ public class MarketState extends AbstractState {
 		if (outputList.size() == 0) {
 			return null;
 		}
-		double[] outputArr = outputList.stream().mapToDouble(Double::doubleValue).toArray();
+		double[] outputArr = com.lambda.investing.algorithmic_trading.ArrayUtils.DoubleListToPrimitiveArray(outputList);//.stream().mapToDouble(Double::doubleValue).toArray();
 		outputArr = getRoundedState(outputArr, marketMaxNumber, marketMinNumber, marketNumberDecimals);
 		return outputArr;
 
 	}
 
-	private double[] getCandleState() {
+	private  double[] getCandleState() {
 		List<Double> outputList = new ArrayList<>(this.numberOfColumns);
 
 		//	private static String[] CANDLE_COLUMNS_PATTERN = new String[] {"open","high","low","close"};
@@ -485,7 +606,8 @@ public class MarketState extends AbstractState {
 		if (outputList.size() == 0) {
 			return null;
 		}
-		double[] outputArr = outputList.stream().mapToDouble(Double::doubleValue).toArray();
+		double[] outputArr = com.lambda.investing.algorithmic_trading.ArrayUtils.DoubleListToPrimitiveArray(outputList);
+		;
 		outputArr = getRoundedState(outputArr, candleMaxNumber, candleMinNumber, candleNumberDecimals);
 		return outputArr;
 	}
@@ -497,22 +619,25 @@ public class MarketState extends AbstractState {
 			return null;
 		}
 		double[] privateState = null;
+		double[] individualStates = null;
 		double[] marketState = null;
 		double[] candleState = null;
 		try {
 			privateState = getPrivateState();
+			individualStates = getIndividualState();
 			marketState = getMarketState();
 			if (this.candleHorizonSave > 0) {
 				candleState = getCandleState();
 			} else {
-				candleState = new double[] { 0.0 };
+				candleState = new double[]{0.0};
 			}
 
 		} catch (Exception e) {
 			logger.error("error getting state", e);
 		}
-		if (privateState == null || marketState == null || candleState == null) {
+		if (privateState == null || individualStates == null || marketState == null || candleState == null) {
 			logger.error("something is wrong when one states is null and is ready");
+			return null;
 		}
 
 		privateState = getRoundedState(privateState, privateMaxNumber, privateMinNumber, privateNumberDecimals);
@@ -523,10 +648,12 @@ public class MarketState extends AbstractState {
 
 		double[] output = null;
 		if (REMOVE_PRIVATE_STATE) {
-			output = marketState;
+			output = individualStates;
 		} else {
-			output = ArrayUtils.addAll(privateState, marketState);
+			output = ArrayUtils.addAll(privateState, individualStates);
 		}
+
+		output = ArrayUtils.addAll(output, marketState);
 
 		if (this.candleHorizonSave > 0) {
 			output = ArrayUtils.addAll(output, candleState);

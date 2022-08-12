@@ -7,6 +7,7 @@ import com.lambda.investing.model.trading.*;
 import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.joda.time.DateTime;
 
 import java.util.*;
 
@@ -21,6 +22,7 @@ public class QuoteSideManager {
 	public static int MAX_SIZE_LAST_CLORDID_SENT = 200;
 	private static long MAX_TIME_ERROR_MS = 1000 * 10;
 	private static int MAX_CANCEL_REJ_DELETE = 5;
+	private static long SLEEP_AFTER_REJ_MS = 500;
 
 	Logger logger = LogManager.getLogger(QuoteSideManager.class);
 	private Algorithm algorithm;
@@ -43,6 +45,7 @@ public class QuoteSideManager {
 	private volatile String clOrdIdPending = null;
 	private Queue<String> lastClOrdIdSent;
 	private long timestampError = Long.MIN_VALUE;
+	private Date sleepUntil = null;
 
 	public QuoteSideManager(Algorithm algorithm, Instrument instrument, Verb verb) {
 		this.algorithm = algorithm;
@@ -69,6 +72,18 @@ public class QuoteSideManager {
 		lastClOrdIdSent = EvictingQueue.create(MAX_SIZE_LAST_CLORDID_SENT);
 		cancelConfirmedOriginalClientOrderId = EvictingQueue.create(200);
 		timestampError = Long.MIN_VALUE;
+		sleepUntil = null;
+
+	}
+
+	public void sleepQuoting(Date wakeupTime) {
+		if (sleepUntil == null) {
+			sleepUntil = wakeupTime;
+			return;
+		}
+		if (sleepUntil.getTime() < wakeupTime.getTime()) {
+			sleepUntil = wakeupTime;
+		}
 	}
 
 	public Queue<String> getLastClOrdIdSent() {
@@ -109,6 +124,7 @@ public class QuoteSideManager {
 			//				throw new LambdaTradingException("cant quote " + verb + " waiting to ER of " + clientOrderIdSent);
 		}
 
+
 		Instrument instrument = quoteRequest.getInstrument();
 		double price = quoteRequest.getBidPrice();
 		double quantity = quoteRequest.getBidQuantity();
@@ -125,6 +141,7 @@ public class QuoteSideManager {
 		}
 
 		OrderRequest orderRequest = createOrderRequest(instrument, verb, price, quantity);
+		orderRequest.setFreeText(quoteRequest.getFreeText());
 		if (activeClientOrderId != null) {
 			orderRequest.setOrderRequestAction(OrderRequestAction.Modify);
 			orderRequest.setOrigClientOrderId(activeClientOrderId);
@@ -231,6 +248,10 @@ public class QuoteSideManager {
 		}
 	}
 
+	public Date getSleepUntil() {
+		return sleepUntil;
+	}
+
 	public boolean onExecutionReportUpdate(ExecutionReport executionReport) {
 		if (executionReport.getVerb() != null && !executionReport.getVerb().equals(verb)) {
 			//is from the other side
@@ -256,6 +277,9 @@ public class QuoteSideManager {
 		if (isRejected) {
 			logger.warn("[{}] {}-{}  {}", new Date(executionReport.getTimestampCreation()),
 					executionReport.getClientOrderId(), executionReport.getExecutionReportStatus(), executionReport);
+			//maybe a trade is coming later
+			Date wakeUpTime = new Date(algorithm.getCurrentTime().getTime() + SLEEP_AFTER_REJ_MS);
+			sleepQuoting(wakeUpTime);
 
 		} else {
 			if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal()) {

@@ -101,8 +101,19 @@ public class FixedLatencyEngine implements LatencyEngine {
 		}
 	}
 
-	@Override public void delay(Date currentDate) {
+	@Override
+	public void delay(Date currentDate) {
 		delayThread(currentDate, latencyMs);
+	}
+
+	@Override
+	public void reset() {
+		currentTime = new Date(0);
+		nextUpdateMs = Long.MIN_VALUE;
+		counterTimeSet = new AtomicInteger(0);
+		synchronized (lockLatch) {
+			latch = null;
+		}
 	}
 
 }

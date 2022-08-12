@@ -1,0 +1,21 @@
+site_name: WekaDeeplearning4j
+theme: readthedocs
+repo_url: https://github.com/Waikato/wekaDeeplearning4j
+site_description: WekaDeeplearning4j Documentation
+nav:
+  - Home: index.md
+  - Installation: install.md
+
+  - User Guide:
+      - 'Getting Started': 'user-guide/getting-started.md'
+      - 'Loading Data': 'user-guide/data.md'
+      - 'Model Zoo': 'user-guide/model-zoo.md'
+      - 'Natural Language Processing': 'user-guide/nlp.md'
+      - 'Progress Manager': 'user-guide/progress-manager.md'
+  - Examples:
+      - 'Introduction': 'examples/introduction.md'
+      - 'Training a CNN': 'examples/train_cnn.md'
+      - 'Training an RNN': 'examples/train_rnn.md'
+      - 'Image Feature Extraction': 'examples/feature_extraction.md'
+      - 'Inference': 'examples/inference.md'
+  - Troubleshooting: troubleshooting.md

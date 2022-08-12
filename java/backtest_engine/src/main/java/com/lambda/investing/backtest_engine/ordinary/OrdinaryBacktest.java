@@ -26,12 +26,18 @@ import java.util.concurrent.ThreadPoolExecutor;
 
 public class OrdinaryBacktest extends AbstractBacktest {
 
+
 	private boolean isSingleThread = false;
 
 	private OrdinaryConnectorConfiguration ordinaryConnectorConfiguration = new OrdinaryConnectorConfiguration();
 
 	public OrdinaryBacktest(BacktestConfiguration backtestConfiguration) throws Exception {
 		super(backtestConfiguration);
+
+		if (Configuration.MULTITHREADING_CORE.equals(Configuration.MULTITHREAD_CONFIGURATION.SINGLE_THREADING)) {
+			System.out.println("SINGLE_THREADING detected from Configuration on OrdinaryBacktest => setSingleThread");
+			setSingleThread(true);
+		}
 
 		if (Configuration.isDebugging()) {
 			System.out.println("DEBUGGING DETECTED => SINGLE THREAD! WITHOUT SIMULATED DELAYS!");
@@ -60,6 +66,7 @@ public class OrdinaryBacktest extends AbstractBacktest {
 	@Override protected void constructPaperExecutionReportConnectorPublisher() {
 		paperTradingEngine = new PaperTradingEngine(paperTradingEngineConnector, ordinaryMarketDataConnectorProvider,
 				backtestOrderRequestProvider, tradingEngineConnectorConfiguration);
+		paperTradingEngine.setDelayOrderRequestPoissonMs(Configuration.DELAY_ORDER_BACKTEST_MS);//setting delay 65 ms
 		paperTradingEngine.setBacktest(true);
 
 		paperTradingEngineConnector = getPaperTradingEngineConnector();
@@ -106,7 +113,7 @@ public class OrdinaryBacktest extends AbstractBacktest {
 	@Override protected TradingEngineConnector getPaperTradingEngineConnector() {
 		return new OrdinaryTradingEngine((OrdinaryConnectorPublisherProvider) backtestOrderRequestProvider,
 				paperTradingEngine, Configuration.BACKTEST_THREADS_PUBLISHING_ORDER_REQUEST,
-				Configuration.BACKTEST_THREADS_LISTENING_EXECUTION_REPORTS);
+				Configuration.BACKTEST_THREADS_LISTENING_EXECUTION_REPORTS, Thread.MAX_PRIORITY, Thread.NORM_PRIORITY);
 	}
 
 	@Override protected ConnectorProvider getBacktestOrderRequestProvider() {

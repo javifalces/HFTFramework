@@ -29,7 +29,8 @@ public class LiveTrading {
 	public LiveTrading(AlgorithmConnectorConfiguration algorithmConnectorConfiguration) {
 		this.algorithmConnectorConfiguration = algorithmConnectorConfiguration;
 		this.marketDataProvider = this.algorithmConnectorConfiguration.getMarketDataProvider();
-		this.tradingEngineConnector = this.algorithmConnectorConfiguration.getTradingEngineConnector();
+		this.tradingEngineConnector = this.algorithmConnectorConfiguration
+				.getTradingEngineConnector();
 	}
 
 	/**
@@ -57,8 +58,7 @@ public class LiveTrading {
 				this.algorithmConnectorConfiguration.setTradingEngineConnector(paperTradingEngine);
 
 				//marketDataProvider
-				this.algorithmConnectorConfiguration
-						.setMarketDataProvider(paperTradingEngine.getMarketDataProviderIn());
+				this.algorithmConnectorConfiguration.setMarketDataProvider(paperTradingEngine.getMarketDataProviderIn());
 				this.algorithm.setAlgorithmConnectorConfiguration(this.algorithmConnectorConfiguration);
 			} else {
 				logger.error("can't set paper trader on tradingEngine is not instanceof AbstractBrokerTradingEngine");

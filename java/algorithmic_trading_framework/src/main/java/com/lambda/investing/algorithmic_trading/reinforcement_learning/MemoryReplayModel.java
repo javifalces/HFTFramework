@@ -20,6 +20,7 @@ public interface MemoryReplayModel {
 
 	boolean isTrained();
 
+
 	int getMaxBatchSize();
 
 	int getBatchSize();
@@ -29,5 +30,11 @@ public interface MemoryReplayModel {
 	long getSeed();
 
 	int getEpoch();
+
+	void setParameterTuningBeforeTraining(boolean value);
+
+	void setEarlyStoppingTraining(boolean value);
+
+	void setHiddenSizeNodesMultiplier(double value);
 
 }

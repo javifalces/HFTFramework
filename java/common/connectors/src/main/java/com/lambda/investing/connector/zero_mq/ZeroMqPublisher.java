@@ -79,6 +79,7 @@ public class ZeroMqPublisher implements ConnectorPublisher {
 			reqSocket.bind(urlAck);
 			new Thread(new ZeroMqAckReqProvider(reqSocket), "listen_req_" + configuration.getPort() + 1).start();
 
+
 		} else {
 			publishSocket = PORTS_TAKEN_PUB.get(configuration.getPort());
 		}
@@ -146,17 +147,17 @@ public class ZeroMqPublisher implements ConnectorPublisher {
 
 	private synchronized void send(String message, ZeroMqConfiguration configuration, String topic, long timestamp,
 			ZMQ.Socket socket) {
-		if (!counterMessagesSent.containsKey(configuration)) {
-			counterMessagesSent.put(configuration, new AtomicInteger(0));
-		}
-		if (!counterMessagesNotSent.containsKey(configuration)) {
-			counterMessagesNotSent.put(configuration, new AtomicInteger(0));
-		}
+			if (!counterMessagesSent.containsKey(configuration)) {
+				counterMessagesSent.put(configuration, new AtomicInteger(0));
+			}
+			if (!counterMessagesNotSent.containsKey(configuration)) {
+				counterMessagesNotSent.put(configuration, new AtomicInteger(0));
+			}
 		if ((topic.trim().length() == 0) || (message.trim().length() == 0))
 			return;
 
 		logger.debug("Sending to zeroMq {} :\n {}", topic, message);
-		//		return socket.send(message.getBytes(ZMQ.CHARSET));
+			//		return socket.send(message.getBytes(ZMQ.CHARSET));
 		long elapsed = System.currentTimeMillis() - timestamp;
 		logger.debug("[ZEROMQ]Took {} ms to process message", elapsed);
 
@@ -172,7 +173,7 @@ public class ZeroMqPublisher implements ConnectorPublisher {
 			AtomicInteger prevCount = counterMessagesNotSent.get(configuration);
 			prevCount.incrementAndGet();
 			counterMessagesNotSent.put(configuration, prevCount);
-		}
+			}
 
 	}
 

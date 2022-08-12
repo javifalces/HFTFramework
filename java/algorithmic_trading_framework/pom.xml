@@ -12,12 +12,15 @@
 
     <artifactId>algorithmic_trading_framework</artifactId>
 
-    <properties>
-        <deeplearning4j.version>1.0.0-beta7</deeplearning4j.version>
-        <djl.version>0.12.0</djl.version>
-    </properties>
 
     <dependencies>
+
+        <!--        log async-->
+        <dependency>
+            <groupId>com.lmax</groupId>
+            <artifactId>disruptor</artifactId>
+        </dependency>
+
         <!--connector-->
         <dependency>
             <groupId>com.lambda.investing</groupId>
@@ -28,6 +31,12 @@
         <dependency>
             <groupId>com.lambda.investing</groupId>
             <artifactId>trading_engine_connectors</artifactId>
+            <version>0.0.0-SNAPSHOT</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.lambda.investing</groupId>
+            <artifactId>configuration</artifactId>
             <version>0.0.0-SNAPSHOT</version>
         </dependency>
 
@@ -81,104 +90,21 @@
             <version>3.3.0</version>
         </dependency>
 
-        <!--ONNX ML Models-->
+        <!--     Matrix data structures, linear solvers, least squares methods, eigenvalue, and singular value decompositions  -->
         <dependency>
-            <groupId>com.microsoft.onnxruntime</groupId>
-            <artifactId>onnxruntime</artifactId>
-            <version>1.9.0</version>
-        </dependency>
-        <!--<dependency>-->
-        <!--<groupId>ai.djl</groupId>-->
-        <!--<artifactId>api</artifactId>-->
-        <!--<version>${djl.version}</version>-->
-        <!--</dependency>-->
-        <!--<dependency>-->
-        <!--<groupId>ai.djl.onnxruntime</groupId>-->
-        <!--<artifactId>onnxruntime-engine</artifactId>-->
-        <!--<version>${djl.version}</version>-->
-        <!--</dependency>-->
-
-
-        <!--<dependency>-->
-        <!--<groupId>com.microsoft.onnxruntime</groupId>-->
-        <!--<artifactId>onnxruntime_gpu</artifactId>-->
-        <!--<version>1.5.2</version>-->
-        <!--</dependency>-->
-
-
-        <!--deeplearning4j ML models-->
-        <dependency>
-            <groupId>org.deeplearning4j</groupId>
-            <artifactId>deeplearning4j-core</artifactId>
-            <version>${deeplearning4j.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.nd4j</groupId>
-            <artifactId>nd4j-native-platform</artifactId>
-            <version>${deeplearning4j.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.bytedeco.javacpp-presets</groupId>
-                    <artifactId>mkl-dnn</artifactId>
-                </exclusion>
-            </exclusions>
-
-        </dependency>
-        <dependency>
-            <groupId>org.datavec</groupId>
-            <artifactId>datavec-api</artifactId>
-            <version>${deeplearning4j.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.deeplearning4j</groupId>
-            <artifactId>deeplearning4j-ui</artifactId>
-            <version>${deeplearning4j.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.deeplearning4j</groupId>
-            <artifactId>arbiter-deeplearning4j</artifactId>
-            <version>${deeplearning4j.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.deeplearning4j</groupId>
-            <artifactId>arbiter-ui</artifactId>
-            <version>${deeplearning4j.version}</version>
+            <groupId>com.googlecode.matrix-toolkits-java</groupId>
+            <artifactId>mtj</artifactId>
+            <version>1.0.4</version>
         </dependency>
 
 
-        <!--CUDA deeplearning4j-->
+        <!--ML models-->
         <dependency>
-            <groupId>org.nd4j</groupId>
-            <artifactId>nd4j-cuda-10.1</artifactId>
-            <version>${deeplearning4j.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.bytedeco.javacpp-presets</groupId>
-                    <artifactId>mkl-dnn</artifactId>
-                </exclusion>
-            </exclusions>
+            <groupId>com.lambda.investing</groupId>
+            <artifactId>machine_learning</artifactId>
+            <version>0.0.0-SNAPSHOT</version>
         </dependency>
 
-        <dependency>
-            <groupId>org.deeplearning4j</groupId>
-            <artifactId>deeplearning4j-cuda-10.1</artifactId>
-            <version>${deeplearning4j.version}</version>
-        </dependency>
-
-
-        <dependency>
-            <groupId>org.bytedeco</groupId>
-            <artifactId>openblas</artifactId>
-            <version>0.3.9-1-1.5.3</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.bytedeco</groupId>
-            <artifactId>cuda</artifactId>
-            <version>10.1-7.5-1.5</version>
-        </dependency>
 
     </dependencies>
 

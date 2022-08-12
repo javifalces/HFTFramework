@@ -149,7 +149,8 @@ public class ZeroMqPusher implements ConnectorPublisher {
 
 	}
 
-	private synchronized void send(String message, long timestamp, ZMQ.Socket socket) {
+	private synchronized void send(String message, long timestamp,
+			ZMQ.Socket socket) {
 		logger.debug("Sending to zeroMq push :\n {}", message);
 		//		return socket.send(message.getBytes(ZMQ.CHARSET));
 		long elapsed = System.currentTimeMillis() - timestamp;

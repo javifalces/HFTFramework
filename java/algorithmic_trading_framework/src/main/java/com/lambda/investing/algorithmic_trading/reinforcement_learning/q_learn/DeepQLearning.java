@@ -19,7 +19,7 @@ import org.apache.logging.log4j.Logger;
 import java.io.*;
 import java.util.*;
 
-import static com.lambda.investing.Configuration.SET_RANDOM_GENERATOR;
+import static com.lambda.investing.Configuration.SET_RANDOM_SEED;
 import static com.lambda.investing.algorithmic_trading.reinforcement_learning.TrainNNUtils.argmax;
 import static com.lambda.investing.algorithmic_trading.reinforcement_learning.TrainNNUtils.getColumnsArray;
 
@@ -76,7 +76,7 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 			maxMemorySize = MAX_MEMORY_SIZE;
 		}
 		this.indexToStateCache = Maps.synchronizedBiMap(HashBiMap.create(this.maxMemorySize));
-		this.isRNN = isRNN;
+		this.isRNN = isRNN;//TODO not used yet but maybe we have to save data other way
 		this.maxMemorySize = maxMemorySize;
 		this.state = state;
 		this.action = action;
@@ -102,7 +102,7 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 	}
 
 	public void setSeed(long seed) {
-		SET_RANDOM_GENERATOR(seed);
+		SET_RANDOM_SEED(seed);
 	}
 
 	public void setPredictModel(MemoryReplayModel predictModel) {
@@ -127,13 +127,17 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 			file.getParentFile().mkdirs();
 			StringBuilder outputString = new StringBuilder();
 			for (int row = 0; row < memoryReplaySize; row++) {
-				for (int column = 0; column < memoryReplay[row].length; column++) {
-					outputString.append(memoryReplay[row][column]);
-					outputString.append(CSV_SEPARATOR);
+				try {
+					for (int column = 0; column < memoryReplay[row].length; column++) {
+						outputString.append(memoryReplay[row][column]);
+						outputString.append(CSV_SEPARATOR);
+					}
+					outputString = outputString.delete(outputString.lastIndexOf(CSV_SEPARATOR),
+							outputString.length());//remove last csv separator
+					outputString.append(System.lineSeparator());
+				} catch (Exception e) {
+					logger.warn("Error saving row {} on memoryReplay of size {}! skip it ", row, memoryReplaySize);
 				}
-				outputString = outputString.delete(outputString.lastIndexOf(CSV_SEPARATOR),
-						outputString.length());//remove last csv separator
-				outputString.append(System.lineSeparator());
 			}
 
 			outputString = outputString.delete(outputString.lastIndexOf(System.lineSeparator()),
@@ -714,6 +718,9 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 	public void commandStopReceived() {
 		//called in stop command end of backtests!
 		double meanReward = cumReward / rewardCounter;
+		if (!Double.isFinite(meanReward)) {
+			meanReward = 0;
+		}
 		System.out.println("meanReward= " + String.valueOf(meanReward));
 		logger.info("meanReward= {}", meanReward);
 

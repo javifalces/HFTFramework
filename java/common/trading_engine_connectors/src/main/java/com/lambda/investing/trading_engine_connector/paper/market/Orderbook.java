@@ -9,6 +9,7 @@ import org.apache.logging.log4j.Logger;
 
 import java.io.StringWriter;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.*;
 
 import static com.lambda.investing.trading_engine_connector.paper.market.OrderbookManager.MARKET_MAKER_ALGORITHM_INFO;
@@ -63,7 +64,7 @@ public class Orderbook {
 	private double clipPrice(double price) {
 		int numDecPlaces = (int) Math.log10(1 / this.tickSize);
 		BigDecimal bd = new BigDecimal(price);
-		BigDecimal rounded = bd.setScale(numDecPlaces, BigDecimal.ROUND_HALF_UP);
+		BigDecimal rounded = bd.setScale(numDecPlaces, RoundingMode.HALF_UP);
 		return rounded.doubleValue();
 	}
 

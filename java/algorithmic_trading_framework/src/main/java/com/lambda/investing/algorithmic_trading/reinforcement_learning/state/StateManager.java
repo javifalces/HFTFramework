@@ -58,7 +58,16 @@ import java.util.Map;
 		return output;
 	}
 
-	@Override public void onUpdateTrade(String algorithmInfo, PnlSnapshot pnlSnapshot) {
+	public void reset() {
+		lastIsReady = false;
+		currentTimestamp = 0L;
+		lasPnlSnapshotSend = null;
+
+	}
+
+
+	@Override
+	public void onUpdateTrade(String algorithmInfo, PnlSnapshot pnlSnapshot) {
 		abstractState.updatePrivateState(pnlSnapshot);
 		lasPnlSnapshotSend = pnlSnapshot;
 

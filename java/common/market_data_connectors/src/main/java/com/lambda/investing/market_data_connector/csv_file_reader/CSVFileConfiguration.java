@@ -14,15 +14,18 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
-@Getter @Setter public class CSVFileConfiguration {
+@Getter
+@Setter
+public class CSVFileConfiguration {
+
 
 	protected Logger logger = LogManager.getLogger(CSVFileConfiguration.class);
 	private List<Instrument> instruments;
 	private List<String> depthFilesPath;
 	private List<String> tradeFilesPath;
-	private int speed = -1;
-	private long initialSleepSeconds = 0;
-	private Date startTime, endTime;
+	private int speed=-1;
+	private long initialSleepSeconds=0;
+	private Date startTime,endTime;
 	SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd");
 	private Map<String, Instrument> filePathToInstrument;
 
@@ -37,7 +40,9 @@ import java.util.*;
 		setCSVFilesPath();
 	}
 
-	public CSVFileConfiguration(Instrument instrument, int speed, long initialSleepSeconds, Date startTime,
+
+
+	public CSVFileConfiguration(Instrument instrument,  int speed, long initialSleepSeconds, Date startTime,
 			Date endTime) {
 		instruments = new ArrayList<>();
 		instruments.add(instrument);
@@ -49,7 +54,8 @@ import java.util.*;
 		setCSVFilesPath();
 	}
 
-	public CSVFileConfiguration(Instrument instrument, int speed, long initialSleepSeconds, String startTime,
+
+	public CSVFileConfiguration(Instrument instrument,  int speed, long initialSleepSeconds, String startTime,
 			String endTime) throws ParseException {
 		instruments = new ArrayList<>();
 		instruments.add(instrument);
@@ -57,7 +63,7 @@ import java.util.*;
 		this.speed = speed;
 		this.initialSleepSeconds = initialSleepSeconds;
 		this.startTime = dateFormat.parse(startTime);
-		this.endTime = dateFormat.parse(endTime);
+		this.endTime =  dateFormat.parse(endTime);
 		setCSVFilesPath();
 	}
 
@@ -65,21 +71,24 @@ import java.util.*;
 		return getDaysBetweenDates(this.startTime, this.endTime);
 	}
 
-	public CSVFileConfiguration(Instrument instrument, Date startTime, Date endTime) {
+	public CSVFileConfiguration(Instrument instrument,Date startTime,
+			Date endTime) {
 		instruments = new ArrayList<>();
 		instruments.add(instrument);
-		this.startTime = startTime;
-		this.endTime = endTime;
+		this.startTime=startTime;
+		this.endTime=endTime;
 
 		setCSVFilesPath();
 	}
 
-	public static List<Date> getDaysBetweenDates(Date startdate, Date enddate) {
+	public static List<Date> getDaysBetweenDates(Date startdate, Date enddate)
+	{
 		List<Date> dates = new ArrayList<>();
 		Calendar calendar = new GregorianCalendar();
 		calendar.setTime(startdate);
 		dates.add(startdate);
-		while (calendar.getTime().before(enddate)) {
+		while (calendar.getTime().before(enddate))
+		{
 			Date result = calendar.getTime();
 			dates.add(result);
 			calendar.add(Calendar.DATE, 1);
@@ -88,8 +97,8 @@ import java.util.*;
 		return new ArrayList<>(new HashSet<>(dates));
 	}
 
-	private void setCSVFilesPath() {
-		depthFilesPath = new ArrayList<>();
+	private void setCSVFilesPath(){
+		depthFilesPath=new ArrayList<>();
 		tradeFilesPath = new ArrayList<>();
 		//btcusd_depth_20200819.csv
 		List<Date> listOfDates = getDaysBetweenDates(startTime, endTime);
@@ -118,8 +127,7 @@ import java.util.*;
 			}
 		}
 		CSVUtils.PATH_TO_INSTRUMENT = filePathToInstrument;
-		logger.info("Setting File path with {} depths files and {} trades files", depthFilesPath.size(),
-				tradeFilesPath.size());
+		logger.info("Setting File path with {} depths files and {} trades files",depthFilesPath.size(),tradeFilesPath.size());
 
 	}
 

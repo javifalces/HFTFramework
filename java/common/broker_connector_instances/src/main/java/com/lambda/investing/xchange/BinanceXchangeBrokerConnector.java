@@ -4,7 +4,9 @@ import info.bitrich.xchangestream.binance.BinanceStreamingExchange;
 import info.bitrich.xchangestream.core.StreamingExchangeFactory;
 import lombok.Getter;
 import org.knowm.xchange.ExchangeFactory;
+import org.knowm.xchange.ExchangeSpecification;
 import org.knowm.xchange.binance.BinanceExchange;
+import org.knowm.xchange.coinbasepro.CoinbaseProExchange;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;

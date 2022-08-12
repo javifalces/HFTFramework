@@ -1,19 +1,8 @@
 package com.lambda.investing.backtest;
 
-import com.lambda.investing.Configuration;
+import com.lambda.investing.algorithmic_trading.AlgorithmCreationUtils;
 import com.lambda.investing.algorithmic_trading.AlgorithmUtils;
 import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
-//import com.lambda.investing.algorithmic_trading.arbitrage.ArbitrageAlgorithm;
-import com.lambda.investing.algorithmic_trading.avellaneda_stoikov.AvellanedaStoikov;
-import com.lambda.investing.algorithmic_trading.avellaneda_stoikov_dqn.*;
-import com.lambda.investing.algorithmic_trading.avellaneda_stoikov_q_learn.AvellanedaStoikovQLearn;
-import com.lambda.investing.algorithmic_trading.constant_spread.ConstantSpreadAlgorithm;
-import com.lambda.investing.algorithmic_trading.constant_spread.LinearConstantSpreadAlgorithm;
-//import com.lambda.investing.algorithmic_trading.hedging.LinearRegressionHedgeManager;
-//import com.lambda.investing.algorithmic_trading.mean_reversion.DQNRSISideQuoting;
-//import com.lambda.investing.algorithmic_trading.mean_reversion.RSISideQuoting;
-//import com.lambda.investing.algorithmic_trading.statistical_arbitrage.StatisticalArbitrageAlgorithm;
-//import com.lambda.investing.algorithmic_trading.statistical_arbitrage.StatisticalArbitrageQuotingAlgorithm;
 import com.lambda.investing.backtest_engine.BacktestConfiguration;
 import com.lambda.investing.model.asset.Instrument;
 import lombok.Getter;
@@ -72,6 +61,8 @@ import java.util.*;
 		private String startDate;//20201208
 		private String endDate;//20201210
 		private long delayOrderMs;//65
+		private boolean feesCommissionsIncluded = true;
+		private long seed = 0;
 		private String instrument;
 		private String multithreadConfiguration = null;
 
@@ -116,6 +107,10 @@ import java.util.*;
 			backtestConfiguration.setStartTime(startDate);
 			backtestConfiguration.setEndTime(endDate);
 			backtestConfiguration.setDelayOrderMs(delayOrderMs);
+			backtestConfiguration.setFeesCommissionsIncluded(feesCommissionsIncluded);
+			if (seed != 0) {
+				backtestConfiguration.setSeed(seed);
+			}
 			backtestConfiguration.setInstruments(instrumentList);
 			if (multithreadConfiguration != null) {
 				backtestConfiguration.setMultithreadConfiguration(multithreadConfiguration);
@@ -139,7 +134,7 @@ import java.util.*;
 		 * @return
 		 */
 		public com.lambda.investing.algorithmic_trading.Algorithm getAlgorithm() {
-			return AlgorithmUtils.getAlgorithm(null, algorithmName, AlgorithmUtils.getParameters(parameters));
+            return AlgorithmCreationUtils.getAlgorithm(null, algorithmName, AlgorithmUtils.getParameters(parameters));
 		}
 
 		public Algorithm() {

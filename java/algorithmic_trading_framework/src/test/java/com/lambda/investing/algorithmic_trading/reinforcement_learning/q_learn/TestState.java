@@ -19,6 +19,9 @@ public class TestState extends AbstractState {
 		this.currentState = sampleState;
 	}
 
+	@Override public void calculateNumberOfColumns() {
+	}
+
 	@Override public List<String> getColumns() {
 		List<String> columns = new ArrayList<>();
 		for (int i = 0; i < this.currentState.length; i++) {
@@ -27,11 +30,18 @@ public class TestState extends AbstractState {
 		return columns;
 	}
 
-	@Override public int getNumberStates() {
+	@Override
+	public int getNumberStates() {
 		return this.currentState.length;
 	}
 
-	@Override public boolean isReady() {
+	@Override
+	public void reset() {
+
+	}
+
+	@Override
+	public boolean isReady() {
 		return true;
 	}
 
@@ -39,7 +49,8 @@ public class TestState extends AbstractState {
 		this.currentState = currentState;
 	}
 
-	@Override public double[] getCurrentState() {
+	@Override
+	public double[] getCurrentState() {
 		return this.currentState;
 	}
 

@@ -10,8 +10,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
-import static com.lambda.investing.Configuration.SET_DELAY_ORDER_BACKTEST_MS;
-import static com.lambda.investing.Configuration.SET_MULTITHREAD_CONFIGURATION;
+import static com.lambda.investing.Configuration.*;
 
 @Getter @Setter public class BacktestConfiguration {
 
@@ -27,6 +26,8 @@ import static com.lambda.investing.Configuration.SET_MULTITHREAD_CONFIGURATION;
 	private long initialSleepSeconds = 5;
 	private String multithreadConfiguration;
 	private long delayOrderMs;
+	private boolean feesCommissionsIncluded = true;
+	private long seed;
 	//backtest type
 	private BacktestSource backtestSource;
 	private BacktestExternalConnection backtestExternalConnection;
@@ -40,6 +41,8 @@ import static com.lambda.investing.Configuration.SET_MULTITHREAD_CONFIGURATION;
 		setMultithreadConfiguration(this.multithreadConfiguration);
 		this.delayOrderMs = Configuration.DELAY_ORDER_BACKTEST_MS;
 		setDelayOrderMs(this.delayOrderMs);
+		this.feesCommissionsIncluded = Configuration.FEES_COMMISSIONS_INCLUDED;
+		setFeesCommissionsIncluded(this.feesCommissionsIncluded);
 	}
 
 	/**
@@ -84,6 +87,20 @@ import static com.lambda.investing.Configuration.SET_MULTITHREAD_CONFIGURATION;
 	public void setDelayOrderMs(long delayOrderMs) {
 		if (delayOrderMs != this.delayOrderMs) {
 			SET_DELAY_ORDER_BACKTEST_MS(delayOrderMs);
+			this.delayOrderMs = delayOrderMs;
+		}
+	}
+
+	public void setFeesCommissionsIncluded(boolean feesCommissionsIncluded) {
+		if (feesCommissionsIncluded != this.feesCommissionsIncluded) {
+			SET_FEES_COMMISSIONS_INCLUDED(feesCommissionsIncluded);
+			this.feesCommissionsIncluded = feesCommissionsIncluded;
+		}
+	}
+
+	public void setSeed(long seed) {
+		if (seed != this.seed) {
+			SET_RANDOM_SEED(seed);
 		}
 	}
 

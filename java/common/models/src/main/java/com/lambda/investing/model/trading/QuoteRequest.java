@@ -9,7 +9,7 @@ import java.util.Objects;
 
 @Getter @Setter @ToString public class QuoteRequest {
 
-	QuoteRequestAction quoteRequestAction;
+	QuoteRequestAction quoteRequestAction = QuoteRequestAction.Off;
 	private double bidPrice, bidQuantity, askPrice, askQuantity;//todo change to bigdecimal or integer
 	private Instrument instrument;
 

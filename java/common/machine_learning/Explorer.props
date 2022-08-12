@@ -1,0 +1,11 @@
+# Adds the Model Explorer tab to the GUI tabs
+
+# When developing, we still want the default WEKA tabs to be shown.
+# If they're left off this file, they won't be shown when running the GUI from IntelliJ.
+
+Tabs=weka.gui.explorer.ExplorerDl4jInference:standalone,\
+    weka.gui.explorer.ClassifierPanel,\
+    weka.gui.explorer.ClustererPanel,\
+    weka.gui.explorer.AssociationsPanel,\
+    weka.gui.explorer.AttributeSelectionPanel,\
+    weka.gui.explorer.VisualizePanel

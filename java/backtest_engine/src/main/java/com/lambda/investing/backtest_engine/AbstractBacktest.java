@@ -154,7 +154,7 @@ public abstract class AbstractBacktest {
 	}
 
 	public void reset() {
-		backtestConfiguration.getAlgorithm().reset();
+		backtestConfiguration.getAlgorithm().resetAlgorithm();
 
 	}
 

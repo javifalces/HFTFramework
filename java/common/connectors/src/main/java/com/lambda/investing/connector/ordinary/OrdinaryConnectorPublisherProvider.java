@@ -3,6 +3,7 @@ package com.lambda.investing.connector.ordinary;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.lambda.investing.connector.*;
 import com.lambda.investing.model.messaging.TypeMessage;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -19,10 +20,12 @@ public class OrdinaryConnectorPublisherProvider implements ConnectorPublisher, C
 	private Map<ConnectorConfiguration, AtomicInteger> counterMessagesNotSent;
 	Logger logger = LogManager.getLogger(OrdinaryConnectorPublisherProvider.class);
 	ThreadFactory namedThreadFactory = new ThreadFactoryBuilder()
-			.setNameFormat("OrdinaryConnectorPublisherProvider -%d").build();
+			.setNameFormat("OrdinaryConnectorPublisherProvider -%d")
+			.build();
 
 	ThreadPoolExecutor senderPool;
 	private Integer priority = null;
+
 
 	private int threads;
 	private String name;
@@ -105,7 +108,7 @@ public class OrdinaryConnectorPublisherProvider implements ConnectorPublisher, C
 				listener.onUpdate(connectorConfiguration, System.currentTimeMillis(), typeMessage, message);
 			}
 		} catch (Exception ex) {
-			logger.error("error notifying {} :{} ", topic, message, ex);
+			logger.error("error notifying {}:{} \n{} ", topic, message, ExceptionUtils.getStackTrace(ex), ex);
 			output = false;
 		}
 

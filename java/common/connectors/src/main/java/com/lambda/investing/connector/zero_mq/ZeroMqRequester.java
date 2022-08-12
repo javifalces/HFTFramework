@@ -36,8 +36,7 @@ public class ZeroMqRequester implements ConnectorRequester {
 		return publishSocket;
 
 	}
-
-	private void reconnect(ZeroMqConfiguration zeroMqConfiguration, ZMQ.Socket socket) {
+	private void reconnect(ZeroMqConfiguration zeroMqConfiguration,ZMQ.Socket socket) {
 		String url = String.format("tcp://%s:%d", zeroMqConfiguration.getHost(), zeroMqConfiguration.getPort());
 		socket.connect(url);
 
@@ -66,6 +65,7 @@ public class ZeroMqRequester implements ConnectorRequester {
 			reconnect(zeroMqConfiguration, socket);
 		}
 		return received;
+
 
 	}
 }

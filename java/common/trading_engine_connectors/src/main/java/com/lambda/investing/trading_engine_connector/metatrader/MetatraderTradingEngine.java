@@ -10,6 +10,7 @@ import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
 import com.lambda.investing.connector.zero_mq.ZeroMqPuller;
 import com.lambda.investing.connector.zero_mq.ZeroMqPusher;
 import com.lambda.investing.metatrader.MetatraderZeroBrokerConnector;
+import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.messaging.TypeMessage;
 import com.lambda.investing.model.portfolio.Portfolio;
 import com.lambda.investing.model.trading.*;
@@ -22,6 +23,9 @@ import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import java.io.File;
 import java.lang.reflect.Modifier;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+
+import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_PORTFOLIO_INFO;
 
 public class MetatraderTradingEngine extends AbstractBrokerTradingEngine {
 
@@ -176,7 +180,6 @@ public class MetatraderTradingEngine extends AbstractBrokerTradingEngine {
 		}
 		return false;
 	}
-
 	@Override public boolean orderRequest(OrderRequest orderRequest) {
 		logger.debug("orderRequest push Metatrader {}", orderRequest);
 		if (ordersProcessed.contains(orderRequest.getClientOrderId())) {

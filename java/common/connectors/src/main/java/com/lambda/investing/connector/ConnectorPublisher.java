@@ -8,7 +8,6 @@ public interface ConnectorPublisher {
 			String message);
 
 	int getMessagesSent(ConnectorConfiguration configuration);
-
 	int getMessagesFailed(ConnectorConfiguration configuration);
 
 }

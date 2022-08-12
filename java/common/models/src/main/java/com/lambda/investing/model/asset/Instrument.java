@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-@Getter @Setter @ToString public class Instrument {
+@Getter @Setter public class Instrument {
 
 	private static List<String> FX_MARKETS_LIST = Arrays.asList(new String[] { Market.Darwinex.name().toLowerCase() });
 
@@ -121,15 +121,18 @@ import java.util.concurrent.ConcurrentHashMap;
 	}
 
 	public String getPrimaryKey() {
-		if (this.primaryKey == null) {
+		if(this.primaryKey!=null){
+			return this.primaryKey;
+		}
+		else{
 			setPrimaryKey();
+			if (this.primaryKey == null) {
+				logger.error("can't get primary key {}", this);
+				return null;
+			}
+			INSTRUMENT_PK_TO_INSTRUMENT.put(this.primaryKey, this);
+			return this.primaryKey;
 		}
-		if (this.primaryKey == null) {
-			logger.error("can't get primary key {}", this);
-			return null;
-		}
-		INSTRUMENT_PK_TO_INSTRUMENT.put(this.primaryKey, this);
-		return this.primaryKey;
 	}
 
 	/**

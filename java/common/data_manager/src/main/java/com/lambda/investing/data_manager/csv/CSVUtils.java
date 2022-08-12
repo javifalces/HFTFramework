@@ -238,15 +238,29 @@ public class CSVUtils {
 		String[] algorithmInfo = new String[levels];
 
 		for (int level = 0; level < levels; level++) {
-			double ask = (double) mapToUpdate.get("ask" + String.valueOf(level));
-			double bid = (double) mapToUpdate.get("bid" + String.valueOf(level));
-			double askQty = (double) mapToUpdate.get("ask_quantity" + String.valueOf(level));
-			double bidQty = (double) mapToUpdate.get("bid_quantity" + String.valueOf(level));
-			asks[level] = ask;
-			bids[level] = bid;
-			asksQty[level] = askQty;
-			bidsQty[level] = bidQty;
+			asks[level] = 0.0;
+			bids[level] = 0.0;
+			asksQty[level] = 0.0;
+			bidsQty[level] = 0.0;
 			algorithmInfo[level] = algorithmInfoDepth;
+
+			try {
+				double ask = (double) mapToUpdate.get("ask" + String.valueOf(level));
+				double bid = (double) mapToUpdate.get("bid" + String.valueOf(level));
+				double askQty = (double) mapToUpdate.get("ask_quantity" + String.valueOf(level));
+				double bidQty = (double) mapToUpdate.get("bid_quantity" + String.valueOf(level));
+				asks[level] = ask;
+				bids[level] = bid;
+				asksQty[level] = askQty;
+				bidsQty[level] = bidQty;
+				algorithmInfo[level] = algorithmInfoDepth;
+			} catch (Exception e) {
+				if (level == 0) {
+					//level 0 requires all data!
+					throw e;
+				}
+			}
+
 		}
 		depth.setTimestamp(getTimestamp(mapToUpdate));
 		depth.setAsks(asks);

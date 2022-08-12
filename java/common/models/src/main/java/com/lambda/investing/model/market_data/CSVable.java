@@ -9,7 +9,6 @@ import java.io.Serializable;
 public abstract class CSVable implements Serializable {
 
 	static Logger logger = LogManager.getLogger(CSVable.class);
-
 	public abstract String toCSV(boolean withHeader);
 
 	public abstract Object getParquetObject();

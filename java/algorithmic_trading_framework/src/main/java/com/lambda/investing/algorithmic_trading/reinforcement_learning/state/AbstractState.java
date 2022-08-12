@@ -2,22 +2,32 @@ package com.lambda.investing.algorithmic_trading.reinforcement_learning.state;
 
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
+import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.PnlSnapshot;
+import com.lambda.investing.algorithmic_trading.reinforcement_learning.action.AvellanedaAction;
+import com.lambda.investing.data_manager.csv.CSVDataManager;
 import com.lambda.investing.model.candle.Candle;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
+import com.lambda.investing.model.trading.Verb;
 import lombok.Getter;
+import lombok.Setter;
 import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.math3.exception.NumberIsTooLargeException;
+import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
+import org.apache.curator.shaded.com.google.common.collect.Queues;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.paukov.combinatorics3.Generator;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.math.BigDecimal;
+import java.math.MathContext;
+import java.util.*;
 import java.util.stream.Collectors;
+
+import static com.lambda.investing.data_manager.csv.CSVDataManager.removeEmptyLines;
+import static org.apache.commons.math3.util.CombinatoricsUtils.binomialCoefficientDouble;
 
 /**
  * https://softwareengineering.stackexchange.com/questions/286822/fast-indexing-of-k-combinations
@@ -36,12 +46,23 @@ import java.util.stream.Collectors;
 
 	protected String[] columnsFilter = null;
 
+	protected Queue<Trade> buyTrades, sellTrades;
+	protected volatile Object lockTradesList = new Object();
+
+	protected DumpCache dumpCache = new DumpCache();
+
 	public void setColumnsFilter(String[] columnsFilter) {
+
 		this.columnsFilter = columnsFilter;
 	}
 
+	public abstract void calculateNumberOfColumns();
+
 	public int getNumberOfColumns() {
 		if (this.columnsFilter == null || this.columnsFilter.length == 0) {
+			if (numberOfColumns == 0) {
+				calculateNumberOfColumns();
+			}
 			return numberOfColumns;
 		} else {
 			return this.columnsFilter.length;
@@ -73,9 +94,19 @@ import java.util.stream.Collectors;
 		return output;
 	}
 
+	public int getDumpSize() {
+		return dumpCache.getSize();
+	}
+
+	public int getDumpColumns() {
+		return dumpCache.getNumberOfColumns();
+	}
+
 	public abstract List<String> getColumns();
 
 	public abstract int getNumberStates();
+
+	public abstract void reset();
 
 	public abstract boolean isReady();
 
@@ -96,6 +127,20 @@ import java.util.stream.Collectors;
 		}
 		stateIndexToArr = HashBiMap.create();
 
+		//trades
+		buyTrades = Queues.synchronizedQueue(EvictingQueue.create(200));
+		sellTrades = Queues.synchronizedQueue(EvictingQueue.create(200));
+
+	}
+
+	protected void cleanTrades() {
+		synchronized (lockTradesList) {
+			buyTrades.clear();
+			sellTrades.clear();
+		}
+		//		tradePrices= Queues.synchronizedQueue(EvictingQueue.create(200));
+		//		tradeSizes= Queues.synchronizedQueue(EvictingQueue.create(200));
+		//		tradeVerb=Queues.synchronizedQueue(EvictingQueue.create(200));
 	}
 
 	public void setNumberOfDecimals(int numberOfDecimals) {
@@ -478,6 +523,51 @@ import java.util.stream.Collectors;
 
 	public abstract void updateDepthState(Depth depth);
 
+	//trades results
+	protected void updateTradesBuffer(Trade trade) {
+		synchronized (lockTradesList) {
+			if (trade.getVerb().equals(Verb.Buy)) {
+				buyTrades.add(trade);
+			} else if (trade.getVerb().equals(Verb.Sell)) {
+				sellTrades.add(trade);
+
+			} else {
+				logger.warn("trying to add trade with unknown verb {} :{}", trade.getVerb(), trade);
+			}
+		}
+	}
+
+	protected List<Trade> getBuyTrades() {
+		return new ArrayList<>(buyTrades);
+	}
+
+	protected List<Trade> getSellTrades() {
+		return new ArrayList<>(sellTrades);
+	}
+
+	protected double getSignedTransactionVolume() {
+		double totalVolume = 0.0;
+		for (Trade trade : getBuyTrades()) {
+			totalVolume += trade.getQuantity();
+		}
+		for (Trade trade : getSellTrades()) {
+			totalVolume -= trade.getQuantity();
+		}
+		return totalVolume;
+	}
+
+	protected double getSignedTransaction() {
+		double totalTransactions = 0.0;
+		for (Trade trade : getBuyTrades()) {
+			totalTransactions++;
+
+		}
+		for (Trade trade : getSellTrades()) {
+			totalTransactions--;
+		}
+		return totalTransactions;
+	}
+
 	public static class StateRow {
 
 		private double[] inputArray;
@@ -498,6 +588,39 @@ import java.util.stream.Collectors;
 		@Override public int hashCode() {
 			return Arrays.hashCode(inputArray);
 		}
+	}
+
+	public void addRowDump(long startTimestamp, double[] state, double startPrice, long[] timestampsEndPrices,
+			double[] endPrices) {
+		dumpCache.addRow(startTimestamp, state, startPrice, timestampsEndPrices, endPrices);
+	}
+
+	public boolean loadPreviousDumpData(String dataPath, int endSize) {
+		try {
+			System.out.println("loading dumpCache from " + dataPath + " ...");
+			dumpCache.loadFromFile(dataPath, getNumberOfColumns(), endSize);
+			System.out.println("loaded");
+			return true;
+		} catch (Exception e) {
+			System.err.println("error loading previousDump " + dataPath);
+			logger.error("error loading previousDump  onf {} columns and {} seconds {}", getColumns(), endSize,
+					dataPath, e);
+			return false;
+		}
+	}
+
+	public boolean persistDumpData(String dataPath) {
+		String textToWriteTrade = dumpCache.getCsvFileContent();
+		try {
+			if (textToWriteTrade.trim().length() > 0) {
+				CSVDataManager.saveCSV(dataPath, removeEmptyLines(textToWriteTrade));
+			}
+			return true;
+		} catch (IOException e) {
+			logger.error("{} cant be write it!", dataPath);
+			return false;
+		}
+
 	}
 
 }
