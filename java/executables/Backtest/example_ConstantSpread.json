@@ -1,0 +1,17 @@
+{
+  "backtest": {
+    "startDate": "20220127 11:00:00",
+    "endDate": "20220127 14:00:00",
+    "instrument": "eurusd_darwinex"
+  },
+  "algorithm": {
+    "algorithmName": "ConstantSpread_test",
+    "parameters": {
+      "level": "1",
+      "seed": 5,
+      "quantity": "0.001",
+      "firstHour": "7.0",
+      "lastHour": "19.0"
+    }
+  }
+}

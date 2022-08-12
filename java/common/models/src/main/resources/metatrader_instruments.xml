@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:util="http://www.springframework.org/schema/util"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+    <!--{"EURUSD","GBPUSD","EURGBP","EURJPY","EURCHF","EURCAD","EURNZD","EURAUD","CADCHF","USDJPY","USDCAD","AUDUSD","GBPJPY","AUDJPY","NZDUSD","USDCHF","XAUUSD","XAGUSD"};-->
+    <bean id="eurusd_metatrader" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="eurusd"></property>
+        <property name="market" value="metatrader"></property>
+        <property name="currency" value="USD"></property>
+        <!--<property name="priceTick" value="0.0001"></property>-->
+        <!--<property name="quantityTick" value="0.0001"></property>-->
+    </bean>
+
+    <bean id="gbpusd_metatrader" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="gbpusd"></property>
+        <property name="market" value="metatrader"></property>
+        <property name="currency" value="USD"></property>
+        <!--<property name="priceTick" value="0.0001"></property>-->
+        <!--<property name="quantityTick" value="0.0001"></property>-->
+    </bean>
+
+    <bean id="eurgbp_metatrader" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="eurgbp"></property>
+        <property name="market" value="metatrader"></property>
+        <property name="currency" value="GBP"></property>
+        <!--<property name="priceTick" value="0.0001"></property>-->
+        <!--<property name="quantityTick" value="0.0001"></property>-->
+    </bean>
+
+    <bean id="eurjpy_metatrader" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="eurjpy"></property>
+        <property name="market" value="metatrader"></property>
+        <property name="currency" value="JPY"></property>
+        <!--<property name="priceTick" value="0.0001"></property>-->
+        <!--<property name="quantityTick" value="0.0001"></property>-->
+    </bean>
+
+    <bean id="eurchf_metatrader" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="eurchf"></property>
+        <property name="market" value="metatrader"></property>
+        <property name="currency" value="CHF"></property>
+        <!--<property name="priceTick" value="0.0001"></property>-->
+        <!--<property name="quantityTick" value="0.0001"></property>-->
+    </bean>
+
+    <bean id="eurcad_metatrader" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="eurcad"></property>
+        <property name="market" value="metatrader"></property>
+        <property name="currency" value="CAD"></property>
+        <!--<property name="priceTick" value="0.0001"></property>-->
+        <!--<property name="quantityTick" value="0.0001"></property>-->
+    </bean>
+
+    <bean id="eurnzd_metatrader" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="eurnzd"></property>
+        <property name="market" value="metatrader"></property>
+        <property name="currency" value="NZD"></property>
+        <!--<property name="priceTick" value="0.0001"></property>-->
+        <!--<property name="quantityTick" value="0.0001"></property>-->
+    </bean>
+
+    <bean id="euraud_metatrader" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="euraud"></property>
+        <property name="market" value="metatrader"></property>
+        <property name="currency" value="AUD"></property>
+        <!--<property name="priceTick" value="0.0001"></property>-->
+        <!--<property name="quantityTick" value="0.0001"></property>-->
+    </bean>
+
+    <bean id="cadchf_metatrader" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="cadchf"></property>
+        <property name="market" value="metatrader"></property>
+        <property name="currency" value="CHF"></property>
+        <!--<property name="priceTick" value="0.0001"></property>-->
+        <!--<property name="quantityTick" value="0.0001"></property>-->
+    </bean>
+
+
+    <bean id="usdjpy_metatrader" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="usdjpy"></property>
+        <property name="market" value="metatrader"></property>
+        <property name="currency" value="JPY"></property>
+        <!--<property name="priceTick" value="0.0001"></property>-->
+        <!--<property name="quantityTick" value="0.0001"></property>-->
+    </bean>
+
+    <bean id="usdcad_metatrader" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="usdcad"></property>
+        <property name="market" value="metatrader"></property>
+        <property name="currency" value="CAD"></property>
+        <!--<property name="priceTick" value="0.0001"></property>-->
+        <!--<property name="quantityTick" value="0.0001"></property>-->
+    </bean>
+
+    <bean id="audusd_metatrader" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="audusd"></property>
+        <property name="market" value="metatrader"></property>
+        <property name="currency" value="USD"></property>
+        <!--<property name="priceTick" value="0.0001"></property>-->
+        <!--<property name="quantityTick" value="0.0001"></property>-->
+    </bean>
+
+    <bean id="gbpjpy_metatrader" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="gbpjpy"></property>
+        <property name="market" value="metatrader"></property>
+        <property name="currency" value="JPY"></property>
+        <!--<property name="priceTick" value="0.0001"></property>-->
+        <!--<property name="quantityTick" value="0.0001"></property>-->
+    </bean>
+
+    <bean id="audjpy_metatrader" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="audjpy"></property>
+        <property name="market" value="metatrader"></property>
+        <property name="currency" value="JPY"></property>
+        <!--<property name="priceTick" value="0.0001"></property>-->
+        <!--<property name="quantityTick" value="0.0001"></property>-->
+    </bean>
+
+    <bean id="nzdusd_metatrader" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="nzdusd"></property>
+        <property name="market" value="metatrader"></property>
+        <property name="currency" value="USD"></property>
+        <!--<property name="priceTick" value="0.0001"></property>-->
+        <!--<property name="quantityTick" value="0.0001"></property>-->
+    </bean>
+    <bean id="usdchf_metatrader" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="usdchf"></property>
+        <property name="market" value="metatrader"></property>
+        <property name="currency" value="CHF"></property>
+        <!--<property name="priceTick" value="0.0001"></property>-->
+        <!--<property name="quantityTick" value="0.0001"></property>-->
+    </bean>
+
+    <bean id="xauusd_metatrader" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="xauusd"></property>
+        <property name="market" value="metatrader"></property>
+        <property name="currency" value="USD"></property>
+        <!--<property name="priceTick" value="0.0001"></property>-->
+        <!--<property name="quantityTick" value="0.0001"></property>-->
+    </bean>
+
+    <bean id="xagusd_metatrader" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="xagusd"></property>
+        <property name="market" value="metatrader"></property>
+        <property name="currency" value="USD"></property>
+        <!--<property name="priceTick" value="0.0001"></property>-->
+        <!--<property name="quantityTick" value="0.0001"></property>-->
+    </bean>
+
+
+    <util:list id="metatrader_instruments" value-type="com.lambda.investing.model.asset.Instrument">
+        <ref bean="eurusd_metatrader"/>
+        <ref bean="gbpusd_metatrader"/>
+        <ref bean="eurgbp_metatrader"/>
+        <ref bean="eurjpy_metatrader"/>
+        <ref bean="eurchf_metatrader"/>
+        <ref bean="eurcad_metatrader"/>
+        <ref bean="usdjpy_metatrader"/>
+        <ref bean="usdcad_metatrader"/>
+        <ref bean="audusd_metatrader"/>
+        <ref bean="nzdusd_metatrader"/>
+        <ref bean="usdchf_metatrader"/>
+        <ref bean="xauusd_metatrader"/>
+        <ref bean="xagusd_metatrader"/>
+        <ref bean="euraud_metatrader"/>
+        <ref bean="eurnzd_metatrader"/>
+        <ref bean="cadchf_metatrader"/>
+        <ref bean="gbpjpy_metatrader"/>
+        <ref bean="audjpy_metatrader"/>
+    </util:list>
+
+</beans>

@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:util="http://www.springframework.org/schema/util"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
+
+    <import resource="classpath:kraken_instruments.xml"></import>
+
+    <bean id="kraken_ConnectorConfiguration" class="com.lambda.investing.connector.zero_mq.ZeroMqConfiguration">
+        <property name="port" value="${kraken.marketdata.port}"/>
+        <property name="host" value="localhost"/>
+    </bean>
+
+    <bean id="kraken_connectorPublisher" class="com.lambda.investing.connector.zero_mq.ZeroMqPublisher">
+        <constructor-arg index="0" value="krakenConnectorPublisher"/>
+        <constructor-arg index="1" value="${publisher.threads}"/>
+    </bean>
+
+
+    <bean id="kraken_MarketDataConfiguration"
+          class="com.lambda.investing.market_data_connector.xchange.KrakenMarketDataConfiguration">
+        <constructor-arg index="0" value="${kraken.apikey}"/>
+        <constructor-arg index="1" value="${kraken.secretkey}"/>
+    </bean>
+
+    <bean id="kraken_MarketDataPublisher"
+          class="com.lambda.investing.market_data_connector.xchange.XChangeMarketDataPublisher" init-method="start">
+        <constructor-arg index="0" ref="kraken_ConnectorConfiguration"/>
+        <constructor-arg index="1" ref="kraken_connectorPublisher"/>
+        <constructor-arg index="2" ref="kraken_MarketDataConfiguration"/>
+        <constructor-arg index="3" ref="kraken_instruments"/>
+    </bean>
+
+
+    <!--persistance listener-->
+    <bean id="kraken_connectorProvider" class="com.lambda.investing.connector.zero_mq.ZeroMqProvider"
+          factory-method="getInstance" init-method="start">
+        <constructor-arg index="0" ref="kraken_ConnectorConfiguration"/>
+        <constructor-arg index="1" value="${provider.threads}"/>
+    </bean>
+
+    <bean id="kraken_persistMarketDataConnectorPublisher"
+          class="com.lambda.investing.market_data_connector.persist.PersistorMarketDataConnector" init-method="init">
+        <constructor-arg index="0" value="${csv.datapath}"/>
+        <constructor-arg index="1" value="${parquet.datapath}"/>
+        <constructor-arg index="2" ref="kraken_connectorProvider"/>
+        <constructor-arg index="3" ref="kraken_ConnectorConfiguration"/>
+        <property name="persistParquet" value="${persist.parquet}"/>
+    </bean>
+
+    <!--trading engine-->
+    <bean id="kraken_executionReportConfigurationPublisher"
+          class="com.lambda.investing.connector.zero_mq.ZeroMqConfiguration">
+        <property name="port" value="${kraken.tradeengine.port}"/>
+        <property name="host" value="localhost"/>
+    </bean>
+
+    <bean id="kraken_executionReportConnectorPublisher" class="com.lambda.investing.connector.zero_mq.ZeroMqPublisher">
+        <constructor-arg index="0" value="kraken_ExecutionReportPublisher"/>
+        <constructor-arg index="1" value="${publisher.threads}"/>
+    </bean>
+
+
+    <bean id="kraken_TradingEngineConfiguration"
+          class="com.lambda.investing.trading_engine_connector.xchange.KrakenTradingEngineConfiguration">
+        <constructor-arg index="0" value="${kraken.apikey}"/>
+        <constructor-arg index="1" value="${kraken.secretkey}"/>
+    </bean>
+
+
+    <bean id="kraken_TradingEngine"
+          class="com.lambda.investing.trading_engine_connector.xchange.XChangeTradingEngine" init-method="start">
+        <constructor-arg index="0" ref="kraken_ConnectorConfiguration"/>
+        <constructor-arg index="1" ref="kraken_connectorProvider"/>
+        <constructor-arg index="2" ref="kraken_executionReportConfigurationPublisher"/>
+        <constructor-arg index="3" ref="kraken_executionReportConnectorPublisher"/>
+        <constructor-arg index="4" ref="kraken_TradingEngineConfiguration"/>
+        <constructor-arg index="5" ref="kraken_instruments"/>
+    </bean>
+
+
+</beans>

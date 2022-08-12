@@ -1,0 +1,1 @@
+java -Xmx512m -Duser.timezone=GMT -jar "target\MetatraderEngine.jar"

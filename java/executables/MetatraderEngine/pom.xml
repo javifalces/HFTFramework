@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>executables</artifactId>
+        <groupId>com.lambda.investing</groupId>
+        <version>0.0.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>MetatraderEngine</artifactId>
+
+    <dependencies>
+
+        <dependency>
+            <groupId>com.lambda.investing</groupId>
+            <artifactId>trading_engine_connectors</artifactId>
+            <version>0.0.0-SNAPSHOT</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.lambda.investing</groupId>
+            <artifactId>market_data_connectors</artifactId>
+            <version>0.0.0-SNAPSHOT</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.lambda.investing</groupId>
+            <artifactId>broker_connector_instances</artifactId>
+            <version>0.0.0-SNAPSHOT</version>
+        </dependency>
+
+
+    </dependencies>
+
+
+    <build>
+        <plugins>
+            <!--Preparing one jar -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>make-my-jar-with-dependencies</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+
+                <configuration>
+                    <finalName>${project.artifactId}</finalName>
+                    <mainClass>com.lambda.investing.App</mainClass>
+                </configuration>
+            </plugin>
+
+            <!--<plugin>-->
+            <!--<groupId>com.jolira</groupId>-->
+            <!--<artifactId>onejar-maven-plugin</artifactId>-->
+            <!--<executions>-->
+            <!--<execution>-->
+            <!--<configuration>-->
+            <!--<mainClass>com.lambda.investing.App</mainClass>-->
+            <!--<attachToBuild>true</attachToBuild>-->
+            <!--<filename>-->
+            <!--${project.artifactId}.jar-->
+            <!--</filename>-->
+            <!--</configuration>-->
+            <!--<goals>-->
+            <!--<goal>one-jar</goal>-->
+            <!--</goals>-->
+            <!--</execution>-->
+            <!--</executions>-->
+            <!--</plugin>-->
+
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>**/application.properties</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+
+
+        </plugins>
+
+
+    </build>
+
+
+</project>

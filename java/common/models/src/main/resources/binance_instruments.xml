@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:util="http://www.springframework.org/schema/util"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+    <!--    https://www.binance.com/en/fee/schedule-->
+    <bean id="btcusdt_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="btcusdt"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="USDT"></property>
+        <property name="priceTick" value="0.01"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+
+    </bean>
+
+    <bean id="btceur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="btceur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.01"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+
+    </bean>
+
+    <bean id="ethusdt_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="ethusdt"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="USD"></property>
+        <property name="priceTick" value="0.01"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+
+    </bean>
+
+    <bean id="etheur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="etheur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.01"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="ethbtc_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="ethbtc"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="BTC"></property>
+        <property name="priceTick" value="0.01"></property>
+        <!--<property name="priceTick" value="0.0001"></property>-->
+        <!--<property name="quantityTick" value="0.0001"></property>-->
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+
+    </bean>
+
+
+    <util:list id="binance_instruments" value-type="com.lambda.investing.model.asset.Instrument">
+        <ref bean="btcusdt_binance"/>
+        <ref bean="ethusdt_binance"/>
+        <ref bean="ethbtc_binance"/>
+        <ref bean="btceur_binance"/>
+        <ref bean="etheur_binance"/>
+    </util:list>
+
+</beans>

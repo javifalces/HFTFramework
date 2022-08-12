@@ -1,0 +1,51 @@
+{
+  "backtest": {
+    "startDate": "20220127 11:00:00",
+    "endDate": "20220127 14:00:00",
+    "instrument": "eurusd_darwinex"
+  },
+  "algorithm": {
+    "algorithmName": "AlphaConstantSpread_test",
+    "parameters": {
+      "spread_multiplier": "1.0",
+      "epsilon": "0.2",
+      "discountFactor": "0.0",
+      "learningRate": "1.0",
+      "levelAction": [
+        1,
+        2,
+        3
+      ],
+      "skewLevelAction": [
+        -1,
+        0,
+        1
+      ],
+      "quantity": "0.001",
+      "first_hour": "7.0",
+      "last_hour": "19.0",
+      "timeHorizonSeconds": 5,
+      "horizonMinMsTick": 1.0,
+      "trainingPredictIterationPeriod": -25,
+      "trainingTargetIterationPeriod": -25,
+      "epoch": "1",
+      "momentumNesterov": "0.5",
+      "learningRateNN": "0.001",
+      "batchSize": 1,
+      "maxBatchSize": "100",
+      "scoreEnum": "total_pnl",
+      "minPrivateState": "-1",
+      "maxPrivateState": "-1",
+      "numberDecimalsPrivateState": "4.0",
+      "horizonTicksPrivateState": "3.0",
+      "minMarketState": "-1",
+      "maxMarketState": "-1",
+      "numberDecimalsMarketState": "4.0",
+      "horizonTicksMarketState": "3.0",
+      "minCandleState": "-1",
+      "maxCandleState": "-1",
+      "numberDecimalsCandleState": "4.0",
+      "horizonTicksCandleState": "1.0"
+    }
+  }
+}

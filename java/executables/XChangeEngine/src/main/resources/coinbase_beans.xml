@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:util="http://www.springframework.org/schema/util"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
+
+    <import resource="classpath:coinbase_instruments.xml"></import>
+
+    <bean id="coinbase_ConnectorConfiguration" class="com.lambda.investing.connector.zero_mq.ZeroMqConfiguration">
+        <property name="port" value="${coinbase.marketdata.port}"/>
+        <property name="host" value="localhost"/>
+    </bean>
+
+    <bean id="coinbase_connectorPublisher" class="com.lambda.investing.connector.zero_mq.ZeroMqPublisher">
+        <constructor-arg index="0" value="coinbaseConnectorPublisher"/>
+        <constructor-arg index="1" value="${publisher.threads}"/>
+    </bean>
+
+
+    <bean id="coinbase_MarketDataConfiguration"
+          class="com.lambda.investing.market_data_connector.xchange.CoinbaseMarketDataConfiguration">
+        <constructor-arg index="0" value="${coinbase.apikey}"/>
+        <constructor-arg index="1" value="${coinbase.secretkey}"/>
+    </bean>
+
+    <bean id="coinbase_MarketDataPublisher"
+          class="com.lambda.investing.market_data_connector.xchange.XChangeMarketDataPublisher" init-method="start">
+        <constructor-arg index="0" ref="coinbase_ConnectorConfiguration"/>
+        <constructor-arg index="1" ref="coinbase_connectorPublisher"/>
+        <constructor-arg index="2" ref="coinbase_MarketDataConfiguration"/>
+        <constructor-arg index="3" ref="coinbase_instruments"/>
+    </bean>
+
+
+    <!--persistance listener-->
+    <bean id="coinbase_connectorProvider" class="com.lambda.investing.connector.zero_mq.ZeroMqProvider"
+          factory-method="getInstance" init-method="start">
+        <constructor-arg index="0" ref="coinbase_ConnectorConfiguration"/>
+        <constructor-arg index="1" value="${provider.threads}"/>
+    </bean>
+
+    <bean id="coinbase_persistMarketDataConnectorPublisher"
+          class="com.lambda.investing.market_data_connector.persist.PersistorMarketDataConnector" init-method="init">
+        <constructor-arg index="0" value="${csv.datapath}"/>
+        <constructor-arg index="1" value="${parquet.datapath}"/>
+        <constructor-arg index="2" ref="coinbase_connectorProvider"/>
+        <constructor-arg index="3" ref="coinbase_ConnectorConfiguration"/>
+        <property name="persistParquet" value="${persist.parquet}"/>
+    </bean>
+
+    <!--trading engine-->
+    <bean id="coinbase_executionReportConfigurationPublisher"
+          class="com.lambda.investing.connector.zero_mq.ZeroMqConfiguration">
+        <property name="port" value="${coinbase.tradeengine.port}"/>
+        <property name="host" value="localhost"/>
+    </bean>
+
+    <bean id="coinbase_executionReportConnectorPublisher"
+          class="com.lambda.investing.connector.zero_mq.ZeroMqPublisher">
+        <constructor-arg index="0" value="coinbase_ExecutionReportPublisher"/>
+        <constructor-arg index="1" value="${publisher.threads}"/>
+    </bean>
+
+
+    <bean id="coinbase_TradingEngineConfiguration"
+          class="com.lambda.investing.trading_engine_connector.xchange.CoinbaseTradingEngineConfiguration">
+        <constructor-arg index="0" value="${coinbase.apikey}"/>
+        <constructor-arg index="1" value="${coinbase.secretkey}"/>
+    </bean>
+
+
+    <bean id="coinbase_TradingEngine"
+          class="com.lambda.investing.trading_engine_connector.xchange.XChangeTradingEngine" init-method="start">
+        <constructor-arg index="0" ref="coinbase_ConnectorConfiguration"/>
+        <constructor-arg index="1" ref="coinbase_connectorProvider"/>
+        <constructor-arg index="2" ref="coinbase_executionReportConfigurationPublisher"/>
+        <constructor-arg index="3" ref="coinbase_executionReportConnectorPublisher"/>
+        <constructor-arg index="4" ref="coinbase_TradingEngineConfiguration"/>
+        <constructor-arg index="5" ref="coinbase_instruments"/>
+    </bean>
+
+
+</beans>

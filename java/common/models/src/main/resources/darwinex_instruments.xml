@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:util="http://www.springframework.org/schema/util"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+    <!--{"EURUSD","GBPUSD","EURGBP","EURJPY","EURCHF","EURCAD","EURNZD","EURAUD","CADCHF","USDJPY","USDCAD","AUDUSD","GBPJPY","AUDJPY","NZDUSD","USDCHF","XAUUSD","XAGUSD"};-->
+    <bean id="eurusd_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="eurusd"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="USD"></property>
+        <property name="priceTick" value="0.00001"></property>
+
+
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+
+    <bean id="gbpusd_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="gbpusd"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="USD"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+
+    <bean id="eurgbp_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="eurgbp"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="GBP"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+
+    <bean id="eurjpy_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="eurjpy"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="JPY"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+
+    <bean id="eurchf_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="eurchf"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="CHF"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+
+    <bean id="eurcad_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="eurcad"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="CAD"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+
+    <bean id="eurnzd_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="eurnzd"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="NZD"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+
+    <bean id="euraud_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="euraud"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="AUD"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+
+    <bean id="cadchf_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="cadchf"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="CHF"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+
+
+    <bean id="usdjpy_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="usdjpy"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="JPY"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+
+    <bean id="usdcad_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="usdcad"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="CAD"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+
+    <bean id="audusd_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="audusd"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="USD"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+
+    <bean id="gbpjpy_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="gbpjpy"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="JPY"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+
+    <bean id="audjpy_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="audjpy"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="JPY"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+
+    <bean id="nzdusd_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="nzdusd"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="USD"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+    <bean id="usdchf_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="usdchf"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="CHF"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+
+    <bean id="xauusd_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="xauusd"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="USD"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+
+    <bean id="xagusd_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="xagusd"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="USD"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+
+
+    <util:list id="darwinex_instruments" value-type="com.lambda.investing.model.asset.Instrument">
+        <ref bean="eurusd_darwinex"/>
+        <ref bean="gbpusd_darwinex"/>
+        <ref bean="eurgbp_darwinex"/>
+        <ref bean="eurjpy_darwinex"/>
+        <ref bean="eurchf_darwinex"/>
+        <ref bean="eurcad_darwinex"/>
+        <ref bean="usdjpy_darwinex"/>
+        <ref bean="usdcad_darwinex"/>
+        <ref bean="audusd_darwinex"/>
+        <ref bean="nzdusd_darwinex"/>
+        <ref bean="usdchf_darwinex"/>
+        <ref bean="xauusd_darwinex"/>
+        <ref bean="xagusd_darwinex"/>
+        <ref bean="euraud_darwinex"/>
+        <ref bean="eurnzd_darwinex"/>
+        <ref bean="cadchf_darwinex"/>
+        <ref bean="gbpjpy_darwinex"/>
+        <ref bean="audjpy_darwinex"/>
+    </util:list>
+
+</beans>

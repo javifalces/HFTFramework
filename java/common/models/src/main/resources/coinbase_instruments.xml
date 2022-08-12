@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:util="http://www.springframework.org/schema/util"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+<!--    https://help.coinbase.com/en/pro/trading-and-funding/trading-rules-and-fees/fees-->
+    <bean id="btcusdt_coinbase" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="btcusdt"></property>
+        <property name="market" value="coinbase"></property>
+        <property name="currency" value="USDT"></property>
+        <property name="priceTick" value="0.01"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.4"></property>
+        <property name="takerFeePct" value="0.6"></property>
+
+    </bean>
+
+    <bean id="btceur_coinbase" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="btceur"></property>
+        <property name="market" value="coinbase"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.01"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.4"></property>
+        <property name="takerFeePct" value="0.6"></property>
+
+    </bean>
+
+    <bean id="ethusdt_coinbase" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="ethusdt"></property>
+        <property name="market" value="coinbase"></property>
+        <property name="currency" value="USD"></property>
+        <property name="priceTick" value="0.01"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.4"></property>
+        <property name="takerFeePct" value="0.6"></property>
+    </bean>
+
+    <bean id="etheur_coinbase" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="etheur"></property>
+        <property name="market" value="coinbase"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.01"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.4"></property>
+        <property name="takerFeePct" value="0.6"></property>
+
+    </bean>
+
+    <bean id="ethbtc_coinbase" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="ethbtc"></property>
+        <property name="market" value="coinbase"></property>
+        <property name="currency" value="BTC"></property>
+        <property name="priceTick" value="0.01"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.4"></property>
+        <property name="takerFeePct" value="0.6"></property>
+    </bean>
+
+
+    <util:list id="coinbase_instruments" value-type="com.lambda.investing.model.asset.Instrument">
+        <ref bean="btcusdt_coinbase"/>
+        <ref bean="ethusdt_coinbase"/>
+        <ref bean="ethbtc_coinbase"/>
+        <ref bean="btceur_coinbase"/>
+        <ref bean="etheur_coinbase"/>
+    </util:list>
+
+</beans>

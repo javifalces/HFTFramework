@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:util="http://www.springframework.org/schema/util"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
+
+    <import resource="classpath:binance_instruments.xml"></import>
+
+    <bean id="binance_ConnectorConfiguration" class="com.lambda.investing.connector.zero_mq.ZeroMqConfiguration">
+        <property name="port" value="${binance.marketdata.port}"/>
+        <property name="host" value="localhost"/>
+    </bean>
+
+    <bean id="binance_connectorPublisher" class="com.lambda.investing.connector.zero_mq.ZeroMqPublisher">
+        <constructor-arg index="0" value="binanceConnectorPublisher"/>
+        <constructor-arg index="1" value="${publisher.threads}"/>
+    </bean>
+
+
+    <bean id="binance_MarketDataConfiguration"
+          class="com.lambda.investing.market_data_connector.xchange.BinanceXchangeMarketDataConfiguration">
+        <constructor-arg index="0" value="${binance.apikey}"/>
+        <constructor-arg index="1" value="${binance.secretkey}"/>
+    </bean>
+
+    <bean id="binance_MarketDataPublisher"
+          class="com.lambda.investing.market_data_connector.xchange.XChangeMarketDataPublisher" init-method="start">
+        <constructor-arg index="0" ref="binance_ConnectorConfiguration"/>
+        <constructor-arg index="1" ref="binance_connectorPublisher"/>
+        <constructor-arg index="2" ref="binance_MarketDataConfiguration"/>
+        <constructor-arg index="3" ref="binance_instruments"/>
+    </bean>
+
+
+    <!--persistance listener-->
+    <bean id="binance_connectorProvider" class="com.lambda.investing.connector.zero_mq.ZeroMqProvider"
+          factory-method="getInstance" init-method="start">
+        <constructor-arg index="0" ref="binance_ConnectorConfiguration"/>
+        <constructor-arg index="1" value="${provider.threads}"/>
+    </bean>
+
+    <bean id="binance_persistMarketDataConnectorPublisher"
+          class="com.lambda.investing.market_data_connector.persist.PersistorMarketDataConnector" init-method="init">
+        <constructor-arg index="0" value="${csv.datapath}"/>
+        <constructor-arg index="1" value="${parquet.datapath}"/>
+        <constructor-arg index="2" ref="binance_connectorProvider"/>
+        <constructor-arg index="3" ref="binance_ConnectorConfiguration"/>
+        <property name="persistParquet" value="${persist.parquet}"/>
+    </bean>
+
+    <!--trading engine-->
+    <bean id="binance_executionReportConfigurationPublisher"
+          class="com.lambda.investing.connector.zero_mq.ZeroMqConfiguration">
+        <property name="port" value="${binance.tradeengine.port}"/>
+        <property name="host" value="localhost"/>
+    </bean>
+
+    <bean id="binance_executionReportConnectorPublisher"
+          class="com.lambda.investing.connector.zero_mq.ZeroMqPublisher">
+        <constructor-arg index="0" value="binance_ExecutionReportPublisher"/>
+        <constructor-arg index="1" value="${publisher.threads}"/>
+    </bean>
+
+
+    <bean id="binance_TradingEngineConfiguration"
+          class="com.lambda.investing.trading_engine_connector.xchange.BinanceXchangeTradingEngineConfiguration">
+        <constructor-arg index="0" value="${binance.apikey}"/>
+        <constructor-arg index="1" value="${binance.secretkey}"/>
+    </bean>
+
+
+    <bean id="binance_TradingEngine"
+          class="com.lambda.investing.trading_engine_connector.xchange.XChangeTradingEngine" init-method="start">
+        <constructor-arg index="0" ref="binance_ConnectorConfiguration"/>
+        <constructor-arg index="1" ref="binance_connectorProvider"/>
+        <constructor-arg index="2" ref="binance_executionReportConfigurationPublisher"/>
+        <constructor-arg index="3" ref="binance_executionReportConnectorPublisher"/>
+        <constructor-arg index="4" ref="binance_TradingEngineConfiguration"/>
+        <constructor-arg index="5" ref="binance_instruments"/>
+    </bean>
+
+
+</beans>

@@ -1,0 +1,170 @@
+{
+  "backtest": {
+    "startDate": "20201208 06:00:00",
+    "endDate": "20201208 20:00:00",
+    "delayOrderMs": 65,
+    "feesCommissionsIncluded": true,
+    "seed": 0,
+    "instrument": "btcusdt_binance",
+    "multithreadConfiguration": "multi_thread"
+  },
+  "algorithm": {
+    "algorithmName": "AlphaAvellanedaStoikov_avellaneda_stoikov_dqn_3",
+    "parameters": {
+      "skewPricePctAction": [
+        0.0,
+        0.05,
+        -0.05,
+        -0.1,
+        0.1
+      ],
+      "riskAversionAction": [
+        0.01,
+        0.1,
+        0.2,
+        0.9
+      ],
+      "windowsTickAction": [
+        24.69
+      ],
+      "isRNN": false,
+      "minPrivateState": -1.0,
+      "maxPrivateState": -1.0,
+      "numberDecimalsPrivateState": 3.0,
+      "horizonTicksPrivateState": 5.0,
+      "minMarketState": -1.0,
+      "maxMarketState": -1.0,
+      "numberDecimalsMarketState": 7.0,
+      "horizonTicksMarketState": 10.0,
+      "minCandleState": -1.0,
+      "maxCandleState": -1.0,
+      "numberDecimalsCandleState": 3.0,
+      "horizonCandlesState": 2.0,
+      "horizonMinMsTick": 0.0,
+      "scoreEnum": "asymmetric_dampened_pnl",
+      "timeHorizonSeconds": 5.0,
+      "epsilon": 1.0,
+      "discountFactor": 0.75,
+      "learningRate": 0.85,
+      "momentumNesterov": 0.5,
+      "learningRateNN": 0.01,
+      "risk_aversion": 0.6327,
+      "window_tick": 24.69,
+      "minutes_change_k": 1.0,
+      "quantity": 1.0E-4,
+      "position_multiplier": 335.52,
+      "k_default": -1.0,
+      "spread_multiplier": 5.0,
+      "first_hour": 7.0,
+      "last_hour": 19.0,
+      "maxBatchSize": 100000.0,
+      "batchSize": 5000.0,
+      "trainingPredictIterationPeriod": -25.0,
+      "trainingTargetIterationPeriod": -25.0,
+      "epoch": 150.0,
+      "stateColumnsFilter": [
+        "ask_price_0",
+        "ask_price_4",
+        "ask_price_8",
+        "ask_qty_0",
+        "ask_qty_1",
+        "ask_qty_2",
+        "ask_qty_3",
+        "bid_price_0",
+        "bid_price_4",
+        "bid_price_8",
+        "bid_qty_0",
+        "bid_qty_1",
+        "bid_qty_2",
+        "high_4",
+        "last_close_price_4",
+        "low_0",
+        "microprice_0",
+        "microprice_8",
+        "midprice_8",
+        "spread_0",
+        "spread_4",
+        "spread_8"
+      ],
+      "l1": 0.0,
+      "l2": 0.0,
+      "seed": 28233.0,
+      "kDefaultAction": [
+        -1.0
+      ],
+      "aDefaultAction": [
+        -1.0
+      ],
+      "learningRateParameterTuning": [
+        1.0E-5,
+        1.0E-4,
+        0.001,
+        0.01
+      ],
+      "hiddenSizeNodesMultiplierParameterTuning": [
+        2.0,
+        1.0,
+        0.5
+      ],
+      "epochMultiplierParameterTuning": [
+        1.0,
+        2.0,
+        0.5
+      ],
+      "momentumParameterTuning": [
+        0.0,
+        0.5,
+        0.8
+      ],
+      "l1ParameterTuning": [
+        0.0,
+        0.1,
+        0.01,
+        0.001
+      ],
+      "l2ParameterTuning": [
+        0.0,
+        0.1,
+        0.01,
+        0.001
+      ],
+      "batchSizeParameterTuning": [
+        32.0,
+        64.0,
+        128.0
+      ],
+      "parameterTuningBeforeTraining": 0.0,
+      "earlyStoppingTraining": 0.0,
+      "earlyStoppingDataSplitTrainingPct": 0.6,
+      "hiddenSizeNodesMultiplier": 2.0,
+      "trainingStats": 0.0,
+      "firstHour": 7.0,
+      "lastHour": 19.0,
+      "numberDecimalsState": 3.0,
+      "binaryStateOutputs": 0.0,
+      "periodsTAStates": [
+        9.0,
+        13.0,
+        21.0
+      ],
+      "dumpSeconds": 30.0,
+      "dumpData": 0.0,
+      "secondsCandles": 56.0,
+      "reinforcementLearningType": "double_deep_q_learn",
+      "otherInstrumentsStates": [],
+      "otherInstrumentsMsPeriods": [],
+      "stopActionOnFilled": 0.0,
+      "riskAversion": 0.68,
+      "windowTick": 25.0,
+      "calculateTt": 1.0,
+      "minutesChangeK": 1.0,
+      "kDefault": -1.0,
+      "aDefault": -1.0,
+      "sigmaDefault": -1.0,
+      "spreadCalculation": "Avellaneda",
+      "kCalculation": "Alridge",
+      "positionMultiplier": 335.35,
+      "spreadMultiplier": 5.0
+    }
+  }
+}
