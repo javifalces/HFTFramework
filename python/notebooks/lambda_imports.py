@@ -24,7 +24,8 @@ import pylab
 
 from database.tick_db import *
 
-
+from backtest.parameter_tuning.ga_configuration import GAConfiguration
+from backtest.parameter_tuning.ga_parameter_tuning import GAParameterTuning
 
 # import plotly.graph_objects as go
 from notebooks.email_util import EmailConnector
@@ -53,7 +54,6 @@ from trading_algorithms.market_making.rl4j_alpha_avellaneda_stoikov import (
 from trading_algorithms.market_making.constant_spread import ConstantSpread
 from trading_algorithms.market_making.linear_constant_spread import LinearConstantSpread
 from trading_algorithms.market_making.alpha_constant_spread import AlphaConstantSpread
-
 
 
 
