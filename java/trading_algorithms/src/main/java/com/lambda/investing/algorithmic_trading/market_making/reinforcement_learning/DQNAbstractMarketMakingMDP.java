@@ -555,8 +555,7 @@ public abstract class DQNAbstractMarketMakingMDP extends SingleInstrumentAlgorit
         if (command.getMessage().equalsIgnoreCase(Command.ClassMessage.stop.name())) {
             logger.info("finished with {} iterations", iterations);
 
-            Integer[] actionHistoricalArray = com.lambda.investing.algorithmic_trading.ArrayUtils.IntegerListToArray(actionHistoricalList);
-            logger.info("historical action List\n{}", ArrayUtils.toStringArray(actionHistoricalArray));
+            logger.info("historical action List\n{}", com.lambda.investing.algorithmic_trading.ArrayUtils.PrintArrayListString(actionHistoricalList,","));
 
             if (isEndOfBacktestDay()) {
                 onEndOfBacktestDay();

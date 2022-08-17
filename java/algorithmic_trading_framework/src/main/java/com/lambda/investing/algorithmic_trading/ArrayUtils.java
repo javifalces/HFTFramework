@@ -3,7 +3,6 @@ package com.lambda.investing.algorithmic_trading;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class ArrayUtils {
 
@@ -19,9 +18,11 @@ public class ArrayUtils {
 
 	}
 
-	public static String PrintArrayListString(List<String> input, String delimiter) {
-		return input.stream().collect(Collectors.joining(delimiter));
+	public static <T> String PrintArrayListString(List<T> input, String delimiter) {
+		return input.stream().map(String::valueOf)
+				.collect(Collectors.joining(delimiter));
 	}
+
 
 	public static double[] ArrayFirstElementsDouble(double[] array1, int elements) {
 		return org.apache.commons.lang3.ArrayUtils.subarray(array1, 0, elements);

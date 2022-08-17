@@ -21,7 +21,6 @@ import com.lambda.investing.model.trading.ExecutionReportStatus;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.commons.lang3.ArrayUtils;
 import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 
@@ -749,10 +748,8 @@ public abstract class DQNAbstractMarketMaking extends SingleInstrumentAlgorithm 
                 ((DeepQLearning) memoryReplay).commandStopReceived();
             }
 
-            Integer[] actionHistoricalArray = new Integer[actionHistoricalList.size()];
-            actionHistoricalArray = actionHistoricalList.toArray(new Integer[actionHistoricalList.size()]);
 
-            logger.info("historical action List\n{}", ArrayUtils.toStringArray(actionHistoricalArray));
+            logger.info("historical action List\n{}", ArrayUtils.PrintArrayListString(actionHistoricalList, ","));
             logger.info("exploreActionsPct={}", memoryReplay.getExplorePct());
         }
 
