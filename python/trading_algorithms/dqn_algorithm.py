@@ -483,7 +483,7 @@ class DQNAlgorithm(Algorithm):
         )
 
     def dump_df_to_files_multi(self, df, csv_files_out, max_batch_size, num_threads):
-        from factor_investing.util.paralellization_util import process_jobs_joblib
+        from utils.paralellization_util import process_jobs_joblib
 
         jobs = []
 

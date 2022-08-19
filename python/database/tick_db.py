@@ -50,12 +50,12 @@ class TickDB:
         self.date_str_format = '%Y%m%d'
 
     def get_all_data(
-        self,
-        instrument_pk: str,
-        start_date: datetime.datetime = default_start_date,
-        end_date: datetime.datetime = default_end_date,
-        first_hour: int = None,
-        last_hour: int = None,
+            self,
+            instrument_pk: str,
+            start_date: datetime.datetime = default_start_date,
+            end_date: datetime.datetime = default_end_date,
+            first_hour: int = None,
+            last_hour: int = None,
     ) -> pd.DataFrame:
         depth_df = self.get_depth(
             instrument_pk=instrument_pk,
@@ -132,10 +132,10 @@ class TickDB:
         return market_instrument in self.FX_MARKETS
 
     def _get_depth_pandas(
-        self,
-        instrument_pk: str,
-        start_date: datetime.datetime = default_start_date,
-        end_date: datetime.datetime = default_end_date,
+            self,
+            instrument_pk: str,
+            start_date: datetime.datetime = default_start_date,
+            end_date: datetime.datetime = default_end_date,
     ):
 
         type_data = 'depth'
@@ -157,12 +157,12 @@ class TickDB:
         return output
 
     def get_depth(
-        self,
-        instrument_pk: str,
-        start_date: datetime.datetime = default_start_date,
-        end_date: datetime.datetime = default_end_date,
-        first_hour: int = None,
-        last_hour: int = None,
+            self,
+            instrument_pk: str,
+            start_date: datetime.datetime = default_start_date,
+            end_date: datetime.datetime = default_end_date,
+            first_hour: int = None,
+            last_hour: int = None,
     ):
 
         start_date_str = start_date.strftime(self.date_str_format)
@@ -185,8 +185,8 @@ class TickDB:
             )
             table = dataset.read()
             df = table.to_pandas()
-        except:
-            print(f"cant read using parquet => try manual mode using pandas")
+        except Exception as e:
+            print(f"cant read using parquet {instrument_pk} between {start_date_str} and {end_date_str} => try manual mode using pandas\n{e}")
             df = self._get_depth_pandas(
                 instrument_pk=instrument_pk, start_date=start_date, end_date=end_date
             )
@@ -214,12 +214,12 @@ class TickDB:
         return df
 
     def get_trades(
-        self,
-        instrument_pk: str,
-        start_date: datetime.datetime = default_start_date,
-        end_date: datetime.datetime = default_end_date,
-        first_hour: int = None,
-        last_hour: int = None,
+            self,
+            instrument_pk: str,
+            start_date: datetime.datetime = default_start_date,
+            end_date: datetime.datetime = default_end_date,
+            first_hour: int = None,
+            last_hour: int = None,
     ):
         import pyarrow.parquet as pq
 
@@ -252,11 +252,11 @@ class TickDB:
         return df
 
     def _persist_candles(
-        self,
-        source_path: str,
-        df: pd.DataFrame,
-        start_date: datetime.datetime,
-        end_date: datetime.datetime,
+            self,
+            source_path: str,
+            df: pd.DataFrame,
+            start_date: datetime.datetime,
+            end_date: datetime.datetime,
     ):
 
         # ignore warnings
@@ -273,8 +273,8 @@ class TickDB:
             complete_path = source_path + os.sep + "date=" + day_to_persist_str
             next_day = day_to_persist + datetime.timedelta(days=1)
             df_to_persist = df.loc[
-                day_to_persist : next_day - datetime.timedelta(minutes=1)
-            ]
+                            day_to_persist : next_day - datetime.timedelta(minutes=1)
+                            ]
             if len(df_to_persist) > 0:
                 Path(complete_path).mkdir(parents=True, exist_ok=True)
                 file_path = complete_path + os.sep + 'data.parquet'
@@ -289,10 +289,10 @@ class TickDB:
             day_to_persist = next_day
 
     def _check_all_candles_exist(
-        self,
-        df: pd.DataFrame,
-        start_date: datetime.datetime,
-        end_date: datetime.datetime,
+            self,
+            df: pd.DataFrame,
+            start_date: datetime.datetime,
+            end_date: datetime.datetime,
     ):
         day_to_persist = start_date
 
@@ -300,8 +300,8 @@ class TickDB:
             return bool(len(pd.bdate_range(date, date)))
 
         if (
-            df.index[0] - datetime.timedelta(days=1) > start_date
-            or df.index[-1] + datetime.timedelta(days=1) < end_date
+                df.index[0] - datetime.timedelta(days=1) > start_date
+                or df.index[-1] + datetime.timedelta(days=1) < end_date
         ):
             print(
                 f"some day is missing on candles between {start_date} and {end_date}  -> df from {df.index[0]} and {df.index[-1]}"
@@ -311,15 +311,15 @@ class TickDB:
             )
 
     def get_candles_midprice_time(
-        self,
-        instrument_pk: str,
-        start_date: datetime.datetime = default_start_date,
-        end_date: datetime.datetime = default_end_date,
-        resolution: str = 'MIN',
-        num_units: int = 1,
-        is_error_call: bool = False,
-        first_hour=None,
-        last_hour=None,
+            self,
+            instrument_pk: str,
+            start_date: datetime.datetime = default_start_date,
+            end_date: datetime.datetime = default_end_date,
+            resolution: str = 'MIN',
+            num_units: int = 1,
+            is_error_call: bool = False,
+            first_hour=None,
+            last_hour=None,
     ):
 
         '''
@@ -392,15 +392,15 @@ class TickDB:
         return df
 
     def get_candles_time(
-        self,
-        instrument_pk: str,
-        start_date: datetime.datetime = default_start_date,
-        end_date: datetime.datetime = default_end_date,
-        resolution: str = 'MIN',
-        num_units: int = 1,
-        is_error_call: bool = False,
-        first_hour=None,
-        last_hour=None,
+            self,
+            instrument_pk: str,
+            start_date: datetime.datetime = default_start_date,
+            end_date: datetime.datetime = default_end_date,
+            resolution: str = 'MIN',
+            num_units: int = 1,
+            is_error_call: bool = False,
+            first_hour=None,
+            last_hour=None,
     ):
         import pyarrow.parquet as pq
 
@@ -477,12 +477,12 @@ class TickDB:
         return df
 
     def get_candles_tick(
-        self,
-        instrument_pk: str,
-        start_date: datetime.datetime = default_start_date,
-        end_date: datetime.datetime = default_end_date,
-        number_of_ticks: int = 100,
-        is_error_call: bool = False,
+            self,
+            instrument_pk: str,
+            start_date: datetime.datetime = default_start_date,
+            end_date: datetime.datetime = default_end_date,
+            number_of_ticks: int = 100,
+            is_error_call: bool = False,
     ):
         import pyarrow as pq
 
@@ -526,12 +526,12 @@ class TickDB:
         return df
 
     def get_candles_volume(
-        self,
-        instrument_pk: str,
-        start_date: datetime.datetime = default_start_date,
-        end_date: datetime.datetime = default_end_date,
-        volume: float = 100,
-        is_error_call: bool = False,
+            self,
+            instrument_pk: str,
+            start_date: datetime.datetime = default_start_date,
+            end_date: datetime.datetime = default_end_date,
+            volume: float = 100,
+            is_error_call: bool = False,
     ):
         import pyarrow.parquet as pq
 
@@ -575,12 +575,12 @@ class TickDB:
         return df
 
     def get_candles_dollar_value(
-        self,
-        instrument_pk: str,
-        start_date: datetime.datetime = default_start_date,
-        end_date: datetime.datetime = default_end_date,
-        dollar_value: float = 1000,
-        is_error_call: bool = False,
+            self,
+            instrument_pk: str,
+            start_date: datetime.datetime = default_start_date,
+            end_date: datetime.datetime = default_end_date,
+            dollar_value: float = 1000,
+            is_error_call: bool = False,
     ):
         import pyarrow.parquet as pq
 

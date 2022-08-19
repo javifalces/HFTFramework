@@ -320,8 +320,7 @@ def parameter_tuning(
         executors.append(executor_job)
         job = {"func": executor_job.run}
         jobs.append(job)
-
-    from factor_investing.util.paralellization_util import process_jobs_joblib
+    from utils.paralellization_util import process_jobs_joblib
 
     n_jobs = min(n_jobs, len(jobs))
     process_jobs_joblib(jobs=jobs, num_threads=n_jobs)

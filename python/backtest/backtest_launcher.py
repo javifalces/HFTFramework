@@ -37,11 +37,11 @@ class BacktestLauncher(threading.Thread):
         DEFAULT_JVM = DEFAULT_JVM_UNIX
 
     def __init__(
-        self,
-        input_configuration: InputConfiguration,
-        id: str,
-        jar_path='Backtest.jar',
-        jvm_options: str = DEFAULT_JVM,
+            self,
+            input_configuration: InputConfiguration,
+            id: str,
+            jar_path='Backtest.jar',
+            jvm_options: str = DEFAULT_JVM,
     ):
         threading.Thread.__init__(self)
         self.input_configuration = input_configuration
@@ -58,7 +58,7 @@ class BacktestLauncher(threading.Thread):
 
         if self.id != self.input_configuration.algorithm_configuration.algorithm_name:
             self.input_configuration.algorithm_configuration.algorithm_name += (
-                '_' + str(id)
+                    '_' + str(id)
             )
 
         if not os.path.isdir(self.output_path):
@@ -122,7 +122,7 @@ class BacktestLauncherController:
                 ]
 
                 for idx in range(
-                    min(self.max_simultaneous - running, len(backtest_waiting))
+                        min(self.max_simultaneous - running, len(backtest_waiting))
                 ):
                     backtest_launcher = backtest_waiting[idx]
                     print("launching %s" % backtest_launcher.id)
@@ -141,7 +141,7 @@ class BacktestLauncherController:
             time.sleep(0.01)
 
     def execute_joblib(self):
-        from factor_investing.util.paralellization_util import process_jobs_joblib
+        from utils.paralellization_util import process_jobs_joblib
 
         jobs = []
         for backtest_launcher in self.backtest_launchers:
@@ -173,8 +173,8 @@ class BacktestLauncherController:
                     try:
                         df_temp = pd.read_csv(csv_filename)
                         instrument_pk_list = csv_filename.split(os.sep)[-1].split('_')[
-                            -2:
-                        ]
+                                             -2:
+                                             ]
                         instrument_pk = '_'.join(instrument_pk_list).split('.')[0]
                         df_temp['instrument'] = instrument_pk
                         df_temp['historicalUnrealizedPnl'] = (
@@ -207,7 +207,7 @@ class BacktestLauncherController:
                     ].cumsum()
                     df['historicalRealizedPnl'] = df['historicalRealizedPnl'].cumsum()
                     df['historicalTotalPnl'] = (
-                        df['historicalUnrealizedPnl'] + df['historicalRealizedPnl']
+                            df['historicalUnrealizedPnl'] + df['historicalRealizedPnl']
                     )
                     print(
                         f'{algo_name} finished with {len(df)} trades on {len(path)} csv files'

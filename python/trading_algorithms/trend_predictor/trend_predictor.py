@@ -256,7 +256,8 @@ class TrendPredictor(Algorithm):
             job = {"func": work.run_df}
             jobs.append(job)
 
-        from factor_investing.util.paralellization_util import process_jobs_joblib
+        from utils.paralellization_util import process_jobs_joblib
+
 
         if n_jobs < 0:
             cpu_number = os.cpu_count()
