@@ -19,9 +19,9 @@ from backtest.parameter_tuning.ga_configuration import GAConfiguration
 DEFAULT_PARAMETERS = {
     "quantity": (0.0001),
     "level": (0),
-    "quantity_limit": (0.001),  # x10
-    "first_hour": (7),
-    "last_hour": (19),
+    "quantityLimit": (0.001),  # x10
+    "firstHour": (7),
+    "lastHour": (19),
 }
 
 
