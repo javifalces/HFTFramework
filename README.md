@@ -13,8 +13,11 @@ Open to suggestions/changes/modifications
 
 Best example is found on jupyter notebook [ConstantSpread example](python/notebooks/ConstantSpread Example.ipynb).
 
-On this example we are running from notebook a backtest for the java strategy [ConstantSpread](java/trading_algorithms/src/main/java/com/lambda/investing/algorithmic_trading/market_making/constant_spread/ConstantSpreadAlgorithm.java) and [LinearConstantSpread](java/trading_algorithms/src/main/java/com/lambda/investing/algorithmic_trading/market_making/constant_spread/LinearConstantSpreadAlgorithm.java)
-from python code [ConstantSpread](python/trading_algorithms/market_making/constant_spread.py) and  [LinearConstantSpread](python/trading_algorithms/market_making/linear_constant_spread.py)
+On this example we are running from notebook a backtest for the 
+* java strategy [ConstantSpread](java/trading_algorithms/src/main/java/com/lambda/investing/algorithmic_trading/market_making/constant_spread/ConstantSpreadAlgorithm.java) and [LinearConstantSpread](java/trading_algorithms/src/main/java/com/lambda/investing/algorithmic_trading/market_making/constant_spread/LinearConstantSpreadAlgorithm.java)
+called from notebook
+* python code [ConstantSpread](python/trading_algorithms/market_making/constant_spread.py) and  [LinearConstantSpread](python/trading_algorithms/market_making/linear_constant_spread.py)
+
 
 *This code is part of a bigger private repository with more algos and more connectors. If you see something wrong or is not compiling , please contact me by email*
 
