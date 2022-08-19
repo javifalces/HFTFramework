@@ -24,7 +24,7 @@ public class LinearConstantSpreadAlgorithm extends SingleInstrumentAlgorithm {
 	private double lastAsk, lastBid;
 
 	public LinearConstantSpreadAlgorithm(AlgorithmConnectorConfiguration algorithmConnectorConfiguration,
-			String algorithmInfo, Map<String, Object> parameters) {
+										 String algorithmInfo, Map<String, Object> parameters) {
 		super(algorithmConnectorConfiguration, algorithmInfo, parameters);
 		setParameters(parameters);
 	}
@@ -42,7 +42,7 @@ public class LinearConstantSpreadAlgorithm extends SingleInstrumentAlgorithm {
 		super.setParameters(parameters);
 		this.level = getParameterIntOrDefault(parameters, "level", 1);
 		this.quantity = getParameterDouble(parameters, "quantity");
-		this.quantityLimit = getParameterDoubleOrDefault(parameters, "quantity_limit", this.quantity * 10);
+		this.quantityLimit = getParameterDoubleOrDefault(parameters, "quantityLimit", this.quantity * 10);
 
 		if (quantity >= quantityLimit) {
 			logger.warn("wrong quantity {} >=  {} quantityLimit -> set quantityLimit to 10x", quantity, quantityLimit);
@@ -53,7 +53,7 @@ public class LinearConstantSpreadAlgorithm extends SingleInstrumentAlgorithm {
 	}
 
 	@Override public String printAlgo() {
-		return String.format("%s  level=%d    quantity=%.5f   quantity_limit=%.5f", algorithmInfo, level, quantity,
+		return String.format("%s  level=%d    quantity=%.5f   quantityLimit=%.5f", algorithmInfo, level, quantity,
 				quantityLimit);
 	}
 
