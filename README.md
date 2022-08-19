@@ -9,6 +9,12 @@ results , like parameter tuning or plot the pnl and parameters.
 Market connectors can have a persistance layer to save market data in parquets that can be used in backtesting.
 Open to suggestions/changes/modifications
 
+### Tutorial Backtest
+
+Best example is found on jupyter notebook [ConstantSpread example](python/notebooks/ConstantSpread Example.ipynb).
+
+On this example we are running from notebook a backtest for the java strategy [ConstantSpread](java/trading_algorithms/src/main/java/com/lambda/investing/algorithmic_trading/market_making/constant_spread/ConstantSpreadAlgorithm.java) and [LinearConstantSpread](java/trading_algorithms/src/main/java/com/lambda/investing/algorithmic_trading/market_making/constant_spread/LinearConstantSpreadAlgorithm.java)
+from python code [ConstantSpread](python/trading_algorithms/market_making/constant_spread.py) and  [LinearConstantSpread](python/trading_algorithms/market_making/linear_constant_spread.py)
 
 *This code is part of a bigger private repository with more algos and more connectors. If you see something wrong or is not compiling , please contact me by email*
 
@@ -16,14 +22,14 @@ Open to suggestions/changes/modifications
 IS my research where and Avellaneda Stoikov market making implementation is going to be manage by RL.
 RL is going to configure the different Avellaneda stoikov parameters dinamically based on market state.
 
-* [Java Code](java/algorithmic_trading_framework/src/main/java/com/lambda/investing/algorithmic_trading/avellaneda_stoikov/AlphaAvellanedaStoikov.java)
-* [Python code caller](python/backtest/alpha_avellaneda_stoikov.py)
+* [Java Code](java/trading_algorithms/src/main/java/com/lambda/investing/algorithmic_trading/market_making/avellaneda_stoikov/AlphaAvellanedaStoikov.java)
+* [Python code caller](python/trading_algorithms/market_making/avellaneda_stoikov/alpha_avellaneda_stoikov.py)
 
 ![Alpha AS](fig/AlphaAS_functional.jpg?raw=true "Alpha AS")
 
 ### Avellaneda Stoikov implementation
-* [Java Code](java/algorithmic_trading_framework/src/main/java/com/lambda/investing/algorithmic_trading/avellaneda_stoikov/AvellanedaStoikov.java)
-* [Python code caller](python/backtest/avellaneda_stoikov.py)
+* [Java Code](java/trading_algorithms/src/main/java/com/lambda/investing/algorithmic_trading/market_making/avellaneda_stoikov/AvellanedaStoikov.java)
+* [Python code caller](python/trading_algorithms/market_making/avellaneda_stoikov/avellaneda_stoikov.py)
 
 
 ## [JAVA]
