@@ -11,7 +11,7 @@ Open to suggestions/changes/modifications
 
 ### Tutorial Backtest
 
-Best example is found on jupyter notebook [ConstantSpread example](python/notebooks/ConstantSpread Example.ipynb).
+Best example is found on jupyter notebook [ConstantSpread example](python/notebooks/ConstantSpread_Example.ipynb).
 
 On this example we are running from notebook a backtest for the 
 * java strategy [ConstantSpread](java/trading_algorithms/src/main/java/com/lambda/investing/algorithmic_trading/market_making/constant_spread/ConstantSpreadAlgorithm.java) and [LinearConstantSpread](java/trading_algorithms/src/main/java/com/lambda/investing/algorithmic_trading/market_making/constant_spread/LinearConstantSpreadAlgorithm.java)
