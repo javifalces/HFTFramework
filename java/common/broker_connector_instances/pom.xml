@@ -14,18 +14,8 @@
     <artifactId>broker_connector_instances</artifactId>
     <properties>
         <com.squareup.retrofit2.version>2.5.0</com.squareup.retrofit2.version>
-        <xchange.version>5.0.14-SNAPSHOT</xchange.version>
+        <xchange.version>5.1.0</xchange.version>
     </properties>
-
-    <!-- maven for xchange snapshots    -->
-    <repositories>
-        <repository>
-            <id>sonatype-nexus-snapshots</id>
-            <name>Sonatype Nexus Snapshots</name>
-            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
-        </repository>
-    </repositories>
-    <!-- maven for xchange snapshots    -->
 
 
     <dependencies>
