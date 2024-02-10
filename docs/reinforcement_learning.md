@@ -3,7 +3,7 @@ receiving actions from Python and returning the subsequent state and reward via 
 Java, these algorithms extend the abstract
 class [SingleInstrumentRLAlgorithm](../java/algorithmic_trading_framework/src/main/java/com/lambda/investing/algorithmic_trading/reinforcement_learning/SingleInstrumentRLAlgorithm.java).
 In Python, the environment algorithms
-extend [RlAlgorithm](../python_lambda/trading_algorithms/reinforcement_learning/rl_algorithm.py).
+extend [RlAlgorithm](../python/trading_algorithms/reinforcement_learning/rl_algorithm.py).
 
 The system integrates Python and Java to execute a backtest with an RL algorithm. The Python AI gym, based on stable
 baselines 3, is open to integration with other frameworks. The Java backtest connects each step with a ZeroMQ
