@@ -1,5 +1,5 @@
-[![Java Unit Tests Workflow](https://github.com/javifalces/market_making_fw/actions/workflows/java_test.yml/badge.svg?branch=master)](https://github.com/javifalces/market_making_fw/actions/workflows/java_test.yml)  
-[![Python Unit Tests Workflow](https://github.com/javifalces/market_making_fw/actions/workflows/python_test.yml/badge.svg?branch=master)](https://github.com/javifalces/market_making_fw/actions/workflows/python_test.yml)
+[![Java Unit Tests Workflow](https://github.com/javifalces/HFTFramework/actions/workflows/java_test.yml/badge.svg?branch=master)](https://github.com/javifalces/HFTFramework/actions/workflows/java_test.yml)  
+[![Python Unit Tests Workflow](https://github.com/javifalces/HFTFramework/actions/workflows/python_test.yml/badge.svg?branch=master)](https://github.com/javifalces/HFTFramework/actions/workflows/python_test.yml)
 
 # HFT Framework
 
@@ -153,11 +153,11 @@ metatrader.pull.port=32768
 
 ### Backtest
 
-![Backtest Architecture](fig/BacktestArquitecture.JPG?raw=true "Backtest")
+![Backtest Architecture](fig/BacktestArquitecture.jpg?raw=true "Backtest")
 
 ### Live trading
 
-![Live Architecture](fig/LiveArquitecture.JPG?raw=true "Live trading")
+![Live Architecture](fig/LiveArquitecture.jpg?raw=true "Live trading")
 
 ## Environment settings
 
