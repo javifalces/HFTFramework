@@ -157,11 +157,11 @@ metatrader.pull.port=32768
 
 ### Backtest
 
-![Backtest Architecture](fig/BacktestArquitecture.JPG?raw=true "Backtest")
+![Backtest Architecture](fig/BacktestArquitecture.jpg?raw=true "Backtest")
 
 ### Live trading
 
-![Live Architecture](fig/LiveArquitecture.JPG?raw=true "Live trading")
+![Live Architecture](fig/LiveArquitecture.jpg?raw=true "Live trading")
 
 ## Environment settings
 
