@@ -118,6 +118,9 @@ the [AlgorithmConnectorConfiguration](java/trading_algorithms/src/main/java/com/
 and are in charge of translate market messages into the format our framework can understand and send orders to the
 market.
 
+These engines possess the capability to archive data in a database, a feature that can be leveraged for the purpose of
+backtesting or analytical examination.
+
 * MarketDataProvider : receive depth and trades . listen(TypeMessage.depth, TypeMessage.trade, TypeMessage.command)
 * TradingEngineConnector: send request and listen to execution reports listen(TypeMessage.execution_report,
   TypeMessage.info)
