@@ -58,4 +58,4 @@ dash_daq>=0.5.0
 pandas_datareader>=0.10.0
 optuna>=3.5.0
 skfolio>=0.0.10
-mlfinlab
+git+https://github.com/hudson-and-thames/mlfinlab.git
