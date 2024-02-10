@@ -5,7 +5,7 @@
     <parent>
         <artifactId>parent_pom</artifactId>
         <groupId>com.lambda.investing</groupId>
-        <version>0.0.0-SNAPSHOT</version>
+        <version>0.1.0-SNAPSHOT</version>
         <relativePath>../../parent_pom/pom.xml</relativePath>
     </parent>
 
@@ -14,27 +14,18 @@
     <artifactId>machine_learning</artifactId>
 
     <properties>
-        <deeplearning4j.version>1.0.0-M1</deeplearning4j.version>
-        <deeplearning4j.rl4j.version>1.0.0-M1</deeplearning4j.rl4j.version>
+        <deeplearning4j.version>1.0.0-M2</deeplearning4j.version>
+        <deeplearning4j.cuda.version>1.0.0-M1</deeplearning4j.cuda.version>
         <cuda.version>11.2-8.1-1.5.5</cuda.version>
         <weka.version>3.8.4</weka.version>
+        <tensorflow.version>1.15.0</tensorflow.version>
+        <tensorflow.core.version>0.5.0</tensorflow.core.version>
     </properties>
 
     <dependencies>
 
-        <!--        <dependency>-->
-        <!--            <groupId>org.apache.logging.log4j</groupId>-->
-        <!--            <artifactId>log4j-api</artifactId>-->
-        <!--            <version>2.11.2</version>-->
-        <!--        </dependency>-->
 
-        <!--        <dependency>-->
-        <!--            <groupId>org.apache.logging.log4j</groupId>-->
-        <!--            <artifactId>log4j-core</artifactId>-->
-        <!--            <version>2.11.2</version>-->
-        <!--        </dependency>-->
-
-        <!-- https://mvnrepository.com/artifact/com.github.fracpete/inetutils4j -->
+        <!-- DL4j examples -->
         <dependency>
             <groupId>com.github.fracpete</groupId>
             <artifactId>inetutils4j</artifactId>
@@ -44,7 +35,6 @@
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-math3</artifactId>
-            <version>3.6.1</version>
         </dependency>
 
         <!--        WEKA-->
@@ -53,23 +43,6 @@
             <artifactId>weka-stable</artifactId>
             <version>${weka.version}</version>
         </dependency>
-        <!--        <dependency>-->
-        <!--            <groupId>nz.ac.waikato.cms.weka</groupId>-->
-        <!--            <artifactId>weka-dev</artifactId>-->
-        <!--            <version>${weka.version}</version>-->
-        <!--        </dependency>-->
-        <!--        <dependency>-->
-        <!--            <groupId>nz.ac.waikato.cms.weka</groupId>-->
-        <!--            <artifactId>LibSVM</artifactId>-->
-        <!--            <version>${weka.version}</version>-->
-        <!--        </dependency>-->
-
-        <!--        <dependency>-->
-        <!--            <groupId>nz.ac.waikato.cms.weka</groupId>-->
-        <!--            <artifactId>rotationForest</artifactId>-->
-        <!--            <version>1.0.3</version>-->
-        <!--        </dependency>-->
-
 
         <!--deeplearning4j ML models-->
         <dependency>
@@ -88,49 +61,6 @@
             <version>${deeplearning4j.version}</version>
         </dependency>
 
-        <dependency>
-            <groupId>org.deeplearning4j</groupId>
-            <artifactId>rl4j-core</artifactId>
-            <version>${deeplearning4j.rl4j.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>ch.qos.logback</groupId>
-                    <artifactId>logback-classic</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-api</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
-        <dependency>
-            <groupId>org.deeplearning4j</groupId>
-            <artifactId>rl4j-gym</artifactId>
-            <version>${deeplearning4j.rl4j.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>ch.qos.logback</groupId>
-                    <artifactId>logback-classic</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-api</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
-        <!--        <dependency>-->
-        <!--            <groupId>org.deeplearning4j</groupId>-->
-        <!--            <artifactId>rl4j-malmo</artifactId>-->
-        <!--            <version>${deeplearning4j.rl4j.version}</version>-->
-        <!--        </dependency>-->
-
-        <!--        <dependency>-->
-        <!--            <groupId>com.microsoft.msr.malmo</groupId>-->
-        <!--            <artifactId>MalmoJavaJar</artifactId>-->
-        <!--            <version>0.30.0</version>-->
-        <!--        </dependency>-->
 
         <dependency>
             <groupId>org.datavec</groupId>
@@ -176,7 +106,7 @@
             <version>0.9.10</version>
         </dependency>
 
-        <!-- https://mvnrepository.com/artifact/edu.cmu.cs/ark-tweet-nlp -->
+        <!-- tokenizer example -->
         <dependency>
             <groupId>edu.cmu.cs</groupId>
             <artifactId>ark-tweet-nlp</artifactId>
@@ -196,6 +126,25 @@
             <groupId>com.microsoft.onnxruntime</groupId>
             <artifactId>onnxruntime</artifactId>
             <version>1.9.0</version>
+        </dependency>
+
+        <!-- tensorflow -->
+        <dependency>
+            <groupId>org.tensorflow</groupId>
+            <artifactId>tensorflow</artifactId>
+            <version>${tensorflow.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.tensorflow</groupId>
+            <artifactId>tensorflow-core-platform</artifactId>
+            <version>${tensorflow.core.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.tensorflow</groupId>
+            <artifactId>tensorflow-framework</artifactId>
+            <version>${tensorflow.core.version}</version>
         </dependency>
 
     </dependencies>
@@ -245,7 +194,7 @@
                 <dependency>
                     <groupId>org.nd4j</groupId>
                     <artifactId>nd4j-cuda-11.2</artifactId>
-                    <version>${deeplearning4j.version}</version>
+                    <version>${deeplearning4j.cuda.version}</version>
                     <exclusions>
                         <exclusion>
                             <groupId>org.bytedeco.javacpp-presets</groupId>
@@ -258,8 +207,15 @@
                 <dependency>
                     <groupId>org.deeplearning4j</groupId>
                     <artifactId>deeplearning4j-cuda-11.2</artifactId>
-                    <version>${deeplearning4j.version}</version>
+                    <version>${deeplearning4j.cuda.version}</version>
                 </dependency>
+
+                <!-- tensorflow-gpu -->
+                <!--                <dependency>-->
+                <!--                    <groupId>org.tensorflow</groupId>-->
+                <!--                    <artifactId>tensorflow-core-platform-gpu</artifactId>-->
+                <!--                    <version>>${tensorflow.core.version}</version>-->
+                <!--                </dependency>-->
 
 
             </dependencies>

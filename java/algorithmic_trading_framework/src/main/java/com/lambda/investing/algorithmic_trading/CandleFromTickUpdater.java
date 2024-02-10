@@ -1,6 +1,6 @@
 package com.lambda.investing.algorithmic_trading;
 
-import EDU.oswego.cs.dl.util.concurrent.ConcurrentHashMap;
+
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.state.StateManager;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.candle.Candle;
@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class CandleFromTickUpdater {
 
@@ -27,6 +28,7 @@ public class CandleFromTickUpdater {
 	protected List<CandleListener> observers;
 	protected Map<String, CandleFromTickUpdaterInstrument> instrumentPkToTickCreator;
 	protected double volumeThreshold = VOLUME_THRESHOLD_DEFAULT;
+
 	protected int secondsThreshold = SECONDS_THRESHOLD_DEFAULT;
 	protected static Logger logger = LogManager.getLogger(CandleFromTickUpdater.class);
 
@@ -44,6 +46,14 @@ public class CandleFromTickUpdater {
 	public void setSecondsThreshold(int secondsThreshold) {
 		logger.info("set setSecondsThreshold time={} ", secondsThreshold);
 		this.secondsThreshold = secondsThreshold;
+	}
+
+	public double getVolumeThreshold() {
+		return volumeThreshold;
+	}
+
+	public int getSecondsThreshold() {
+		return secondsThreshold;
 	}
 
 	public void register(CandleListener candleListener) {

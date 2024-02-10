@@ -5,14 +5,11 @@ import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.Verb;
 import lombok.Getter;
 import lombok.Setter;
-import lombok.ToString;
 
-import java.util.Date;
 import java.util.UUID;
 
 import static com.lambda.investing.model.Util.GSON_STRING;
 import static com.lambda.investing.model.Util.getDatePythonUTC;
-import static com.lambda.investing.model.Util.getDateUTC;
 
 @Getter @Setter public class Trade extends CSVable {
 
@@ -47,7 +44,7 @@ import static com.lambda.investing.model.Util.getDateUTC;
 		this.quantity = executionReport.getLastQuantity();
 		this.price = executionReport.getPrice();
 		this.algorithmInfo = executionReport.getAlgorithmInfo();
-		this.verb = executionReport.getVerb();
+		this.verb = Verb.OtherSideVerb(executionReport.getVerb());//our buy , is a sell for the market
 		id = generateId();
 
 	}

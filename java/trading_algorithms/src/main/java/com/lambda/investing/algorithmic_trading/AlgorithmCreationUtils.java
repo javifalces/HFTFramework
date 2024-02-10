@@ -1,11 +1,12 @@
 package com.lambda.investing.algorithmic_trading;
 
+
 import com.lambda.investing.algorithmic_trading.market_making.avellaneda_stoikov.AlphaAvellanedaStoikov;
-import com.lambda.investing.algorithmic_trading.market_making.avellaneda_stoikov.AlphaAvellanedaStoikovRL4J;
 import com.lambda.investing.algorithmic_trading.market_making.avellaneda_stoikov.AvellanedaStoikov;
 import com.lambda.investing.algorithmic_trading.market_making.constant_spread.AlphaConstantSpread;
 import com.lambda.investing.algorithmic_trading.market_making.constant_spread.ConstantSpreadAlgorithm;
 import com.lambda.investing.algorithmic_trading.market_making.constant_spread.LinearConstantSpreadAlgorithm;
+
 
 import java.util.Map;
 
@@ -18,7 +19,7 @@ public class AlgorithmCreationUtils {
      * @param parameters
      * @return
      */
-    public static com.lambda.investing.algorithmic_trading.Algorithm getAlgorithm(String algorithmName, Map<String, Object> parameters) {
+    public static Algorithm getAlgorithm(String algorithmName, Map<String, Object> parameters) {
         //for backtest only!!
         return getAlgorithm(null, algorithmName, parameters);
     }
@@ -29,7 +30,7 @@ public class AlgorithmCreationUtils {
      *
      * @return
      */
-    public static com.lambda.investing.algorithmic_trading.Algorithm getAlgorithm(
+    public static Algorithm getAlgorithm(
             AlgorithmConnectorConfiguration algorithmConnectorConfiguration, String algorithmName,
             Map<String, Object> parameters) {
 
@@ -56,10 +57,6 @@ public class AlgorithmCreationUtils {
             return new AlphaAvellanedaStoikov(algorithmConnectorConfiguration, algorithmName, parameters);
         }
 
-        if (algorithmName.startsWith("RL4jAlphaAvellanedaStoikov")) {
-            System.out.println("RL4jAlphaAvellanedaStoikov backtest " + algorithmName);
-            return new AlphaAvellanedaStoikovRL4J(algorithmConnectorConfiguration, algorithmName, parameters);
-        }
 
 
         System.err.println("AlgorithmUtils :  algorithm " + algorithmName + " not found!");

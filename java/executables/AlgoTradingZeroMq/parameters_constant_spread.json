@@ -1,0 +1,22 @@
+{
+  "marketDataPort": 666,
+  "tradeEnginePort": 677,
+  "tradeEngineHost": "localhost",
+  "marketDataHost": "localhost",
+  "paperTrading": "False",
+  "demoTrading": "False",
+  "instrumentPks": [
+    "btcusdt_kraken"
+  ],
+  "algorithm": {
+    "algorithmName": "ConstantSpread_zeromq_test",
+    "parameters": {
+      "level": "0",
+      "skewLevel": "0",
+      "seed": 5,
+      "quantity": "0.001",
+      "firstHour": "7.0",
+      "lastHour": "19.0"
+    }
+  }
+}

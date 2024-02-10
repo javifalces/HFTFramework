@@ -1,7 +1,5 @@
 package com.lambda.investing.algorithmic_trading.reinforcement_learning.state;
 
-import com.google.common.collect.BiMap;
-import com.google.common.collect.HashBiMap;
 import com.lambda.investing.algorithmic_trading.PnlSnapshot;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.MatrixRoundUtils;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.ScoreEnum;
@@ -42,7 +40,7 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Ma
 	private double quantity;
 
 	public PrivateState(ScoreEnum scoreEnum, int numberOfDecimals, int horizonSave, long tickMs, double maxNumber,
-			double minNumber, double quantity) {
+						double minNumber, double quantity) {
 		super(numberOfDecimals);
 		this.quantity = quantity;
 		this.numberOfDecimals = numberOfDecimals;
@@ -91,6 +89,7 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Ma
 
 	@Override
 	public synchronized void reset() {
+		logger.info("resetting PrivateState");
 		inventoryBuffer.clear();
 		scoreBuffer.clear();
 		lastTickSave = 0;

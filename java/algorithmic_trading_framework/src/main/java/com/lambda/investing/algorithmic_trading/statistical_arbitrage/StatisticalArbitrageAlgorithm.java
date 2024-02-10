@@ -14,7 +14,6 @@ import com.lambda.investing.model.trading.OrderRequest;
 import com.lambda.investing.model.trading.Verb;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import tech.tablesaw.api.Table;
 
 import java.io.FileNotFoundException;
 import java.util.Map;
@@ -392,28 +391,4 @@ public class StatisticalArbitrageAlgorithm extends Algorithm {
 		System.out.print(header + outputInstrument);
 	}
 
-	@Override protected void printBacktestResults(Map<Instrument, Table> tradesTable) {
-		double totalPnl = 0.;
-		double unrealizedPnl = 0.;
-		double realizedPnl = 0.;
-		for (Instrument instrument : tradesTable.keySet()) {
-			String output = (portfolioManager.summary(instrument));
-			Table tradesInstrument = tradesTable.get(instrument);
-			if (isBacktest) {
-				System.out.println(instrument);
-				System.out.println(output);
-			}
-			totalPnl += portfolioManager.getLastPnlSnapshot(instrument.getPrimaryKey()).totalPnl;
-			realizedPnl += portfolioManager.getLastPnlSnapshot(instrument.getPrimaryKey()).realizedPnl;
-			unrealizedPnl += portfolioManager.getLastPnlSnapshot(instrument.getPrimaryKey()).unrealizedPnl;
-		}
-		if (isBacktest) {
-			System.out.println("------------");
-			System.out.println("totalPnl:" + totalPnl);
-			System.out.println("realizedPnl:" + realizedPnl);
-			System.out.println("unrealizedPnl:" + unrealizedPnl);
-			System.out.println("------------");
-		}
-
-	}
 }

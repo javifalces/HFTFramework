@@ -142,7 +142,7 @@ import javax.xml.bind.annotation.*;
 	 *
 	 * @return The list of points.
 	 */
-	public List<Trajectory.Point> getPoints() {
+	public List<Point> getPoints() {
 		return new ArrayList<Point>(mPoints);
 	}
 

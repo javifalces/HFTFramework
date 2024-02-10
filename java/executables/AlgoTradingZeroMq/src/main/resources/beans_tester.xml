@@ -15,9 +15,8 @@
         </property>
     </bean>
 
-    <import resource="classpath:metatrader_instruments.xml"></import>
-    <import resource="classpath:darwinex_instruments.xml"></import>
-    <import resource="classpath:binance_instruments.xml"></import>
+    <import resource="classpath:all_instruments.xml"></import>
+
     <import resource="classpath:base_beans.xml"></import>
     <import resource="classpath:connector_tester_beans.xml"></import>
 

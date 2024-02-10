@@ -8,6 +8,10 @@ public abstract class AbstractAction {
 
 	protected Logger logger = LogManager.getLogger(AbstractState.class);
 
+	public int getNumberActionColumns() {
+		return 1;
+	}
+
 	public abstract int getNumberActions();
 
 	public abstract int getAction(double[] actionArr);

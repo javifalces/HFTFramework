@@ -1,12 +1,9 @@
 package com.lambda.investing.algorithmic_trading;
 
-import java.util.Calendar;
-import java.util.Date;
-import java.util.TimeZone;
-
 public class BacktestTimeService extends TimeService {
 
 	long startMs = 0;
+
 	public BacktestTimeService(String timezone) {
 		super(timezone);
 	}
@@ -20,7 +17,7 @@ public class BacktestTimeService extends TimeService {
 
 		startMs = this.currentTimestamp;
 		while (this.currentTimestamp - startMs > msToSleep) {
-			Thread.sleep(1);//waiting until simulated ms to sleep are done
+			Thread.onSpinWait();//to not occupy the cpu//
 		}
 	}
 

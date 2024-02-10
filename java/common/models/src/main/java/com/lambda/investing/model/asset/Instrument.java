@@ -1,18 +1,14 @@
 package com.lambda.investing.model.asset;
 
 import com.lambda.investing.model.Market;
-import com.lambda.investing.model.exception.ModelException;
 import com.lambda.investing.model.trading.Verb;
 import lombok.Getter;
 import lombok.Setter;
-import lombok.ToString;
-import org.apache.commons.lang3.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-
-import java.text.DecimalFormat;
-import java.util.ArrayList;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -23,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
 	private static List<String> FX_MARKETS_LIST = Arrays.asList(new String[] { Market.Darwinex.name().toLowerCase() });
 
 	private static Map<String, Instrument> INSTRUMENT_PK_TO_INSTRUMENT = new ConcurrentHashMap<>();
-	private static final double DEFAULT_LEVERAGE_FX = 100000;
+	private static final double DEFAULT_LEVERAGE_FX = 100;
 	private static double DEFAULT_PRICE_TICK = 0.00001;
 	private static double DEFAULT_QTY_TICK = 0.00001;
 
@@ -55,11 +51,13 @@ import java.util.concurrent.ConcurrentHashMap;
 
 	//
 	private double leverage = 1;
+	private double quantityMultiplier = 1;
 
 	public void addMap() {
 		INSTRUMENT_PK_TO_INSTRUMENT.put(getPrimaryKey(), this);
 		if (isFX()) {
 			leverage = DEFAULT_LEVERAGE_FX;
+			quantityMultiplier = 1E5;//1 lot = 100k
 		}
 	}
 
@@ -77,8 +75,11 @@ import java.util.concurrent.ConcurrentHashMap;
 
 	public double calculateFee(boolean isTaker, double price, double quantity) {
 		double feePct = getPctFee(isTaker);
-		double variableFeePct = feePct * quantity * price * leverage;
-		double variableFeeVolume = (volumeFeePct / 100.0) * quantity * leverage;
+
+		quantity = quantity * getQuantityMultiplier();
+		double variableFeePct = feePct * quantity * price;
+		double variableFeeVolume = (volumeFeePct / 100.0) * quantity;
+
 		double totalCost = Math.abs(variableFeePct) + Math.abs(variableFeeVolume) + Math.abs(getConstantFee());
 		return totalCost;
 	}
@@ -123,8 +124,7 @@ import java.util.concurrent.ConcurrentHashMap;
 	public String getPrimaryKey() {
 		if(this.primaryKey!=null){
 			return this.primaryKey;
-		}
-		else{
+		} else{
 			setPrimaryKey();
 			if (this.primaryKey == null) {
 				logger.error("can't get primary key {}", this);
@@ -165,37 +165,54 @@ import java.util.concurrent.ConcurrentHashMap;
 	}
 
 	public int getNumberDecimalsPrice() {
-		//		TODO
-		//		String[] splitter = decimalFormat.format(getPriceTick()).replace(",",".").split("\\.");
-		//		return splitter[1].length();
-		return (int) Math.round(Math.abs(Math.log10(priceTick)));
-
+		return (int) Math.round(Math.abs(Math.log10(1.0 / priceTick)));
 	}
 
 	public double roundPrice(double price) {
 		//		return Math.round(price / getPriceTick()) * getPriceTick();
-		double scale = Math.pow(10, ((double) (getNumberDecimalsPrice())));
-		return Math.round(price * scale) / scale;
+//		double scale = Math.pow(10, ((double) (getNumberDecimalsPrice())));
+//		return Math.round(price * scale) / scale;
+
+		int places = getNumberDecimalsPrice();
+		return round(price, places);
 
 	}
 
-	public double roundQty(double price) {
-		return Math.round(price / getQuantityTick()) * getQuantityTick();
+	public double roundQty(double qty) {
+		return roundQty(qty, RoundingMode.HALF_UP);
 	}
+
+	public double roundQty(double qty, RoundingMode roundingMode) {
+//		return Math.round(price / getQuantityTick()) * getQuantityTick();
+
+		int places = getNumberDecimalsQty();
+		return round(qty, places, roundingMode);
+	}
+
+	public static double round(double value, int places) {
+		return round(value, places, RoundingMode.HALF_UP);
+	}
+
+	public static double round(double value, int places, RoundingMode roundingMode) {
+		if (places < 0) throw new IllegalArgumentException();
+
+		BigDecimal bd = BigDecimal.valueOf(value);
+		bd = bd.setScale(places, roundingMode);
+		return bd.doubleValue();
+	}
+
 
 	public int getNumberDecimalsQty() {
-		//		TODO
-		//		String[] splitter = decimalFormat.format(getQuantityTick()).replace(",",".").split("\\.");
-		//
-		//		return splitter[1].length();
-		return 4;
+		return (int) Math.round(Math.abs(Math.log10(1.0 / quantityTick)));
 	}
 
-	@Override public String toString() {
+	@Override
+	public String toString() {
 		return getPrimaryKey();
 	}
 
-	@Override public boolean equals(Object obj) {
+	@Override
+	public boolean equals(Object obj) {
 		if (obj instanceof Instrument) {
 			Instrument otherInstrument = (Instrument) obj;
 			return otherInstrument.getPrimaryKey().equals(getPrimaryKey());

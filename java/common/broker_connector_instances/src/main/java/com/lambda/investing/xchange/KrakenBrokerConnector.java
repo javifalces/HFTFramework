@@ -27,8 +27,8 @@ import java.util.concurrent.ConcurrentHashMap;
 	}
 
 	private KrakenBrokerConnector(String apiKey, String secretKey) {
-		this.apiKey = apiKey;
-		this.secretKey = secretKey;
+		this.apiKey = apiKey;//tGdJZa9Z7Yjxxxxx+4X63
+		this.secretKey = secretKey;//FL8iRtxhh9xxxx
 		streamingExchange = StreamingExchangeFactory.INSTANCE.createExchange(KrakenStreamingExchange.class);
 		exchange = ExchangeFactory.INSTANCE.createExchange(KrakenExchange.class);
 		marketDataService = exchange.getMarketDataService();

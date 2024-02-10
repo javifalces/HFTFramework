@@ -1,6 +1,7 @@
 package com.lambda.investing.algorithmic_trading;
 
 import com.lambda.investing.Configuration;
+import com.lambda.investing.algorithmic_trading.gui.main.MainMenuGUI;
 import com.lambda.investing.algorithmic_trading.hedging.LinearRegressionHedgeManager;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
@@ -21,7 +22,7 @@ import java.util.Map;
 	protected double maxVolumeDepth = -5;//<0 means disable check
 
 	public SingleInstrumentAlgorithm(AlgorithmConnectorConfiguration algorithmConnectorConfiguration,
-			String algorithmInfo, Map<String, Object> parameters) {
+									 String algorithmInfo, Map<String, Object> parameters) {
 		super(algorithmConnectorConfiguration, algorithmInfo, parameters);
 	}
 
@@ -103,12 +104,22 @@ import java.util.Map;
 		return true;
 	}
 
-	@Override public boolean onDepthUpdate(Depth depth) {
+	@Override
+	public boolean onDepthUpdate(Depth depth) {
 		boolean outputSuper = super.onDepthUpdate(depth);
 		if (!validDepth(depth, minLevelsDepth, minVolumeDepth, maxVolumeDepth)) {
 			return false;
 		}
 		return outputSuper;
 	}
+
+	@Override
+	protected void startUI() {
+		super.startUI();
+		algorithmicTradingGUI = new MainMenuGUI(theme, this);
+		MainMenuGUI.IS_BACKTEST = isBacktest;
+		algorithmicTradingGUI.start();
+	}
+
 
 }

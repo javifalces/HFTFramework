@@ -8,7 +8,6 @@ from trading_algorithms.algorithm_enum import AlgorithmEnum
 from backtest.backtest_launcher import BacktestLauncher, BacktestLauncherController
 from backtest.input_configuration import (
     BacktestConfiguration,
-    TrainInputConfiguration,
     AlgorithmConfiguration,
     InputConfiguration,
     JAR_PATH,
@@ -16,10 +15,17 @@ from backtest.input_configuration import (
 )
 from backtest.parameter_tuning.ga_configuration import GAConfiguration
 from backtest.parameter_tuning.ga_parameter_tuning import GAParameterTuning
-from backtest.pnl_utils import get_drawdown
-from backtest.train_launcher import TrainLauncher, TrainLauncherController
-from configuration import BACKTEST_OUTPUT_PATH
+from backtest.pnl_utils import get_drawdown, get_backtest_df_date_indexed
+from configuration import LAMBDA_OUTPUT_PATH, SHARPE_BACKTEST_FREQ
 import math
+
+
+class AlgorithmParameters:
+    ui = 'ui'
+    quantity = "quantity"
+    first_hour = "firstHour"
+    last_hour = "lastHour"
+    seed = "seed"
 
 
 class Algorithm:
@@ -40,10 +46,12 @@ class Algorithm:
 
     def __init__(self, algorithm_info: str, parameters: dict) -> None:
         super().__init__()
-
         # self.NAME=''
         self.algorithm_info = algorithm_info
         self.parameters = copy.copy(parameters)
+
+    def __reduce__(self):
+        return (self.__class__, (self.algorithm_info, self.parameters))
 
     def get_json_param(self) -> dict:
         # import json
@@ -54,12 +62,12 @@ class Algorithm:
 
     def _is_memory_file(self, file: str, algorithm_name: str):
         return algorithm_name in file and (
-            'qmatrix' in file or 'memoryReplay' in file or 'input_ml' in file
+                'qmatrix' in file or 'memoryReplay' in file or 'input_ml' in file
         )
 
     def _is_model_file(self, file: str, algorithm_name: str):
         return algorithm_name in file and (
-            file.endswith('.model') or file.endswith('.onnx')
+                file.endswith('.model') or file.endswith('.onnx')
         )
 
     def clean_experience(self, output_path):
@@ -101,18 +109,22 @@ class Algorithm:
                 parameters_key_set_it.append(key_param)
 
         parameters_key_input = set(parameters.keys())
-        if len(parameters_key_set_it) < len(parameters_key_input):
-            not_set = list(set(parameters_key_input) - set(parameters_key_set_it))
-            not_set_str = ','.join(not_set)
-            print(f'rf"WARNING some parameters not set! {not_set_str}')
+        # if len(parameters_key_set_it) < len(parameters_key_input):
+        #     not_set = list(set(parameters_key_input) - set(parameters_key_set_it))
+        #     not_set_str = ','.join(not_set)
+        #     print(f'WARNING some parameters not set! {not_set_str}')
 
-        if 'seed' in parameters.keys():
-            self.parameters['seed'] = parameters['seed']
+        if AlgorithmParameters.seed in parameters.keys():
+            self.parameters[AlgorithmParameters.seed] = parameters[
+                AlgorithmParameters.seed
+            ]
 
     def set_training_seed(self, parameters, iteration: int, algorithm_number: int):
-        if 'seed' in self.parameters.keys():
-            self.parameters['seed'] = (
-                self.parameters['seed'] + iteration * 1000 + algorithm_number
+        if AlgorithmParameters.seed in self.parameters.keys():
+            self.parameters[AlgorithmParameters.seed] = (
+                    self.parameters[AlgorithmParameters.seed]
+                    + iteration * 1000
+                    + algorithm_number
             )
 
     def get_iteration_number_filename(self, filename) -> int:
@@ -125,29 +137,19 @@ class Algorithm:
         except:
             return 0
 
-    def train_model(self, jar_path, train_input_configuration: TrainInputConfiguration):
-
-        train_launcher = TrainLauncher(
-            train_input_configuration=train_input_configuration,
-            jar_path=jar_path,
-            id='',
-        )
-        train_launcher_controller = TrainLauncherController(train_launcher)
-        train_launcher_controller.run()
-
     def parameter_tuning(
-        self,
-        algorithm_enum: AlgorithmEnum,
-        start_date: datetime.datetime,
-        end_date: datetime,
-        instrument_pk: str,
-        parameters_base: dict,
-        parameters_min: dict,
-        parameters_max: dict,
-        max_simultaneous: int,
-        generations: int,
-        ga_configuration: GAConfiguration,
-        clean_initial_generation_experience: bool = True,
+            self,
+            algorithm_enum: AlgorithmEnum,
+            start_date: datetime.datetime,
+            end_date: datetime,
+            instrument_pk: str,
+            parameters_base: dict,
+            parameters_min: dict,
+            parameters_max: dict,
+            max_simultaneous: int,
+            generations: int,
+            ga_configuration: GAConfiguration,
+            clean_initial_generation_experience: bool = True,
     ) -> (dict, pd.DataFrame):
 
         backtest_configuration = BacktestConfiguration(
@@ -191,10 +193,10 @@ class Algorithm:
             if clean_initial_generation_experience:
                 print(
                     'cleaning outputs/experience on generation %d in path %s'
-                    % (generation, BACKTEST_OUTPUT_PATH)
+                    % (generation, LAMBDA_OUTPUT_PATH)
                 )
-                self.clean_experience(output_path=BACKTEST_OUTPUT_PATH)
-                self.clean_permutation_cache(output_path=BACKTEST_OUTPUT_PATH)
+                self.clean_experience(output_path=LAMBDA_OUTPUT_PATH)
+                self.clean_permutation_cache(output_path=LAMBDA_OUTPUT_PATH)
 
             ga_parameter_tuning.run_generation(
                 backtest_configuration=backtest_configuration,
@@ -212,7 +214,15 @@ class Algorithm:
     def get_sharpe(self, trade_df: pd.DataFrame, column: str = 'returns') -> float:
         if len(trade_df) == 0:
             return 0.0
-        returns = trade_df[column]
+        # group by time
+        trade_df = get_backtest_df_date_indexed(backtest_df=trade_df)
+        returns = (
+            trade_df[column]
+            .groupby(pd.Grouper(freq=SHARPE_BACKTEST_FREQ))
+            .sum()
+            .reset_index(drop=True)
+            .fillna(0.0)
+        )
         return returns.mean() / returns.std()
 
     def get_trade_df(self, raw_trade_pnl_df: pd.DataFrame):
@@ -222,16 +232,11 @@ class Algorithm:
             'historicalRealizedPnl': 'close_pnl',
             'historicalUnrealizedPnl': 'open_pnl',
             'netPosition': 'position',
-            # #columns=['time', 'risk_aversion', 'windows_tick', 'skew_pct', 'bid', 'ask', 'bid_qty', 'ask_qty',
-            #              'imbalance',
-            #              'reward'],
-            'skewPricePct': 'skew_pct',
-            'riskAversion': 'risk_aversion',
-            'windowTick': 'windows_tick',
             'clientOrderId': 'client_order_id',
-            'kDefault': 'k_default',
-            'aDefault': 'a_default',
         }
+        if raw_trade_pnl_df is None or len(raw_trade_pnl_df) == 0:
+            print(rf"WARNING: raw_trade_pnl_df on get_trade_df is empty -> return None")
+            return None
 
         trade_pnl_df = raw_trade_pnl_df.rename(columns=columns_rn)
         trade_pnl_df['time'] = pd.to_datetime(
@@ -257,11 +262,12 @@ class Algorithm:
         trade_pnl_df['open_returns'] = trade_pnl_df['open_returns'].replace(
             [np.inf, -np.inf], np.nan
         )
-        trade_pnl_df.fillna(method='ffill', inplace=True)
+        trade_pnl_df.ffill(inplace=True)
         before_len = len(trade_pnl_df)
         trade_pnl_df.dropna(axis=0, inplace=True)  # all the rest!
         if len(trade_pnl_df) == 0 and before_len > 0:
-            print(rf"WARNING!! trade pnl size =0 and before dropna {before_len}!!")
+            print(rf"WARNING: trade pnl size =0 and before dropna {before_len}!!")
+
         trade_pnl_df['sharpe'] = self.get_sharpe(
             trade_df=trade_pnl_df, column='returns'
         )
@@ -270,17 +276,17 @@ class Algorithm:
         return trade_pnl_df
 
     def plot_params_base(
-        self,
-        fig,
-        axs,
-        last_index_plotted,
-        color,
-        color_mean,
-        bid_color,
-        ask_color,
-        lw,
-        alpha,
-        raw_trade_pnl_df: pd.DataFrame,
+            self,
+            fig,
+            axs,
+            last_index_plotted,
+            color,
+            color_mean,
+            bid_color,
+            ask_color,
+            lw,
+            alpha,
+            raw_trade_pnl_df: pd.DataFrame,
     ):
         from matplotlib import dates
         import matplotlib.pyplot as plt
@@ -348,7 +354,7 @@ class Algorithm:
         return fig
 
     def plot_params(
-        self, raw_trade_pnl_df: pd.DataFrame, figsize=None, title: str = None
+            self, raw_trade_pnl_df: pd.DataFrame, figsize=None, title: str = None
     ):
         import seaborn as sns
 
@@ -367,7 +373,7 @@ class Algorithm:
             skew_change = True
             windows_change = True
 
-            if len(df['skew_pct'].fillna(0).diff().fillna(0).unique()) == 0:
+            if len(df['skew'].fillna(0).diff().fillna(0).unique()) == 0:
                 skew_change = False
 
             # if len(df['windows_tick'].fillna(0).diff().fillna(0).unique()) == 0:
@@ -398,15 +404,15 @@ class Algorithm:
             lw = 0.5
 
             ax = axs[index]
-            ax.plot(df['risk_aversion'], color=color, lw=lw, alpha=alpha)
+            ax.plot(df['riskAversion'], color=color, lw=lw, alpha=alpha)
             ax.plot(
-                df['risk_aversion'].rolling(window=window).mean(),
+                df['riskAversion'].rolling(window=window).mean(),
                 color=color_mean,
                 lw=lw - 0.1,
                 alpha=alpha,
             )
 
-            ax.set_ylabel('risk_aversion')
+            ax.set_ylabel('riskAversion')
             ax.grid(axis='y', ls='--', alpha=0.7)
 
             if title is not None:
@@ -415,22 +421,22 @@ class Algorithm:
             if windows_change:
                 index += 1
                 ax = axs[index]
-                ax.plot(df['windows_tick'], color=color, lw=lw, alpha=alpha)
+                ax.plot(df['midpricePeriodSeconds'], color=color, lw=lw, alpha=alpha)
                 ax.plot(
-                    df['windows_tick'].rolling(window=window).mean(),
+                    df['midpricePeriodSeconds'].rolling(window=window).mean(),
                     color=color_mean,
                     lw=lw - 0.1,
                     alpha=alpha,
                 )
 
-                ax.set_ylabel('windows_tick')
+                ax.set_ylabel('midpricePeriodSeconds')
                 ax.grid(axis='y', ls='--', alpha=0.7)
 
             if skew_change:
                 index += 1
                 ax = axs[index]
-                ax.plot(df['skew_pct'], color=color, lw=lw, alpha=alpha)
-                ax.set_ylabel('skew_pct')
+                ax.plot(df['skew'], color=color, lw=lw, alpha=alpha)
+                ax.set_ylabel('skew')
                 ax.grid(axis='y', ls='--', alpha=0.7)
 
             fig = self.plot_params_base(
@@ -445,18 +451,18 @@ class Algorithm:
                 alpha=alpha,
                 raw_trade_pnl_df=raw_trade_pnl_df,
             )
-            plt.show()
+            # plt.show()
             return fig
         except Exception as e:
             print('Some error plotting params %s' % e)
         return None
 
     def plot_trade_results(
-        self,
-        raw_trade_pnl_df: pd.DataFrame,
-        figsize=None,
-        title: str = None,
-        plot_open: bool = True,
+            self,
+            raw_trade_pnl_df: pd.DataFrame,
+            figsize=None,
+            title: str = None,
+            plot_open: bool = True,
     ) -> tuple:
         import warnings
         import matplotlib.pyplot as plt
@@ -638,9 +644,9 @@ class Algorithm:
             # ax = axs[index][index_col]
             column_sharpe = 'returns'
 
-            sharpe = self.get_sharpe(trade_df=trade_pnl_df, column='returns')
+            sharpe = trade_pnl_df['sharpe'].iloc[-1]
             realized_sharpe = self.get_sharpe(
-                trade_df=trade_pnl_df, column='close_returns'
+                trade_df=trade_pnl_df.reset_index(), column='close_returns'
             )
 
             if trade_pnl_df['sharpe'][:-1].sum() != 0:
@@ -700,7 +706,7 @@ class Algorithm:
         except Exception as e:
             print(rf"error plotting stats text box {e}")
 
-        plt.show()
+        # plt.show()  #this is going to create a new image!
 
         return (plt.gcf(), trade_pnl_df)
 
@@ -709,12 +715,12 @@ class Algorithm:
         return parameters
 
     def test(
-        self,
-        start_date: datetime.datetime,
-        end_date: datetime,
-        instrument_pk: str,
-        algorithm_number: int = 0,
-        clean_experience: bool = False,
+            self,
+            start_date: datetime.datetime,
+            end_date: datetime,
+            instrument_pk: str,
+            algorithm_number: int = 0,
+            clean_experience: bool = False,
     ) -> dict:
         backtest_configuration = BacktestConfiguration(
             start_date=start_date,
@@ -753,8 +759,10 @@ class Algorithm:
         output_dict = {}
         try:
             output_dict = backtest_controller.run()
-            output_dict[self.algorithm_info] = output_dict[algorithm_name]
-            del output_dict[algorithm_name]
+            if self.algorithm_info is not algorithm_name:
+                output_dict[self.algorithm_info] = output_dict[algorithm_name]
+                del output_dict[algorithm_name]
+
         except Exception as e:
             print(rf"error getting test -> return empty  {e}")
 

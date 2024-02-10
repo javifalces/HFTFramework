@@ -390,7 +390,7 @@ public class AutoWEKAClassifier extends AbstractClassifier implements Additional
 			}
 		}
 
-		final String javaExecutable = autoweka.Util.getJavaExecutable();
+		final String javaExecutable = Util.getJavaExecutable();
 
 		if (!(new File(javaExecutable)).isFile() && // Windows...
 				!(new File(javaExecutable + ".exe")).isFile()) {
@@ -408,13 +408,13 @@ public class AutoWEKAClassifier extends AbstractClassifier implements Additional
 					Process mProc = null;
 					try {
 						ProcessBuilder pb = new ProcessBuilder(javaExecutable, "-Xmx128m", "-cp",
-								autoweka.Util.getAbsoluteClasspath(), "autoweka.tools.ExperimentRunner",
+								Util.getAbsoluteClasspath(), "autoweka.tools.ExperimentRunner",
 								msExperimentPaths[index] + expName, "" + (seed + index));
 						pb.redirectErrorStream(true);
 
 						mProc = pb.start();
 
-						Thread killerHook = new autoweka.Util.ProcessKillerShutdownHook(mProc);
+						Thread killerHook = new Util.ProcessKillerShutdownHook(mProc);
 						Runtime.getRuntime().addShutdownHook(killerHook);
 
 						BufferedReader reader = new BufferedReader(new InputStreamReader(mProc.getInputStream()));

@@ -13,7 +13,7 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 
 	protected TreeMap<Double, Double> openBuys;
 	protected TreeMap<Double, Double> openSells;
-	protected TreeMap<Double, Double> openFees;
+	protected TreeMap<Double, Double> openFees;//price to fee
 
 	public PnlSnapshotOrders() {
 		super();
@@ -22,7 +22,7 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 		openFees = new TreeMap<>();
 	}
 
-	private double updateClosePosition(ExecutionReport executionReport, double leverage) {
+	private double updateClosePosition(ExecutionReport executionReport, double quantityMultiplier) {
 
 		double quantityWithDirection = executionReport.getLastQuantity();
 		TreeMap<Double, Double> priceMap = openSells;
@@ -49,10 +49,16 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 
 			double entryFee = feeMap.getOrDefault(initialPrice, 0.0);
 			double exitFee = lastFee;
+			if (exitFee < entryFee) {
+				//its a close with less qty?
+				double newEntryFee = Math.max(entryFee - exitFee, 0.0);
+				feeMap.put(initialPrice, newEntryFee);//update it for the next
+				entryFee = exitFee;
+			}
 			double totalFee = entryFee + exitFee;
 
 			double minPositionAbs = Math.min(Math.abs(qtyBuy), Math.abs(netPosition));
-			double realizedPnlTemp = (lastPrice - initialPrice) * minPositionAbs * sidePosition * leverage;
+			double realizedPnlTemp = (lastPrice - initialPrice) * minPositionAbs * sidePosition * quantityMultiplier;
 			//include fees!
 			realizedPnlTemp -= (totalFee);
 
@@ -168,9 +174,9 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 
 		realizedFees += lastFee;
 
-		double leverage = DEFAULT_LEVERAGE;
+		double quantityMultiplier = DEFAULT_QUANTITY_MULTIPLIER;
 		if (instrument != null) {
-			leverage = instrument.getLeverage();
+			quantityMultiplier = instrument.getQuantityMultiplier();
 		}
 
 		double quantityWithDirection = executionReport.getLastQuantity();
@@ -186,7 +192,7 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 		//			realizedPnl
 		if (isClosePosition || isChangeSide || partialClosePosition) {
 			//closed position
-			double remainQty = updateClosePosition(executionReport, leverage);
+			double remainQty = updateClosePosition(executionReport, quantityMultiplier);
 			netPosition = newPosition;
 //			lastQuantity = remainQty;
 			if (remainQty == 0) {
@@ -336,14 +342,14 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 			return;
 		}
 
-		double leverage = DEFAULT_LEVERAGE;
+		double quantityMultiplier = DEFAULT_QUANTITY_MULTIPLIER;
 		if (instrument != null) {
-			leverage = instrument.getLeverage();
+			quantityMultiplier = instrument.getQuantityMultiplier();
 		}
 
 		double lastPrice = depth.getMidPrice();
 		if (lastPrice != 0 && avgOpenPrice != 0 && Double.isFinite(lastPrice) && Double.isFinite(avgOpenPrice)) {
-			updateOpenPosition(depth, leverage);
+			updateOpenPosition(depth, quantityMultiplier);
 		}
 		totalPnl = unrealizedPnl + realizedPnl;
 		totalFees = realizedFees + unrealizedFees;

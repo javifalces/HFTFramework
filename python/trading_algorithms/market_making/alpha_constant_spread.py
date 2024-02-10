@@ -1,7 +1,8 @@
 import datetime
+import copy
 
-from trading_algorithms import dqn_algorithm
-from trading_algorithms.dqn_algorithm import DQNAlgorithm
+from trading_algorithms.market_making.constant_spread import ConstantSpreadParameters
+from trading_algorithms.reinforcement_learning import rl_algorithm
 
 from trading_algorithms.algorithm import Algorithm
 from trading_algorithms.algorithm_enum import AlgorithmEnum
@@ -11,62 +12,85 @@ from trading_algorithms.iterations_period_time import IterationsPeriodTime
 from backtest.parameter_tuning.ga_configuration import GAConfiguration
 from backtest.pnl_utils import get_score
 from trading_algorithms.market_making import constant_spread
+from trading_algorithms.reinforcement_learning.rl_algorithm import (
+    RLAlgorithm,
+    ReinforcementLearningActionType,
+    RlAlgorithmParameters,
+)
 from trading_algorithms.score_enum import ScoreEnum
-from configuration import BACKTEST_OUTPUT_PATH
+from configuration import LAMBDA_OUTPUT_PATH
+
+
+class AlphaConstantSpreadParameters:
+    level_action = "levelAction"
+    skew_level_action = "skewLevelAction"
+
 
 DEFAULT_PARAMETERS = {
     # Action
-    'levelAction': [1, 2, 3, 4, 5],
-    'skewLevelAction': [0, 1, -1],
+    AlphaConstantSpreadParameters.level_action: [1, 2, 3, 4, 5],
+    AlphaConstantSpreadParameters.skew_level_action: [0, 1, -1],
     # states
-    "minPrivateState": (-1),
-    "maxPrivateState": (-1),
-    "numberDecimalsPrivateState": (3),
-    "horizonTicksPrivateState": (5),
-    "minMarketState": (-1),
-    "maxMarketState": (-1),
-    "numberDecimalsMarketState": (7),
-    "horizonTicksMarketState": (10),
-    "minCandleState": (-1),
-    "maxCandleState": (-1),
-    "numberDecimalsCandleState": (3),
-    "horizonCandlesState": (2),
-    "horizonMinMsTick": (0),
+    RlAlgorithmParameters.min_private_state: (-1),
+    RlAlgorithmParameters.max_private_state: (-1),
+    RlAlgorithmParameters.number_decimals_private_state: (-1),
+    RlAlgorithmParameters.horizon_ticks_private_state: (5),
+    RlAlgorithmParameters.min_market_state: (-1),
+    RlAlgorithmParameters.max_market_state: (-1),
+    RlAlgorithmParameters.number_decimals_market_state: (-1),
+    RlAlgorithmParameters.horizon_ticks_market_state: (10),
+    RlAlgorithmParameters.min_candle_state: (-1),
+    RlAlgorithmParameters.max_candle_state: (-1),
+    RlAlgorithmParameters.number_decimals_candle_state: (-1),
+    RlAlgorithmParameters.state_candles_length: (5),
+    RlAlgorithmParameters.horizon_min_ms_tick: (0),
     # rewards
-    "scoreEnum": ScoreEnum.asymmetric_dampened_pnl,
-    "timeHorizonSeconds": (5),
+    RlAlgorithmParameters.score: ScoreEnum.asymmetric_dampened_pnl,
+    RlAlgorithmParameters.step_seconds: (5),
 }
-DEFAULT_PARAMETERS.update(dqn_algorithm.DEFAULT_PARAMETERS)
+DEFAULT_PARAMETERS.update(rl_algorithm.DEFAULT_PARAMETERS)
 DEFAULT_PARAMETERS.update(constant_spread.DEFAULT_PARAMETERS)
 
 
-class AlphaConstantSpread(DQNAlgorithm):
+class AlphaConstantSpread(RLAlgorithm):
     NAME = AlgorithmEnum.alpha_constant_spread
 
-    def __init__(self, algorithm_info: str, parameters: dict = DEFAULT_PARAMETERS):
+    def __init__(self, algorithm_info: str, parameters: dict = None):
+        if parameters is None:
+            parameters = copy.copy(DEFAULT_PARAMETERS)
+
         parameters = Algorithm.set_defaults_parameters(
             parameters=parameters, DEFAULT_PARAMETERS=DEFAULT_PARAMETERS
         )
 
-        super().__init__(algorithm_info=algorithm_info, parameters=parameters)
+        super().__init__(
+            algorithm_info=self.NAME + "_" + algorithm_info, parameters=parameters
+        )
         self.is_filtered_states = False
         if (
-            'stateColumnsFilter' in parameters.keys()
-            and parameters['stateColumnsFilter'] is not None
-            and len(parameters['stateColumnsFilter']) > 0
+                RlAlgorithmParameters.state_filter in parameters.keys()
+                and parameters[RlAlgorithmParameters.state_filter] is not None
+                and len(parameters[RlAlgorithmParameters.state_filter]) > 0
         ):
             self.is_filtered_states = True
 
     def _get_action_columns(self):
-        levels = self.parameters['levelAction']
-        skew_levels = self.parameters['skewLevelAction']
+        levels = self.parameters[AlphaConstantSpreadParameters.level_action]
+        skew_levels = self.parameters[AlphaConstantSpreadParameters.skew_level_action]
 
         actions = []
-        counter = 0
-        for level in levels:
-            for skew_level in skew_levels:
-                actions.append('action_%d_reward' % counter)
-                counter += 1
+        if (
+                self.reinforcement_learning_action_type
+                == ReinforcementLearningActionType.discrete
+        ):
+            counter = 0
+            for level in set(levels):
+                for skew_level in set(skew_levels):
+                    actions.append('action_%d_reward' % counter)
+                    counter += 1
+        else:
+            actions = [(min(levels), max(levels)), (min(skew_levels), max(skew_levels))]
+
         return actions
 
     def parameter_tuning(
@@ -140,15 +164,15 @@ class AlphaConstantSpread(DQNAlgorithm):
             lw = 0.5
 
             ax = axs[index]
-            ax.plot(df['level'], color=color, lw=lw, alpha=alpha)
+            ax.plot(df[ConstantSpreadParameters.level], color=color, lw=lw, alpha=alpha)
             ax.plot(
-                df['level'].rolling(window=window).mean(),
+                df[ConstantSpreadParameters.level].rolling(window=window).mean(),
                 color=color_mean,
                 lw=lw - 0.1,
                 alpha=alpha,
             )
 
-            ax.set_ylabel('level')
+            ax.set_ylabel(ConstantSpreadParameters.level)
             ax.grid(axis='y', ls='--', alpha=0.7)
 
             if title is not None:
@@ -157,8 +181,13 @@ class AlphaConstantSpread(DQNAlgorithm):
             if skew_change:
                 index += 1
                 ax = axs[index]
-                ax.plot(df['skewLevel'], color=color, lw=lw, alpha=alpha)
-                ax.set_ylabel('skewLevel')
+                ax.plot(
+                    df[ConstantSpreadParameters.skew_level],
+                    color=color,
+                    lw=lw,
+                    alpha=alpha,
+                )
+                ax.set_ylabel(ConstantSpreadParameters.skew_level)
                 ax.grid(axis='y', ls='--', alpha=0.7)
             fig = self.plot_params_base(
                 fig,
@@ -172,7 +201,7 @@ class AlphaConstantSpread(DQNAlgorithm):
                 alpha=alpha,
                 raw_trade_pnl_df=raw_trade_pnl_df,
             )
-            plt.show()
+            # plt.show()
             return fig
 
         except Exception as e:
@@ -220,7 +249,7 @@ if __name__ == '__main__':
 
     results = []
     scores = []
-    alpha_constant_spread.clean_model(output_path=BACKTEST_OUTPUT_PATH)
+    alpha_constant_spread.clean_model(output_path=LAMBDA_OUTPUT_PATH)
     iterations = 0
     explore_prob = 1.0
     while True:

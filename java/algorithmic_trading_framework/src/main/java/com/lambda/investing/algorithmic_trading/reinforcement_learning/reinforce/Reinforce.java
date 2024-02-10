@@ -11,7 +11,8 @@ import org.apache.commons.lang3.ArrayUtils;
 
 import java.util.*;
 
-import static com.lambda.investing.algorithmic_trading.reinforcement_learning.TrainNNUtils.*;
+import static com.lambda.investing.algorithmic_trading.reinforcement_learning.TrainNNUtils.getColumnsArray;
+import static com.lambda.investing.algorithmic_trading.reinforcement_learning.TrainNNUtils.getTargetClassification;
 import static java.lang.Math.log;
 
 public class Reinforce extends DeepQLearning {

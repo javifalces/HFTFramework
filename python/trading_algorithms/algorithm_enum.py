@@ -1,6 +1,5 @@
 class AlgorithmEnum:
     avellaneda_stoikov = "AvellanedaStoikov"
-    rl4j_alpha_avellaneda_stoikov = "RL4jAlphaAvellanedaStoikov"
     alpha_avellaneda_stoikov = "AlphaAvellanedaStoikov"
     alpha_constant_spread = "AlphaConstantSpread"
     constant_spread = "ConstantSpread"
@@ -8,10 +7,9 @@ class AlgorithmEnum:
 
 
 
-
 def get_algorithm(algorithm_enum: AlgorithmEnum):
-    from trading_algorithms.market_making.avellaneda_stoikov import AvellanedaStoikov
 
+    from trading_algorithms.market_making.avellaneda_stoikov import AvellanedaStoikov
     from trading_algorithms.market_making.constant_spread import ConstantSpread
     from trading_algorithms.market_making.linear_constant_spread import (
         LinearConstantSpread,
@@ -22,7 +20,6 @@ def get_algorithm(algorithm_enum: AlgorithmEnum):
     from trading_algorithms.market_making.alpha_constant_spread import (
         AlphaConstantSpread,
     )
-
     if algorithm_enum == AlgorithmEnum.avellaneda_stoikov:
         return AvellanedaStoikov
     if algorithm_enum == AlgorithmEnum.constant_spread:

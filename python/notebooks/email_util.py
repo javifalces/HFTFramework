@@ -1,7 +1,5 @@
 import os
 
-from configuration import logger
-
 
 def check_matplotlib_env():
     if (
@@ -22,8 +20,7 @@ def check_matplotlib_env():
 
 
 def find_logger_basefilename(logger):
-    """Finds the logger base filename(s) currently there is only one
-    """
+    """Finds the logger base filename(s) currently there is only one"""
     log_file = None
     parent = logger.__dict__["parent"]
     if parent.__class__.__name__ == "RootLogger":
@@ -38,32 +35,35 @@ def find_logger_basefilename(logger):
 
 
 class EmailConnector:
-
     # email_smtp_host = 'smtp.gmail.com'
     # email_smtp_port = 587
-    from configuration import logger
-
     def __init__(self):
         self.email_host = os.environ.get("EMAIL_HOST", default="smtp.gmail.com")
         self.email_port = os.environ.get("EMAIL_PORT", default="587")
         self.email_password = os.environ.get("EMAIL_PASSWORD", default=None)
         self.email = os.environ.get("EMAIL_FROM", default=None)
         if self.email_password is None:
-
-            logger.error('Set the EMAIL_PASSWORD env')
+            print('Set the EMAIL_PASSWORD env')
         if self.email is None:
-            logger.error('Set the EMAIL_FROM env')
+            print('Set the EMAIL_FROM env')
 
-    def send_email(self, recipient, subject, body, html=None, file_append=[], fromEmail=None, fromName=None):
+    def send_email(
+        self,
+        recipient,
+        subject,
+        body,
+        html=None,
+        file_append=[],
+        fromEmail=None,
+        fromName=None,
+    ):
         if self.email_password is None:
-            logger.error(
+            print(
                 "Email password  is None .set environment EMAIL_PASSWORD=> not sending email"
             )
             return
         if self.email is None:
-            logger.error(
-                "Email email  is None.set environment EMAIL_FROM=> not sending email"
-            )
+            print("Email email  is None.set environment EMAIL_FROM=> not sending email")
             return
 
         import smtplib
@@ -74,6 +74,7 @@ class EmailConnector:
         from email.mime.base import MIMEBase
         from email.mime.image import MIMEImage
         from email.mime.text import MIMEText
+
         if fromEmail is None:
             fromEmail = self.email
         try:
@@ -94,7 +95,7 @@ class EmailConnector:
             if file_append is not None and len(file_append) > 0:
                 for fileToSend in file_append:
                     if fileToSend is not None and os.path.isfile(fileToSend):
-                        logger.debug("adding file " + fileToSend)
+                        print("adding file " + fileToSend)
 
                         ctype, encoding = mimetypes.guess_type(fileToSend)
                         if ctype is None or encoding is not None:
@@ -140,18 +141,18 @@ class EmailConnector:
                     server.quit()
                     result = True
                 except Exception as e:
-                    logger.error(
+                    print(
                         "Error: unable to send email retry[%d] :%s" % (counter, str(e))
                     )
                     result = False
                     counter -= 1
                     os.sleep(5)
             if result:
-                logger.info("Successfully sent email")
+                print("Successfully sent email")
             else:
-                logger.error("Error: unable to send email")
+                print("Error: unable to send email")
 
         except:
-            logger.error("Error: unable to send email")
+            print("Error: unable to send email")
 
 

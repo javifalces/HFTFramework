@@ -174,7 +174,7 @@ public class Util {
 	}
 
 	static public String getAbsoluteClasspath() {
-		return System.getProperty("java.class.path") + java.io.File.pathSeparatorChar + URLDecoder
+		return System.getProperty("java.class.path") + File.pathSeparatorChar + URLDecoder
 				.decode(Util.class.getProtectionDomain().getCodeSource().getLocation().getPath());
 	}
 
@@ -228,7 +228,7 @@ public class Util {
 	public static String expandEnvironmentVariable(String var) {
 		if (System.getProperty("os.name").toLowerCase().indexOf("win") == 0) {
 			try {
-				String[] splitVar = var.split(java.io.File.pathSeparator);
+				String[] splitVar = var.split(File.pathSeparator);
 				String expanded = "";
 				for (int i = 0; i < splitVar.length; i++) {
 					Process shellExec = Runtime.getRuntime()
@@ -240,19 +240,19 @@ public class Util {
 					if (res != null) {
 						expanded += res;
 						if (i < splitVar.length - 1)
-							expanded += java.io.File.pathSeparator;
+							expanded += File.pathSeparator;
 					}
 				}
 
 				return expanded;
-			} catch (java.io.IOException ex) {
+			} catch (IOException ex) {
 				// Crap....
 				log.warn("Failed to evaluate environment variable contents {}", var);
 			}
 		} else //We're probably on a posix system....
 		{
 			try {
-				String[] splitVar = var.split(java.io.File.pathSeparator);
+				String[] splitVar = var.split(File.pathSeparator);
 				String expanded = "";
 				for (int i = 0; i < splitVar.length; i++) {
 					String v = splitVar[i];
@@ -266,12 +266,12 @@ public class Util {
 					if (res != null) {
 						expanded += res;
 						if (i < splitVar.length - 1)
-							expanded += java.io.File.pathSeparator;
+							expanded += File.pathSeparator;
 					}
 				}
 
 				return expanded;
-			} catch (java.io.IOException ex) {
+			} catch (IOException ex) {
 				// Crap....
 				log.warn("Failed to evaluate environment variable contents {} - probably due to a lack of unix...",
 						var);
@@ -303,7 +303,7 @@ public class Util {
 				if (expandedPath != null) {
 					exp = expandedPath;
 				}
-			} catch (java.io.IOException ex) {
+			} catch (IOException ex) {
 				// Just consider it unexpandable and return original path.
 				log.warn("Failed to expand path {}", path, ex);
 			}
@@ -325,7 +325,7 @@ public class Util {
 				if (expandedPath != null) {
 					path = expandedPath;
 				}
-			} catch (java.io.IOException ex) {
+			} catch (IOException ex) {
 				// Just consider it unexpandable and return original path.
 				log.warn("Failed to expand path {}", path, ex);
 			}

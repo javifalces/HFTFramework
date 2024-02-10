@@ -3,6 +3,7 @@ package com.lambda.investing.backtest;
 import com.lambda.investing.algorithmic_trading.AlgorithmCreationUtils;
 import com.lambda.investing.algorithmic_trading.AlgorithmUtils;
 import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
+import com.lambda.investing.algorithmic_trading.factor_investing.AbstractFactorInvestingAlgorithm;
 import com.lambda.investing.backtest_engine.BacktestConfiguration;
 import com.lambda.investing.model.asset.Instrument;
 import lombok.Getter;
@@ -13,7 +14,11 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.*;
 
-@Setter @ToString
+import static com.lambda.investing.backtest.App.GSON;
+import static com.lambda.investing.backtest_engine.BacktestConfiguration.dateFormatTime;
+
+@Setter
+@ToString
 /***
  * EXAMPLE
  *{
@@ -40,105 +45,144 @@ import java.util.*;
  * }
  *
  *
- */ public class InputConfiguration {
+ */
+@Getter
+public class InputConfiguration implements Cloneable {
 
-	protected static Logger logger = LogManager.getLogger(InputConfiguration.class);
+    protected static Logger logger = LogManager.getLogger(InputConfiguration.class);
 
-	private static int COUNTER_ALGORITHMS = -1;
+    private static int COUNTER_ALGORITHMS = -1;
 
-	private Backtest backtest;
-	private Algorithm algorithm;
+    public Backtest backtest;
 
-	public InputConfiguration() {
-	}
+    @Getter
+    private Algorithm algorithm;
 
-	public BacktestConfiguration getBacktestConfiguration() throws Exception {
-		return backtest.getBacktestConfiguration(algorithm.getAlgorithm());
-	}
+    public InputConfiguration() {
+    }
 
-	@Getter @Setter private class Backtest {
+    public BacktestConfiguration getBacktestConfiguration() throws Exception {
+        return backtest.getBacktestConfiguration(algorithm.getAlgorithm());
+    }
 
-		private String startDate;//20201208
-		private String endDate;//20201210
-		private long delayOrderMs;//65
-		private boolean feesCommissionsIncluded = true;
-		private long seed = 0;
-		private String instrument;
-		private String multithreadConfiguration = null;
+    @Getter
+    @Setter
+    public class Backtest {
+        private String startDate;//20201208
+        private String endDate;//20201210
+        private long delayOrderMs;//65
+        private boolean feesCommissionsIncluded = true;
+        private long seed = 0;
+        private String instrument;
+        private String multithreadConfiguration = null;
+        private int initialSleepSeconds = 3;
 
-		public Backtest() {
-		}
+        public Backtest() {
+        }
 
-		public BacktestConfiguration getBacktestConfiguration(
-				com.lambda.investing.algorithmic_trading.Algorithm algorithm) throws Exception {
-			Instrument instrumentObject = Instrument.getInstrument(instrument);
-			if (instrumentObject == null) {
-				throw new Exception("InstrumentPK " + instrument + " not found");
-			}
-			if (algorithm instanceof SingleInstrumentAlgorithm) {
-				((SingleInstrumentAlgorithm) algorithm).setInstrument(instrumentObject);
-			}
-			List<Instrument> instrumentList = new ArrayList<>();
-			instrumentList.add(instrumentObject);
+        private List<Instrument> getInstrumentList(com.lambda.investing.algorithmic_trading.Algorithm algorithm) throws Exception {
 
-			//add the rest of instruments in case needed
-			Set<Instrument> algoInstrumentSet = algorithm.getInstruments();
-			for (Instrument instrument : algoInstrumentSet) {
-				if (!instrumentList.contains(instrument)) {
-					instrumentList.add(instrument);
-				}
-			}
+            Instrument instrumentObject = Instrument.getInstrument(instrument);
+            if (instrumentObject == null) {
+                throw new Exception("InstrumentPK " + instrument + " not found");
+            }
+            if (algorithm instanceof SingleInstrumentAlgorithm) {
+                ((SingleInstrumentAlgorithm) algorithm).setInstrument(instrumentObject);
+            }
 
-			//ad hedge manager rest of insturments
-			if (algorithm.getHedgeManager() != null) {
-				//adding
-				Set<Instrument> instrumentSet = algorithm.getHedgeManager().getInstrumentsHedgeList();
-				Set<Instrument> instrumentSetSource = new HashSet<>(instrumentList);
-				instrumentSetSource.addAll(instrumentSet);
-				instrumentList = new ArrayList<>(instrumentSetSource);
-				if (instrumentSet.size() > 0) {
-					logger.info("adding {} HedgeManager instruments to backtestConfiguration -> {}",
-							instrumentSet.size(), instrumentList.size());
-				}
-			}
-			algorithm.setPlotStopHistorical(false);
-			BacktestConfiguration backtestConfiguration = new BacktestConfiguration();
-			backtestConfiguration.setAlgorithm(algorithm);
-			backtestConfiguration.setStartTime(startDate);
-			backtestConfiguration.setEndTime(endDate);
-			backtestConfiguration.setDelayOrderMs(delayOrderMs);
-			backtestConfiguration.setFeesCommissionsIncluded(feesCommissionsIncluded);
-			if (seed != 0) {
-				backtestConfiguration.setSeed(seed);
-			}
-			backtestConfiguration.setInstruments(instrumentList);
-			if (multithreadConfiguration != null) {
-				backtestConfiguration.setMultithreadConfiguration(multithreadConfiguration);
-			}
-			backtestConfiguration.setBacktestSource("parquet");
-			backtestConfiguration.setSpeed(-1);
-			backtestConfiguration.setBacktestExternalConnection("ordinary");
+            List<Instrument> instrumentList = new ArrayList<>();
+            instrumentList.add(instrumentObject);
 
-			return backtestConfiguration;
-		}
-	}
+            //add the rest of instruments in case needed
+            Set<Instrument> algoInstrumentSet = algorithm.getInstruments();
 
-	@Getter @Setter private class Algorithm {
+            //factor investing only requires instruments from model! instrument from backtestConfiguration is ignored
+            if (algorithm instanceof AbstractFactorInvestingAlgorithm) {
+                instrumentList.clear();
+            }
 
-		private String algorithmName;
-		private Map<String, Object> parameters;
 
-		/**
-		 * Must return the same as in algorithm_enum.py
-		 *
-		 * @return
-		 */
-		public com.lambda.investing.algorithmic_trading.Algorithm getAlgorithm() {
+            for (Instrument instrument : algoInstrumentSet) {
+                if (!instrumentList.contains(instrument)) {
+                    instrumentList.add(instrument);
+                }
+            }
+
+            //ad hedge manager rest of insturments
+            if (algorithm.getHedgeManager() != null) {
+                //adding
+                Set<Instrument> instrumentSet = algorithm.getHedgeManager().getInstrumentsHedgeList();
+                Set<Instrument> instrumentSetSource = new HashSet<>(instrumentList);
+                instrumentSetSource.addAll(instrumentSet);
+                instrumentList = new ArrayList<>(instrumentSetSource);
+                if (instrumentSet.size() > 0) {
+                    logger.info("adding {} HedgeManager instruments to backtestConfiguration -> {}",
+                            instrumentSet.size(), instrumentList.size());
+                }
+            }
+            return instrumentList;
+        }
+
+
+        public BacktestConfiguration getBacktestConfiguration(
+                com.lambda.investing.algorithmic_trading.Algorithm algorithm) throws Exception {
+            List<Instrument> instrumentList = getInstrumentList(algorithm);
+
+            algorithm.setPlotStopHistorical(false);
+            BacktestConfiguration backtestConfiguration = new BacktestConfiguration();
+            backtestConfiguration.setAlgorithm(algorithm);
+            dateFormatTime.setTimeZone(TimeZone.getTimeZone("GMT"));
+
+            backtestConfiguration.setStartTime(startDate);
+            backtestConfiguration.setEndTime(endDate);
+            backtestConfiguration.setDelayOrderMs(delayOrderMs);
+            backtestConfiguration.setInitialSleepSeconds(initialSleepSeconds);
+
+            backtestConfiguration.setFeesCommissionsIncluded(feesCommissionsIncluded);
+            if (seed != 0) {
+                backtestConfiguration.setSeed(seed);
+            }
+            backtestConfiguration.setInstruments(instrumentList);
+            if (multithreadConfiguration != null) {
+                backtestConfiguration.setMultithreadConfiguration(multithreadConfiguration);
+            }
+            backtestConfiguration.setBacktestSource("parquet");
+            backtestConfiguration.setSpeed(-1);
+            backtestConfiguration.setBacktestExternalConnection("ordinary");
+
+            return backtestConfiguration;
+        }
+    }
+
+    @Getter
+    @Setter
+    private class Algorithm {
+
+        private String algorithmName;
+        private Map<String, Object> parameters;
+
+        /**
+         * Must return the same as in algorithm_enum.py
+         *
+         * @return
+         */
+        public com.lambda.investing.algorithmic_trading.Algorithm getAlgorithm() {
             return AlgorithmCreationUtils.getAlgorithm(null, algorithmName, AlgorithmUtils.getParameters(parameters));
-		}
+        }
 
-		public Algorithm() {
-		}
-	}
+        public Algorithm() {
+        }
+    }
 
+    public Object clone() throws CloneNotSupportedException {
+        InputConfiguration output = new InputConfiguration();
+        output.setBacktest(this.backtest);
+        output.setAlgorithm(this.algorithm);
+        return output;
+    }
+
+    @Override
+    public String toString() {
+        return GSON.toJson(this);
+    }
 }

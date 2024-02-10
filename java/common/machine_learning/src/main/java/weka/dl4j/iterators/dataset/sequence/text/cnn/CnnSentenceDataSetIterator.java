@@ -72,7 +72,7 @@ public class CnnSentenceDataSetIterator extends org.deeplearning4j.iterator.CnnS
 	 *
 	 * @param builder Builder
 	 */
-	protected CnnSentenceDataSetIterator(CnnSentenceDataSetIterator.Builder builder) {
+	protected CnnSentenceDataSetIterator(Builder builder) {
 		super(builder);
 		this.stopwords = builder.stopwords;
 		setUnknownWordHandling(UnknownWordHandling.UseUnknownVector);

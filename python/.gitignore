@@ -19,8 +19,11 @@ venv
 *.c
 *.html
 *.ipynb_checkpoints
-backtest/application.properties
+trading_algorithms/application.properties
 
-!test/data/*.csv
-!test/factor_investing/data/**/*.txt
-!test/factor_investing/data/**/*.csv
+!test/data/**/*.csv
+!test/data/**/*.parquet
+!test/data/**/*.txt
+
+test/data/ddbb/factor_investing/*_factor_publisher/**/*
+/test/data/ddbb/factor_investing/fama_french_factors_*.csv

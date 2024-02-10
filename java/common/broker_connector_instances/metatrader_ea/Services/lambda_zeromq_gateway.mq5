@@ -68,6 +68,7 @@ input bool Publish_Tick_MarketData=false;//Publish Tick
 input bool Publish_Depth_MarketData=true;//Publish Depth
 input bool Publish_Trades=true;// Publish Trades
 input bool Hedge_to_net = true;//Hedge to net account
+input bool Close_Hedged_Positions=true;// close trades if are in reversed side
 
 input bool Verbose_market_data=false;
 input bool Verbose=true;
@@ -75,7 +76,7 @@ input bool Verbose=true;
 int maxDepthLevels=10;
 //string Publish_Symbols[]= {"EURUSD"};
 //string Publish_Symbols[9]= {"EURGBP","EURUSD","EURAUD","EURNZD","EURJPY","EURCHF","EURCAD","XAUUSD","XAGUSD"};
-string Publish_Symbols[]= {"EURUSD","GBPUSD","EURGBP","EURJPY","EURCHF","EURCAD","EURAUD","CADCHF","USDJPY","USDCAD","AUDUSD","GBPJPY","AUDJPY","USDCHF"};
+string Publish_Symbols[]= {"EURUSD","EURGBP","EURJPY","EURNZD","EURCHF","EURAUD","EURCAD","EURAUD"};
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -154,6 +155,10 @@ void OnStart()
       if(Publish_Trades)
         {
          CollectAndPublishTrades();
+        }
+      if(Close_Hedged_Positions)
+        {
+         ClosedHedgedPositions();
         }
 
       // Code section used to get and respond to commands
@@ -418,7 +423,6 @@ void CollectAndPublishTrades(void)
      }
   }
 
-
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -631,7 +635,7 @@ void InterpretZmqMessage(Socket &pSocket,string &compArray[])
             zmq_ret="{";
             ticket=DWX_PositionOpen(compArray[2],(int)StringToInteger(compArray[1]),StringToDouble(compArray[7]),
                                     StringToDouble(compArray[3]),(int)StringToInteger(compArray[4]),(int)StringToInteger(compArray[5]),
-                                    compArray[6],lambdaMagicNumber,zmq_ret);
+                                    compArray[6],lambdaMagicNumber,zmq_ret,pSocket);
             InformPullClient(pSocket,zmq_ret+"}");
             break;
 
@@ -645,7 +649,8 @@ void InterpretZmqMessage(Socket &pSocket,string &compArray[])
          case POS_CLOSE:
 
             zmq_ret="{";
-            DWX_PositionClose_Ticket((int)StringToInteger(compArray[9]),zmq_ret);
+            DWX_PositionsClose_All(zmq_ret);
+            //DWX_PositionClose_Ticket((int)StringToInteger(compArray[9]),zmq_ret);
             InformPullClient(pSocket,zmq_ret+"}");
 
             break;
@@ -912,7 +917,7 @@ void InformPullClient(Socket &pSocket,string message)
 //+------------------------------------------------------------------+
 //|  OPEN NEW POSITION                                               |
 //+------------------------------------------------------------------+
-int DWX_PositionOpen(string _symbol,int _type,double _lots,double _price,double _SL,double _TP,string _comment,string _magic,string &zmq_ret)
+int DWX_PositionOpen(string _symbol,int _type,double _lots,double _price,double _SL,double _TP,string _comment,string _magic,string &zmq_ret,Socket &pSocket)
   {
    int ticket,error;
 
@@ -940,14 +945,13 @@ int DWX_PositionOpen(string _symbol,int _type,double _lots,double _price,double 
    double sl = 0.0;
    double tp = 0.0;
 
+
    double symbol_bid=SymbolInfoDouble(valid_symbol,SYMBOL_BID);
    double symbol_ask=SymbolInfoDouble(valid_symbol,SYMBOL_ASK);
-
+   double overrideLotsOriginal=0.0;
    if(Hedge_to_net && PositionSelect(valid_symbol))
      {
-      double currentPositionSymbol = PositionGetDouble(POSITION_VOLUME);
-      long positionType = PositionGetInteger(POSITION_TYPE);
-      if(positionType==POSITION_TYPE_SELL){currentPositionSymbol=-1*currentPositionSymbol;}
+      double currentPositionSymbol = GetOpenPositionSymbol(valid_symbol);
 
       bool isBuyToClose = (ENUM_ORDER_TYPE)_type==ORDER_TYPE_BUY && currentPositionSymbol<0;
       bool isSellToClose = (ENUM_ORDER_TYPE)_type==ORDER_TYPE_SELL && currentPositionSymbol>0;
@@ -956,21 +960,66 @@ int DWX_PositionOpen(string _symbol,int _type,double _lots,double _price,double 
          if(MathAbs(_lots)<=MathAbs(currentPositionSymbol))
            {
             //Close partial position
-            Print("Hedge_to_net Partial Close sell DWX_CloseAtMarket position:" + DoubleToString(currentPositionSymbol,2)+" close:"+ DoubleToString(_lots,2));
-            return DWX_CloseAtMarket(_lots,zmq_ret);
-           }
+            bool closeAllPosition = MathAbs(_lots) == MathAbs(currentPositionSymbol);
+            if(closeAllPosition)
+              {
+               Print("Hedge_to_net Complete DWX_PositionsSymbolClose_All "+valid_symbol+" position:" + DoubleToString(currentPositionSymbol,2)+" close:"+ DoubleToString(_lots,2));
+               zmq_ret="{";
+               //zmq_ret+=", '_magic': "+_magic;
 
-         if(MathAbs(_lots)>MathAbs(currentPositionSymbol))
+               DWX_PositionsSymbolClose_All(valid_symbol,zmq_ret);
+               //bool output= DWX_CloseAtMarket(_lots,zmq_ret);
+               return true;
+              }
+            Print("Hedge_to_net partial DWX_PositionClosePartial "+valid_symbol+" position:" + DoubleToString(currentPositionSymbol,2)+" close:"+ DoubleToString(_lots,2));
+            string originalZmq_ret=zmq_ret;
+            if(DWX_PositionClosePartial(_lots,zmq_ret))
+              {
+               return true;
+              }
+            else
+              {
+               double positionOut = GetOpenPositionSymbol(valid_symbol);
+               double changePosition = MathAbs(currentPositionSymbol-positionOut);
+               double rest_lots = _lots-changePosition;
+               if(rest_lots>0)
+                 {
+                  printf("Hedge_to_net Failed DWX_PositionClosePartial "+valid_symbol+" position:" + DoubleToString(positionOut,2)+" changePosition:" + DoubleToString(changePosition,2)+" continue opening new trade of _lots "+ DoubleToString(rest_lots,2));
+
+                  InformPullClient(pSocket,zmq_ret+"}");//notify new trade that close some positions and continue opening more silently
+                  bool output=true;
+                  overrideLotsOriginal=_lots;//this is what we are going to notify
+                  _lots=rest_lots;//this is the rest we are going to close silently
+                  zmq_ret=originalZmq_ret;
+
+                 }
+               else
+                 {
+                  printf("Hedge_to_net Failed DWX_PositionClosePartial "+valid_symbol+" position:" + DoubleToString(positionOut,2)+" but resulted _lots "+ DoubleToString(_lots,2)+" is <= 0.0");
+                  return false;
+                 }
+              }
+           }
+         else
            {
-            //Close partial position
-            Print("Hedge_to_net Close all sell DWX_PositionClosePartial and continue position:" + DoubleToString(currentPositionSymbol,2)+" close:"+ DoubleToString(_lots,2));
-            string zmq_ret_bis = zmq_ret;
-            DWX_CloseAtMarket(_lots,zmq_ret_bis);
-            _lots = _lots-MathAbs(currentPositionSymbol);
+            double lots_to_continue=_lots-MathAbs(currentPositionSymbol);
+            Print("Hedge_to_net Complete DWX_PositionsSymbolClose_All "+valid_symbol+" position:" + DoubleToString(currentPositionSymbol,2)+" close:"+ DoubleToString(_lots,2)+" and continue with the rest _lots "+DoubleToString(lots_to_continue,2));
+
+            string originalZmq_ret=zmq_ret;
+            zmq_ret="{";
+            DWX_PositionsSymbolClose_All(valid_symbol,zmq_ret);
+            InformPullClient(pSocket,zmq_ret+"}");//notify close all the rest is not going to be notified!!
+
+            bool output=true;
+            overrideLotsOriginal=_lots;//this is what we are going to notify
+            _lots = lots_to_continue;//this is the rest we are going to close silently
+            zmq_ret=originalZmq_ret;
+
            }
 
         }
      }
+
 
 
 
@@ -999,6 +1048,17 @@ int DWX_PositionOpen(string _symbol,int _type,double _lots,double _price,double 
       return(-1*error);
      }
 
+   if(overrideLotsOriginal!=0.0)
+     {
+      string lots_original="'_lots': "+DoubleToString(_lots,2);
+      string lots_replace="'_lots': "+DoubleToString(overrideLotsOriginal,2);
+      Print("Hedge_to_net "+valid_symbol+" replace lots_original "+lots_original+" with lots_replace "+lots_replace);
+      int replaced=StringReplace(zmq_ret,lots_original,lots_replace);
+     }
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
    uint ret_code=tradeHelper.ResultRetcode();
    if(ret_code==TRADE_RETCODE_DONE)
      {
@@ -1037,6 +1097,9 @@ int DWX_PositionOpen(string _symbol,int _type,double _lots,double _price,double 
       return(-1*(int)ret_code);
      }
 
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
    return(ticket);
   }
 //+------------------------------------------------------------------+
@@ -1289,6 +1352,12 @@ bool DWX_PositionClosePartial(double size,string &zmq_ret,int ticket=0)
      {
       error=(int)tradeHelper.ResultRetcode();
       zmq_ret+=", "+"'_response': '"+IntegerToString(error)+"', 'response_value': '"+GetErrorDescription(error)+"'";
+      if(error==10009)
+        {
+         //its okey but not found the price/size
+         printf("retcode 10009 on PositionClosePartial return as close_ret "+IntegerToString(close_ret));
+         return close_ret;
+        }
       return(close_ret);
      }
    uint ret_code=tradeHelper.ResultRetcode();
@@ -1307,12 +1376,14 @@ bool DWX_PositionClosePartial(double size,string &zmq_ret,int ticket=0)
            }
          else
            {
-            zmq_ret+=", "+"'_response': 'Position partially closed, but corresponding deal cannot be selected'";
+            zmq_ret+=", "+"'_response': 'Position partially closed 1, but corresponding deal cannot be selected "+DoubleToString(deal_id)+"'";
+            close_ret=false;
            }
         }
       else
         {
-         zmq_ret+=", "+"'_response': 'Position partially closed, but corresponding deal cannot be selected'";
+         zmq_ret+=", "+"'_response': 'Position partially closed 2, but corresponding deal cannot be selected "+DoubleToString(deal_id)+"'";
+         close_ret=false;
         }
      }
    else
@@ -1491,6 +1562,52 @@ void DWX_PositionsClose_All(string &zmq_ret)
      }
   }
 //+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void DWX_PositionsSymbolClose_All(string symbol,string &zmq_ret)
+  {
+     {
+      bool found=false;
+      zmq_ret+="'_action': 'CLOSE_ALL'";
+      zmq_ret+=", '_comment':'"+symbol+"'";
+      zmq_ret+=", '_responses': {";
+
+
+      for(int i=PositionsTotal()-1; i>=0; i--)
+        {
+         if(PositionGetTicket(i)>0)
+           {
+            string symbolIter = PositionGetString(POSITION_SYMBOL);
+            if(symbol==symbolIter)
+              {
+               found=true;
+
+               zmq_ret+=IntegerToString(PositionGetInteger(POSITION_TICKET))+": {'_symbol':'"+PositionGetString(POSITION_SYMBOL)
+                        +"', '_magic': "+IntegerToString(PositionGetInteger(POSITION_MAGIC));
+
+               DWX_CloseAtMarket(-1,zmq_ret);
+               zmq_ret+=", '_response': 'CLOSE_MARKET'";
+
+
+               zmq_ret+="}, ";
+              }
+           }
+        }
+
+      zmq_ret=StringSubstr(zmq_ret,0,StringLen(zmq_ret)-2);//remove last comma
+      zmq_ret+="}";
+
+      if(found==false)
+        {
+         zmq_ret+=", '_response': 'NOT_FOUND'";
+        }
+      else
+        {
+         zmq_ret+=", '_response_value': 'SUCCESS'";
+        }
+     }
+  }
+//+------------------------------------------------------------------+
 //|  GET LIST OF WORKING POSITIONS                                   |
 //+------------------------------------------------------------------+
 void DWX_GetOpenPositions(string &zmq_ret)
@@ -1523,6 +1640,58 @@ void DWX_GetOpenPositions(string &zmq_ret)
      }
    zmq_ret+="}";
   }
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+double GetOpenPositionSymbol(string symbol)
+  {
+   double position=0.0;
+   for(int i=PositionsTotal()-1; i>=0; i--)
+     {
+      if(PositionGetTicket(i)>0)
+        {
+         if(PositionGetString(POSITION_SYMBOL)==symbol)
+           {
+            double currPosition = PositionGetDouble(POSITION_VOLUME);
+            long positionType = PositionGetInteger(POSITION_TYPE);
+            if(positionType==POSITION_TYPE_SELL)
+              {
+               currPosition = -1*currPosition;
+              }
+            position+=currPosition;
+
+
+
+           }
+
+        }
+
+     }
+   return position;
+
+  }
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+int GetTradesSymbol(string symbol)
+  {
+   int counter=0;
+   for(int i=PositionsTotal()-1; i>=0; i--)
+     {
+      if(PositionGetTicket(i)>0)
+        {
+         if(PositionGetString(POSITION_SYMBOL)==symbol)
+           {
+            counter++;
+           }
+        }
+     }
+   return counter;
+
+  }
+
 //+------------------------------------------------------------------+
 //|  GET LIST OF PENDING ORDERS                                      |
 //+------------------------------------------------------------------+
@@ -1597,5 +1766,83 @@ void Add_Error_Description(uint error_code,string &out_string)
   {
 // Use 'GetErrorDescription' function already imported from https://github.com/dingmaotu/mql-zmq
    out_string+=", "+"'_response': '"+IntegerToString(error_code)+"', 'response_value': '"+GetErrorDescription(error_code)+"'";
+  }
+//+------------------------------------------------------------------+
+
+//+------------------------------------------------------------------+
+
+//+------------------------------------------------------------------+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void ClosedHedgedPositions(void)
+  {
+   int     total=PositionsTotal();
+   for(int i=0; i<total; i++)
+     {
+      if(PositionGetTicket(i)<=0)
+        {
+         continue;
+        }
+      string symbol = PositionGetString(POSITION_SYMBOL);
+      double actPosition = GetOpenPositionSymbol(symbol);
+      int numberOrders=GetTradesSymbol(symbol);
+      if(actPosition==0.0)
+        {
+         printf("ClosedHedgedPositions detected for "+symbol +" with no position and "+IntegerToString(numberOrders)+" orders");
+         string zmq_ret="{";
+         DWX_PositionsSymbolClose_All(symbol,zmq_ret);
+        }
+     }
+
+   CloseHedgedPositionsIndividual();
+  }
+
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void CloseHedgedPositionsIndividual(void)
+  {
+//search matching orders
+   int numberOrders=PositionsTotal();
+   for(int j=0; j<numberOrders; j++)
+     {
+      if(PositionGetTicket(j)<=0)
+        {
+         continue;
+        }
+
+      double size1 = PositionGetDouble(POSITION_VOLUME);
+      long ticket1 = PositionGetInteger(POSITION_TICKET);
+      string symbol1 = PositionGetString(POSITION_SYMBOL);
+      ENUM_POSITION_TYPE type1=(ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+      for(int k=0; k<numberOrders; k++)
+        {
+         if(j==k)
+           {
+            continue;
+           }
+         if(PositionGetTicket(k)<=0)
+           {
+            continue;
+           }
+
+         double size2 = PositionGetDouble(POSITION_VOLUME);
+         long ticket2 = PositionGetInteger(POSITION_TICKET);
+         string symbol2 = PositionGetString(POSITION_SYMBOL);
+
+         ENUM_POSITION_TYPE type2=(ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+         if(size1==size2 && symbol2==symbol1 && type1!=type2)
+           {
+            printf("ClosedHedgedPositions detected for "+symbol1 +" with two opossite positions  "+IntegerToString(ticket1)+" and "+IntegerToString(ticket2));
+            bool ret1=tradeHelper.PositionClose(ticket1);
+            bool ret2=tradeHelper.PositionClose(ticket2);
+
+           }
+
+        }
+     }
+
   }
 //+------------------------------------------------------------------+

@@ -3,17 +3,19 @@ from concurrent.futures._base import Executor, wait, FIRST_COMPLETED, ALL_COMPLE
 
 from pathos.pools import ProcessPool as ProcessPool  # multiprocess backend
 
-# from pathos.pools import ThreadPool as ProcessPool  # multiprocess backend
+from pathos.pools import ThreadPool as ThreadPool  # multiprocess backend
 from pathos.parallel import ParallelPool, stats
 from pathos.parallel import ParallelPythonPool as ParallelPool
 
 import numpy as np
+
 
 def get_os():
     import platform
 
     system = platform.system().lower()
     return system
+
 
 def process_jobs_(jobs):
     # Run jobs sequentially, for debugging
@@ -22,8 +24,6 @@ def process_jobs_(jobs):
         out_ = expand_call(job)
         out.append(out_)
     return out
-
-
 
 
 def join_df(df0, dataframe_input):
@@ -38,12 +38,14 @@ def join_df(df0, dataframe_input):
         df0[i_clean.columns] = dataframe_input[i_clean.columns]
     return df0
 
+
 def expand_call(kargs):
     # Expand the arguments of a callback function, kargs['func']
     func = kargs["func"]
     del kargs["func"]
     out = func(**kargs)
     return out
+
 
 def linear_parts(num_atoms, num_threads):
     # partition of atoms with a single loop
@@ -68,30 +70,40 @@ def nested_parts(num_atoms, num_threads, upper_triang=False):
     return parts
 
 
-def process_jobs_joblib(jobs, task=None, num_threads=24):
-    from joblib import Parallel, delayed
+def process_jobs_joblib(jobs, task=None, num_threads=24, prefer='threads'):
+    '''
+    prefer: str in {'processes', 'threads'} or None, default: None
+    '''
+    if num_threads == 1:
+        out = process_jobs_(jobs)
+    else:
+        from joblib import Parallel, delayed
 
-    # joblib
-    # outputs = Parallel(n_jobs=numThreads, prefer="threads")(delayed(expandCall)(i) for i in jobs)
-    outputs = Parallel(n_jobs=num_threads, prefer="threads")(
-        delayed(expand_call)(i) for i in jobs
-    )
-    out = [x for x in outputs if x is not None]
+        # joblib
+        # outputs = Parallel(n_jobs=numThreads, prefer="threads")(delayed(expandCall)(i) for i in jobs)
+        outputs = Parallel(n_jobs=num_threads, prefer=prefer)(
+            delayed(expand_call)(i) for i in jobs
+        )
+        out = [x for x in outputs if x is not None]
     return out
 
 
-def process_jobs_pathos(jobs, task=None, num_threads=24, pool_class=ProcessPool):
-    # Run in parallel.
-    # jobs must contain a 'func' callback, for expandCall
-    if task is None:
-        task = jobs[0]["func"].__name__
-    # pathos
-    pool = pool_class(processes=num_threads, maxtasksperchild=1000)
-    return _process_job(pool, jobs)
+def process_jobs_pathos(jobs, task=None, num_threads=24, pool_class=ThreadPool):
+    if num_threads == 1:
+        out = process_jobs_(jobs)
+        return out
+    else:
+        # Run in parallel.
+        # jobs must contain a 'func' callback, for expandCall
+        if task is None:
+            task = jobs[0]["func"].__name__
+        # pathos
+        pool = pool_class(processes=num_threads, maxtasksperchild=1000)
+        return _process_job(pool, jobs)
 
 
 def _process_job(pool_instance, jobs):
-    # logger.debug("process job in pool: %s" % pool_instance)
+    # print("process job in pool: %s" % pool_instance)
     if isinstance(pool_instance, ParallelPool):
         outputs = pool_instance.map(expand_call, jobs)
     else:

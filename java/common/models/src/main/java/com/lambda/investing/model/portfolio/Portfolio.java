@@ -16,9 +16,7 @@ import java.io.IOException;
 import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 @Getter @Setter public class Portfolio implements Runnable {
@@ -28,7 +26,8 @@ import java.util.Map;
 			.excludeFieldsWithModifiers(Modifier.STATIC, Modifier.TRANSIENT, Modifier.VOLATILE, Modifier.FINAL)
 			.serializeSpecialFloatingPointValues().create();
 	public static String REQUESTED_PORTFOLIO_INFO = "portfolio";
-	protected static Logger logger = LogManager.getLogger(Portfolio.class);
+    public static String REQUESTED_POSITION_INFO = "position";
+    protected static Logger logger = LogManager.getLogger(Portfolio.class);
 	private Map<String, PortfolioInstrument> portfolioInstruments;
 	private String path;
 	//	private double openPnl=0.;

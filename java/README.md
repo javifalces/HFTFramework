@@ -1,2 +1,0 @@
-# HFTFramework java execution
-

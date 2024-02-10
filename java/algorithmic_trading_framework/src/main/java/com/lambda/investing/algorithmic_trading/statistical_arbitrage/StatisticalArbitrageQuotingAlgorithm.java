@@ -29,7 +29,7 @@ public class StatisticalArbitrageQuotingAlgorithm extends StatisticalArbitrageAl
 	protected double zscoreExitBuyAggressive, zscoreExitSellAggressive;
 
 	public StatisticalArbitrageQuotingAlgorithm(AlgorithmConnectorConfiguration algorithmConnectorConfiguration,
-			String algorithmInfo, Map<String, Object> parameters) {
+												String algorithmInfo, Map<String, Object> parameters) {
 		super(algorithmConnectorConfiguration, algorithmInfo, parameters);
 	}
 
@@ -113,7 +113,7 @@ public class StatisticalArbitrageQuotingAlgorithm extends StatisticalArbitrageAl
 
 		boolean buyEntryNotFilled = currentStatus == Status.quoting && this.lastVerbQuoted != null && isMinTimeQuoting
 				&& this.lastVerbQuoted
-						.equals(Verb.Buy) && zscore > zscoreEntryBuy && currentPosition == 0;
+				.equals(Verb.Buy) && zscore > zscoreEntryBuy && currentPosition == 0;
 		if (buyEntryNotFilled) {
 			//entry buy not hit
 			logger.info("unquote buy side because no arbitrage condition with zscore {}", zscore);
@@ -132,7 +132,7 @@ public class StatisticalArbitrageQuotingAlgorithm extends StatisticalArbitrageAl
 		}
 		boolean sellEntryNotFilled = currentStatus == Status.quoting && this.lastVerbQuoted != null && isMinTimeQuoting
 				&& this.lastVerbQuoted
-						.equals(Verb.Sell) && zscore < zscoreEntrySell && currentPosition == 0;
+				.equals(Verb.Sell) && zscore < zscoreEntrySell && currentPosition == 0;
 		if (sellEntryNotFilled) {
 			//entry sell not hit
 			logger.info("unquote sell side because no arbitrage condition with zscore {}", zscore);
@@ -190,11 +190,10 @@ public class StatisticalArbitrageQuotingAlgorithm extends StatisticalArbitrageAl
 		}
 
 
-
 	}
 
 	protected void tradeSpread(Instrument instrument, Verb verb, double quantity, boolean isEntry,
-			boolean isAggressive) {
+							   boolean isAggressive) {
 		if (isAggressive) {
 			lastVerbQuoted = null;
 			this.currentStatus = Status.init;
@@ -362,11 +361,8 @@ public class StatisticalArbitrageQuotingAlgorithm extends StatisticalArbitrageAl
 					unquote = false;
 				}
 
-				try {
-					Thread.sleep(1);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
+				Thread.onSpinWait();//to not occupy the cpu
+//					Thread.sleep(1);
 			}
 		}
 	}

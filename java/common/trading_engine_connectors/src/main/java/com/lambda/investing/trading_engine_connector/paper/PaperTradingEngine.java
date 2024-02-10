@@ -5,6 +5,7 @@ import com.lambda.investing.Configuration;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorProvider;
 import com.lambda.investing.connector.zero_mq.ZeroMqProvider;
+import com.lambda.investing.market_data_connector.AbstractMarketDataConnectorPublisher;
 import com.lambda.investing.market_data_connector.AbstractMarketDataProvider;
 import com.lambda.investing.market_data_connector.MarketDataConnectorPublisher;
 import com.lambda.investing.market_data_connector.MarketDataProvider;
@@ -14,29 +15,30 @@ import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.messaging.Command;
 import com.lambda.investing.model.portfolio.Portfolio;
 import com.lambda.investing.model.trading.ExecutionReport;
+import com.lambda.investing.model.trading.ExecutionReportStatus;
 import com.lambda.investing.model.trading.OrderRequest;
 import com.lambda.investing.trading_engine_connector.AbstractPaperExecutionReportConnectorPublisher;
+import com.lambda.investing.trading_engine_connector.ExecutionReportListener;
 import com.lambda.investing.trading_engine_connector.TradingEngineConnector;
+import com.lambda.investing.trading_engine_connector.ordinary.OrdinaryTradingEngine;
 import com.lambda.investing.trading_engine_connector.paper.latency.FixedLatencyEngine;
 import com.lambda.investing.trading_engine_connector.paper.latency.LatencyEngine;
 import com.lambda.investing.trading_engine_connector.paper.latency.PoissonLatencyEngine;
 import com.lambda.investing.trading_engine_connector.paper.market.OrderMatchEngine;
 import com.lambda.investing.trading_engine_connector.paper.market.Orderbook;
 import com.lambda.investing.trading_engine_connector.paper.market.OrderbookManager;
+import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-
 import java.io.File;
-import java.sql.Time;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.*;
+import java.util.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import static com.lambda.investing.Configuration.DELAY_ORDER_BACKTEST_MS;
-import static com.lambda.investing.Configuration.logger;
 import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_PORTFOLIO_INFO;
 import static com.lambda.investing.trading_engine_connector.ZeroMqTradingEngineConnector.ALL_ALGORITHMS_SUBSCRIPTION;
 import static com.lambda.investing.trading_engine_connector.ZeroMqTradingEngineConnector.GSON;
@@ -52,7 +54,7 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
     private Logger logger = LogManager.getLogger(PaperTradingEngine.class);
 
     private MarketDataProvider marketDataProvider;
-    private MarketMakerMarketDataExecutionReportListener marketMakerMarketDataExecutionReportListener;
+    private MarketMakerMarketBacktestDataAlgorithm marketMakerMarketBacktestDataAlgorithm;
     private ConnectorProvider orderRequestConnectorProvider;
     private ConnectorConfiguration orderRequestConnectorConfiguration;
 
@@ -63,7 +65,7 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
     private Map<String, OrderbookManager> orderbookManagerMap;
     MarketDataProviderIn marketDataProviderIn;
 
-    Map<String, Portfolio> porfolioMap;
+    Map<String, Portfolio> portfolioMap;
 
     protected LatencyEngine orderRequestLatencyEngine = new FixedLatencyEngine(
             DELAY_ORDER_BACKTEST_MS);// //change to more ms on OrdinaryBacktest
@@ -71,6 +73,7 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
     protected LatencyEngine executionReportLatencyEngine = new FixedLatencyEngine(0);
 
     private boolean isBacktest = false;
+    private boolean rejectAllOrders = false;
 
     public List<Instrument> getInstrumentsList() {
         return instrumentsList;
@@ -88,19 +91,24 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
         this.executionReportLatencyEngine = executionReportLatencyEngine;
     }
 
+    @Override
+    public boolean isBusy() {
+        return getTradingEngineConnector().isBusy() || marketDataProviderIn.isBusy();
+    }
+
     public PaperTradingEngine(TradingEngineConnector tradingEngineConnector, MarketDataProvider marketDataProvider,
                               ConnectorProvider orderRequestConnectorProvider,
                               ConnectorConfiguration orderRequestConnectorConfiguration) {
         super(tradingEngineConnector);
         this.marketDataProvider = marketDataProvider;
-        this.marketMakerMarketDataExecutionReportListener = new MarketMakerMarketDataExecutionReportListener(this);
+        this.marketMakerMarketBacktestDataAlgorithm = new MarketMakerMarketBacktestDataAlgorithm(this);
         this.orderRequestConnectorProvider = orderRequestConnectorProvider;
         this.orderRequestConnectorConfiguration = orderRequestConnectorConfiguration;
 
         //portfolio file not on the broker side
 
         //listen on this side
-        porfolioMap = new ConcurrentHashMap<>();
+        portfolioMap = new HashMap<>();
 
         this.paperConnectorOrderRequestListener = new PaperConnectorOrderRequestListener(this,
                 this.orderRequestConnectorProvider, this.orderRequestConnectorConfiguration);
@@ -133,15 +141,17 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
         isBacktest = backtest;
     }
 
-    public MarketMakerMarketDataExecutionReportListener getMarketMakerMarketDataExecutionReportListener() {
-        return marketMakerMarketDataExecutionReportListener;
+    public MarketMakerMarketBacktestDataAlgorithm getMarketMakerMarketDataExecutionReportListener() {
+        return marketMakerMarketBacktestDataAlgorithm;
     }
 
     public void init() {
         //subscribe to data
         this.paperConnectorOrderRequestListener.start();
-        this.marketDataProvider.register(this.marketMakerMarketDataExecutionReportListener);
-        this.register(ALL_ALGORITHMS_SUBSCRIPTION, this.marketMakerMarketDataExecutionReportListener);
+        this.marketDataProvider.register(this.marketMakerMarketBacktestDataAlgorithm);
+
+        this.marketDataProviderIn.registerExecutionReport(marketMakerMarketBacktestDataAlgorithm);
+        this.register(ALL_ALGORITHMS_SUBSCRIPTION, this.marketMakerMarketBacktestDataAlgorithm);
         this.orderRequestConnectorProvider
                 .register(this.orderRequestConnectorConfiguration, this.paperConnectorOrderRequestListener);
 
@@ -157,13 +167,14 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
             orderRequestConnectorProviderZero.start(false, false);//subscribed to all topics on that port
         }
 
+
     }
 
     public void setInstrumentsList(List<Instrument> instrumentsList) {
         this.instrumentsList = instrumentsList;
         //
         logger.info("creating {} orderbooks", instrumentsList.size());
-        orderbookManagerMap = new ConcurrentHashMap<>();
+        orderbookManagerMap = new HashMap<>(instrumentsList.size());
         for (Instrument instrument : instrumentsList) {
             Orderbook orderbook = new Orderbook(instrument.getPriceTick());
 
@@ -179,6 +190,7 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
             }
             orderbookManagerMap.put(instrument.getPrimaryKey(), orderbookManager);
         }
+        Configuration.BACKTEST_BUSY_THREADPOOL_TRESHOLD *= instrumentsList.size();//multiply this
 
     }
 
@@ -205,6 +217,11 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
     public void notifyCommand(Command command) {
         String topic = "command";
         logger.debug("Notifying command -> \n{}", command.getMessage());
+
+        if (command.getMessage().equalsIgnoreCase(Command.ClassMessage.finishedBacktest.name())) {
+            logger.info("Backtest finished -> reject all orders");
+            rejectAllOrders = true;
+        }
 
         this.marketDataProviderIn.notifyCommand(command);
     }
@@ -252,18 +269,27 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
 
     }
 
+    private void pauseBacktest() {
+        AbstractMarketDataConnectorPublisher.setPauseTradingEngine(true);
+    }
+
+    private void resumeBacktest() {
+        AbstractMarketDataConnectorPublisher.setPauseTradingEngine(false);
+    }
+
     public void notifyExecutionReport(ExecutionReport executionReport) {
         logger.debug("Notifying execution report -> \n{}", executionReport.toString());
         this.marketDataProviderIn.notifyExecutionReport(executionReport);
+        resumeBacktest();//pause backtest to avoid long md processing on our mock backtest
         Portfolio portfolio = null;
-        if (porfolioMap.containsKey(executionReport.getAlgorithmInfo())) {
-            portfolio = porfolioMap.get(executionReport.getAlgorithmInfo());
+        if (portfolioMap.containsKey(executionReport.getAlgorithmInfo())) {
+            portfolio = portfolioMap.get(executionReport.getAlgorithmInfo());
         } else {
             portfolio = Portfolio
                     .getPortfolio(String.format(FORMAT_PORTFOLIO, executionReport.getAlgorithmInfo()), isBacktest);
         }
         portfolio.updateTrade(executionReport);
-        porfolioMap.put(executionReport.getAlgorithmInfo(), portfolio);
+        portfolioMap.put(executionReport.getAlgorithmInfo(), portfolio);
 
     }
 
@@ -278,10 +304,30 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
             logger.error("trying to send orderRequest on {} not found in manager", orderRequest.getInstrument());
             return false;
         }
+
+        if (rejectAllOrders) {
+            logger.info("Rejecting orderRequest due to rejectAllOrders {}", orderRequest);
+            orderbookManager.notifyExecutionReportReject(orderRequest, "PaperTradingEngine rejectAllOrders");
+            return true;
+        }
+
         orderRequestLatencyEngine.delay(orderRequestLatencyEngine.getCurrentTime());
-        orderRequest.setTimestampCreation(
-                orderRequestLatencyEngine.getCurrentTime().getTime());//update OrderRequestTime if required
-        return orderbookManager.orderRequest(orderRequest);
+
+        boolean output = false;
+        try {
+            pauseBacktest();//pause backtest to avoid long md processing on our mock backtest
+
+            orderRequest.setTimestampCreation(
+                    orderRequestLatencyEngine.getCurrentTime().getTime());//update OrderRequestTime if required
+
+
+            output = orderbookManager.orderRequest(orderRequest);
+
+        } catch (Exception e) {
+            logger.error("Error on orderRequest {}", orderRequest, e);
+        }
+
+        return output;
     }
 
     @Override
@@ -289,10 +335,10 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
         if (info.endsWith(REQUESTED_PORTFOLIO_INFO)) {
             //return portfolio on execution Report
             String algorithmInfo = info.split("[.]")[0];
-            Portfolio portfolio = porfolioMap.getOrDefault(algorithmInfo,
+            Portfolio portfolio = portfolioMap.getOrDefault(algorithmInfo,
                     Portfolio.getPortfolio(String.format(FORMAT_PORTFOLIO, algorithmInfo), isBacktest));
 
-            porfolioMap.put(algorithmInfo, portfolio);
+            portfolioMap.put(algorithmInfo, portfolio);
             this.marketDataProviderIn.notifyInfo(info, GSON.toJson(portfolio));
         }
     }
@@ -307,6 +353,7 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
         orderRequestLatencyEngine.reset();
         marketDataLatencyEngine.reset();
         executionReportLatencyEngine.reset();
+        rejectAllOrders = false;
     }
 
     public void fillOrderbook(Depth depth) {
@@ -343,6 +390,12 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
                 .setNameFormat("MarketDataProviderIn-ExecutionReport-%d").build();
         ThreadPoolExecutor marketDataPool, executionReportPool;
         boolean killMarketDataPool = false, killExecutionReportPool = false;
+        protected Map<ExecutionReportListener, String> executionReportListenersManager;//for backtesting
+
+        protected Queue<String> lastActiveClOrdId;
+        protected Queue<String> lastCfClOrdId;
+        protected Queue<String> lastRejClOrdId;
+
 
         public MarketDataProviderIn(LatencyEngine executionReportLatencyEngine, LatencyEngine marketDataLatencyEngine,
                                     int threadsPublishingMd, int threadsPublishingER) {
@@ -352,10 +405,23 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
             this.threadsPublishingER = threadsPublishingER;
             this.threadsPublishingMd = threadsPublishingMd;
 
+            executionReportListenersManager = new HashMap<>();
+
+            lastActiveClOrdId = EvictingQueue.create(QUEUE_FINAL_STATES_SIZE);
+            lastCfClOrdId = EvictingQueue.create(QUEUE_FINAL_STATES_SIZE);
+            lastRejClOrdId = EvictingQueue.create(QUEUE_FINAL_STATES_SIZE);
+
             initExecutionReportPool();
             initMarketDataPool();
 
         }
+
+        public boolean isBusy() {
+            boolean marketPoolBusy = marketDataPool != null && marketDataPool.getQueue().size() > Configuration.BACKTEST_BUSY_THREADPOOL_TRESHOLD;
+            boolean executionReportBusy = executionReportPool != null && executionReportPool.getQueue().size() > Configuration.BACKTEST_BUSY_THREADPOOL_TRESHOLD;
+            return marketPoolBusy || executionReportBusy;
+        }
+
 
         private void initMarketDataPool() {
             if (this.threadsPublishingMd > 0) {
@@ -376,6 +442,10 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
                 executionReportPool = (ThreadPoolExecutor) Executors
                         .newCachedThreadPool(namedThreadFactoryExecutionReport);
             }
+        }
+
+        public void registerExecutionReport(ExecutionReportListener listener) {
+            executionReportListenersManager.put(listener, "");
         }
 
         @Override
@@ -410,20 +480,60 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
 
         }
 
-        @Override
+
+        protected boolean checkER(ExecutionReport executionReport) {
+            /// void double notifications
+            Queue<String> checkList = lastActiveClOrdId;
+            if (executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Active)) {
+                checkList = lastActiveClOrdId;
+            } else if (executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled)) {
+                checkList = lastCfClOrdId;
+            } else if (executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Rejected) || executionReport
+                    .getExecutionReportStatus().equals(ExecutionReportStatus.CancelRejected)) {
+                checkList = lastRejClOrdId;
+            } else {
+                //partials filled dont check it
+                return true;
+            }
+
+            if (checkList.size() > QUEUE_FINAL_STATES_SIZE * 2) {
+                logger.warn("something is wrong on checkER queues!!! {} >{} return as valid", checkList.size(),
+                        QUEUE_FINAL_STATES_SIZE);
+                return true;
+            }
+
+            if (checkList.contains(executionReport.getClientOrderId())) {
+                //already processed
+                return false;
+            } else {
+                checkList.offer(executionReport.getClientOrderId());
+                return true;
+            }
+
+        }
+
         public void notifyExecutionReport(ExecutionReport executionReport) {
+//            if(checkER(executionReport)) {
+            TradingEngineConnector tradingEngineConnector = getTradingEngineConnector();
             if (threadsPublishingER == 0) {
-                super.notifyExecutionReport(executionReport);
+                if (tradingEngineConnector instanceof OrdinaryTradingEngine) {
+                    OrdinaryTradingEngine ordinaryTradingEngine = (OrdinaryTradingEngine) tradingEngineConnector;
+                    ordinaryTradingEngine.notifyExecutionReport(executionReport);
+                }
+
             } else {
                 executionReportPool.submit(() -> {
                     if (killExecutionReportPool) {
                         return;
                     }
                     marketDataLatencyEngine.delay(new Date(executionReport.getTimestampCreation()));
-                    super.notifyExecutionReport(executionReport);
+                    if (tradingEngineConnector instanceof OrdinaryTradingEngine) {
+                        OrdinaryTradingEngine ordinaryTradingEngine = (OrdinaryTradingEngine) tradingEngineConnector;
+                        ordinaryTradingEngine.notifyExecutionReport(executionReport);
+                    }
                 });
             }
-
+//            }
         }
 
         protected void updateLatencyEngineTime(Date date, long timestamp, long nextUpdateMs) {
@@ -464,9 +574,14 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
                     initMarketDataPool();
                 }
             }
+
+            orderRequestLatencyEngine.setTime(new Date());//trick to unblock it
+
             marketDataLatencyEngine.reset();
             executionReportLatencyEngine.reset();
-
+            marketDataProvider.reset();//reset the market data provider sequence numbers
+            getTradingEngineConnector().reset();
+            orderRequestLatencyEngine.reset();
             super.reset();
         }
     }

@@ -13,7 +13,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
-import static com.lambda.investing.data_manager.csv.CSVUtils.PATH_TO_INSTRUMENT;
+import static com.lambda.investing.data_manager.FileDataUtils.PATH_TO_INSTRUMENT;
 
 @Getter @Setter public class ParquetFileConfiguration {
 
@@ -31,7 +31,7 @@ import static com.lambda.investing.data_manager.csv.CSVUtils.PATH_TO_INSTRUMENT;
 	private List<String> tradeFiles;
 
 	public ParquetFileConfiguration(List<Instrument> instruments, int speed, long initialSleepSeconds, Date startTime,
-			Date endTime) {
+									Date endTime) {
 		this.instruments = instruments;
 
 		this.speed = speed;
@@ -42,7 +42,7 @@ import static com.lambda.investing.data_manager.csv.CSVUtils.PATH_TO_INSTRUMENT;
 	}
 
 	public ParquetFileConfiguration(Instrument instrument, int speed, long initialSleepSeconds, Date startTime,
-			Date endTime) {
+									Date endTime) {
 		this.instruments = new ArrayList<>();
 		instruments.add(instrument);
 		this.speed = speed;
@@ -53,7 +53,7 @@ import static com.lambda.investing.data_manager.csv.CSVUtils.PATH_TO_INSTRUMENT;
 	}
 
 	public ParquetFileConfiguration(Instrument instrument, int speed, long initialSleepSeconds, String startTime,
-			String endTime) throws ParseException {
+									String endTime) throws ParseException {
 		this.instruments = new ArrayList<>();
 		instruments.add(instrument);
 

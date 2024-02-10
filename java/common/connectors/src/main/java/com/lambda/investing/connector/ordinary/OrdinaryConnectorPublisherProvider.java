@@ -1,7 +1,10 @@
 package com.lambda.investing.connector.ordinary;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.lambda.investing.connector.*;
+import com.lambda.investing.connector.ConnectorConfiguration;
+import com.lambda.investing.connector.ConnectorListener;
+import com.lambda.investing.connector.ConnectorProvider;
+import com.lambda.investing.connector.ConnectorPublisher;
 import com.lambda.investing.model.messaging.TypeMessage;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.logging.log4j.LogManager;
@@ -10,7 +13,10 @@ import org.apache.logging.log4j.Logger;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class OrdinaryConnectorPublisherProvider implements ConnectorPublisher, ConnectorProvider {
@@ -27,65 +33,54 @@ public class OrdinaryConnectorPublisherProvider implements ConnectorPublisher, C
 	private Integer priority = null;
 
 
-	private int threads;
+	private int publishThreads;
 	private String name;
 
 	private Map<TypeMessage, ThreadPoolExecutor> typeOfMessageToThreads = new HashMap<>();
 
 	/**
-	 * @param name    name of the threadpool
-	 * @param threads number of threads that publish to register ConnectorListeners
+	 * @param name            name of the threadpool
+	 * @param publishThreads  number of publishThreads that publish to register ConnectorListeners <1 is going to cached
+	 * @param publishPriority publishPriority of the thread pool
 	 */
-	public OrdinaryConnectorPublisherProvider(String name, int threads) {
-		listenerManager = new ConcurrentHashMap<>();
-		counterMessagesSent = new ConcurrentHashMap<>();
-		counterMessagesNotSent = new ConcurrentHashMap<>();
+	public OrdinaryConnectorPublisherProvider(String name, int publishThreads, Integer publishPriority) {
+		listenerManager = new HashMap<>();
+		counterMessagesSent = new HashMap<>();
+		counterMessagesNotSent = new HashMap<>();
 
 		//thread pool name
 		this.name = name;
-		this.threads = threads;
-
-		ThreadFactoryBuilder threadFactoryBuilder = new ThreadFactoryBuilder();
-		threadFactoryBuilder.setNameFormat(this.name + " -%d").build();
-		threadFactoryBuilder.setPriority(Thread.NORM_PRIORITY);
-		namedThreadFactory = threadFactoryBuilder.build();
-		if (this.threads < 0) {
-			//infinite
-			senderPool = (ThreadPoolExecutor) Executors.newCachedThreadPool(namedThreadFactory);
-		}
-		if (this.threads > 0) {
-			senderPool = (ThreadPoolExecutor) Executors.newFixedThreadPool(this.threads, namedThreadFactory);
-		}
+		initSenderPool(publishThreads, publishPriority);
 	}
 
-	public OrdinaryConnectorPublisherProvider(String name, int threads, Integer priority) {
-		listenerManager = new ConcurrentHashMap<>();
-		counterMessagesSent = new ConcurrentHashMap<>();
-		counterMessagesNotSent = new ConcurrentHashMap<>();
-
-		//thread pool name
-		this.name = name;
-		this.threads = threads;
-
+	protected void initSenderPool(int publishThreads, Integer priority) {
+		//TODO change it to maintain order by instrument
+		this.publishThreads = publishThreads;
 		ThreadFactoryBuilder threadFactoryBuilder = new ThreadFactoryBuilder();
 		threadFactoryBuilder.setNameFormat(this.name + " -%d").build();
 		threadFactoryBuilder.setPriority(priority);
 		namedThreadFactory = threadFactoryBuilder.build();
-		if (this.threads < 0) {
+		if (this.publishThreads < 0) {
 			//infinite
 			senderPool = (ThreadPoolExecutor) Executors.newCachedThreadPool(namedThreadFactory);
 		}
-		if (this.threads > 0) {
-			senderPool = (ThreadPoolExecutor) Executors.newFixedThreadPool(this.threads, namedThreadFactory);
+		if (this.publishThreads > 0) {
+			senderPool = (ThreadPoolExecutor) Executors.newFixedThreadPool(this.publishThreads, namedThreadFactory);
 		}
 
 	}
 
+	/**
+	 * Can route  to a different ThreadPoolExecutor depending of TypeMessage
+	 *
+	 * @param typeOfMessageToThreads map with routing table
+	 */
 	public void setRoutingPool(Map<TypeMessage, ThreadPoolExecutor> typeOfMessageToThreads) {
 		this.typeOfMessageToThreads = typeOfMessageToThreads;
 	}
 
-	@Override public void register(ConnectorConfiguration configuration, ConnectorListener listener) {
+	@Override
+	public void register(ConnectorConfiguration configuration, ConnectorListener listener) {
 		Map<ConnectorListener, String> listeners = listenerManager
 				.getOrDefault(configuration, new ConcurrentHashMap<>());
 		listeners.put(listener, "");
@@ -101,7 +96,7 @@ public class OrdinaryConnectorPublisherProvider implements ConnectorPublisher, C
 	}
 
 	private void _notify(ConnectorConfiguration connectorConfiguration, TypeMessage typeMessage, String topic,
-			String message, Set<ConnectorListener> listenerList) {
+						 String message, Set<ConnectorListener> listenerList) {
 		boolean output = true;
 		try {
 			for (ConnectorListener listener : listenerList) {
@@ -132,18 +127,14 @@ public class OrdinaryConnectorPublisherProvider implements ConnectorPublisher, C
 	}
 
 	@Override public boolean publish(ConnectorConfiguration connectorConfiguration, TypeMessage typeMessage,
-			String topic, String message) {
+									 String topic, String message) {
 		Map<ConnectorListener, String> listeners = listenerManager
-				.getOrDefault(connectorConfiguration, new ConcurrentHashMap<>());
+				.getOrDefault(connectorConfiguration, new HashMap<>());
 
-		ThreadPoolExecutor threadPoolExecutor = typeOfMessageToThreads.get(typeMessage);
-
-		if (threadPoolExecutor == null && threads == 0) {
+		ThreadPoolExecutor threadPoolExecutor = typeOfMessageToThreads.getOrDefault(typeMessage, this.senderPool);
+		if (threadPoolExecutor == null || publishThreads == 0) {
 			_notify(connectorConfiguration, typeMessage, topic, message, listeners.keySet());
 		} else {
-			if (threadPoolExecutor == null) {
-				threadPoolExecutor = this.senderPool;
-			}
 			threadPoolExecutor.submit(() -> {
 				_notify(connectorConfiguration, typeMessage, topic, message, listeners.keySet());
 			});

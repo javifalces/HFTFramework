@@ -24,15 +24,16 @@ class GAParameterTuning:
     INCREASE_POPULATION = True
 
     def __init__(
-        self,
-        ga_configuration: GAConfiguration,
-        algorithm: AlgorithmEnum,
-        parameters_base: dict,
-        parameters_min: dict,
-        parameters_max: dict,
-        max_simultaneous: int,
-        initial_param_dict_list: list = [],
+            self,
+            ga_configuration: GAConfiguration,
+            algorithm: AlgorithmEnum,
+            parameters_base: dict,
+            parameters_min: dict,
+            parameters_max: dict,
+            max_simultaneous: int,
+            initial_param_dict_list: list = [],
     ):
+
         self.counter_algorithms = 0
         self.max_simultaneous = max_simultaneous
         self.initial_param_dict_list = initial_param_dict_list
@@ -46,7 +47,7 @@ class GAParameterTuning:
         self.ignored_dict = {}
         for parameter in self.parameters_base.keys():
             if not isinstance(self.parameters_base[parameter], int) and not isinstance(
-                self.parameters_base[parameter], float
+                    self.parameters_base[parameter], float
             ):
                 self.ignored_keys.append(parameter)
         ignored_keys_str = ','.join(self.ignored_keys)
@@ -81,7 +82,7 @@ class GAParameterTuning:
         )
 
     def _random_param_dict(
-        self, current_eval_ser=None, sigma_eval: float = None
+            self, current_eval_ser=None, sigma_eval: float = None
     ) -> dict:
         # randomizer between min and max
 
@@ -111,7 +112,7 @@ class GAParameterTuning:
         return output_dict
 
     def _create_random_population(
-        self, population_size: int, sigma_eval: float
+            self, population_size: int, sigma_eval: float
     ) -> dict:
         output = {}
         id = 0
@@ -212,27 +213,26 @@ class GAParameterTuning:
         return output
 
     def _generate_initial_population(self, check_unique_population: bool) -> list:
-        from configuration import logger
 
         param_dicts = []
         initialized_with_precreated_population = (
-            self.generation == 0 and len(self.initial_param_dict_list) > 0
+                self.generation == 0 and len(self.initial_param_dict_list) > 0
         )
         if initialized_with_precreated_population:
-            logger.info('loading initial population')
+            print('loading initial population')
             param_dicts = [param_dict for param_dict in self.initial_param_dict_list]
             while len(param_dicts) < self.ga_configuration.population:
                 random_param = self._random_param_dict()
                 if random_param in param_dicts:
                     continue
-                logger.info('adding more random param dict to initial population')
+                print('adding more random param dict to initial population')
                 param_dicts.append(self._random_param_dict())
 
             while len(param_dicts) > self.ga_configuration.population:
-                logger.info('removing last param dicts until reach population')
+                print('removing last param dicts until reach population')
                 param_dicts.remove(param_dicts[-1])
         else:
-            logger.info(
+            print(
                 'generate all %d population randomly' % self.ga_configuration.population
             )
             max_retries = self.ga_configuration.population * 4
@@ -242,9 +242,7 @@ class GAParameterTuning:
                 if sigma_eval == 0:
                     sigma_eval = self.sigma
                 if retries > max_retries:
-                    logger.error(
-                        'cant fill all population different!! -> less population'
-                    )
+                    print('cant fill all population different!! -> less population')
                     break
 
                 param_dict = self._random_param_dict(sigma_eval=sigma_eval)
@@ -266,7 +264,6 @@ class GAParameterTuning:
         return param_dicts
 
     def _generate_next_gen(self, check_unique_population: bool) -> list:
-        from configuration import logger
 
         param_dicts = []  # new offpsring params
         if not self.INCREASE_POPULATION:
@@ -292,11 +289,11 @@ class GAParameterTuning:
 
             number = random.random()  # if number<crossover_prob=> crossover
             if retries > max_retries:
-                logger.error('cant fill all population different!! -> less population')
+                print('cant fill all population different!! -> less population')
                 break
             is_crossover = (
-                number < self.ga_configuration.crossover_prob
-                and len(self.population_df) > 1
+                    number < self.ga_configuration.crossover_prob
+                    and len(self.population_df) > 1
             )
             # CROSSOVER
             if is_crossover:
@@ -340,12 +337,12 @@ class GAParameterTuning:
         return param_dicts
 
     def run_generation(
-        self,
-        backtest_configuration: BacktestConfiguration,
-        check_unique_population: bool = True,
+            self,
+            backtest_configuration: BacktestConfiguration,
+            check_unique_population: bool = True,
     ) -> list:
         is_empty_population = (
-            len(self.population_df) == 0 or self.population_df['score'].sum() == 0
+                len(self.population_df) == 0 or self.population_df['score'].sum() == 0
         )
         if is_empty_population:
             param_dicts = self._generate_initial_population(check_unique_population)
@@ -362,7 +359,7 @@ class GAParameterTuning:
         )
 
     def _run_backtests(
-        self, backtest_configuration: BacktestConfiguration, param_dicts: list
+            self, backtest_configuration: BacktestConfiguration, param_dicts: list
     ):
 
         algorithms = []
@@ -373,13 +370,13 @@ class GAParameterTuning:
             algorithm_class = get_algorithm(self.algorithm)
             if algorithm_class is None:
                 print(
-                    "WARNING!! need to add algorithm to backtest.algorithm_enum.get_algorithm() "
+                    "WARNING: need to add algorithm to backtest.algorithm_enum.get_algorithm() "
                 )
                 print(
-                    "WARNING!! need to add algorithm to backtest.algorithm_enum.get_algorithm() "
+                    "WARNING: need to add algorithm to backtest.algorithm_enum.get_algorithm() "
                 )
                 print(
-                    "WARNING!! need to add algorithm to backtest.algorithm_enum.get_algorithm() "
+                    "WARNING: need to add algorithm to backtest.algorithm_enum.get_algorithm() "
                 )
             # restore the base params cant be optimized
             parameters = copy.copy(self.parameters_base_final)
@@ -436,9 +433,21 @@ class GAParameterTuning:
                 sortino = -999
                 dd = 999
             else:
-                equity_curve = output_dict[algorithm_info][
+                backtest_df = output_dict[algorithm_info]
+                backtest_df = get_backtest_df_date_indexed(backtest_df=backtest_df)
+
+                equity_curve = backtest_df[
                     get_score_enum_csv_column(ScoreEnum.total_pnl)
                 ]
+
+                # group by time
+                from configuration import SHARPE_BACKTEST_FREQ
+
+                equity_curve = (
+                    equity_curve.groupby(pd.Grouper(freq=SHARPE_BACKTEST_FREQ))
+                    .last()
+                    .fillna(method='ffill')
+                )
                 try:
                     sharpe = get_sharpe(equity_curve)
                     dd = get_max_drawdown(equity_curve)

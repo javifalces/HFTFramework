@@ -3,14 +3,15 @@ package com.lambda.investing.trading_engine_connector.paper.market;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.exception.LambdaTradingException;
 import com.lambda.investing.model.market_data.Depth;
-import com.lambda.investing.model.trading.OrderRequest;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.StringWriter;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
 
 import static com.lambda.investing.trading_engine_connector.paper.market.OrderbookManager.MARKET_MAKER_ALGORITHM_INFO;
 
@@ -87,8 +88,8 @@ public class Orderbook {
 		Double[] bidQtyArray = new Double[bidLevels];
 		Double[] askQtyArray = new Double[askLevels];
 
-		String[] bidAlgorithmInfo = new String[bidLevels];
-		String[] askAlgorithmInfo = new String[askLevels];
+		List<String>[] bidAlgorithmInfo = new List[bidLevels];
+		List<String>[] askAlgorithmInfo = new List[askLevels];
 
 		//BID side is descending order
 		int level = 0;
@@ -101,7 +102,7 @@ public class Orderbook {
 			OrderList bidList = bids.getPriceList(price);
 			if (bidList != null) {
 				bidQtyArray[level] = bidList.getVolume();
-				bidAlgorithmInfo[level] = bidList.getAlgorithms();
+				bidAlgorithmInfo[level] = bidList.getAlgorithmsList();
 			}
 			level++;
 		}
@@ -117,7 +118,7 @@ public class Orderbook {
 			OrderList askList = asks.getPriceList(price);
 			if (askList != null) {
 				askQtyArray[level] = askList.getVolume();
-				askAlgorithmInfo[level] = askList.getAlgorithms();
+				askAlgorithmInfo[level] = askList.getAlgorithmsList();
 			}
 			level++;
 		}
@@ -259,7 +260,7 @@ public class Orderbook {
 	}
 
 	private double processOrderList(ArrayList<Trade> trades, OrderList orders, double qtyRemaining,
-			OrderOrderbook quote, boolean verbose, boolean fromTradeFill) throws LambdaTradingException {
+									OrderOrderbook quote, boolean verbose, boolean fromTradeFill) throws LambdaTradingException {
 		String side = quote.getSide();
 		int buyer, seller;
 		String buyerAlgorithmInfo, sellerAlgorithmInfo, buyerClOrdId, sellerClOrdId;

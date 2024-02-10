@@ -9,8 +9,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class FixedLatencyEngine implements LatencyEngine {
 
-	protected static long THREAD_MS_WAITING = 0;//less than 1 is not possible and can cause some problems on backtest!
-	protected static int THREAD_NS_WAITING = 0;
 
 	protected long latencyMs;
 	protected Date currentTime = new Date(0);
@@ -28,11 +26,7 @@ public class FixedLatencyEngine implements LatencyEngine {
 		if (currentDate.getTime() > currentTime.getTime()) {
 			currentTime = currentDate;
 			counterTimeSet.incrementAndGet();
-			synchronized (lockLatch) {
-				if (latch != null) {
-					latch.countDown();
-				}
-			}
+			freeLock();
 		}
 	}
 
@@ -67,27 +61,20 @@ public class FixedLatencyEngine implements LatencyEngine {
 					}
 				}
 
-				if (THREAD_NS_WAITING > 0 || THREAD_MS_WAITING > 0) {
 
-					try {
-						Thread.sleep(THREAD_MS_WAITING, THREAD_NS_WAITING);
-					} catch (Exception e) {
-						;
+				synchronized (lockLatch) {
+					if (latch == null || latch.getCount() == 0) {
+						latch = new CountDownLatch(1);
 					}
-				} else {
-					synchronized (lockLatch) {
-						if (latch == null || latch.getCount() == 0) {
-							latch = new CountDownLatch(1);
-						}
-					}
-
-					try {
-						latch.await();
-					} catch (Exception e) {
-						;
-					}
-
 				}
+
+				try {
+					latch.await();
+				} catch (Exception e) {
+					;
+				}
+
+
 			}
 			//end while sleeping
 			int finalCounter = counterTimeSet.get();
@@ -108,11 +95,23 @@ public class FixedLatencyEngine implements LatencyEngine {
 
 	@Override
 	public void reset() {
+		freeLock();
+
 		currentTime = new Date(0);
 		nextUpdateMs = Long.MIN_VALUE;
 		counterTimeSet = new AtomicInteger(0);
+
 		synchronized (lockLatch) {
 			latch = null;
+		}
+	}
+
+	@Override
+	public void freeLock() {
+		synchronized (lockLatch) {
+			if (latch != null) {
+				latch.countDown();
+			}
 		}
 	}
 

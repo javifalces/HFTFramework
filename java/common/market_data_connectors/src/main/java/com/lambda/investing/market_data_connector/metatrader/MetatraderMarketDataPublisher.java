@@ -7,7 +7,6 @@ import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ConnectorPublisher;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
-import com.lambda.investing.connector.zero_mq.ZeroMqProvider;
 import com.lambda.investing.market_data_connector.AbstractMarketDataConnectorPublisher;
 import com.lambda.investing.metatrader.MetatraderZeroBrokerConnector;
 import com.lambda.investing.model.asset.Instrument;
@@ -18,7 +17,6 @@ import org.apache.commons.lang3.ArrayUtils;
 
 import java.lang.reflect.Modifier;
 import java.util.Date;
-import java.util.List;
 import java.util.Map;
 
 public class MetatraderMarketDataPublisher extends AbstractMarketDataConnectorPublisher implements ConnectorListener {

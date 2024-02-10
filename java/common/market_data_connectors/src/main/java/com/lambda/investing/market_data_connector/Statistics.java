@@ -8,16 +8,20 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class Statistics implements Runnable{
 
+	private static boolean RESET_STATISTICS_PER_UPDATE = true;
 	private long sleepMs;
 	private boolean enable;
-	private Map<String,Long> topicToCounter;
+	private Map<String, Long> topicToCounter;
+	private Map<String, Long> topicToTotalCounter;
 	private String header;
 	protected Logger logger = LogManager.getLogger(Statistics.class);
+
 	public Statistics(String header,long sleepMs) {
 		this.header=header;
 		this.sleepMs = sleepMs;
-		topicToCounter= new ConcurrentHashMap<>();
-		enable=true;
+		topicToCounter = new ConcurrentHashMap<>();
+		topicToTotalCounter = new ConcurrentHashMap<>();
+		enable = true;
 		if (sleepMs > 0) {
 			Thread thread = new Thread(this, "Statistics");
 			thread.setPriority(Thread.MIN_PRIORITY);
@@ -28,20 +32,28 @@ public class Statistics implements Runnable{
 	public void addStatistics(String topic){
 		long counter = topicToCounter.getOrDefault(topic,0L);
 		long newCounter=counter+1;
-		topicToCounter.put(topic,newCounter);
+		topicToCounter.put(topic, newCounter);
+		topicToTotalCounter.put(topic, topicToTotalCounter.getOrDefault(topic, 0L) + 1);
 	}
 
 	public void setStatistics(String topic, long counter) {
 		topicToCounter.put(topic, counter);
+		topicToTotalCounter.put(topic, counter);
 	}
 
 	private void printCurrentStatistics() {
 		if (topicToCounter.size()>0) {
 			logger.info("******** {} ********", header);
 			for (Map.Entry<String, Long> entry : topicToCounter.entrySet()) {
-				logger.info("\t{}:\t{}", entry.getKey(), entry.getValue());
+				long totalCounter = topicToTotalCounter.getOrDefault(entry.getKey(), 0L);
+				logger.info("\t{}:\t{}\ttotal:{}", entry.getKey(), entry.getValue(), totalCounter);
 			}
 			logger.info("****************");
+
+			if (RESET_STATISTICS_PER_UPDATE) {
+				topicToCounter.clear();
+			}
+
 		}
 	}
 

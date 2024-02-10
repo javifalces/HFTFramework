@@ -1,9 +1,5 @@
 package com.lambda.investing.trading_engine_connector;
 
-import com.lambda.investing.connector.ConnectorPublisher;
-import com.lambda.investing.market_data_connector.MarketDataConnectorPublisher;
-import com.lambda.investing.model.portfolio.Portfolio;
-import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.OrderRequest;
 
 /**
@@ -20,5 +16,7 @@ public interface TradingEngineConnector {
     void requestInfo(String info);
 
     void reset();
+
+    boolean isBusy();
 
 }

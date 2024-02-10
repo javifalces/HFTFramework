@@ -104,12 +104,6 @@ import static com.lambda.investing.Configuration.RANDOM_GENERATOR;
 				return true;
 			}
 
-			@Override public boolean onExecutionReportUpdate(ExecutionReport executionReport) {
-				System.out.println("ExecutionReport received " + executionReport.getInstrument());
-				lastER = executionReport;
-				return true;
-			}
-
 			@Override public boolean onInfoUpdate(String header, String message) {
 				System.out.println("info received " + header);
 				return true;

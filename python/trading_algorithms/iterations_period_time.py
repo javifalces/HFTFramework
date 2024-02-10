@@ -11,3 +11,12 @@ class IterationsPeriodTime:
     EIGHT_HOURS = -18
     DAILY = -24
     END_OF_SESSION = -25
+
+    @staticmethod
+    def is_a_period(period: int) -> bool:
+        output = False
+        for period_time in IterationsPeriodTime.__dict__.values():
+            if period_time == period:
+                output = True
+                break
+        return output

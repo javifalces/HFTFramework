@@ -226,13 +226,13 @@ import org.slf4j.LoggerFactory;
 		}
 		ExperimentBatch batch = new ExperimentBatch();
 
-		ExperimentBatch.DatasetComponent dataset = new ExperimentBatch.DatasetComponent();
+		DatasetComponent dataset = new DatasetComponent();
 		dataset.name = "";
 		dataset.zipFile = "(Optional - One must be defined though)";
 
 		batch.mDatasets = Collections.singletonList(dataset);
 
-		ExperimentBatch.ExperimentComponent experiment = new ExperimentBatch.ExperimentComponent();
+		ExperimentComponent experiment = new ExperimentComponent();
 		experiment.name = "";
 		experiment.constructor = "";
 		experiment.instanceGenerator = "";

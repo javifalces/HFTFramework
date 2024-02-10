@@ -1,0 +1,106 @@
+{
+  "backtest": {
+    "startDate": "20201208 09:00:00",
+    "endDate": "20201208 18:00:00",
+    "delayOrderMs": 0,
+    "feesCommissionsIncluded": false,
+    "seed": 0,
+    "instrument": "btcusdt_binance",
+    "multithreadConfiguration": "single_thread",
+    "bucleRun": false
+  },
+  "algorithm": {
+    "algorithmName": "AlphaAvellanedaStoikov_avellaneda_stoikov_dqn_2_AlphaAvellanedaStoikov_avellaneda_stoikov_dqn_2_backtest_jar_thread",
+    "parameters": {
+      "dummyAgent": 1,
+      "rlPort": 2122,
+      "quantity": 0.0001,
+      "seed": 28220,
+      "skewAction": [
+        0.0,
+        1.0,
+        -1.0
+      ],
+      "riskAversionAction": [
+        0.06327,
+        0.31635,
+        0.6327,
+        0.9490500000000001
+      ],
+      "midpricePeriodWindowAction": [
+        24,
+        50
+      ],
+      "midpricePeriodSeconds": 26,
+      "changeKPeriodSecondsAction": [
+        60.0
+      ],
+      "minPrivateState": -1,
+      "maxPrivateState": -1,
+      "numberDecimalsPrivateState": 3,
+      "horizonTicksPrivateState": 5,
+      "minMarketState": -1,
+      "maxMarketState": -1,
+      "numberDecimalsMarketState": 7,
+      "horizonTicksMarketState": 10,
+      "minCandleState": -1,
+      "maxCandleState": -1,
+      "numberDecimalsCandleState": 3,
+      "horizonCandlesState": 4,
+      "horizonMinMsTick": 0,
+      "stateColumnsFilter": [],
+      "scoreEnum": "asymmetric_dampened_pnl",
+      "stepSeconds": 5,
+      "reinforcementLearningActionType": "discrete",
+      "baseModel": "DQN",
+      "epsilon": 0.2,
+      "discountFactor": 0.75,
+      "learningRate": 0.85,
+      "learningRateNN": 0.01,
+      "maxBatchSize": 10000,
+      "batchSize": 500,
+      "trainingPredictIterationPeriod": -25,
+      "trainingTargetIterationPeriod": -25,
+      "epoch": 150,
+      "calculateTt": 0,
+      "kDefaultAction": [
+        -1
+      ],
+      "aDefaultAction": [
+        -1
+      ],
+      "earlyStoppingTraining": 0,
+      "earlyStoppingDataSplitTrainingPct": 0.6,
+      "hiddenSizeNodesMultiplier": 2,
+      "trainingStats": 0,
+      "momentumNesterov": 0.99,
+      "firstHour": 7,
+      "lastHour": 19,
+      "l1": 0.0,
+      "l2": 0.0,
+      "numberDecimalsState": 3,
+      "binaryStateOutputs": 0,
+      "periodsTAStates": [
+        9,
+        13,
+        21
+      ],
+      "dumpSeconds": 30,
+      "dumpData": 0,
+      "secondsCandles": 56,
+      "otherInstrumentsStates": [],
+      "otherInstrumentsMsPeriods": [],
+      "stopActionOnFilled": 0,
+      "riskAversion": 0.68,
+      "changeKPeriodSeconds": 10,
+      "kDefault": -1,
+      "aDefault": -1,
+      "sigmaDefault": -1,
+      "spreadCalculation": "Avellaneda",
+      "kCalculation": "Pct",
+      "positionMultiplier": 335.35,
+      "spreadMultiplier": 5.0,
+      "ui": 0
+    }
+  }
+}

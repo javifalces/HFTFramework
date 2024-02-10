@@ -6,7 +6,7 @@
 
     <groupId>com.lambda.investing</groupId>
     <artifactId>parent_pom</artifactId>
-    <version>0.0.0-SNAPSHOT</version>
+    <version>0.1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>Parent Maven POM</name>
@@ -15,6 +15,19 @@
         <name>LambdaInvesting</name>
         <url>http://www.lambdainvesting.com</url>
     </organization>
+
+    <repositories>
+        <!-- JAVA GUI        -->
+        <repository>
+            <id>jetbrains.releases</id>
+            <url>https://www.jetbrains.com/intellij-repository/releases</url>
+        </repository>
+        <repository>
+            <id>jetbrains.3rdparty</id>
+            <url>https://cache-redirector.jetbrains.com/intellij-dependencies</url>
+        </repository>
+
+    </repositories>
 
     <properties>
         <!-- common properties -->
@@ -36,14 +49,15 @@
         <!-- common -->
         <mvn-assembly.version>1.0.2</mvn-assembly.version>
         <!--<powermock.version>2.0.0</powermock.version>-->
-        <powermockito.version>1.7.4</powermockito.version>
+        <powermockito.version>1.6.4</powermockito.version>
         <mockito.version>1.10.19</mockito.version>
         <!--<powermockito.version>1.5.6</powermockito.version>-->
         <lombok.version>1.18.20</lombok.version>
         <log4j2.version>2.18.0</log4j2.version>
         <slf4j.version>2.0.0-alpha7</slf4j.version>
         <spring.version>5.2.22.RELEASE</spring.version>
-        <junit.version>4.13.1</junit.version>
+        <junit4.version>4.13.1</junit4.version>
+        <junit.version>5.9.2</junit.version>
         <gson.version>2.8.9</gson.version>
         <commons-lang.version>3.11</commons-lang.version>
 
@@ -54,7 +68,11 @@
         <sqlite-jdbc.version>3.15.1</sqlite-jdbc.version>
         <disruptor.version>3.4.2</disruptor.version>
         <springboot-maven-build.version>2.4.1</springboot-maven-build.version>
-
+        <table-saw.version>0.43.1</table-saw.version>
+        <table-saw-parquet.version>0.11.0</table-saw-parquet.version>
+        <jmh.version>1.36</jmh.version>
+        <intellij.version>232.9921.82</intellij.version>
+        <flatlaf.version>3.2.5</flatlaf.version>
     </properties>
 
 
@@ -66,12 +84,14 @@
                 <version>${powermockito.version}</version>
                 <scope>test</scope>
             </dependency>
+
             <dependency>
                 <groupId>org.powermock</groupId>
                 <artifactId>powermock-api-mockito</artifactId>
                 <version>${powermockito.version}</version>
                 <scope>test</scope>
             </dependency>
+
             <dependency>
                 <groupId>org.apache.commons</groupId>
                 <artifactId>commons-csv</artifactId>
@@ -101,28 +121,31 @@
             <dependency>
                 <groupId>tech.tablesaw</groupId>
                 <artifactId>tablesaw-core</artifactId>
-                <version>0.37.3</version>
+                <version>${table-saw.version}</version>
             </dependency>
+
+
             <dependency>
                 <groupId>tech.tablesaw</groupId>
                 <artifactId>tablesaw-excel</artifactId>
-                <version>0.37.3</version>
+                <version>${table-saw.version}</version>
             </dependency>
             <!--<dependency>-->
             <!--<groupId>tech.tablesaw</groupId>-->
             <!--<artifactId>tablesaw-html</artifactId>-->
-            <!--<version>0.37.3</version>-->
+            <!--<version>${table-saw.version}</version>-->
             <!--</dependency>-->
             <dependency>
                 <groupId>tech.tablesaw</groupId>
                 <artifactId>tablesaw-json</artifactId>
-                <version>0.37.3</version>
+                <version>${table-saw.version}</version>
             </dependency>
             <dependency>
                 <groupId>tech.tablesaw</groupId>
                 <artifactId>tablesaw-jsplot</artifactId>
-                <version>0.37.3</version>
+                <version>${table-saw.version}</version>
             </dependency>
+
 
             <dependency>
                 <groupId>io.pebbletemplates</groupId>
@@ -132,6 +155,12 @@
 
 
             <!--Parquet-->
+
+            <dependency>
+                <groupId>net.tlabs-data</groupId>
+                <artifactId>tablesaw_${table-saw.version}-parquet</artifactId>
+                <version>${table-saw-parquet.version}</version>
+            </dependency>
 
             <dependency>
                 <groupId>org.apache.parquet</groupId>
@@ -166,7 +195,7 @@
             <dependency>
                 <groupId>org.apache.parquet</groupId>
                 <artifactId>parquet-hadoop</artifactId>
-                <version>1.10.0</version>
+                <version>1.13.1</version>
             </dependency>
 
 
@@ -366,6 +395,20 @@
             <dependency>
                 <groupId>junit</groupId>
                 <artifactId>junit</artifactId>
+                <version>${junit4.version}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter-engine</artifactId>
+                <version>${junit.version}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter-api</artifactId>
                 <version>${junit.version}</version>
                 <scope>test</scope>
             </dependency>
@@ -393,6 +436,43 @@
                 <artifactId>commons-lang</artifactId>
                 <version>2.6</version>
             </dependency>
+
+            <!-- JMH version microbenchmarking            -->
+            <dependency>
+                <groupId>org.openjdk.jmh</groupId>
+                <artifactId>jmh-core</artifactId>
+                <version>${jmh.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.openjdk.jmh</groupId>
+                <artifactId>jmh-generator-annprocess</artifactId>
+                <version>${jmh.version}</version>
+            </dependency>
+
+            <!-- Intellij dependencies -->
+            <dependency>
+                <groupId>com.jetbrains.intellij.java</groupId>
+                <artifactId>java-gui-forms-rt</artifactId>
+                <version>${intellij.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jetbrains.intellij.java</groupId>
+                <artifactId>java-compiler-ant-tasks</artifactId>
+                <version>${intellij.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.formdev</groupId>
+                <artifactId>flatlaf</artifactId>
+                <version>${flatlaf.version}</version>
+            </dependency>
+            <!-- threadly ConcurrentArrayList -->
+            <dependency>
+                <groupId>org.threadly</groupId>
+                <artifactId>threadly</artifactId>
+                <version>7.0</version>
+            </dependency>
+
 
         </dependencies>
 
@@ -440,6 +520,16 @@
             <artifactId>guava</artifactId>
         </dependency>
 
+        <!-- JMH version microbenchmarking            -->
+        <dependency>
+            <groupId>org.openjdk.jmh</groupId>
+            <artifactId>jmh-core</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.openjdk.jmh</groupId>
+            <artifactId>jmh-generator-annprocess</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>junit</groupId>
@@ -452,6 +542,19 @@
             <artifactId>powermock-module-junit4</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <dependency>
             <groupId>org.powermock</groupId>
             <artifactId>powermock-api-mockito</artifactId>
@@ -541,6 +644,13 @@
                                 <artifactId>lombok</artifactId>
                                 <version>${lombok.version}</version>
                             </path>
+
+                            <path>
+                                <groupId>org.openjdk.jmh</groupId>
+                                <artifactId>jmh-generator-annprocess</artifactId>
+                                <version>${jmh.version}</version>
+                            </path>
+
                         </annotationProcessorPaths>
 
                     </configuration>

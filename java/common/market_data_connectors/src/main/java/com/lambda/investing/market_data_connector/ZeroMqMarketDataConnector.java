@@ -4,31 +4,33 @@ import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
 import com.lambda.investing.connector.zero_mq.ZeroMqProvider;
-import com.lambda.investing.market_data_connector.mock.MockMarketDataConfiguration;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.messaging.Command;
-import com.lambda.investing.model.messaging.TopicUtils;
 import com.lambda.investing.model.messaging.TypeMessage;
 import com.lambda.investing.model.trading.ExecutionReport;
 import lombok.Getter;
+import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
+import java.util.Queue;
 
-@Getter public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implements ConnectorListener {
-
+@Getter
+public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implements ConnectorListener {
+	private static int BUFFER_ER_ORDER_ID = 128;
 	Logger logger = LogManager.getLogger(ZeroMqMarketDataConnector.class);
 	private ZeroMqConfiguration zeroMqConfiguration;
 	private ZeroMqProvider zeroMqProvider;
 
 	private List<String> instrumentPksList;
-	private boolean listenER = true;
+	private boolean listenER = false;
+
+	private Queue<String> ActiveOrderIdNotified = EvictingQueue.create(BUFFER_ER_ORDER_ID);
+	private Queue<String> FinishedOrderIdNotified = EvictingQueue.create(BUFFER_ER_ORDER_ID);
 	///////////////////// Constructors ////////////////////
 
 	/**
@@ -40,12 +42,14 @@ import java.util.Set;
 		this.zeroMqConfiguration = new ZeroMqConfiguration(zeroMqConfiguration);
 		zeroMqProvider = ZeroMqProvider.getInstance(this.zeroMqConfiguration, threadsListening);
 		zeroMqProvider.register(this.zeroMqConfiguration, this);
-		logger.info("Listening MarketData {}   in tcp://{}:{}", this.zeroMqConfiguration.getTopic(),
-				this.zeroMqConfiguration.getHost(), this.zeroMqConfiguration.getPort());
+		logger.info("Listening MarketData {}   in {}", this.zeroMqConfiguration.getTopic(), this.zeroMqConfiguration.getUrl());
 	}
 
 	public void setListenER(boolean listenER) {
 		this.listenER = listenER;
+		if (this.listenER) {
+			System.out.println("DEPRECATED setListenER is true!please change it! deprecated!!! ER should be on tradingEngine!!!");
+		}
 	}
 
 	public void setInstrumentPksList(List<String> instrumentPksList) {
@@ -72,7 +76,7 @@ import java.util.Set;
 	//	}
 
 	public ZeroMqMarketDataConnector(ZeroMqConfiguration zeroMqConfigurationIn, List<Instrument> instruments,
-			int threadsListening) {
+									 int threadsListening) {
 		List<ZeroMqConfiguration> zeroMqConfigurationList = new ArrayList<>();
 		for (Instrument instrument : instruments) {
 			List<ZeroMqConfiguration> zeroMqConfigurationListTemp = ZeroMqConfiguration
@@ -85,8 +89,7 @@ import java.util.Set;
 			zeroMqProvider = ZeroMqProvider.getInstance(zeroMqConfiguration, threadsListening);
 			zeroMqProvider.register(zeroMqConfiguration, this);
 
-			logger.info("Listening {}   in tcp://{}:{}", zeroMqConfiguration.getTopic(), zeroMqConfiguration.getHost(),
-					zeroMqConfiguration.getPort());
+			logger.info("Listening {}   in {}}", zeroMqConfiguration.getTopic(), zeroMqConfiguration.getUrl());
 		}
 
 	}
@@ -98,8 +101,9 @@ import java.util.Set;
 
 	///////////////////// Constructors ////////////////////
 
-	@Override public void onUpdate(ConnectorConfiguration configuration, long timestampReceived,
-			TypeMessage typeMessage, String content) {
+	@Override
+	public void onUpdate(ConnectorConfiguration configuration, long timestampReceived,
+						 TypeMessage typeMessage, String content) {
 		//
 		ZeroMqConfiguration zeroMqConfigurationReceived = (ZeroMqConfiguration) configuration;
 		String topicReceived = zeroMqConfigurationReceived.getTopic();
@@ -141,11 +145,36 @@ import java.util.Set;
 
 		//// ER should come from the trading engine!
 		//		when trading is coming here
-		if (typeMessage == TypeMessage.execution_report && listenER) {
-			//ExecutionReport received
-			ExecutionReport executionReport = GSON.fromJson(content, ExecutionReport.class);
-			notifyExecutionReport(executionReport);
-		}
+//		if (typeMessage == TypeMessage.execution_report && listenER) {
+//			//ExecutionReport received
+//			ExecutionReport executionReport = GSON.fromJson(content, ExecutionReport.class);
+//			logger.warn("ER received on ZeroMqMarketDataConnector -> please do another thing!! {}",executionReport.getClientOrderId());
+//
+//			notifyExecutionReport(executionReport);
+//		}
 
+	}
+
+	private boolean IsExecutionReportAlreadyNotified(ExecutionReport executionReport) {
+		String clordId = executionReport.getClientOrderId();
+		switch (executionReport.getExecutionReportStatus()) {
+			case Active:
+				if (ActiveOrderIdNotified.contains(clordId)) {
+					return true;
+				} else {
+					ActiveOrderIdNotified.offer(clordId);
+					return false;
+				}
+
+			case CompletellyFilled:
+				if (FinishedOrderIdNotified.contains(clordId)) {
+					return true;
+				} else {
+					FinishedOrderIdNotified.offer(clordId);
+					return false;
+				}
+			default:
+				return false;
+		}
 	}
 }

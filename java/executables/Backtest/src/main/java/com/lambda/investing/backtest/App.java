@@ -2,13 +2,10 @@ package com.lambda.investing.backtest;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonSyntaxException;
 import com.lambda.investing.Configuration;
-import com.lambda.investing.algorithmic_trading.Algorithm;
-import com.lambda.investing.algorithmic_trading.reinforcement_learning.TrainType;
 import com.lambda.investing.backtest_engine.BacktestConfiguration;
 import com.lambda.investing.backtest_engine.ordinary.OrdinaryBacktest;
-import com.lambda.investing.market_data_connector.MarketDataConnectorPublisherListener;
+import com.lambda.investing.gym.DummyRlAgent;
 import org.apache.hadoop.fs.Path;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -26,10 +23,10 @@ import java.lang.management.ManagementFactory;
 import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.text.ParseException;
-import java.util.*;
-
-import static com.lambda.investing.algorithmic_trading.reinforcement_learning.TrainNNUtils.*;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 
 public class App {
 
@@ -51,48 +48,6 @@ public class App {
     }
 
 
-    private boolean trainMode(String[] args, Logger logger) throws IOException {
-        try {
-
-            TrainInputConfiguration trainInputConfiguration = GSON.fromJson(args[0], TrainInputConfiguration.class);
-            if (trainInputConfiguration.getMemoryPath() != null
-                    && trainInputConfiguration.getOutputModelPath() != null) {
-                logger.info("trainInputConfiguration detected! -> training");
-                logger.info("{}", GSON.toJson(trainInputConfiguration));
-                TrainType trainType = DEFAULT_TRAIN_TYPE;
-
-                if (trainInputConfiguration.getTrainType() != null) {
-                    trainType = trainInputConfiguration.getTrainType();
-                }
-                System.out.println(trainType + " training model");
-                System.out.println("-----");
-                System.out.println(args[0]);
-                System.out.println("-----");
-
-                trainOnData(trainType, trainInputConfiguration.getMemoryPath(),
-                        trainInputConfiguration.getActionColumns(), trainInputConfiguration.getStateColumns(),
-                        trainInputConfiguration.getOutputModelPath(), trainInputConfiguration.getLearningRate(),
-                        trainInputConfiguration.getMomentumNesterov(), trainInputConfiguration.getNEpoch(),
-                        trainInputConfiguration.getBatchSize(), trainInputConfiguration.getMaxBatchSize(),
-                        trainInputConfiguration.getL2(), trainInputConfiguration.getL1(),
-                        trainInputConfiguration.getTrainingStats(), trainInputConfiguration.isRNN(),
-                        trainInputConfiguration.isHyperparameterTuning(), trainInputConfiguration.getRnnHorizon());
-
-                logger.info("finished training -> " + trainInputConfiguration.getOutputModelPath());
-
-                if (trainInputConfiguration.getTrainingStats() != 0) {
-                    Scanner myObj = new Scanner(System.in);  // Create a Scanner object
-                    System.out.print("TrainingStats detected -> press enter key to close");
-                    String userName = myObj.nextLine();  // Read user input
-
-                }
-                return true;
-            }
-        } catch (JsonSyntaxException e) {
-
-        }
-        return false;
-    }
 
     private static void logProperties(Logger logger) {
         logger.info("");
@@ -121,8 +76,23 @@ public class App {
         logger.info("");
     }
 
+    private static void setInputConfigurationDefaultValues(String jsonString, InputConfiguration inputConfiguration, Logger logger) {
+
+//        if (!jsonString.toUpperCase().contains("feesCommissionsIncluded".toUpperCase())) {
+//            try {
+//                inputConfiguration.getBacktestConfiguration().setFeesCommissionsIncluded(true);
+//            } catch (Exception e) {
+//                logger.error("cant set default setFeesCommissionsIncluded to true");
+//            }
+//        }
+
+    }
+
     private static InputConfiguration loadJson(String[] args, Logger logger) {
+        String jsonString = args[0];
         InputConfiguration inputConfiguration = GSON.fromJson(args[0], InputConfiguration.class);
+        setInputConfigurationDefaultValues(jsonString, inputConfiguration, logger);
+
         System.out.println("-----");
         System.out.println(args[0]);
         System.out.println("-----");
@@ -151,7 +121,7 @@ public class App {
             if (args.length == 0) {
                 System.out.println("EXAMPLE json!");
 
-                String exampleJson = "{\"backtest\":{\"startDate\": \"20201208\", \"endDate\": \"20201208\", \"instrument\": \"btcusdt_binance\"},\n\"algorithm\":{\"algorithmName\": \"AvellanedaQ_4_AvellanedaQ_4\", \"parameters\": {\"skewPricePctAction\": \"0.0\",\"riskAversionAction\": \"0.9,0.5,0.1\", \"windowsTickAction\": \"5,10\", \"numberDecimalsPrivateState\": \"4\", \"minPrivateState\": \"-0.001\", \"maxPrivateState\": \"0.001\", \"horizonTicksPrivateState\": \"1\", \"horizonMinMsTick\": \"10\", \"scoreEnum\": \"total_pnl\", \"timeHorizonSeconds\": \"5\", \"epsilon\": \"1.0\", \"risk_aversion\": \"0.9\", \"position_multiplier\": \"100\", \"window_tick\": \"5\", \"minutes_change_k\": \"10\", \"quantity\": \"0.0001\", \"k_default\": \"0.00769\", \"spread_multiplier\": \"5.0\", \"first_hour\": \"7\", \"last_hour\": \"19\"}}}";
+                String exampleJson = "{\"backtest\":{\"startDate\": \"20201208\", \"endDate\": \"20201208\", \"instrument\": \"btcusdt_binance\"},\n\"algorithm\":{\"algorithmName\": \"AvellanedaQ_4_AvellanedaQ_4\", \"parameters\": {\"skewAction\": \"0.0\",\"riskAversionAction\": \"0.9,0.5,0.1\", \"midpricePeriodSecondsAction\": \"5,10\", \"numberDecimalsPrivateState\": \"4\", \"minPrivateState\": \"-0.001\", \"maxPrivateState\": \"0.001\", \"horizonTicksPrivateState\": \"1\", \"horizonMinMsTick\": \"10\", \"scoreEnum\": \"total_pnl\", \"timeHorizonSeconds\": \"5\", \"epsilon\": \"1.0\", \"risk_aversion\": \"0.9\", \"position_multiplier\": \"100\", \"window_tick\": \"5\", \"minutes_change_k\": \"10\", \"quantity\": \"0.0001\", \"k_default\": \"0.00769\", \"spread_multiplier\": \"5.0\", \"first_hour\": \"7\", \"last_hour\": \"19\"}}}";
 
                 args = new String[]{exampleJson};
                 checkFile = false;
@@ -205,9 +175,7 @@ public class App {
         logger = LogManager.getLogger();
 
 //        logProperties(logger);
-        if (trainMode(args, logger)) {
-            return;
-        }
+
 
         InputConfiguration inputConfiguration = loadJson(args, logger);
 
@@ -215,6 +183,10 @@ public class App {
             ConfigurationPropertiesLoader configurationProperties = new ConfigurationPropertiesLoader("application.properties");
             BacktestConfiguration backtestConfiguration = inputConfiguration.getBacktestConfiguration();
 
+            DummyRlAgent dummyRlAgent = new DummyRlAgent(args[0]);
+            if (dummyRlAgent.isDummyAgent()) {
+                new Thread(dummyRlAgent, "dummyRlAgent").start();
+            }
             OrdinaryBacktest ordinaryBacktest = new OrdinaryBacktest(backtestConfiguration);
             ordinaryBacktest.start();
 
@@ -225,6 +197,10 @@ public class App {
             System.exit(-1);
         }
 
+    }
+
+    protected static void setLogProperty(String logName) {
+        System.setProperty("log.appName", logName);
     }
 
     private class ConfigurationPropertiesLoader {

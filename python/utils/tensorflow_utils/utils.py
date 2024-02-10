@@ -1,4 +1,5 @@
-from tensorflow.contrib import keras
+# from tensorflow.contrib import keras
+from tensorflow import keras
 
 
 def save_model(file: str, model: keras.models.Model):

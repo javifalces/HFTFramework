@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import copy
 
-from configuration import PARQUET_PATH_DB
+from configuration import LAMBDA_DATA_PATH
 
 
 class DarwinexFtpDownloader:
@@ -23,7 +23,7 @@ class DarwinexFtpDownloader:
         self.host = host
         self.port = port
         if parquet_base_path is None:
-            parquet_base_path = PARQUET_PATH_DB
+            parquet_base_path = LAMBDA_DATA_PATH
         self.parquet_base_path = parquet_base_path
         self.dwt = darwinex_ticks.DarwinexTicksConnection(
             dwx_ftp_user=self.username,
@@ -68,7 +68,7 @@ class DarwinexFtpDownloader:
         rest_of_levels = [1, 2, 3, 4]
         tick_data.rename(columns=column_rename_dict, inplace=True)
         tick_data.reset_index(inplace=True)
-        tick_data['timestamp'] = tick_data['Time'].astype('int64') // 10**6
+        tick_data['timestamp'] = tick_data['Time'].view('int64') // 10**6
         del tick_data['Time']
         tick_data.set_index('timestamp', inplace=True)
         for column in rest_of_columns:
@@ -139,7 +139,7 @@ class DarwinexFtpDownloader:
 # %%
 if __name__ == '__main__':
     darwinex_ftp_downloader = DarwinexFtpDownloader(
-        username='xxxx', password='xxxxx'
+        username='xxx', password='xxxxx'
     )
     tick_data_darwinex = darwinex_ftp_downloader.update_parquet_db(
         symbol='EURUSD',

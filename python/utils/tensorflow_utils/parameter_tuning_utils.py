@@ -5,12 +5,18 @@ import pandas as pd
 from sklearn.model_selection import KFold
 import numpy as np
 import itertools
-from tqdm.contrib.itertools import product
 
+import pandas as pd
 
 DEFAULT_METRICS = [
     tf.keras.metrics.RootMeanSquaredError(),
     tf.keras.metrics.MeanSquaredError(),
+]
+
+DEFAULT_METRICS_CLASSIFICATION = [
+    tf.keras.metrics.AUC(),
+    # tf.keras.metrics.Precision(),
+    tf.keras.metrics.Accuracy(),
 ]
 
 
@@ -27,22 +33,23 @@ def join_by_row(table_1: pd.DataFrame, table_2: pd.DataFrame) -> pd.DataFrame:
 
 class ExecutorRun:
     def __init__(
-        self,
-        hidden_layer_neurons,
-        epoch,
-        batch_size,
-        learning_rate,
-        momentum,
-        activation_function,
-        output_activation_function,
-        kernel_initializer,
-        loss_function,
-        hidden_layers,
-        X_normalized,
-        y,
-        n_folds,
-        shuffle,
-        metrics,
+            self,
+            hidden_layer_neurons,
+            epoch,
+            batch_size,
+            learning_rate,
+            momentum,
+            activation_function,
+            output_activation_function,
+            kernel_initializer,
+            loss_function,
+            hidden_layers,
+            X_normalized,
+            y,
+            n_folds,
+            shuffle,
+            metrics,
+            model=None,
     ):
         self.hidden_layers = hidden_layers
         self.hidden_layer_neurons = hidden_layer_neurons
@@ -60,13 +67,45 @@ class ExecutorRun:
         self.shuffle = shuffle
         self.metrics = metrics
 
+        if len(self.metrics) < 2:
+            print(rf"error!!!! you need to add 2 metrics!")
+            raise Exception(rf"error!!!! you need to add 2 metrics!")
+
         self.oos_score_1 = None
         self.oos_score_2 = None
         self.finished = False
+        if model is None:
+            self.create_model()
+
+    def create_model(self):
+
+        self.model = create_feedforward_model(
+            self.X_normalized.shape[1],
+            self.hidden_layers,
+            self.y.shape[1],
+            self.hidden_layer_neurons,
+            self.learning_rate,
+            self.momentum,
+            self.loss_function,
+            self.kernel_initializer,
+            self.activation_function,
+            self.metrics,
+            self.output_activation_function,
+        )
 
     def run(self):
+        import datetime
+
+        start = datetime.datetime.now()
+        print(
+            rf"get_out_of_sample_metrics {self.X_normalized.shape[0]} rows and {self.X_normalized.shape[1]} features  {self.y.shape[1]} outputs -> hidden_layers:{self.hidden_layers} \
+            hidden_layer_neurons:{self.hidden_layer_neurons} learning_rate:{self.learning_rate} momentum:{self.momentum} \
+            epoch:{self.epoch} batch_size:{self.batch_size} n_folds:{self.n_folds} shuffle:{self.shuffle} loss_function:{self.loss_function}\
+             kernel_initializer:{self.kernel_initializer} activation_function:{self.activation_function} output_activation_function:{self.output_activation_function}"
+        )
         try:
             self.finished = False
+
             self.oos_score_1, self.oos_score_2 = get_out_of_sample_metrics(
                 self.X_normalized,
                 self.y,
@@ -83,6 +122,11 @@ class ExecutorRun:
                 self.activation_function,
                 self.metrics,
                 self.output_activation_function,
+                model=self.model,
+            )
+            elapsed_seconds = (datetime.datetime.now() - start).seconds
+            print(
+                rf"get_out_of_sample_metrics finished in {elapsed_seconds / 60.0} minutes with {self.n_folds} folds ->  mean {self.metrics[0].name}:{self.oos_score_1}  mean {self.metrics[1].name}:{self.oos_score_2}"
             )
         except Exception as e:
             print(rf"error running ExecutorRun {e}")
@@ -128,28 +172,54 @@ class ExecutorRun:
         )
         return df
 
+    def __reduce__(self):
+        return (
+            self.__class__,
+            (
+                self.hidden_layer_neurons,
+                self.epoch,
+                self.batch_size,
+                self.learning_rate,
+                self.momentum,
+                self.activation_function,
+                self.output_activation_function,
+                self.kernel_initializer,
+                self.loss_function,
+                self.hidden_layers,
+                self.X_normalized,
+                self.y,
+                self.n_folds,
+                self.shuffle,
+                self.metrics,
+                self.model,
+            ),
+        )
+
 
 def create_feedforward_model(
-    input_layer_neurons: int,
-    hidden_layer_neurons: int,
-    output_layer_neurons: int,
-    hidden_layers: int,
-    learning_rate: float,
-    momentum: float,
-    loss_function: str = 'mse',
-    kernel_initializer: str = 'GlorotNormal',
-    activation_function: str = 'sigmoid',
-    metrics: list = DEFAULT_METRICS,
-    output_activation_function: str = None,
+        input_layer_neurons: int,
+        hidden_layer_neurons: int,
+        output_layer_neurons: int,
+        hidden_layers: int,
+        learning_rate: float,
+        momentum: float,
+        loss_function: str = 'mse',
+        kernel_initializer: str = 'GlorotNormal',
+        activation_function: str = 'sigmoid',
+        metrics: list = DEFAULT_METRICS,
+        output_activation_function: str = None,
 ) -> tf.keras.Model:
-    optimizer = keras.optimizers.SGD(learning_rate=learning_rate)
+    optimizer = keras.optimizers.Adam(learning_rate=learning_rate)  # Adam is faster
     if momentum > 0:
         optimizer = keras.optimizers.SGD(
             learning_rate=learning_rate, momentum=momentum, nesterov=True
         )
 
     model = keras.Sequential()
+    # input layer
     model.add(layers.Dense(input_layer_neurons, kernel_initializer=kernel_initializer))
+
+    # hidden layers
     if hidden_layer_neurons is None or hidden_layer_neurons < 0:
         hidden_layer_neurons = (input_layer_neurons + output_layer_neurons) * 2
         print(rf"setting hidden_layer_neurons = {hidden_layer_neurons}")
@@ -163,10 +233,19 @@ def create_feedforward_model(
             )
         )
 
+    # output layer
     if output_activation_function is None:
-        model.add(layers.Dense(output_layer_neurons))
+        model.add(
+            layers.Dense(output_layer_neurons, kernel_initializer=kernel_initializer)
+        )
     else:
-        model.add(layers.Dense(output_layer_neurons, activation=activation_function))
+        model.add(
+            layers.Dense(
+                output_layer_neurons,
+                kernel_initializer=kernel_initializer,
+                activation=output_activation_function,
+            )
+        )
 
     model.compile(
         optimizer=optimizer,
@@ -177,35 +256,37 @@ def create_feedforward_model(
 
 
 def get_out_of_sample_metrics(
-    X_normalized: pd.DataFrame,
-    y: pd.DataFrame,
-    hidden_layer_neurons: int,
-    hidden_layers: int,
-    learning_rate: float,
-    momentum: float,
-    epoch: int,
-    batch_size: int,
-    n_splits: int,
-    shuffle=True,
-    loss_function: str = 'mse',
-    kernel_initializer: str = 'GlorotNormal',
-    activation_function: str = 'sigmoid',
-    metrics: list = DEFAULT_METRICS,
-    output_activation_function: str = None,
+        X_normalized: pd.DataFrame,
+        y: pd.DataFrame,
+        hidden_layer_neurons: int,
+        hidden_layers: int,
+        learning_rate: float,
+        momentum: float,
+        epoch: int,
+        batch_size: int,
+        n_splits: int,
+        shuffle=True,
+        loss_function: str = 'mse',
+        kernel_initializer: str = 'GlorotNormal',
+        activation_function: str = 'sigmoid',
+        metrics: list = DEFAULT_METRICS,
+        output_activation_function: str = None,
+        model=None,
 ) -> (float, float):
-    model = create_feedforward_model(
-        X_normalized.shape[1],
-        hidden_layers,
-        y.shape[1],
-        hidden_layer_neurons,
-        learning_rate,
-        momentum,
-        loss_function,
-        kernel_initializer,
-        activation_function,
-        metrics,
-        output_activation_function,
-    )
+    if model is None:
+        model = create_feedforward_model(
+            X_normalized.shape[1],
+            hidden_layers,
+            y.shape[1],
+            hidden_layer_neurons,
+            learning_rate,
+            momentum,
+            loss_function,
+            kernel_initializer,
+            activation_function,
+            metrics,
+            output_activation_function,
+        )
     kf = KFold(n_splits=n_splits, shuffle=shuffle)
 
     evaluation_1 = []
@@ -223,35 +304,35 @@ def get_out_of_sample_metrics(
             verbose=0,
             batch_size=batch_size,
         )  # verbose 0 to zero logs each epoch
-        model_test_loss, model_test_rmse, model_test_mse = model.evaluate(
+        model_test_loss, model_test_eval1, model_test_eval2 = model.evaluate(
             X_test_fold.values, y_test_fold.fillna(0).values, verbose=2
         )
-        evaluation_1.append(model_test_mse)
-        evaluation_2.append(model_test_rmse)
+        evaluation_1.append(model_test_eval1)
+        evaluation_2.append(model_test_eval2)
 
     return np.mean(evaluation_1), np.mean(evaluation_2)
 
 
 def parameter_tuning(
-    X_normalized: pd.DataFrame,
-    y: pd.DataFrame,
-    hidden_layers_list,
-    hidden_layer_neurons_list,
-    epoch_list,
-    batch_size_list,
-    learning_rate_list,
-    momentum_list,
-    activation_function_list,
-    output_activation_function_list,
-    kernel_initializer_list,
-    loss_function_list,
-    n_folds,
-    shuffle=True,
-    metrics: list = DEFAULT_METRICS,
-    n_jobs: int = 1,
-    X_normalized_test: pd.DataFrame = None,
-    y_test: pd.DataFrame = None,
-    take_best: int = 5,
+        X_normalized: pd.DataFrame,
+        y: pd.DataFrame,
+        hidden_layers_list,
+        hidden_layer_neurons_list,
+        epoch_list,
+        batch_size_list,
+        learning_rate_list,
+        momentum_list,
+        activation_function_list,
+        output_activation_function_list,
+        kernel_initializer_list,
+        loss_function_list,
+        n_folds,
+        shuffle=True,
+        metrics: list = DEFAULT_METRICS,
+        n_jobs: int = 1,
+        X_normalized_test: pd.DataFrame = None,
+        y_test: pd.DataFrame = None,
+        take_best: int = 5,
 ):
     import os
 
@@ -277,17 +358,17 @@ def parameter_tuning(
     executors = []
     jobs = []
     for (
-        hidden_layers,
-        hidden_layer_neurons,
-        epoch,
-        batch_size,
-        learning_rate,
-        momentum,
-        activation_function,
-        output_activation_function,
-        kernel_initializer,
-        loss_function,
-    ) in product(
+            hidden_layers,
+            hidden_layer_neurons,
+            epoch,
+            batch_size,
+            learning_rate,
+            momentum,
+            activation_function,
+            output_activation_function,
+            kernel_initializer,
+            loss_function,
+    ) in itertools.product(
         hidden_layers_list,
         hidden_layer_neurons_list,
         epoch_list,
@@ -320,10 +401,12 @@ def parameter_tuning(
         executors.append(executor_job)
         job = {"func": executor_job.run}
         jobs.append(job)
-    from utils.paralellization_util import process_jobs_joblib
+
+    from utils.paralellization_util import process_jobs_joblib, process_jobs_pathos
 
     n_jobs = min(n_jobs, len(jobs))
     process_jobs_joblib(jobs=jobs, num_threads=n_jobs)
+    # process_jobs_pathos(jobs=jobs, num_threads=n_jobs)
 
     # #waiting finished
     # all_executors_are_finished=False
@@ -460,20 +543,20 @@ def parameter_tuning(
 
 
 def old_parameter_tuning(
-    X_normalized: pd.DataFrame,
-    y: pd.DataFrame,
-    hidden_layers_list,
-    hidden_layer_neurons_list,
-    epoch_list,
-    batch_size_list,
-    learning_rate_list,
-    momentum_list,
-    activation_function_list,
-    kernel_initializer_list,
-    loss_function_list,
-    n_folds,
-    shuffle=True,
-    metrics: list = DEFAULT_METRICS,
+        X_normalized: pd.DataFrame,
+        y: pd.DataFrame,
+        hidden_layers_list,
+        hidden_layer_neurons_list,
+        epoch_list,
+        batch_size_list,
+        learning_rate_list,
+        momentum_list,
+        activation_function_list,
+        kernel_initializer_list,
+        loss_function_list,
+        n_folds,
+        shuffle=True,
+        metrics: list = DEFAULT_METRICS,
 ) -> pd.DataFrame:
     iterative = itertools.product(
         hidden_layers_list,
@@ -493,17 +576,18 @@ def old_parameter_tuning(
     inputs = []
     evaluation_1 = []
     evaluation_2 = []
+    from tqdm.contrib.itertools import product
 
     for (
-        hidden_layers,
-        hidden_layer_neurons,
-        epoch,
-        batch_size,
-        learning_rate,
-        momentum,
-        activation_function,
-        kernel_initializer,
-        loss_function,
+            hidden_layers,
+            hidden_layer_neurons,
+            epoch,
+            batch_size,
+            learning_rate,
+            momentum,
+            activation_function,
+            kernel_initializer,
+            loss_function,
     ) in product(
         hidden_layers_list,
         hidden_layer_neurons_list,

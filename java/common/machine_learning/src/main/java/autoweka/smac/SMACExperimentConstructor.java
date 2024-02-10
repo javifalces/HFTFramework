@@ -26,17 +26,17 @@ public class SMACExperimentConstructor extends ExperimentConstructor {
 		path = URLDecoder.decode(path);
 		try {
 			//Print out the param file
-			printParamFile(new PrintStream(new java.io.File(path + "autoweka.params")));
+			printParamFile(new PrintStream(new File(path + "autoweka.params")));
 
 			//Write out the instance file
-			printInstanceFile(new PrintStream(new java.io.File(path + "autoweka.instances")));
-			printTestInstanceFile(new PrintStream(new java.io.File(path + "autoweka.test.instances")));
-			printFeatureFile(new PrintStream(new java.io.File(path + "autoweka.features")));
+			printInstanceFile(new PrintStream(new File(path + "autoweka.instances")));
+			printTestInstanceFile(new PrintStream(new File(path + "autoweka.test.instances")));
+			printFeatureFile(new PrintStream(new File(path + "autoweka.features")));
 
 			//Write out the scenario file
-			printScenarioFile(new PrintStream(new java.io.File(path + "autoweka.scenario")));
+			printScenarioFile(new PrintStream(new File(path + "autoweka.scenario")));
 
-			autoweka.Util.makePath(path + "out");
+			Util.makePath(path + "out");
 		} catch (Exception e) {
 			throw new RuntimeException("Failed to prepare the experiment", e);
 		}
@@ -56,7 +56,7 @@ public class SMACExperimentConstructor extends ExperimentConstructor {
 		if (mProperties.getProperty("smacexecutable") == null)
 			throw new RuntimeException("The 'smacexecutable' property was not defined");
 
-		Properties props = autoweka.Util.parsePropertyString(mExperiment.extraPropsString);
+		Properties props = Util.parsePropertyString(mExperiment.extraPropsString);
 
 		String execExtension = "";
 		if (System.getProperty("os.name").toLowerCase().indexOf("win") >= 0) {
@@ -164,7 +164,7 @@ public class SMACExperimentConstructor extends ExperimentConstructor {
 	}
 
 	public void printInstanceFile(PrintStream out) {
-		Properties props = autoweka.Util.parsePropertyString(mExperiment.extraPropsString);
+		Properties props = Util.parsePropertyString(mExperiment.extraPropsString);
 		String instancesOverride = props.getProperty("instancesOverride", null);
 		if (instancesOverride != null) {
 			out.println(instancesOverride);
@@ -210,12 +210,12 @@ public class SMACExperimentConstructor extends ExperimentConstructor {
 		if (mExperiment.extraPropsString != null && mExperiment.extraPropsString.length() > 0)
 			extraProps = " -prop " + mExperiment.extraPropsString;
 
-		Properties props = autoweka.Util.parsePropertyString(mExperiment.extraPropsString);
+		Properties props = Util.parsePropertyString(mExperiment.extraPropsString);
 		String wrapper = props.getProperty("wrapper", "autoweka.smac.SMACWrapper");
 
 		out.println(
-				"algo = \"" + autoweka.Util.getJavaExecutable() + "\" -Dautoweka.infinity=" + autoweka.ClassifierResult
-						.getInfinity() + " -Xmx" + mExperiment.memory + " -cp \"" + autoweka.Util.getAbsoluteClasspath()
+				"algo = \"" + Util.getJavaExecutable() + "\" -Dautoweka.infinity=" + autoweka.ClassifierResult
+						.getInfinity() + " -Xmx" + mExperiment.memory + " -cp \"" + Util.getAbsoluteClasspath()
 						+ "\" " + wrapper + " -prop " + getWrapperPropString() + extraProps + " -wrapper");
 		out.println("execdir = ./");
 		out.println("deterministic = 1");

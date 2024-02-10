@@ -2,18 +2,14 @@ package com.lambda.investing.algorithmic_trading.reinforcement_learning.state;
 
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
-import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.PnlSnapshot;
-import com.lambda.investing.algorithmic_trading.reinforcement_learning.action.AvellanedaAction;
 import com.lambda.investing.data_manager.csv.CSVDataManager;
 import com.lambda.investing.model.candle.Candle;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.trading.Verb;
 import lombok.Getter;
-import lombok.Setter;
 import org.apache.commons.lang3.ArrayUtils;
-import org.apache.commons.math3.exception.NumberIsTooLargeException;
 import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.curator.shaded.com.google.common.collect.Queues;
 import org.apache.logging.log4j.LogManager;
@@ -21,13 +17,10 @@ import org.apache.logging.log4j.Logger;
 import org.paukov.combinatorics3.Generator;
 
 import java.io.*;
-import java.math.BigDecimal;
-import java.math.MathContext;
 import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.lambda.investing.data_manager.csv.CSVDataManager.removeEmptyLines;
-import static org.apache.commons.math3.util.CombinatoricsUtils.binomialCoefficientDouble;
 
 /**
  * https://softwareengineering.stackexchange.com/questions/286822/fast-indexing-of-k-combinations
@@ -50,16 +43,62 @@ import static org.apache.commons.math3.util.CombinatoricsUtils.binomialCoefficie
 	protected volatile Object lockTradesList = new Object();
 
 	protected DumpCache dumpCache = new DumpCache();
+	protected Map<String, Integer> columnStateToIndex = new HashMap<>();
 
 	public void setColumnsFilter(String[] columnsFilter) {
-
 		this.columnsFilter = columnsFilter;
+		updateMaxHorizon();
+
+		updateColumnStateIndex();
+
+	}
+
+	protected int getMaxHorizon(List<String> columnsFilter, String[] columns) {
+		int maxSuffix = 0;
+		List<String> columnsList = Arrays.asList(columns);
+		for (String column : columnsFilter) {
+			String[] split = column.split("_");
+			if (split.length > 1) {
+				try {
+					int lastIndex = split.length - 1;
+					//join all except last
+					String prefix = Arrays.stream(split).limit(lastIndex).collect(Collectors.joining("_"));
+					if (columnsList.contains(prefix)) {
+						int suffix = Integer.parseInt(split[lastIndex]);
+						if (suffix > maxSuffix) {
+							maxSuffix = suffix;
+						}
+					}
+
+				} catch (Exception e) {
+					logger.error("Error parsing column {} ", column);
+				}
+			}
+		}
+		return maxSuffix;
+	}
+
+	protected void updateMaxHorizon() {
+	}
+
+	private void updateColumnStateIndex() {
+		List<String> allColumns = getColumns();
+		logger.info("updating column state index for {} columns", allColumns.size());
+		int index = 0;
+		for (String column : allColumns) {
+			columnStateToIndex.put(column, index);
+			index++;
+		}
 	}
 
 	public abstract void calculateNumberOfColumns();
 
+	public boolean isFiltered() {
+		return columnsFilter != null && this.columnsFilter.length > 0;
+	}
+
 	public int getNumberOfColumns() {
-		if (this.columnsFilter == null || this.columnsFilter.length == 0) {
+		if (!isFiltered()) {
 			if (numberOfColumns == 0) {
 				calculateNumberOfColumns();
 			}
@@ -73,24 +112,22 @@ import static org.apache.commons.math3.util.CombinatoricsUtils.binomialCoefficie
 		if (this.columnsFilter == null) {
 			return inputState;
 		}
+		if (this.columnStateToIndex == null || this.columnStateToIndex.isEmpty()) {
+			updateColumnStateIndex();
+		}
 
-		int[] columnsSelected = new int[this.columnsFilter.length];
-
-		int index = 0;
-		List<String> allColumns = getColumns();
-		for (String column : columnsFilter) {
-			if (allColumns.contains(column)) {
-				columnsSelected[index] = allColumns.indexOf(column);
-				index++;
+		List<Double> filteredState = new ArrayList<>();
+		for (String filteredColumn : columnsFilter) {
+			double state = 0.0;
+			try {
+				int indexInAllStates = columnStateToIndex.get(filteredColumn);
+				state = inputState[indexInAllStates];
+			} catch (Exception e) {
+				logger.error("error getting state for column " + filteredColumn + " from state [" + inputState.length + "] " + Arrays.toString(inputState) + " set to 0.0", e);
 			}
+			filteredState.add(state);
 		}
-
-		double[] output = new double[this.columnsFilter.length];
-		int indexOut = 0;
-		for (int column : columnsSelected) {
-			output[indexOut] = inputState[column];
-			indexOut++;
-		}
+		double[] output = ArrayUtils.toPrimitive(filteredState.toArray(new Double[0]));
 		return output;
 	}
 
@@ -102,6 +139,14 @@ import static org.apache.commons.math3.util.CombinatoricsUtils.binomialCoefficie
 		return dumpCache.getNumberOfColumns();
 	}
 
+	public List<String> getFilteredColumns() {
+		return getColumns();
+	}
+
+	/***
+	 * Get column names before filtering ITS important to get in the same order as the state , because we filter same order
+	 * @return
+	 */
 	public abstract List<String> getColumns();
 
 	public abstract int getNumberStates();
@@ -115,6 +160,16 @@ import static org.apache.commons.math3.util.CombinatoricsUtils.binomialCoefficie
 	 */
 	public abstract double[] getCurrentState();
 
+	public double[] getCurrentStateSafe() {
+		try {
+			return getCurrentState();
+		} catch (Exception e) {
+			int numberOfColumns = getNumberOfColumns();
+			logger.error("error getting current state -> return all zeros array of size {}", numberOfColumns, e);
+			double[] zeros = new double[numberOfColumns];
+			return zeros;
+		}
+	}
 	public abstract int getCurrentStatePosition();
 
 	public abstract void enumerateStates(String cachePermutationsPath);
@@ -282,7 +337,7 @@ import static org.apache.commons.math3.util.CombinatoricsUtils.binomialCoefficie
 	/////
 
 	public double[] getCurrentStateRounded() {
-		double[] outputArr = getCurrentState();
+		double[] outputArr = getCurrentStateSafe();
 		if (outputArr == null) {
 			return outputArr;
 		}
@@ -591,7 +646,7 @@ import static org.apache.commons.math3.util.CombinatoricsUtils.binomialCoefficie
 	}
 
 	public void addRowDump(long startTimestamp, double[] state, double startPrice, long[] timestampsEndPrices,
-			double[] endPrices) {
+						   double[] endPrices) {
 		dumpCache.addRow(startTimestamp, state, startPrice, timestampsEndPrices, endPrices);
 	}
 
@@ -617,7 +672,7 @@ import static org.apache.commons.math3.util.CombinatoricsUtils.binomialCoefficie
 			}
 			return true;
 		} catch (IOException e) {
-			logger.error("{} cant be write it!", dataPath);
+			logger.error("{} can't be write it!", dataPath);
 			return false;
 		}
 

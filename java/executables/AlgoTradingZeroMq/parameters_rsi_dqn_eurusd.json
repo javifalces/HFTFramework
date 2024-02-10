@@ -1,0 +1,102 @@
+{
+  "marketDataPort": 666,
+  "tradeEnginePort": 677,
+  "tradeEngineHost": "localhost",
+  "marketDataHost": "localhost",
+  "paperTrading": "False",
+  "demoTrading": "False",
+  "instrumentPks": [
+    "eurusd_darwinex"
+  ],
+  "algorithm": {
+    "algorithmName": "DQNRSISideQuoting_eurusd_darwinex_test",
+    "parameters": {
+      "rlHost": "localhost",
+      "rlPort": 1212,
+      "style": "level",
+      "maxTimeWaitingActionResultsMs": 1000.0,
+      "maxTimeWaitingExitMs": 50000.0,
+      "levelToQuotes": [
+        -1.0,
+        1.0
+      ],
+      "periods": [
+        7.0,
+        9.0,
+        14.0,
+        21.0
+      ],
+      "upperBounds": [
+        70.0
+      ],
+      "upperBoundsExits": [
+        55.0
+      ],
+      "lowerBounds": [
+        30.0
+      ],
+      "lowerBoundsExits": [
+        45.0
+      ],
+      "changeSides": [
+        0.0,
+        1.0
+      ],
+      "volumeCandles": 1.5E8,
+      "useAsQLearn": 0.0,
+      "stateColumnsFilter": [],
+      "binaryStateOutputs": 0.0,
+      "numberDecimalsState": 3.0,
+      "horizonTicksMarketState": 1.0,
+      "periodsTAStates": [
+        9.0,
+        13.0,
+        21.0
+      ],
+      "otherInstrumentsStates": [
+        "eurgbp_darwinex",
+        "gbpusd_darwinex"
+      ],
+      "otherInstrumentsMsPeriods": [
+        5000.0,
+        10000.0,
+        30000.0,
+        45000.0,
+        60000.0,
+        90000.0
+      ],
+      "marketTickMs": 10.0,
+      "dumpFilename": "null",
+      "candleTypeBusiness": [
+        "mid_time_seconds_threshold"
+      ],
+      "reinforcementLearningType": "double_deep_q_learn",
+      "parameterTuningBeforeTraining": 0.0,
+      "earlyStoppingTraining": 0.0,
+      "earlyStoppingDataSplitTrainingPct": 0.6,
+      "hiddenSizeNodesMultiplier": 2.0,
+      "trainingStats": 0.0,
+      "maxBatchSize": 150.0,
+      "trainingPredictIterationPeriod": -25.0,
+      "trainingTargetIterationPeriod": -25.0,
+      "epoch": 30.0,
+      "momentumNesterov": 0.9,
+      "learningRateNN": 0.001,
+      "horizonMinMsTick": 0.0,
+      "scoreEnum": "realized_pnl",
+      "epsilon": 0.0,
+      "discountFactor": 0.95,
+      "learningRate": 0.95,
+      "quantity": 0.01,
+      "firstHour": 7.0,
+      "lastHour": 19.0,
+      "l1": 0.0,
+      "l2": 0.0,
+      "seed": 0.0,
+      "dumpSeconds": 30.0,
+      "dumpData": 0.0,
+      "secondsCandles": 8.0,
+      "stopActionOnFilled": 0.0
+    }
+  }
+}

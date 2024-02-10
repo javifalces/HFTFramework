@@ -2,7 +2,6 @@ package com.lambda.investing.trading_engine_connector;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.lambda.investing.Configuration;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorConfiguration;
@@ -28,13 +27,14 @@ import com.lambda.investing.trading_engine_connector.paper.PaperTradingEngineCon
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-
-import java.io.File;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+
+import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_POSITION_INFO;
 
 //Think how to add paper trading here!
 public class ZeroMqTradingEngineConnector implements TradingEngineConnector, ConnectorListener {
@@ -67,25 +67,24 @@ public class ZeroMqTradingEngineConnector implements TradingEngineConnector, Con
 	 * @param zeroMqConfigurationOrderRequest
 	 */
 	public ZeroMqTradingEngineConnector(String name, int threadsPublish, int threadsListen,
-			ZeroMqConfiguration zeroMqConfigurationExecutionReportListening,
-			ZeroMqConfiguration zeroMqConfigurationOrderRequest) {
+										ZeroMqConfiguration zeroMqConfigurationExecutionReportListening,
+										ZeroMqConfiguration zeroMqConfigurationOrderRequest) {
 		this.name = name;
 		this.zeroMqConfigurationExecutionReportListening = zeroMqConfigurationExecutionReportListening;
 		//listen the answers here
 		zeroMqExecutionReportProvider = ZeroMqProvider
 				.getInstance(this.zeroMqConfigurationExecutionReportListening, threadsListen);
 		zeroMqExecutionReportProvider.register(this.zeroMqConfigurationExecutionReportListening, this);
-		logger.info("Listening ExecutionReports on {}   in tcp://{}:{}",
+		logger.info("Listening ExecutionReports on {}   in {}}",
 				zeroMqConfigurationExecutionReportListening.getTopic(),
-				zeroMqConfigurationExecutionReportListening.getHost(),
-				zeroMqConfigurationExecutionReportListening.getPort());
+				zeroMqConfigurationExecutionReportListening.getUrl());
 
 		//publish the request here
 		this.zeroMqConfigurationOrderRequest = zeroMqConfigurationOrderRequest;
 		this.zeroMqPublisher = new ZeroMqPublisher(name, threadsPublish);
 
-		logger.info("Publishing OrderRequests on {}   in tcp://{}:{}", this.zeroMqConfigurationOrderRequest.getTopic(),
-				this.zeroMqConfigurationOrderRequest.getHost(), this.zeroMqConfigurationOrderRequest.getPort());
+		logger.info("Publishing OrderRequests on {}   in {}", this.zeroMqConfigurationOrderRequest.getTopic(),
+				this.zeroMqConfigurationOrderRequest.getUrl());
 
 		this.zeroMqPublisher
 				.publish(this.zeroMqConfigurationOrderRequest, TypeMessage.command, "*", "starting publishing");
@@ -97,11 +96,17 @@ public class ZeroMqTradingEngineConnector implements TradingEngineConnector, Con
 
 	}
 
+	@Override
+	public boolean isBusy() {
+		return false;
+	}
+
 	public void start() {
 		zeroMqExecutionReportProvider.start(true, true);
 	}
 
-	@Override public void register(String algorithmInfo, ExecutionReportListener executionReportListener) {
+	@Override
+	public void register(String algorithmInfo, ExecutionReportListener executionReportListener) {
 
 		Map<ExecutionReportListener, String> insideMap = listenersManager
 				.getOrDefault(algorithmInfo, new ConcurrentHashMap<>());
@@ -138,7 +143,7 @@ public class ZeroMqTradingEngineConnector implements TradingEngineConnector, Con
 		if (isPaperTrading && paperTradingEngine != null) {
 			this.paperTradingEngine.requestInfo(info);
 		} else {
-			this.zeroMqPublisher.publish(this.zeroMqConfigurationOrderRequest, TypeMessage.info, info, info);
+			this.zeroMqPublisher.publish(this.zeroMqConfigurationOrderRequest, TypeMessage.info, TypeMessage.info.toString(), info);
 		}
 	}
 
@@ -177,8 +182,18 @@ public class ZeroMqTradingEngineConnector implements TradingEngineConnector, Con
 
 	public void notifyInfo(String header, String message) {
 		String algorithmInfo = header.split("[.]")[0];
+
 		Map<ExecutionReportListener, String> insideMap = listenersManager
 				.getOrDefault(algorithmInfo, new ConcurrentHashMap<>());
+
+		if (algorithmInfo.equals(REQUESTED_POSITION_INFO)) {
+			insideMap = new HashMap<>();
+			for (Map<ExecutionReportListener, String> insideMapIter : listenersManager.values()) {
+				insideMap.putAll(insideMapIter);
+			}
+		}
+
+
 		if (insideMap.size() > 0) {
 			for (ExecutionReportListener executionReportListener : insideMap.keySet()) {
 				executionReportListener.onInfoUpdate(header, message);
@@ -187,7 +202,7 @@ public class ZeroMqTradingEngineConnector implements TradingEngineConnector, Con
 	}
 
 	@Override public void onUpdate(ConnectorConfiguration configuration, long timestampReceived,
-			TypeMessage typeMessage, String content) {
+								   TypeMessage typeMessage, String content) {
 		//ER read
 
 		if (typeMessage.equals(TypeMessage.execution_report)) {
@@ -195,7 +210,12 @@ public class ZeroMqTradingEngineConnector implements TradingEngineConnector, Con
 			notifyExecutionReport(executionReport);
 		}
 		if (typeMessage.equals(TypeMessage.info)) {
-			//TODO something with this info message
+			String header = REQUESTED_POSITION_INFO;
+			if (configuration instanceof ZeroMqConfiguration) {
+				ZeroMqConfiguration config = (ZeroMqConfiguration) configuration;
+				header = config.getTopic();
+			}
+			notifyInfo(header, content);
 		}
 
 	}
@@ -247,9 +267,7 @@ public class ZeroMqTradingEngineConnector implements TradingEngineConnector, Con
 					ordinaryMarketDataProvider.getConnectorConfiguration(), this.zeroMqPublisher);
 			paperTradingEngine.setPaperConnectorMarketDataAndExecutionReportPublisher(paperConnectorPublisher);
 
-		} else
-
-		{
+		} else {
 			logger.error(
 					"cant be paper trading on other type of MarketDataProvider as ZeroMqMarketDataConnector or OrdinaryMarketDataProvider");
 		}
@@ -272,11 +290,6 @@ public class ZeroMqTradingEngineConnector implements TradingEngineConnector, Con
 		}
 
 		@Override public boolean onCommandUpdate(Command command) {
-			return true;
-		}
-
-		@Override public boolean onExecutionReportUpdate(ExecutionReport executionReport) {
-			notifyExecutionReport(executionReport);
 			return true;
 		}
 

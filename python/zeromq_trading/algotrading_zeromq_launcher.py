@@ -10,6 +10,11 @@ from configuration import (
 )
 import json
 
+from trading_algorithms.reinforcement_learning.rl_algorithm import (
+    BaseModelType,
+    ReinforcementLearningActionType,
+)
+
 
 class AlgorithmState(Enum):
     created = 0
@@ -34,10 +39,10 @@ class AlgoTradingZeroMqLauncher:
         DEFAULT_JVM = DEFAULT_JVM_UNIX
 
     def __init__(
-        self,
-        algorithm_settings_path: str,
-        jar_path=ZEROMQ_JAR_PATH,
-        jvm_options: str = DEFAULT_JVM,
+            self,
+            algorithm_settings_path: str,
+            jar_path=ZEROMQ_JAR_PATH,
+            jvm_options: str = DEFAULT_JVM,
     ) -> None:
         if not os.path.isfile(algorithm_settings_path):
             print(f"algorithm_settings_path not found {algorithm_settings_path}")
@@ -51,6 +56,26 @@ class AlgoTradingZeroMqLauncher:
         self.state = AlgorithmState.created
         self.jvm_options = '-Duser.timezone=GMT ' + jvm_options
         self.algorithm_name = self._read_algorithm_name()
+
+        (
+            algorithm_name,
+            rl_host,
+            rl_port,
+            base_model,
+            reinforcement_learning_action_type,
+        ) = self._read_rl_gym_configuration()
+        if rl_port > 0:
+            print(
+                rf" start python server gym_agent_launcher -> algorithm_name={algorithm_name} rl_host={rl_host} rl_port={rl_port} base_model={base_model}"
+            )
+            self._start_gym_agent_launcher(
+                algorithm_name,
+                rl_host,
+                rl_port,
+                base_model,
+                reinforcement_learning_action_type,
+            )
+
         self.output_path = None
         if self.algorithm_name is not None:
             self.output_path = rf"{self.base_output}"
@@ -64,6 +89,42 @@ class AlgoTradingZeroMqLauncher:
         self.pid = None
         self.process = None
 
+        self.gym_agent_pid = None
+        self.gym_agent_process = None
+
+    def _start_gym_agent_launcher(
+            self,
+            algorithm_name: str,
+            rl_host: str,
+            rl_port: int,
+            base_model: str,
+            reinforcement_learning_action_type: str,
+    ):
+        from trading_algorithms.reinforcement_learning.rl_algorithm import RLAlgorithm
+
+        agent_model_path = RLAlgorithm.get_agent_model_path(algorithm_name)
+        normalizer_model_path = RLAlgorithm.get_normalizer_model_path(algorithm_name)
+        action_adapter_path = RLAlgorithm.get_action_adaptor_path(algorithm_name)
+
+        if not os.path.isfile(agent_model_path):
+            raise Exception(f"agent_model_path not found {agent_model_path}")
+        import subprocess
+
+        python_executable = 'gym_agent_launcher.py'
+        task = rf'python {python_executable}'
+
+        args = rf"{rl_host} {rl_port} {agent_model_path} {normalizer_model_path} {base_model} {reinforcement_learning_action_type} {action_adapter_path}"  # <rl_host> <rl_port> <model_path> <normalizer_model_path> <base_model> <reinforcement_learning_action_type> <action_adapter_path>
+        command_to_run = task + rf' {args}'
+        print('pwd=%s' % os.getcwd())
+        if self.VERBOSE_OUTPUT:
+            command_to_run += '>%sout.log' % (os.getcwd() + os.sep)
+
+        self.gym_agent_process = subprocess.Popen(
+            command_to_run, creationflags=subprocess.CREATE_NEW_CONSOLE
+        )
+
+        self.gym_agent_pid = self.gym_agent_process.pid
+
     def _read_algorithm_name(self):
         try:
             with open(self.algorithm_settings_path, 'r') as myfile:
@@ -74,10 +135,33 @@ class AlgoTradingZeroMqLauncher:
             print(f"not the right json format on {self.algorithm_settings_path}")
         return None
 
+    def _read_rl_gym_configuration(self) -> (str, str, int, str, str):
+        from trading_algorithms.reinforcement_learning.rl_algorithm import (
+            RlAlgorithmParameters,
+        )
+
+        try:
+            with open(self.algorithm_settings_path, 'r') as myfile:
+                data = myfile.read()
+            settings = json.loads(data)
+            parameters = settings["algorithm"]["parameters"]
+            algorithm_name = settings["algorithm"]["algorithmName"]
+            rl_host = parameters.get(RlAlgorithmParameters.rl_host, "")
+            rl_port = parameters.get(RlAlgorithmParameters.rl_port, -1)
+            base_model = parameters.get(RlAlgorithmParameters.model, BaseModelType.PPO)
+            reinforcement_learning_action_type = parameters.get(
+                RlAlgorithmParameters.action_type,
+                ReinforcementLearningActionType.continuous,
+            )
+            return algorithm_name, rl_host, rl_port, base_model
+        except Exception as e:
+            print(f"not the right json format on {self.algorithm_settings_path}")
+        return "", "", -1, ""
+
     def run(self):
         if (
-            self.state == AlgorithmState.created
-            or self.state == AlgorithmState.finished
+                self.state == AlgorithmState.created
+                or self.state == AlgorithmState.finished
         ):
             self.task = 'java %s -jar %s' % (self.jvm_options, self.jar_path)
             self.state = AlgorithmState.running

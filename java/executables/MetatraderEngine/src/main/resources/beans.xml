@@ -89,6 +89,7 @@
         <constructor-arg index="2" ref="marketDataPublisherConnectorConfiguration"/>
         <constructor-arg index="3" ref="marketDataConnectorPublisher"/>
         <constructor-arg index="4" ref="metatraderConnector"/>
+        <property name="broker" value="${metatrader.broker}"/>
     </bean>
 
 

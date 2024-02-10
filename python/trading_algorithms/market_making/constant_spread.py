@@ -1,6 +1,6 @@
 import datetime
-
-from trading_algorithms.algorithm import Algorithm
+import copy
+from trading_algorithms.algorithm import Algorithm, AlgorithmParameters
 from trading_algorithms.algorithm_enum import AlgorithmEnum
 from backtest.backtest_launcher import BacktestLauncher, BacktestLauncherController
 from backtest.input_configuration import (
@@ -15,21 +15,32 @@ import pandas as pd
 
 from backtest.parameter_tuning.ga_configuration import GAConfiguration
 
+
+class ConstantSpreadParameters:
+    quantity_limit = 'quantityLimit'
+    level = 'level'  # 0 - 4
+    skew_level = 'skewLevel'
+
+
 DEFAULT_PARAMETERS = {
     # ConstantSpread default
-    "quantity": (0.0001),
-    "level": (0),#0=1-5
-    "quantityLimit": (-1),
-    "firstHour": (7),
-    "lastHour": (19),
-    "skewLevel": (0),#0-4 -4-0
+    AlgorithmParameters.quantity: (0.0001),
+    AlgorithmParameters.first_hour: (0),
+    AlgorithmParameters.last_hour: (24),
+    AlgorithmParameters.ui: 0,
+    ConstantSpreadParameters.level: (0),  # 0=1-5
+    ConstantSpreadParameters.quantity_limit: (-1),
+    ConstantSpreadParameters.skew_level: (0),  # 0-4 -4-0
 }
 
 
 class ConstantSpread(Algorithm):
     NAME = AlgorithmEnum.constant_spread
 
-    def __init__(self, algorithm_info: str, parameters: dict = DEFAULT_PARAMETERS):
+    def __init__(self, algorithm_info: str, parameters: dict = None):
+        if parameters is None:
+            parameters = copy.copy(DEFAULT_PARAMETERS)
+
         parameters = Algorithm.set_defaults_parameters(
             parameters=parameters, DEFAULT_PARAMETERS=DEFAULT_PARAMETERS
         )
@@ -42,13 +53,13 @@ class ConstantSpread(Algorithm):
         return parameters
 
     def train(
-            self,
-            start_date: datetime.datetime,
-            end_date: datetime,
-            instrument_pk: str,
-            iterations: int,
-            algos_per_iteration: int,
-            simultaneous_algos: int = 1,
+        self,
+        start_date: datetime.datetime,
+        end_date: datetime,
+        instrument_pk: str,
+        iterations: int,
+        algos_per_iteration: int,
+        simultaneous_algos: int = 1,
     ) -> list:
         # makes no sense
 
@@ -100,16 +111,16 @@ class ConstantSpread(Algorithm):
         return output_list
 
     def parameter_tuning(
-            self,
-            start_date: datetime.datetime,
-            end_date: datetime,
-            instrument_pk: str,
-            parameters_min: dict,
-            parameters_max: dict,
-            max_simultaneous: int,
-            generations: int,
-            ga_configuration: GAConfiguration,
-            parameters_base: dict = DEFAULT_PARAMETERS,
+        self,
+        start_date: datetime.datetime,
+        end_date: datetime,
+        instrument_pk: str,
+        parameters_min: dict,
+        parameters_max: dict,
+        max_simultaneous: int,
+        generations: int,
+        ga_configuration: GAConfiguration,
+        parameters_base: dict = DEFAULT_PARAMETERS,
     ) -> (dict, pd.DataFrame):
 
         return super().parameter_tuning(

@@ -49,7 +49,7 @@ public class MultiLevel extends RandomSubSampling {
 	}
 
 	public Instances _getTrainingFromParams(String params) {
-		InstanceGenerator.NestedArgs args = new InstanceGenerator.NestedArgs(params);
+		NestedArgs args = new NestedArgs(params);
 		InstanceGenerator child = InstanceGenerator
 				.create(args.child, getInstancesFromParamsForSubClass(args.current, false),
 						getInstancesFromParamsForSubClass(args.current, true));
@@ -57,7 +57,7 @@ public class MultiLevel extends RandomSubSampling {
 	}
 
 	public Instances _getTestingFromParams(String params) {
-		InstanceGenerator.NestedArgs args = new InstanceGenerator.NestedArgs(params);
+		NestedArgs args = new NestedArgs(params);
 		InstanceGenerator child = InstanceGenerator
 				.create(args.child, getInstancesFromParamsForSubClass(args.current, false),
 						getInstancesFromParamsForSubClass(args.current, true));
@@ -93,7 +93,7 @@ public class MultiLevel extends RandomSubSampling {
 	}
 
 	public List<String> getAllInstanceStrings(String params) {
-		InstanceGenerator.NestedArgs args = new InstanceGenerator.NestedArgs(params);
+		NestedArgs args = new NestedArgs(params);
 		Properties levelParams = Util.parsePropertyString(args.current);
 		int numLevels = Integer.parseInt(levelParams.getProperty("numLevels", "-1"));
 		if (numLevels <= 0)
@@ -120,7 +120,7 @@ public class MultiLevel extends RandomSubSampling {
 	public Map<String, Map<String, String>> getAllInstanceFeatures(String params) {
 		Map<String, Map<String, String>> feats = new HashMap<String, Map<String, String>>();
 
-		InstanceGenerator.NestedArgs args = new InstanceGenerator.NestedArgs(params);
+		NestedArgs args = new NestedArgs(params);
 		Properties levelParams = Util.parsePropertyString(args.current);
 		int numLevels = Integer.parseInt(levelParams.getProperty("numLevels", "-1"));
 		if (numLevels <= 0)

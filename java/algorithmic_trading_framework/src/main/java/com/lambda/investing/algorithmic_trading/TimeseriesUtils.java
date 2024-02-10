@@ -134,13 +134,13 @@ public class TimeseriesUtils {
 		return new Pair<>(instrument1, instrument2);
 	}
 
-	private static List<TimeseriesUtils.TupleQueue> getLastValues(long takeUntil,
-			Map<String, Queue<TimeseriesUtils.TupleQueue>> values, String instrumentPk) {
-		List<TimeseriesUtils.TupleQueue> instrumentValues = new ArrayList<>(values.get(instrumentPk));
+	private static List<TupleQueue> getLastValues(long takeUntil,
+                                                  Map<String, Queue<TupleQueue>> values, String instrumentPk) {
+		List<TupleQueue> instrumentValues = new ArrayList<>(values.get(instrumentPk));
 		Collections.reverse(instrumentValues);
-		List<TimeseriesUtils.TupleQueue> selected = new ArrayList<>();
+		List<TupleQueue> selected = new ArrayList<>();
 		selected.add(instrumentValues.get(0));//add the last one,on the first item
-		for (TimeseriesUtils.TupleQueue item : instrumentValues.subList(1, instrumentValues.size())) {
+		for (TupleQueue item : instrumentValues.subList(1, instrumentValues.size())) {
 			long timestamp = item.getTimestamp();
 			if (timestamp < takeUntil) {
 				break;
@@ -160,15 +160,15 @@ public class TimeseriesUtils {
 		long takeUntil = (long) currentTimestamp - periodMs;//
 
 		//instrument 1
-		List<TimeseriesUtils.TupleQueue> instrumentValuesSelected = getLastValues(takeUntil, values, instrument);
+		List<TupleQueue> instrumentValuesSelected = getLastValues(takeUntil, values, instrument);
 		//instrument 2
-		List<TimeseriesUtils.TupleQueue> otherValuesSelected = getLastValues(takeUntil, values, otherInstrument);
+		List<TupleQueue> otherValuesSelected = getLastValues(takeUntil, values, otherInstrument);
 
 		if (instrumentValuesSelected.size() == 0 || otherValuesSelected.size() == 0) {
 			//no values yet
 			return 0.0;
 		}
-		Pair<List<TimeseriesUtils.TupleQueue>, List<TimeseriesUtils.TupleQueue>> merged = MergeTupleFfillQueue(
+		Pair<List<TupleQueue>, List<TupleQueue>> merged = MergeTupleFfillQueue(
 				instrumentValuesSelected, otherValuesSelected);
 
 		if (merged.getKey().size() < 3) {
@@ -177,8 +177,8 @@ public class TimeseriesUtils {
 			return 0.0;
 		}
 
-		List<TimeseriesUtils.TupleQueue> instrumentValuesSelectedOut = merged.getKey();
-		List<TimeseriesUtils.TupleQueue> otherValuesSelectedOut = merged.getValue();
+		List<TupleQueue> instrumentValuesSelectedOut = merged.getKey();
+		List<TupleQueue> otherValuesSelectedOut = merged.getValue();
 		int minSize = Math.min(instrumentValuesSelectedOut.size(), otherValuesSelectedOut.size());
 
 		List<Double> distance = new ArrayList<>();

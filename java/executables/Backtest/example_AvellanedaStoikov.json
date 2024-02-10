@@ -1,24 +1,27 @@
 {
   "backtest": {
-    "startDate": "20211223 06:00:00",
-    "endDate": "20211223 20:00:00",
-    "instrument": "btcusdt_binance",
-    "delayOrderMs": 0
+    "startDate": "20231113 06:00:00",
+    "endDate": "20231113 20:00:00",
+    "instrument": "btcusdt_kraken",
+    "delayOrderMs": 0,
+    "feesCommissionsIncluded": false,
+    "multithreadConfiguration": "single_thread"
   },
   "algorithm": {
     "algorithmName": "AvellanedaStoikov_test",
     "parameters": {
-      "risk_aversion": 0.1,
-      "windowTick": 15,
-      "minutesChangeK": 1.0,
+      "riskAversion": 0.00006,
+      "midpricePeriodSeconds": 3,
+      "midpricePeriodWindow": 60,
+      "changeKPeriodSeconds": 60.0,
       "quantity": 0.0001,
       "firstHour": 7.0,
       "lastHour": 19.0,
-      "kDefault": -1,
-      "spreadMultiplier": 1.0,
-      "positionMultiplier": 1.0,
       "spreadCalculation": "Avellaneda",
-      "kCalculation": "Alridge"
+      "kCalculation": "Pct",
+      "calculateTt": 0,
+      "skew": 0,
+      "ui": 1
     }
   }
 }

@@ -327,14 +327,14 @@ import weka.gui.ProgrammaticProperty;
 	public Capabilities getCapabilities() {
 		Capabilities result = super.getCapabilities();
 		result.disableAll();
-		result.enable(Capabilities.Capability.STRING_ATTRIBUTES);
+		result.enable(Capability.STRING_ATTRIBUTES);
 		result.enable(Capability.RELATIONAL_ATTRIBUTES);
 
 		// class
-		result.enable(Capabilities.Capability.NOMINAL_CLASS);
-		result.enable(Capabilities.Capability.NUMERIC_CLASS);
-		result.enable(Capabilities.Capability.DATE_CLASS);
-		result.enable(Capabilities.Capability.MISSING_CLASS_VALUES);
+		result.enable(Capability.NOMINAL_CLASS);
+		result.enable(Capability.NUMERIC_CLASS);
+		result.enable(Capability.DATE_CLASS);
+		result.enable(Capability.MISSING_CLASS_VALUES);
 
 		return result;
 	}

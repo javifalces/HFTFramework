@@ -85,7 +85,7 @@ import weka.gui.ProgrammaticProperty;
 	 *
 	 * @return NeuralNetworkConfiguration
 	 */
-	public org.deeplearning4j.nn.conf.NeuralNetConfiguration.Builder builder() {
+	public Builder builder() {
 		Builder builder = new Builder();
 
 		// Set dist to null if Disabled was chosen as dl4j backend defaults to null

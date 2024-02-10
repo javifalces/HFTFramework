@@ -1,11 +1,10 @@
 package com.lambda.investing.market_data_connector.csv_file_reader;
 
 import com.lambda.investing.Configuration;
-import com.lambda.investing.data_manager.csv.CSVUtils;
+import com.lambda.investing.data_manager.FileDataUtils;
 import com.lambda.investing.model.asset.Instrument;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.kerby.config.Conf;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -30,7 +29,7 @@ public class CSVFileConfiguration {
 	private Map<String, Instrument> filePathToInstrument;
 
 	public CSVFileConfiguration(List<Instrument> instruments, int speed, long initialSleepSeconds, Date startTime,
-			Date endTime) {
+								Date endTime) {
 		this.instruments = instruments;
 
 		this.speed = speed;
@@ -41,9 +40,8 @@ public class CSVFileConfiguration {
 	}
 
 
-
 	public CSVFileConfiguration(Instrument instrument,  int speed, long initialSleepSeconds, Date startTime,
-			Date endTime) {
+								Date endTime) {
 		instruments = new ArrayList<>();
 		instruments.add(instrument);
 
@@ -56,7 +54,7 @@ public class CSVFileConfiguration {
 
 
 	public CSVFileConfiguration(Instrument instrument,  int speed, long initialSleepSeconds, String startTime,
-			String endTime) throws ParseException {
+								String endTime) throws ParseException {
 		instruments = new ArrayList<>();
 		instruments.add(instrument);
 
@@ -72,7 +70,7 @@ public class CSVFileConfiguration {
 	}
 
 	public CSVFileConfiguration(Instrument instrument,Date startTime,
-			Date endTime) {
+								Date endTime) {
 		instruments = new ArrayList<>();
 		instruments.add(instrument);
 		this.startTime=startTime;
@@ -81,14 +79,12 @@ public class CSVFileConfiguration {
 		setCSVFilesPath();
 	}
 
-	public static List<Date> getDaysBetweenDates(Date startdate, Date enddate)
-	{
+	public static List<Date> getDaysBetweenDates(Date startdate, Date enddate) {
 		List<Date> dates = new ArrayList<>();
 		Calendar calendar = new GregorianCalendar();
 		calendar.setTime(startdate);
 		dates.add(startdate);
-		while (calendar.getTime().before(enddate))
-		{
+		while (calendar.getTime().before(enddate)) {
 			Date result = calendar.getTime();
 			dates.add(result);
 			calendar.add(Calendar.DATE, 1);
@@ -126,8 +122,8 @@ public class CSVFileConfiguration {
 
 			}
 		}
-		CSVUtils.PATH_TO_INSTRUMENT = filePathToInstrument;
-		logger.info("Setting File path with {} depths files and {} trades files",depthFilesPath.size(),tradeFilesPath.size());
+		FileDataUtils.PATH_TO_INSTRUMENT = filePathToInstrument;
+		logger.info("Setting File path with {} depths files and {} trades files", depthFilesPath.size(), tradeFilesPath.size());
 
 	}
 

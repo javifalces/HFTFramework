@@ -7,9 +7,8 @@ import itertools
 import tqdm
 from tqdm.contrib.itertools import product
 
+
 from utils.paralellization_util import process_jobs_joblib
-
-
 
 DEFAULT_METRICS = [
     tf.keras.metrics.RootMeanSquaredError(),

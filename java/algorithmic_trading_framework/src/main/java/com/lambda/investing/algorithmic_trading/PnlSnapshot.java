@@ -1,14 +1,11 @@
 package com.lambda.investing.algorithmic_trading;
 
-import com.google.common.primitives.Doubles;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.ExecutionReportStatus;
 import com.lambda.investing.model.trading.Verb;
 import lombok.Getter;
-import lombok.Setter;
-import org.apache.commons.lang3.ArrayUtils;
 import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -17,13 +14,17 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetStd;
-import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore;
-import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscorePositive;
+import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.*;
 
-@Getter public class PnlSnapshot {
 
-	protected static double DEFAULT_LEVERAGE = 1.0;
+/****
+ * DEPRECATED CLASS!!! not use it!! we are using PnlSnapshotOrders!
+ *
+ */
+@Getter
+public class PnlSnapshot {
+
+	protected static double DEFAULT_QUANTITY_MULTIPLIER = 1.0;
 
 	protected static boolean CHECK_OPEN_PNL = false;
 	protected static double UNREALIZED_ZSCORE_WARNING = 100.0;
@@ -68,6 +69,8 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore
 	protected Map<Instrument, Depth> lastDepth;
 
 	List<Double> zerosList = Arrays.asList(0.0, -0.0);
+
+	protected Calendar calendar = new GregorianCalendar();
 
 	public PnlSnapshot() {
 		historicalTimestamp = new ArrayList<>();
@@ -186,7 +189,9 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore
 				//				nextCustomReject=true;
 				//				return;
 				//			}
-				if (new Date(timestamp).getYear() < 80) {//lower 1980 is strange
+				calendar.setTime(new Date(timestamp));
+				int year = calendar.get(Calendar.YEAR) - 1900;
+				if (year < 80) {//lower 1980 is strange
 					logger.warn("trying to update historicals with year {}", new Date(timestamp));
 				}
 				timestamp = getTimestamp(timestamp);
@@ -240,8 +245,8 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore
 
 		} else {
 			//modify it by default
-				timestampIn += 1;
-			}
+			timestampIn += 1;
+		}
 		//		}
 		return timestampIn;
 	}
@@ -338,9 +343,9 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore
 		boolean isTaker = isTaker(instrument, executionReport.getPrice(), executionReport.getVerb());
 		lastFee = instrument.calculateFee(isTaker, executionReport.getPrice(), executionReport.getLastQuantity());
 
-		double leverage = DEFAULT_LEVERAGE;
+		double quantityMultiplier = DEFAULT_QUANTITY_MULTIPLIER;
 		if (instrument != null) {
-			leverage = instrument.getLeverage();
+			quantityMultiplier = instrument.getQuantityMultiplier();
 		}
 		double quantityWithDirection = executionReport.getLastQuantity();
 		if (executionReport.getVerb().equals(Verb.Sell)) {
@@ -358,7 +363,7 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore
 			double minPositionAbs = Math.min(Math.abs(quantityWithDirection), Math.abs(netPosition));
 			double sidePosition = Math.signum(netPosition);
 			double initialPrice = avgOpenPrice;//TODO use openBids or openAsks
-			double realizedPnlTemp = (lastPrice - initialPrice) * minPositionAbs * sidePosition * leverage;
+			double realizedPnlTemp = (lastPrice - initialPrice) * minPositionAbs * sidePosition * quantityMultiplier;
 			if (Double.isNaN(realizedPnlTemp)) {
 				realizedPnlTemp = 0.0;
 			}
@@ -443,9 +448,9 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore
 			return;
 		}
 		Instrument instrument = Instrument.getInstrument(depth.getInstrument());
-		double leverage = DEFAULT_LEVERAGE;
+		double quantityMultiplier = DEFAULT_QUANTITY_MULTIPLIER;
 		if (instrument != null) {
-			leverage = instrument.getLeverage();
+			quantityMultiplier = instrument.getQuantityMultiplier();
 		}
 
 		double lastPrice = depth.getMidPrice();
@@ -502,7 +507,7 @@ import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore
 				//				logger.warn("unrealizedPnlProposal is out of bounds {} => using previous {}", unrealizedPnlProposal,
 				//						unrealizedPnl);
 			} else {
-				unrealizedPnl = unrealizedPnlProposal * leverage;
+				unrealizedPnl = unrealizedPnlProposal * quantityMultiplier;
 				midpricesQueue.offer(lastPrice);
 				calculateBoundariesPrice(lastPriceForUnrealized);
 			}

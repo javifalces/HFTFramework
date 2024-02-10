@@ -161,10 +161,10 @@ public class SubProcessWrapper extends Wrapper {
 			String instance, String args, String autowekaSeed) {
 		try {
 			List<String> wrapperCmd = new ArrayList<String>();
-			wrapperCmd.add(autoweka.Util.getJavaExecutable());
+			wrapperCmd.add(Util.getJavaExecutable());
 			wrapperCmd.add("-Xmx" + memory);
 			wrapperCmd.add("-cp");
-			wrapperCmd.add(autoweka.Util.getAbsoluteClasspath());
+			wrapperCmd.add(Util.getAbsoluteClasspath());
 			wrapperCmd.add("autoweka.SubProcessWrapper");
 			wrapperCmd.add("-prop");
 			wrapperCmd.add(Util.propertiesToString(props));

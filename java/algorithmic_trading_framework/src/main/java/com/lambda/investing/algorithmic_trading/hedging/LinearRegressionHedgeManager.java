@@ -1,22 +1,21 @@
 package com.lambda.investing.algorithmic_trading.hedging;
 
 import com.lambda.investing.algorithmic_trading.Algorithm;
-import com.lambda.investing.algorithmic_trading.statistical_arbitrage.StatisticalArbitrageAlgorithm;
 import com.lambda.investing.algorithmic_trading.statistical_arbitrage.synthetic_portfolio.SyntheticInstrument;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.exception.LambdaTradingException;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
-import com.lambda.investing.model.trading.*;
+import com.lambda.investing.model.trading.ExecutionReport;
+import com.lambda.investing.model.trading.OrderRequest;
+import com.lambda.investing.model.trading.Verb;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.FileNotFoundException;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class LinearRegressionHedgeManager implements HedgeManager {
 

@@ -14,6 +14,8 @@ import org.mockito.runners.MockitoJUnitRunner;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.Matchers.any;
@@ -102,15 +104,18 @@ import static org.mockito.Mockito.doAnswer;
 		Double[] bids = new Double[] { bestBid, bestBid - 0.01 };
 		depth.setBids(bids);
 
-		Double[] asksQ = new Double[] { bestAskQty, bestAskQty };
+		Double[] asksQ = new Double[]{bestAskQty, bestAskQty};
 		depth.setAsksQuantities(asksQ);
 
-		Double[] bidsQ = new Double[] { bestBidQty, bestBidQty };
+		Double[] bidsQ = new Double[]{bestBidQty, bestBidQty};
 		depth.setBidsQuantities(bidsQ);
 
-		String[] algorithms = new String[] { Depth.ALGORITHM_INFO_MM, Depth.ALGORITHM_INFO_MM };
-		depth.setAsksAlgorithmInfo(algorithms);
-		depth.setBidsAlgorithmInfo(algorithms);
+
+		String[] algorithms = new String[]{Depth.ALGORITHM_INFO_MM, Depth.ALGORITHM_INFO_MM};
+		List<String>[] algorithmsList = new List[]{Arrays.asList(algorithms), Arrays.asList(algorithms)};
+		depth.setAsksAlgorithmInfo(algorithmsList);
+		depth.setBidsAlgorithmInfo(algorithmsList);
+
 		depth.setLevelsFromData();
 		return depth;
 
@@ -308,7 +313,37 @@ import static org.mockito.Mockito.doAnswer;
 		Assert.assertEquals(trade.getQuantity(), lastTradeListen.getQuantity());
 	}
 
-	@Test public void refreshAlgoAndFilledWithTradeSells() {
+	@Test
+	public void refreshDepthRelativeTest() {
+		lastDepthListen = null;
+		Depth depth = createDepth(85, 95, 5, 6);
+		orderMatchEngine.refreshMarketMakerDepth(depth);
+		Assert.assertEquals(depth.getBestBid(), lastDepthListen.getBestBid(), 0.0001);
+		Assert.assertEquals(depth.getBestAsk(), lastDepthListen.getBestAsk(), 0.0001);
+
+		lastDepthListen = null;
+		Depth depth1 = createDepth(84, 96, 5, 6);
+		orderMatchEngine.refreshMarketMakerDepth(depth1);
+		Assert.assertEquals(depth1.getBestBid(), lastDepthListen.getBestBid(), 0.0001);
+		Assert.assertEquals(depth1.getBestAsk(), lastDepthListen.getBestAsk(), 0.0001);
+
+		lastDepthListen = null;
+		Depth depth2 = createDepth(84, 96, 6, 9);
+		orderMatchEngine.refreshMarketMakerDepth(depth2);
+
+		Assert.assertEquals(depth2.getBestBid(), lastDepthListen.getBestBid(), 0.0001);
+		Assert.assertEquals(depth2.getBestAsk(), lastDepthListen.getBestAsk(), 0.0001);
+		Assert.assertEquals(depth2.getBestBidQty(), lastDepthListen.getBestBidQty(), 0.0001);
+		Assert.assertEquals(depth2.getBestAskQty(), lastDepthListen.getBestAskQty(), 0.0001);
+
+		lastDepthListen = null;
+		orderMatchEngine.refreshMarketMakerDepth(depth2);
+		Assert.assertNull(lastDepthListen);
+
+	}
+
+	@Test
+	public void refreshAlgoAndFilledWithTradeSells() {
 		lastDepthListen = null;
 		Depth depth = createDepth(85, 95, 5, 6);
 		orderMatchEngine.refreshMarketMakerDepth(depth);
@@ -446,7 +481,9 @@ import static org.mockito.Mockito.doAnswer;
 		Assert.assertEquals(depth.getAsks()[1], lastDepthListen.getBestAsk(), 0.0001);
 		Assert.assertEquals(depth.getAsksQuantities()[1], lastDepthListen.getBestAskQty(), 0.0001);
 
-		orderMatchEngine.refreshMarketMakerDepth(depth);
+		Depth depth2 = createDepth(85, 95, 10, 12);//we increase size of the depth
+		orderMatchEngine.refreshMarketMakerDepth(depth2);
+
 		lastDepthListen = null;
 		lastExecutionReportListen = null;
 		lastTradeListen = null;

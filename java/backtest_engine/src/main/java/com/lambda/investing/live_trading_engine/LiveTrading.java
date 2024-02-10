@@ -11,7 +11,6 @@ import com.lambda.investing.trading_engine_connector.paper.PaperTradingEngine;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.ArrayList;
 import java.util.List;
 
 public class LiveTrading {
@@ -40,6 +39,10 @@ public class LiveTrading {
 	 */
 	public void setInstrumentList(List<Instrument> instrumentList) {
 		this.instrumentList = instrumentList;
+	}
+
+	public List<Instrument> getInstrumentList() {
+		return instrumentList;
 	}
 
 	public void setPaperTrading(boolean paperTrading) throws Exception {

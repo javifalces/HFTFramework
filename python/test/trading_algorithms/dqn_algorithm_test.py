@@ -1,4 +1,4 @@
-from trading_algorithms.side_quoting.rsi_dqn import RsiDQN
+from trading_algorithms.side_quoting.alpha_mean_reversion import AlphaMeanReversion
 import numpy as np
 
 
@@ -33,7 +33,7 @@ class DqnAlgorithmTest:
 
     instrument_pk = 'eurusd_darwinex'
     algorithm_info = '%s_test_script' % instrument_pk
-    rsi_dqn = RsiDQN(algorithm_info=algorithm_info)
+    rsi_dqn = AlphaMeanReversion(algorithm_info=algorithm_info)
     rsi_dqn.set_parameters(parameters=parameters)
 
     def test_merge_arrays(self):
@@ -47,7 +47,7 @@ class DqnAlgorithmTest:
         actions = 2
         state_columns = 3
 
-        df_final = RsiDQN.merge_array_matrix(arrays, state_columns, actions)
+        df_final = AlphaMeanReversion.merge_array_matrix(arrays, state_columns, actions)
         assert len(df_final) == 3
 
     def test_merge_arrays_negative(self):
@@ -61,5 +61,5 @@ class DqnAlgorithmTest:
         actions = 2
         state_columns = 3
 
-        df_final = RsiDQN.merge_array_matrix(arrays, state_columns, actions)
+        df_final = AlphaMeanReversion.merge_array_matrix(arrays, state_columns, actions)
         assert len(df_final) == 3

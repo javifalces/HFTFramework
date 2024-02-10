@@ -6,7 +6,7 @@
     <parent>
         <artifactId>parent_pom</artifactId>
         <groupId>com.lambda.investing</groupId>
-        <version>0.0.0-SNAPSHOT</version>
+        <version>0.1.0-SNAPSHOT</version>
         <relativePath>../../parent_pom/pom.xml</relativePath>
     </parent>
 
@@ -19,7 +19,13 @@
         <dependency>
             <groupId>com.lambda.investing</groupId>
             <artifactId>models</artifactId>
-            <version>0.0.0-SNAPSHOT</version>
+            <version>0.1.0-SNAPSHOT</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.lambda.investing</groupId>
+            <artifactId>configuration</artifactId>
+            <version>0.1.0-SNAPSHOT</version>
         </dependency>
 
         <!--Parquet-->
@@ -57,6 +63,11 @@
             <artifactId>tablesaw-core</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>net.tlabs-data</groupId>
+            <artifactId>tablesaw_${table-saw.version}-parquet</artifactId>
+        </dependency>
+
         <!--sort method-->
         <dependency>
             <groupId>it.unimi.dsi</groupId>
@@ -68,7 +79,6 @@
         <dependency>
             <groupId>me.tongfei</groupId>
             <artifactId>progressbar</artifactId>
-            <version>0.8.1</version>
         </dependency>
 
         <dependency>

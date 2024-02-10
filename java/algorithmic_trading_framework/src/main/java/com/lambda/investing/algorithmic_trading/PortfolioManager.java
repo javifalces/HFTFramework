@@ -1,32 +1,23 @@
 package com.lambda.investing.algorithmic_trading;
 
-import com.google.common.collect.BiMap;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
-import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.portfolio.Portfolio;
 import com.lambda.investing.model.portfolio.PortfolioInstrument;
 import com.lambda.investing.model.trading.ExecutionReport;
-import com.lambda.investing.model.trading.Verb;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import tech.tablesaw.aggregate.AggregateFunctions;
 import tech.tablesaw.api.*;
+import tech.tablesaw.plotly.Plot;
+import tech.tablesaw.plotly.api.TimeSeriesPlot;
+import tech.tablesaw.plotly.components.Figure;
 
-import java.io.*;
+import java.io.File;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-
-//
-import tech.tablesaw.plotly.Plot;
-import tech.tablesaw.plotly.api.BubblePlot;
-import tech.tablesaw.plotly.api.TimeSeriesPlot;
-import tech.tablesaw.plotly.components.Figure;
-import tech.tablesaw.selection.Selection;
 
 import static com.lambda.investing.algorithmic_trading.PnlSnapshot.UPDATE_HISTORICAL_LOCK;
 
@@ -187,12 +178,6 @@ public class PortfolioManager {
 						pnlSnapshot.totalFees, pnlSnapshot.realizedPnl, pnlSnapshot.realizedFees,
 						pnlSnapshot.unrealizedPnl, pnlSnapshot.unrealizedFees);
 
-		logger.info(
-				"\n\ttrades:{}  position:{} totalPnl:{} totalFees:{}\n\trealizedPnl:{}  realizedFees:{}\n\tunrealizedPnl:{}  unrealizedFees:{}",
-				pnlSnapshot.numberOfTrades, pnlSnapshot.netPosition, pnlSnapshot.totalPnl, pnlSnapshot.totalFees,
-				pnlSnapshot.realizedPnl, pnlSnapshot.realizedFees, pnlSnapshot.unrealizedPnl,
-				pnlSnapshot.unrealizedFees);
-
 		return output;
 
 	}
@@ -208,7 +193,7 @@ public class PortfolioManager {
 	}
 
 	public void plotHistorical(Instrument instrument) {
-		Map<Instrument, Table> tradesTable = getTradesTable(null);
+		Map<Instrument, Table> tradesTable = getTradesTableAndSave(null);
 		Table tradeTable = tradesTable.get(instrument);
 		if (tradeTable == null || tradeTable.rowCount() <= 0) {
 			//nothing saved here
@@ -280,8 +265,18 @@ public class PortfolioManager {
 		return output;
 	}
 
-	public synchronized Map<Instrument, Table> getTradesTable(String basePath) {
+	/***
+	 *
+	 * @param basePath path to save trades CSV ,if null is only getting the table , not persisting
+	 * @return Table of results per instrument
+	 */
+	public synchronized Map<Instrument, Table> getTradesTableAndSave(String basePath) {
 		synchronized (UPDATE_HISTORICAL_LOCK) {
+			if (basePath != null) {
+				File file = new File(basePath).getParentFile();
+				file.mkdirs();//create if not exist
+			}
+
 			Map<Instrument, Table> output = new ConcurrentHashMap<>();
 			try {
 				List<String> instrumentsIterated = new ArrayList<>();
@@ -429,8 +424,8 @@ public class PortfolioManager {
 						String filename = basePath + "_" + instrumentPk + ".csv";
 						try {
 							output1.write().csv(filename);
-						} catch (IOException e) {
-							logger.error("cant save tradestable to {} ", filename, e);
+						} catch (Exception e) {
+							logger.error("can't save tradestable to {} ", filename, e);
 						}
 					}
 					Instrument instrument = Instrument.getInstrument(getInstrumentPK(instrumentKey));

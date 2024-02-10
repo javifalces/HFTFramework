@@ -1314,7 +1314,7 @@ import javax.swing.*;
    */
   protected void createModel() throws Exception {
     final INDArray features = getFirstBatchFeatures(trainData);
-    ComputationGraphConfiguration.GraphBuilder gb = netConfig.builder().seed(getSeed()).graphBuilder();
+    GraphBuilder gb = netConfig.builder().seed(getSeed()).graphBuilder();
 
     // Set ouput size
     final Layer lastLayer = layers[layers.length - 1];
@@ -1473,7 +1473,7 @@ import javax.swing.*;
     TrainingListener listener;
 
     // Initialize weka listener
-    if (iterationListener instanceof weka.dl4j.listener.EpochListener) {
+    if (iterationListener instanceof EpochListener) {
       // int numEpochs = getNumEpochs();
       int numEpochs = maxEpochs;
       iterationListener.init(trainData.numClasses(), numEpochsPerformed, numEpochs, numSamples, trainIterator,
@@ -1507,7 +1507,7 @@ import javax.swing.*;
 
         // invoke this directly because (for some reason) ParallelWrapper does
         // not seem to inform listeners after completing a call to fit()
-        if (iterationListener instanceof weka.dl4j.listener.EpochListener) {
+        if (iterationListener instanceof EpochListener) {
           iterationListener.onEpochEnd(model);
         }
       } else {

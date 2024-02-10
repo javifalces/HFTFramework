@@ -3,7 +3,8 @@
     <properties>
         <!-- time-stamp unique to execution instance -->
         <property name="timestamp">${date:yyMMdd_HHmmss}</property>
-        <property name="log.path">LOG</property>
+
+        <property name="log.path">$${env:LAMBDA_LOGS_PATH}/${date:yyMMdd}</property>
         <!-- max number of files -->
         <property name="numFiles">100</property>
         <property name="log.fileSize">500 MB</property>

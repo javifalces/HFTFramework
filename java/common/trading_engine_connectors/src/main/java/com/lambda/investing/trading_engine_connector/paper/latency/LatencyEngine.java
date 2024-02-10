@@ -13,4 +13,6 @@ public interface LatencyEngine {
     void delay(Date currentDate);
 
     void reset();
+
+    void freeLock();
 }

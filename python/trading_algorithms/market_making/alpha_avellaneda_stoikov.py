@@ -1,101 +1,148 @@
 import datetime
-from typing import Type
-
-from trading_algorithms import dqn_algorithm
+import copy
+from backtest.input_configuration import MultiThreadConfiguration
+from trading_algorithms.reinforcement_learning import rl_algorithm
 from trading_algorithms.market_making import avellaneda_stoikov
-from trading_algorithms.market_making.avellaneda_stoikov import SpreadCalculationEnum
-from trading_algorithms.dqn_algorithm import DQNAlgorithm, ReinforcementLearningType
+from trading_algorithms.market_making.avellaneda_stoikov import (
+    AvellanedaStoikovParameters,
+)
 
-from trading_algorithms.algorithm import Algorithm
+from trading_algorithms.algorithm import Algorithm, AlgorithmParameters
 from trading_algorithms.algorithm_enum import AlgorithmEnum
 import pandas as pd
 
-from trading_algorithms.iterations_period_time import IterationsPeriodTime
 from backtest.parameter_tuning.ga_configuration import GAConfiguration
 from backtest.pnl_utils import get_score
+from trading_algorithms.reinforcement_learning.rl_algorithm import (
+    RLAlgorithm,
+    ReinforcementLearningActionType,
+    BaseModelType,
+    RlAlgorithmParameters,
+)
+from trading_algorithms.reinforcement_learning.core.baselines3.core_baselines3_callbacks import (
+    InfoStepKey,
+)
 from trading_algorithms.score_enum import ScoreEnum
-from configuration import BACKTEST_OUTPUT_PATH
+
+
+class AlphaAvellanedaAlgorithmParameters:
+    skew_action = 'skewAction'
+    risk_aversion_action = 'riskAversionAction'
+    midprice_period_window_action = 'midpricePeriodWindowAction'
+    change_k_period_seconds_action = 'changeKPeriodSecondsAction'
+    k_default_action = 'kDefaultAction'
+    a_default_action = 'aDefaultAction'
 
 
 DEFAULT_PARAMETERS = {
     # actions
-    'skewPricePctAction': [0.0, 0.05, -0.05, -0.1, 0.1],
-    'riskAversionAction': [0.01, 0.1, 0.2, 0.9],
-    'windowsTickAction': [24.69],
-    "kDefaultAction": [-1],
-    "aDefaultAction": [-1],
+    # applied in levels limited by best levels worst levels in the order book.
+    # quoted bid is going to be between worst_bid best_bid
+    AlphaAvellanedaAlgorithmParameters.skew_action: [0, 1, -1, -2, 2],
+    AlphaAvellanedaAlgorithmParameters.risk_aversion_action: [0.01, 0.1, 0.2, 0.9],
+    AlphaAvellanedaAlgorithmParameters.midprice_period_window_action: [10],
+    AlphaAvellanedaAlgorithmParameters.change_k_period_seconds_action: [60],
+    AlphaAvellanedaAlgorithmParameters.k_default_action: [-1],
+    AlphaAvellanedaAlgorithmParameters.a_default_action: [-1],
     # states
-    "minPrivateState": (-1),
-    "maxPrivateState": (-1),
-    "numberDecimalsPrivateState": (3),
-    "horizonTicksPrivateState": (5),
-    "minMarketState": (-1),
-    "maxMarketState": (-1),
-    "numberDecimalsMarketState": (7),
-    "horizonTicksMarketState": (10),
-    "minCandleState": (-1),
-    "maxCandleState": (-1),
-    "numberDecimalsCandleState": (3),
-    "horizonCandlesState": (2),
-    "horizonMinMsTick": (0),
+    RlAlgorithmParameters.min_private_state: -1,
+    RlAlgorithmParameters.max_private_state: -1,
+    RlAlgorithmParameters.number_decimals_private_state: -1,
+    RlAlgorithmParameters.horizon_ticks_private_state: 5,
+    RlAlgorithmParameters.min_market_state: -1,
+    RlAlgorithmParameters.max_market_state: -1,
+    RlAlgorithmParameters.number_decimals_market_state: -1,
+    RlAlgorithmParameters.horizon_ticks_market_state: 10,
+    RlAlgorithmParameters.min_candle_state: -1,
+    RlAlgorithmParameters.max_candle_state: -1,
+    RlAlgorithmParameters.number_decimals_candle_state: -1,
+    RlAlgorithmParameters.horizon_candles_state: 2,
+    RlAlgorithmParameters.horizon_min_ms_tick: 0,
     # reward
-    "scoreEnum": ScoreEnum.asymmetric_dampened_pnl,
-    "timeHorizonSeconds": (5),
+    RlAlgorithmParameters.score_enum: ScoreEnum.asymmetric_dampened_pnl,
+    RlAlgorithmParameters.step_seconds: 5,
 }
-DEFAULT_PARAMETERS.update(dqn_algorithm.DEFAULT_PARAMETERS)
-DEFAULT_PARAMETERS.update(avellaneda_stoikov.DEFAULT_PARAMETERS)
-DEFAULT_PARAMETERS.update(dqn_algorithm.DEFAULT_PARAMETERS)
+DEFAULT_PARAMETERS.update(rl_algorithm.DEFAULT_PARAMETERS)
 DEFAULT_PARAMETERS.update(avellaneda_stoikov.DEFAULT_PARAMETERS)
 
 
-class AlphaAvellanedaStoikov(DQNAlgorithm):
+class AlphaAvellanedaStoikov(RLAlgorithm):
     NAME = AlgorithmEnum.alpha_avellaneda_stoikov
 
-    def __init__(self, algorithm_info: str, parameters: dict = DEFAULT_PARAMETERS):
+    def __init__(self, algorithm_info: str, parameters=None):
+        if parameters is None:
+            parameters = copy.copy(DEFAULT_PARAMETERS)
+
         parameters = Algorithm.set_defaults_parameters(
             parameters=parameters, DEFAULT_PARAMETERS=DEFAULT_PARAMETERS
         )
-        super().__init__(algorithm_info=algorithm_info, parameters=parameters)
+        super().__init__(
+            algorithm_info=self.NAME + "_" + algorithm_info, parameters=parameters
+        )
         self.is_filtered_states = False
         if (
-            'stateColumnsFilter' in parameters.keys()
-            and parameters['stateColumnsFilter'] is not None
-            and len(parameters['stateColumnsFilter']) > 0
+                RlAlgorithmParameters.state_filter in parameters.keys()
+                and parameters[RlAlgorithmParameters.state_filter] is not None
+                and len(parameters[RlAlgorithmParameters.state_filter]) > 0
         ):
             self.is_filtered_states = True
 
     def _get_action_columns(self):
-        skew_actions = self.parameters['skewPricePctAction']
-        risk_aversion_actions = self.parameters['riskAversionAction']
-        windows_actions = self.parameters['windowsTickAction']
-        k_default = self.parameters['kDefaultAction']
-        a_default = self.parameters['aDefaultAction']
+        skew_actions = self.parameters[AlphaAvellanedaAlgorithmParameters.skew_action]
+        risk_aversion_actions = self.parameters[
+            AlphaAvellanedaAlgorithmParameters.risk_aversion_action
+        ]
+        windows_actions = self.parameters[
+            AlphaAvellanedaAlgorithmParameters.midprice_period_window_action
+        ]
+        k_default = self.parameters[AlphaAvellanedaAlgorithmParameters.k_default_action]
+        a_default = self.parameters[AlphaAvellanedaAlgorithmParameters.a_default_action]
+        change_k_period_seconds = self.parameters[
+            AlphaAvellanedaAlgorithmParameters.change_k_period_seconds_action
+        ]
         actions = []
-        counter = 0
-        for action in skew_actions:
-            for risk_aversion in risk_aversion_actions:
-                for windows_action in windows_actions:
-                    for k_defaul in k_default:
-                        for a_defaul in a_default:
-                            actions.append('action_%d_reward' % counter)
-                            counter += 1
+        if (
+                self.reinforcement_learning_action_type
+                == ReinforcementLearningActionType.discrete
+        ):
+            counter = 0
+            for action in set(skew_actions):
+                for risk_aversion in set(risk_aversion_actions):
+                    for windows_action in set(windows_actions):
+                        for k_defaul in set(k_default):
+                            for a_defaul in set(a_default):
+                                for k_period_seconds in set(change_k_period_seconds):
+                                    actions.append('action_%d_reward' % counter)
+                                    counter += 1
+        else:
+            actions = [
+                (min(windows_actions), max(windows_actions)),
+                (min(risk_aversion_actions), max(risk_aversion_actions)),
+                (min(skew_actions), max(skew_actions)),
+                (min(k_default), max(k_default)),
+                (min(a_default), max(a_default)),
+                (min(change_k_period_seconds), max(change_k_period_seconds)),
+            ]
+
         return actions
 
     def parameter_tuning(
-        self,
-        start_date: datetime.datetime,
-        end_date: datetime,
-        instrument_pk: str,
-        parameters_min: dict,
-        parameters_max: dict,
-        max_simultaneous: int,
-        generations: int,
-        ga_configuration: Type[GAConfiguration],
-        parameters_base: dict = DEFAULT_PARAMETERS,
-        clean_initial_generation_experience: bool = True,
-        algorithm_enum=AlgorithmEnum.alpha_avellaneda_stoikov,
+            self,
+            start_date: datetime.datetime,
+            end_date: datetime,
+            instrument_pk: str,
+            parameters_min: dict,
+            parameters_max: dict,
+            max_simultaneous: int,
+            generations: int,
+            ga_configuration: GAConfiguration,
+            parameters_base=None,
+            clean_initial_generation_experience: bool = True,
+            algorithm_enum=AlgorithmEnum.alpha_avellaneda_stoikov,
     ) -> (dict, pd.DataFrame):
 
+        if parameters_base is None:
+            parameters_base = DEFAULT_PARAMETERS
         return super().parameter_tuning(
             algorithm_enum=algorithm_enum,
             start_date=start_date,
@@ -111,7 +158,7 @@ class AlphaAvellanedaStoikov(DQNAlgorithm):
         )
 
     def plot_params(
-        self, raw_trade_pnl_df: pd.DataFrame, figsize=None, title: str = None
+            self, raw_trade_pnl_df: pd.DataFrame, figsize=None, title: str = None
     ):
         import seaborn as sns
 
@@ -132,7 +179,16 @@ class AlphaAvellanedaStoikov(DQNAlgorithm):
             k_change = True
             a_change = True
 
-            if len(df['skew_pct'].fillna(0).diff().fillna(0).unique()) == 0:
+            if (
+                    len(
+                        df[AvellanedaStoikovParameters.skew]
+                                .fillna(0)
+                                .diff()
+                                .fillna(0)
+                                .unique()
+                    )
+                    == 0
+            ):
                 skew_change = False
 
             # if len(df['windows_tick'].fillna(0).diff().fillna(0).unique()) == 0:
@@ -163,39 +219,62 @@ class AlphaAvellanedaStoikov(DQNAlgorithm):
             lw = 0.5
 
             ax = axs[index]
-            ax.plot(df['risk_aversion'], color=color, lw=lw, alpha=alpha)
             ax.plot(
-                df['risk_aversion'].rolling(window=window).mean(),
+                df[AvellanedaStoikovParameters.risk_aversion],
+                color=color,
+                lw=lw,
+                alpha=alpha,
+            )
+            ax.plot(
+                df[AvellanedaStoikovParameters.risk_aversion]
+                .rolling(window=window)
+                .mean(),
                 color=color_mean,
                 lw=lw - 0.1,
                 alpha=alpha,
             )
-            ax.set_ylabel('risk_aversion')
+            ax.set_ylabel(AvellanedaStoikovParameters.risk_aversion)
             ax.grid(axis='y', ls='--', alpha=0.7)
 
-            index += 1
-            ax = axs[index]
-            ax.plot(df['k_default'], color=color, lw=lw, alpha=alpha)
-            ax.plot(
-                df['k_default'].rolling(window=window).mean(),
-                color=color_mean,
-                lw=lw - 0.1,
-                alpha=alpha,
-            )
-            ax.set_ylabel('k_default')
-            ax.grid(axis='y', ls='--', alpha=0.7)
+            if AvellanedaStoikovParameters.k_default in df.columns:
+                index += 1
+                ax = axs[index]
+                ax.plot(
+                    df[AvellanedaStoikovParameters.k_default],
+                    color=color,
+                    lw=lw,
+                    alpha=alpha,
+                )
+                ax.plot(
+                    df[AvellanedaStoikovParameters.k_default]
+                    .rolling(window=window)
+                    .mean(),
+                    color=color_mean,
+                    lw=lw - 0.1,
+                    alpha=alpha,
+                )
+                ax.set_ylabel(AvellanedaStoikovParameters.k_default)
+                ax.grid(axis='y', ls='--', alpha=0.7)
 
-            index += 1
-            ax = axs[index]
-            ax.plot(df['a_default'], color=color, lw=lw, alpha=alpha)
-            ax.plot(
-                df['a_default'].rolling(window=window).mean(),
-                color=color_mean,
-                lw=lw - 0.1,
-                alpha=alpha,
-            )
-            ax.set_ylabel('a_default')
-            ax.grid(axis='y', ls='--', alpha=0.7)
+            if AvellanedaStoikovParameters.a_default in df.columns:
+                index += 1
+                ax = axs[index]
+                ax.plot(
+                    df[AvellanedaStoikovParameters.a_default],
+                    color=color,
+                    lw=lw,
+                    alpha=alpha,
+                )
+                ax.plot(
+                    df[AvellanedaStoikovParameters.a_default]
+                    .rolling(window=window)
+                    .mean(),
+                    color=color_mean,
+                    lw=lw - 0.1,
+                    alpha=alpha,
+                )
+                ax.set_ylabel(AvellanedaStoikovParameters.a_default)
+                ax.grid(axis='y', ls='--', alpha=0.7)
 
             if title is not None:
                 ax.set_title(title)
@@ -203,22 +282,34 @@ class AlphaAvellanedaStoikov(DQNAlgorithm):
             if windows_change:
                 index += 1
                 ax = axs[index]
-                ax.plot(df['windows_tick'], color=color, lw=lw, alpha=alpha)
                 ax.plot(
-                    df['windows_tick'].rolling(window=window).mean(),
+                    df[AvellanedaStoikovParameters.midprice_period_window],
+                    color=color,
+                    lw=lw,
+                    alpha=alpha,
+                )
+                ax.plot(
+                    df[AvellanedaStoikovParameters.midprice_period_window]
+                    .rolling(window=window)
+                    .mean(),
                     color=color_mean,
                     lw=lw - 0.1,
                     alpha=alpha,
                 )
 
-                ax.set_ylabel('windows_tick')
+                ax.set_ylabel(AvellanedaStoikovParameters.midprice_period_window)
                 ax.grid(axis='y', ls='--', alpha=0.7)
 
             if skew_change:
                 index += 1
                 ax = axs[index]
-                ax.plot(df['skew_pct'], color=color, lw=lw, alpha=alpha)
-                ax.set_ylabel('skew_pct')
+                ax.plot(
+                    df[AvellanedaStoikovParameters.skew],
+                    color=color,
+                    lw=lw,
+                    alpha=alpha,
+                )
+                ax.set_ylabel(AvellanedaStoikovParameters.skew)
                 ax.grid(axis='y', ls='--', alpha=0.7)
 
             fig = self.plot_params_base(
@@ -233,226 +324,124 @@ class AlphaAvellanedaStoikov(DQNAlgorithm):
                 alpha=alpha,
                 raw_trade_pnl_df=raw_trade_pnl_df,
             )
-            plt.show()
+            # plt.show()
             return fig
         except Exception as e:
             print('Some error plotting params %s' % e)
+            import traceback
+
+            traceback.print_exc()
+
         return None
 
 
 if __name__ == '__main__':
-    skewPricePctAction = [0.0, 1.0, -1.0, -5.0, 5.0]
-    trainingPredictIterationPeriod = (
-        IterationsPeriodTime.END_OF_SESSION
-    )  # OFF END_OF_SESSION
-    trainingTargetIterationPeriod = (
-        IterationsPeriodTime.END_OF_SESSION
-    )  # OFF END_OF_SESSION
-    QUANTITY = 0.1
-    FIRST_HOUR = 8
-    LAST_HOUR = 15
+    import os
 
-    most_significant_state_columns = [
-        'ask_price_0',
-        'ask_price_1',
-        'ask_price_4',
-        'ask_price_5',
-        'ask_price_7',
-        'ask_qty_0',
-        'ask_qty_1',
-        'ask_qty_2',
-        'ask_qty_3',
-        'bid_price_0',
-        'bid_price_1',
-        'bid_price_4',
-        'bid_price_5',
-        'bid_price_7',
-        'bid_price_8',
-        'bid_qty_0',
-        'last_close_price_6',
-        'microprice_0',
-        'midprice_0',
-        'midprice_3',
-        'midprice_9',
-        'spread_0',
-        'spread_1',
-        'spread_4',
-        'spread_5',
-        'spread_7',
-    ]
+    os.environ["LOG_STATE_STEPS"] = "1"  # print each step state in logs
+    Algorithm.MULTITHREAD_CONFIGURATION = MultiThreadConfiguration.singlethread
+    Algorithm.FEES_COMMISSIONS_INCLUDED = False
+    Algorithm.DELAY_MS = 0
+    instrument_pk = 'btcusdt_kraken'
+
+    skew_action = [0.0, 1.0, -1.0]
+    risk_aversion_action = [0.5, 0.25, 0.6, 0.9]
+    midprice_period_window_action = [60, 120]
+
+    QUANTITY = 0.001
+    FIRST_HOUR = 8
+    LAST_HOUR = 21
+
+    most_significant_state_columns = []
     parameters_default_dqn = {
         # Q
-        "skewPricePctAction": skewPricePctAction,
-        "riskAversionAction": [0.5],
-        "kDefaultAction": [0.1],
-        "aDefaultAction": [0.1],
-        "spreadCalculation": SpreadCalculationEnum.GueantTapia,
-        "sigmaDefault": (0.2),
-        "windowsTickAction": [5, 6],
-        "minPrivateState": (-1),
-        "maxPrivateState": (-1),
-        "numberDecimalsPrivateState": (3),
-        "horizonTicksPrivateState": (5),
-        "minMarketState": (-1),
-        "maxMarketState": (-1),
-        "numberDecimalsMarketState": (7),
-        "horizonTicksMarketState": (10),
-        "minCandleState": (-1),
-        "maxCandleState": (-1),
-        "numberDecimalsCandleState": (3),
-        "horizonCandlesState": (10),
-        "horizonMinMsTick": (5),
-        "scoreEnum": ScoreEnum.asymmetric_dampened_pnl,  # ScoreEnum.asymmetric_dampened_pnl,
-        "timeHorizonSeconds": (5),
-        "epsilon": (0.2),  # probability of explore=> random action
-        "discountFactor": 0.75,  # next state prediction reward discount
-        "learningRate": 0.85,  # 0.25 in phd? new values reward multiplier
-        "momentumNesterov": 0.5,  # momentum nesterov nn
-        "learningRateNN": 0.01,  # on nn
+        AlphaAvellanedaAlgorithmParameters.skew_action: skew_action,
+        AlphaAvellanedaAlgorithmParameters.risk_aversion_action: risk_aversion_action,
+        AlphaAvellanedaAlgorithmParameters.midprice_period_window_action: midprice_period_window_action,
+        AvellanedaStoikovParameters.midprice_period_seconds: 15,
+        AlphaAvellanedaAlgorithmParameters.change_k_period_seconds_action: [60],
+        RlAlgorithmParameters.horizon_ticks_private_state: (5),
+        RlAlgorithmParameters.horizon_ticks_market_state: (10),
+        RlAlgorithmParameters.horizon_candles_state: (10),
+        RlAlgorithmParameters.horizon_min_ms_tick: (5),
+        RlAlgorithmParameters.score: ScoreEnum.asymmetric_dampened_pnl,  # ScoreEnum.asymmetric_dampened_pnl,
+        RlAlgorithmParameters.step_seconds: (5),
+        RlAlgorithmParameters.stop_action_on_filled: 0,
         # Avellaneda default
-        "riskAversion": (0.5),  # will be override
-        "windowTick": (10),  # will be override
-        "minutesChangeK": (1),  # will be override
-        "quantity": (QUANTITY),
-        "positionMultiplier": (1.0),
-        "kDefault": (-1),
-        "spreadMultiplier": (1.0),
-        "firstHour": (FIRST_HOUR),
-        "lastHour": (LAST_HOUR),
-        # DQN
-        "maxBatchSize": 10000,  # 10000
-        "batchSize": 1000,  # 5000
-        "trainingPredictIterationPeriod": trainingPredictIterationPeriod,  # train only at the end,offline
-        "trainingTargetIterationPeriod": trainingTargetIterationPeriod,  # train at the end,offline
-        "epoch": 150,  # 150
-        "stateColumnsFilter": most_significant_state_columns,
-        "l1": 0.0,
-        "l2": 0.0,
-        "seed": 28220,
-        "calculateTt": 0,
-        "reinforcementLearningType": ReinforcementLearningType.double_deep_q_learn,
-        "parameterTuningBeforeTraining": 1,
-        "earlyStoppingTraining": 1,
-        "earlyStoppingDataSplitTrainingPct": 0.6,
-        "epochMultiplierParameterTuning": [150, 75, 300],
-        "learningRateParameterTuning": [0.00001, 0.0001, 0.001, 0.01],
-        "hiddenSizeNodesMultiplierParameterTuning": [2.0, 1.0, 0.5],
-        "batchSizeParameterTuning": [32, 64, 128],
-        "momentumParameterTuning": [0.5, 0.8, 0.0],
-        "l1ParameterTuning": [0.0, 0.1, 0.01, 0.001],
-        "l2ParameterTuning": [0.0, 0.1, 0.01, 0.001],
+        AlgorithmParameters.quantity: (QUANTITY),
+        AlgorithmParameters.first_hour: (FIRST_HOUR),
+        AlgorithmParameters.last_hour: (LAST_HOUR),
+        RlAlgorithmParameters.seed: 28220,
+        RlAlgorithmParameters.rl_port: 2111,
+        AlgorithmParameters.ui: 0,
+        RlAlgorithmParameters.training_stats: False,
+        RlAlgorithmParameters.action_type: ReinforcementLearningActionType.discrete,
+        RlAlgorithmParameters.model: BaseModelType.PPO,
+        RlAlgorithmParameters.custom_neural_networks: {"net_arch": [256, 256]},
     }
-    best_avellaneda_param_dict = {
-        'riskAversion': 0.079665431,
-        'windowTick': 25,
-        'minutesChangeK': 1,
-        'quantity': QUANTITY,
-        'kDefault': 0.001,
-        'aDefault': 2.039242,
-        'spreadMultiplier': 1.0,
-        'positionMultiplier': 1.0,
-        'firstHour': FIRST_HOUR,
-        'lastHour': LAST_HOUR,
-        "seed": 28220,
-        "calculateTt": 0,
-    }
+    # best_avellaneda_param_dict = {
+    #     AvellanedaStoikovParameters.risk_aversion: 0.079665431,
+    #     AvellanedaStoikovParameters.midprice_period_window: 60,
+    #     AvellanedaStoikovParameters.seconds_change_k: 60
+    # }
 
-    algorithm_info_dqn = 'avellaneda_stoikov_dqn_2'
+    algorithm_info_dqn = 'ppo_pytest'
 
     avellaneda_dqn = AlphaAvellanedaStoikov(
         algorithm_info=algorithm_info_dqn, parameters=parameters_default_dqn
     )
-    avellaneda_dqn.set_parameters(
-        best_avellaneda_param_dict
-    )  # same optimization as benchmark
-
-    parameters_base_pt = DEFAULT_PARAMETERS
-    parameters_base_pt['epoch'] = 3
-    parameters_base_pt['maxBatchSize'] = 100
-    parameters_base_pt['batchSize'] = 12
-    parameters_base_pt['stateColumnsFilter'] = most_significant_state_columns
-
-    avellaneda_dqn.set_parameters(parameters=parameters_base_pt)
+    # avellaneda_dqn.set_parameters(
+    #     best_avellaneda_param_dict
+    # )  # same optimization as benchmark
 
     # print('Starting training')
     output_train = avellaneda_dqn.train(
-        instrument_pk='btcusdt_binance',
-        start_date=datetime.datetime(year=2020, day=8, month=12, hour=10),
-        end_date=datetime.datetime(year=2020, day=8, month=12, hour=14),
-        iterations=3,
-        fill_memory_max_iterations=2,
-        simultaneous_algos=2,
-        algos_per_iteration=2,
+        instrument_pk=instrument_pk,
+        start_date=datetime.datetime(year=2023, day=12, month=11, hour=9),
+        end_date=datetime.datetime(year=2023, day=12, month=11, hour=15),
+        iterations=10,
+        simultaneous_algos=1,
         clean_initial_experience=True,
-        # algos_per_iteration=1,
-        # simultaneous_algos=1,
+        plot_training=True,
+        score_early_stopping=InfoStepKey.totalPnl,
+        patience=5,
+        min_iterations=35,
     )
-
-    # name_output = avellaneda_dqn.NAME + '_' + avellaneda_dqn.algorithm_info + '_0'
-
-    # backtest_result_train = output_train[0][name_output]
-    # # memory_replay_file = r'E:\Usuario\Coding\Python\market_making_fw\python_lambda\output\memoryReplay_AvellanedaDQN_test_main_dqn_0.csv'
-    # # memory_replay_df=avellaneda_dqn.get_memory_replay_df(memory_replay_file=memory_replay_file)
-    #
-    # avellaneda_dqn.plot_trade_results(raw_trade_pnl_df=backtest_result_train,title='train initial')
-    #
-    # backtest_result_train = output_train[-1][name_output]
-    # avellaneda_dqn.plot_trade_results(raw_trade_pnl_df=backtest_result_train,title='train final')
 
     print('Starting testing')
 
     results = []
     scores = []
-    avellaneda_dqn.clean_model(output_path=BACKTEST_OUTPUT_PATH)
+    # avellaneda_dqn.clean_model(output_path=BACKTEST_OUTPUT_PATH)
     iterations = 0
     explore_prob = 1.0
-    while True:
 
-        parameters = avellaneda_dqn.get_parameters(explore_prob=explore_prob)
-        avellaneda_dqn.set_parameters(parameters)
-        if iterations == 0:
-            clean_experience = True
-        else:
-            clean_experience = False
-        print(
-            rf"starting training with explore_prob = {avellaneda_dqn.parameters['epsilon']}"
-        )
-        output_test = avellaneda_dqn.test(
-            instrument_pk='btcusdt_binance',
-            start_date=datetime.datetime(year=2020, day=9, month=12, hour=7),
-            end_date=datetime.datetime(year=2020, day=9, month=12, hour=9),
-            trainingPredictIterationPeriod=IterationsPeriodTime.END_OF_SESSION,
-            trainingTargetIterationPeriod=IterationsPeriodTime.END_OF_SESSION,
-            clean_experience=clean_experience,
-        )
-        # name_output = avellaneda_dqn.NAME + '_' + avellaneda_dqn.algorithm_info + '_0'
-        name_output = avellaneda_dqn.get_test_name(
-            name=avellaneda_dqn.NAME, algorithm_number=0
-        )
-        backtest_df = output_test[name_output]
+    parameters = avellaneda_dqn.get_parameters(explore_prob=explore_prob)
+    avellaneda_dqn.set_parameters(parameters)
 
-        score = get_score(
-            backtest_df=backtest_df,
-            score_enum=ScoreEnum.realized_pnl,
-            equity_column_score=ScoreEnum.realized_pnl,
-        )
+    output_test = avellaneda_dqn.test(
+        instrument_pk=instrument_pk,
+        start_date=datetime.datetime(year=2023, day=13, month=11, hour=10),
+        end_date=datetime.datetime(year=2023, day=13, month=11, hour=12),
+    )
 
-        results.append(backtest_df)
-        scores.append(score)
+    name_output = avellaneda_dqn.get_test_name(name=avellaneda_dqn.NAME)
+    print(rf"output_test.keys() = {output_test.keys()}")
+    backtest_df = output_test[name_output]
 
-        import matplotlib.pyplot as plt
+    score = get_score(
+        backtest_df=backtest_df,
+        score_enum=ScoreEnum.realized_pnl,
+        equity_column_score=ScoreEnum.realized_pnl,
+    )
+    import matplotlib.pyplot as plt
 
-        avellaneda_dqn.plot_trade_results(
-            raw_trade_pnl_df=output_test[name_output], title='test %d' % iterations
-        )
-        plt.show()
-
-        avellaneda_dqn.plot_params(raw_trade_pnl_df=output_test[name_output])
-        plt.show()
-
-        pd.Series(scores).plot()
-        plt.title(f'scores evolution {explore_prob} {iterations} ')
-        plt.show()
-        iterations += 1
-        explore_prob -= 0.05
-        explore_prob = max(explore_prob, 0.05)
+    plt.figure()
+    fig, df = avellaneda_dqn.plot_trade_results(
+        raw_trade_pnl_df=output_test[name_output], title='test %d' % iterations
+    )
+    # fig.savefig(rf"{name_output}_test.png")
+    # plt.show()
+    #
+    # avellaneda_dqn.plot_params(raw_trade_pnl_df=output_test[name_output])
+    # plt.show()

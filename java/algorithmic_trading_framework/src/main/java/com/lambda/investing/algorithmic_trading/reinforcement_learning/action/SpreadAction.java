@@ -17,6 +17,9 @@ public class SpreadAction extends AbstractAction {
 				.getValuesPerColumn(this.numberOfDecimals, this.maxSpread, this.minSpread);
 	}
 
+	public int getNumberActionColumns() {
+		return COLUMNS.length;
+	}
 	@Override public int getNumberActions() {
 		return MatrixRoundUtils.getNumberStates(this.numberOfPossibleSpreads, 2);
 	}

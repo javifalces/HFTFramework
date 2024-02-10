@@ -1,0 +1,23 @@
+{
+	"marketDataPort": 666,
+	"tradeEnginePort": 677,
+	"factorPublisherPort": 8800,
+	"tradeEngineHost": "localhost",
+	"marketDataHost": "localhost",
+	"factorPublisherHost": "localhost",
+	"paperTrading": "False",
+	"demoTrading": "False",
+	"instrumentPks": [
+		"eurusd_darwinex"
+	],
+	"algorithm": {
+		"algorithmName": "MarketFactorInvestingAlgorithm_FX_neutral1",
+		"parameters": {
+			"modelName": "FX_neutral1",
+			"seed": 5,
+			"capital": "10000",
+			"firstHour": "0.0",
+			"lastHour": "0.0"
+		}
+	}
+}

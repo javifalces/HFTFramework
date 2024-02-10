@@ -33,7 +33,7 @@ public abstract class ExperimentConstructor {
 	/**
 	 * The directory with all the param files in it.
 	 */
-	protected String mParamBaseDir = autoweka.Util.getAutoWekaDistributionPath() + File.separator + "params";
+	protected String mParamBaseDir = Util.getAutoWekaDistributionPath() + File.separator + "params";
 
 	protected List<ClassParams> mBaseClassParams = new ArrayList<ClassParams>();
 	protected List<ClassParams> mMetaClassParams = new ArrayList<ClassParams>();
@@ -145,7 +145,7 @@ public abstract class ExperimentConstructor {
 		String propsFilePath = Util.getAutoWekaDistributionPath() + File.separator + this.getClass().getCanonicalName()
 				+ ".properties";
 		try {
-			mProperties.load(new java.io.FileInputStream(new java.io.File(propsFilePath)));
+			mProperties.load(new java.io.FileInputStream(new File(propsFilePath)));
 		} catch (java.io.FileNotFoundException e) {
 			log.warn("No property file {}.properties found", propsFilePath);
 		} catch (java.io.IOException e) {

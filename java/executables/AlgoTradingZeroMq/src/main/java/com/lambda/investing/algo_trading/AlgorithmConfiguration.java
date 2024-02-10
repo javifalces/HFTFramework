@@ -1,11 +1,9 @@
 package com.lambda.investing.algo_trading;
 
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
-
 import com.lambda.investing.algorithmic_trading.AlgorithmCreationUtils;
 import com.lambda.investing.algorithmic_trading.AlgorithmUtils;
 import lombok.Getter;
-
 import lombok.ToString;
 
 import java.util.Map;

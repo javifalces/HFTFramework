@@ -32,7 +32,16 @@ public class TopicUtils {
 			return TypeMessage.command;
 		}
 
-		logger.error("topic {} cant found type! return null",topicReceived);
+		if (typeOfMessage.equalsIgnoreCase(TypeMessage.factor.name())) {
+			return TypeMessage.factor;
+		}
+
+		if (typeOfMessage.equalsIgnoreCase(TypeMessage.info.name())) {
+			return TypeMessage.info;
+		}
+
+
+		logger.error("topic {} cant found type! return null", topicReceived);
 		return null;
 
 	}

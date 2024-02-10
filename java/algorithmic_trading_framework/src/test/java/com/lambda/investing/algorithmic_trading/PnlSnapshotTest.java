@@ -6,6 +6,8 @@ import com.lambda.investing.model.trading.*;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 
 public class PnlSnapshotTest {
@@ -46,18 +48,19 @@ public class PnlSnapshotTest {
 		Double[] asks = new Double[] { bestAsk, bestAsk + 0.01 };
 		depth.setAsks(asks);
 
-		Double[] bids = new Double[] { bestBid, bestAsk - 0.01 };
+		Double[] bids = new Double[]{bestBid, bestAsk - 0.01};
 		depth.setBids(bids);
 
-		Double[] asksQ = new Double[] { bestAskQty, bestAskQty };
+		Double[] asksQ = new Double[]{bestAskQty, bestAskQty};
 		depth.setAsksQuantities(asksQ);
 
-		Double[] bidsQ = new Double[] { bestBidQty, bestBidQty };
+		Double[] bidsQ = new Double[]{bestBidQty, bestBidQty};
 		depth.setBidsQuantities(bidsQ);
 
-		String[] algorithms = new String[] { Depth.ALGORITHM_INFO_MM, Depth.ALGORITHM_INFO_MM };
-		depth.setAsksAlgorithmInfo(algorithms);
-		depth.setBidsAlgorithmInfo(algorithms);
+		String[] algorithms = new String[]{Depth.ALGORITHM_INFO_MM, Depth.ALGORITHM_INFO_MM};
+		List<String>[] algorithmsList = new List[]{Arrays.asList(algorithms), Arrays.asList(algorithms)};
+		depth.setAsksAlgorithmInfo(algorithmsList);
+		depth.setBidsAlgorithmInfo(algorithmsList);
 		depth.setLevelsFromData();
 		return depth;
 

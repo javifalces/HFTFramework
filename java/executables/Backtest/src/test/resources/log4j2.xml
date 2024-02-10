@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration monitorInterval="60" status="off">
+    <properties>
+        <property name="log.level">info</property>
+        <property name="log.output">console</property>
+    </properties>
+
+    <appenders>
+        <Console name="console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} %-5p [%t] %c{1} - %m%n"/>
+        </Console>
+    </appenders>
+
+    <loggers>
+
+        <Logger name="org.deeplearning4j" level="debug">
+            <AppenderRef ref="${log.output}"/>
+        </Logger>
+
+        <Logger name="me.tongfei.progressbar" level="info">
+            <AppenderRef ref="console"/>
+        </Logger>
+
+
+        <root level="${log.level}">
+            <appender-ref ref="${log.output}"/>
+        </root>
+
+
+    </loggers>
+</configuration>

@@ -1,6 +1,6 @@
 package com.lambda.investing.algorithmic_trading.reinforcement_learning.state;
 
-import com.lambda.investing.algorithmic_trading.ArrayUtils;
+import com.lambda.investing.ArrayUtils;
 import com.lambda.investing.algorithmic_trading.TimeseriesUtils;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.ScoreEnum;
 import com.lambda.investing.model.asset.Instrument;
@@ -13,7 +13,7 @@ import org.apache.curator.shaded.com.google.common.collect.Queues;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static com.lambda.investing.algorithmic_trading.ArrayUtils.*;
+import static com.lambda.investing.ArrayUtils.*;
 
 //TODO review it better ratios
 public class MultiMarketState extends MarketState {
@@ -160,6 +160,7 @@ public class MultiMarketState extends MarketState {
 
 	@Override
 	public synchronized void reset() {
+		logger.info("resetting MultiMarketState");
 		bidPriceBuffer.clear();
 		askPriceBuffer.clear();
 		spreadBuffer.clear();
@@ -167,6 +168,7 @@ public class MultiMarketState extends MarketState {
 		imbalanceBuffer.clear();
 		microPriceBuffer.clear();
 		timestampBuffer.clear();
+		initializedQueues();
 		super.reset();
 	}
 
@@ -276,7 +278,7 @@ public class MultiMarketState extends MarketState {
 	}
 
 	protected double getZscore(String instrument, String otherInstrument, int period,
-			Map<String, Queue<TimeseriesUtils.TupleQueue>> values) {
+							   Map<String, Queue<TimeseriesUtils.TupleQueue>> values) {
 
 		//only get the  last period values
 		double zscore = TimeseriesUtils

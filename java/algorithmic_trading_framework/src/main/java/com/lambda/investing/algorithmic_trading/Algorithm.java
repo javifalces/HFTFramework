@@ -1,8 +1,13 @@
 package com.lambda.investing.algorithmic_trading;
 
+import com.formdev.flatlaf.FlatDarculaLaf;
+import com.formdev.flatlaf.FlatIntelliJLaf;
+import com.formdev.flatlaf.FlatLaf;
 import com.lambda.investing.Configuration;
+import com.lambda.investing.algorithmic_trading.gui.main.MainMenuGUI;
 import com.lambda.investing.algorithmic_trading.hedging.HedgeManager;
 import com.lambda.investing.algorithmic_trading.hedging.NoHedgeManager;
+import com.lambda.investing.algorithmic_trading.reinforcement_learning.SingleInstrumentRLAlgorithm;
 import com.lambda.investing.connector.ThreadUtils;
 import com.lambda.investing.market_data_connector.MarketDataListener;
 import com.lambda.investing.market_data_connector.Statistics;
@@ -20,680 +25,481 @@ import com.lambda.investing.trading_engine_connector.ZeroMqTradingEngineConnecto
 import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import tech.tablesaw.api.Table;
+import org.jfree.chart.ChartFactory;
+import org.jfree.chart.ChartTheme;
 
 
+import javax.swing.*;
 import java.io.File;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.lambda.investing.Configuration.*;
-import static com.lambda.investing.model.portfolio.Portfolio.GSON_STRING;
-import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_PORTFOLIO_INFO;
+import static com.lambda.investing.model.portfolio.Portfolio.*;
+import static org.jfree.chart.ChartFactory.getChartTheme;
 
-public abstract class Algorithm implements MarketDataListener, ExecutionReportListener {
+public abstract class Algorithm extends AlgorithmParameters implements MarketDataListener, ExecutionReportListener {
 
-	protected static int DEFAULT_QUEUE_CF_TRADE = 20;
-	protected static int DEFAULT_QUEUE_HISTORICAL_ORDER_REQUEST = 20;
-	protected Queue<String> cfTradesProcessed;
-	protected Map<String, OrderRequest> historicalOrdersRequestSent;
+    protected static long TIMEOUT_WAIT_DONE_SECONDS = 15;
+    protected static int DEFAULT_QUEUE_CF_TRADE = 20;
+    protected static int DEFAULT_QUEUE_HISTORICAL_ORDER_REQUEST = 20;
+    protected static int DEFAULT_QUEUE_HISTORICAL_TRADES = 5;
+    protected Queue<String> cfTradesProcessed;
 
-	private static String SEPARATOR_ARRAY_PARAMETERS = ",";
-	private static String START_ARRAY_PARAMETERS = "[";
-	private static String END_ARRAY_PARAMETERS = "]";
-	public static int LOG_LEVEL = LogLevels.ALL_ITERATION_LOG.ordinal();//0 is s
-	private static String REJECTION_NOT_FOUND = "not found for";
-	private static Long STATISTICS_PRINT_SECONDS = 60L;
-	private List<AlgorithmObserver> algorithmObservers;
-	protected static String BASE_PATH_OUTPUT = Configuration.OUTPUT_PATH;
-	protected static Integer FIRST_HOUR_DEFAULT = -1;
-	protected static Integer LAST_HOUR_DEFAULT = 25;
-	protected static DateFormat DAY_STR_DATE_FORMAT = new SimpleDateFormat("yyyymmdd");
+    protected Queue<ExecutionReport> erTradesProcessed;
 
-	private static final String SEND_STATS = "->";
-	private static final String RECEIVE_STATS = "<-";
+    protected Map<String, OrderRequest> historicalOrdersRequestSent;
 
-	protected Integer firstHourOperatingIncluded = FIRST_HOUR_DEFAULT;//starting
-	protected Integer lastHourOperatingIncluded = LAST_HOUR_DEFAULT;//stopping
 
-	private AtomicInteger depthReceived = new AtomicInteger(0);
-	private AtomicInteger tradeReceived = new AtomicInteger(0);
+    public static int LOG_LEVEL = LogLevels.ALL_ITERATION_LOG.ordinal();//0 is s
+    private static String REJECTION_NOT_FOUND = "not found for";
+    private static Long STATISTICS_PRINT_SECONDS = 60L;
+    private List<AlgorithmObserver> algorithmObservers;
+    protected static String BASE_PATH_OUTPUT = Configuration.OUTPUT_PATH;
+    protected static Integer FIRST_HOUR_DEFAULT = -1;
+    protected static Integer LAST_HOUR_DEFAULT = 25;
+    protected static DateFormat DAY_STR_DATE_FORMAT = new SimpleDateFormat("yyyymmdd");
 
-	protected Logger logger = LogManager.getLogger(Algorithm.class);
+    private static final String SEND_STATS = "->";
+    private static final String RECEIVE_STATS = "<-";
 
-	protected AlgorithmConnectorConfiguration algorithmConnectorConfiguration; //must be private because send orders must pass from here except for Portfolio
-	protected String algorithmInfo;
-
-	public String getAlgorithmInfo() {
-		return algorithmInfo;
-	}
-
-	protected Map<String, InstrumentManager> instrumentToManager;
-
-	protected long seed = 0;
-
-	protected Map<String, Double> algorithmPosition;
-
-	protected HedgeManager hedgeManager = new NoHedgeManager();
-
-	public QuoteManager getQuoteManager(String instrumentPk) {
-
-		QuoteManager quoteManager = instrumentQuoteManagerMap.get(instrumentPk);
-		if (quoteManager == null) {
-			quoteManager = new QuoteManager(this, Instrument.getInstrument(instrumentPk));
-			instrumentQuoteManagerMap.put(instrumentPk, quoteManager);
-		}
-		return instrumentQuoteManagerMap.get(instrumentPk);
-	}
-
-	private Map<String, Object> defaultParameters;
-	protected Map<String, Object> parameters;
-
-	protected Statistics statistics;
-
-	public PnlSnapshot getLastPnlSnapshot(String instrumentPk) {
-		return portfolioManager.getLastPnlSnapshot(instrumentPk);
-	}
-
-	public void addCurrentCustomColumn(String instrumentPk, String key, Double value) {
-		portfolioManager.addCurrentCustomColumn(instrumentPk, key, value);
-	}
-
-	public PortfolioManager getPortfolioManager() {
-		return portfolioManager;
-	}
-
-	protected PortfolioManager portfolioManager;
-	protected AlgorithmNotifier algorithmNotifier;
-
-	protected boolean isBacktest = false;
-
-	protected boolean saveBacktestOutputTrades = true;
-	protected boolean isPaper = false;
-	protected TimeServiceIfc timeService;
-	protected AlgorithmState algorithmState = AlgorithmState.NOT_INITIALIZED;
-
-	public boolean isReady() {
-		return getAlgorithmState().equals(AlgorithmState.STARTED);
-	}
-
-	public AlgorithmState getAlgorithmState() {
-		return algorithmState;
-	}
-
-	public Map<String, Object> getParameters() {
-		return parameters;
-	}
-
-	public Map<String, ExecutionReport> clientOrderIdLastCompletelyFillReceived;
-	private static int HISTORICAL_TRADES_SAVE = 50;
-	private boolean plotStopHistorical = false;
-	protected boolean exitOnStop = true;
-	private int lastCurrentDay = 0;
-	//	private List<String> pendingToRemoveClientOrderId;
-	private Map<String, QuoteManager> instrumentQuoteManagerMap = new ConcurrentHashMap<>();
-
-	private Map<String, OrderRequest> clientOrderIdToCancelWhenActive = new ConcurrentHashMap<>();
-	private CandleFromTickUpdater candleFromTickUpdater;
-	public static final Object EXECUTION_REPORT_LOCK = new Object();
-	protected Set<Instrument> instruments = new HashSet<>();
-
-	public Algorithm(AlgorithmConnectorConfiguration algorithmConnectorConfiguration, String algorithmInfo,
-			Map<String, Object> parameters) {
-		constructorForAbstract(algorithmConnectorConfiguration, algorithmInfo, parameters);
-	}
-
-	//for backtesting
-	public Algorithm(String algorithmInfo, Map<String, Object> parameters) {
-		constructorForAbstract(null, algorithmInfo, parameters);
-	}
-
-	public void setHedgeManager(HedgeManager hedgeManager) {
-		this.hedgeManager = hedgeManager;
-	}
-
-	public HedgeManager getHedgeManager() {
-		return hedgeManager;
-	}
-
-	protected double getParameterDoubleOrDefault(Map<String, Object> parameters, String key, double defaultValue) {
-		String value = String.valueOf(parameters.getOrDefault(key, String.valueOf(defaultValue)));
-		if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
-			return defaultValue;
-		}
-		try {
-			return Double.valueOf(value);
-		} catch (Exception e) {
-			System.err.println(String.format("wrong parameter %s with value %s", key, value));
-			throw e;
-		}
-	}
-
-	public void setSaveBacktestOutputTrades(boolean saveBacktestOutputTrades) {
-		this.saveBacktestOutputTrades = saveBacktestOutputTrades;
-	}
-
-	protected double getParameterDoubleOrDefault(Map<String, Object> parameters, String key, String secondKey,
-												 double defaultValue) {
-		if (!parameters.containsKey(key)) {
-			double output = getParameterDoubleOrDefault(parameters, secondKey, defaultValue);
-			if (output != defaultValue) {
-				logger.warn("deprecated parameter key: {} better use {}", secondKey, key);
-			}
-			return output;
-		}
-
-		String value = String.valueOf(parameters.getOrDefault(key, String.valueOf(defaultValue)));
-		if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
-			return defaultValue;
-		}
-		try {
-			return Double.valueOf(value);
-		} catch (Exception e) {
-			System.err.println(String.format("wrong parameter %s with value %s", key, value));
-			throw e;
-		}
-	}
-
-	protected double getParameterDouble(Map<String, Object> parameters, String key) {
-		String value = String.valueOf(parameters.get(key));
-
-		try {
-			return Double.valueOf(value);
-		} catch (Exception e) {
-			System.err.println(String.format("wrong parameter %s with value %s", key, value));
-			throw e;
-		}
-	}
-
-	protected double getParameterDouble(Map<String, Object> parameters, String key, String secondKey) {
-		if (!parameters.containsKey(key)) {
-			logger.warn("deprecated parameter key: {} better use {}", secondKey, key);
-			return getParameterDouble(parameters, secondKey);
-		}
-
-		String value = String.valueOf(parameters.get(key));
-
-		try {
-			return Double.valueOf(value);
-		} catch (Exception e) {
-			System.err.println(String.format("wrong parameter %s with value %s", key, value));
-			throw e;
-		}
-	}
-
-	protected int getParameterIntOrDefault(Map<String, Object> parameters, String key, int defaultValue) {
-		String value = String.valueOf(parameters.getOrDefault(key, String.valueOf(defaultValue)));
-		if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
-			return defaultValue;
-		}
-		try {
-			return (int) Math.round(Double.valueOf(value));
-		} catch (Exception e) {
-			System.err.println(String.format("wrong parameter %s with value %s", key, value));
-			throw e;
-		}
-	}
-
-	protected int getParameterIntOrDefault(Map<String, Object> parameters, String key, String secondKey,
-			int defaultValue) {
-		if (!parameters.containsKey(key)) {
-			int output = getParameterIntOrDefault(parameters, secondKey, defaultValue);
-			if (output != defaultValue) {
-				logger.warn("deprecated parameter key: {} better use {}", secondKey, key);
-			}
-			return output;
-		}
-
-		String value = String.valueOf(parameters.getOrDefault(key, String.valueOf(defaultValue)));
-		if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
-			return defaultValue;
-		}
-		try {
-			return (int) Math.round(Double.valueOf(value));
-		} catch (Exception e) {
-			System.err.println(String.format("wrong parameter %s with value %s", key, value));
-			throw e;
-		}
-	}
-
-	protected int getParameterInt(Map<String, Object> parameters, String key) {
-
-		String value = String.valueOf(parameters.get(key));
-
-		try {
-			return (int) Math.round(Double.valueOf(value));
-		} catch (Exception e) {
-			System.err.println(String.format("wrong parameter %s with value %s", key, value));
-			throw e;
-		}
-
-	}
-
-	protected int getParameterInt(Map<String, Object> parameters, String key, String secondKey) {
-		if (!parameters.containsKey(key)) {
-			int output = getParameterIntOrDefault(parameters, secondKey, -666);
-			if (output != -666) {
-				logger.warn("deprecated parameter key: {} better use {}", secondKey, key);
-			}
-			return output;
-		}
-
-		String value = String.valueOf(parameters.get(key));
-
-		try {
-			return (int) Math.round(Double.valueOf(value));
-		} catch (Exception e) {
-			System.err.println(String.format("wrong parameter %s with value %s", key, value));
-			throw e;
-		}
-
-	}
-
-	protected Object getParameterObject(Map<String, Object> parameters, String key) {
-		return parameters.get(key);
-	}
-
-	protected String getParameterString(Map<String, Object> parameters, String key) {
-		String output = String.valueOf(parameters.get(key));
-		if (output.equalsIgnoreCase("null")) {
-			return null;
-		}
-		return output;
-	}
-
-	protected String getParameterString(Map<String, Object> parameters, String key, String secondKey) {
-		if (!parameters.containsKey(key)) {
-			String output = getParameterString(parameters, secondKey);
-			if (output != null) {
-				logger.warn("deprecated parameter key: {} better use {}", secondKey, key);
-			}
-			return output;
-		}
-
-
-		String output = String.valueOf(parameters.get(key));
-		if (output.equalsIgnoreCase("null")) {
-			return null;
-		}
-		return output;
-	}
-
-	protected String getParameterStringOrDefault(Map<String, Object> parameters, String key, String defaultValue) {
-		String value = String.valueOf(parameters.getOrDefault(key, defaultValue));
-		if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
-			return defaultValue;
-		}
-		try {
-			return value;
-		} catch (Exception e) {
-			System.err.println(String.format("wrong parameter %s with value %s", key, value));
-			throw e;
-		}
-	}
-
-	protected String getParameterStringOrDefault(Map<String, Object> parameters, String key, String secondKey,
-			String defaultValue) {
-		if (!parameters.containsKey(key)) {
-			String output = getParameterStringOrDefault(parameters, secondKey, defaultValue);
-			if (!output.equals(defaultValue)) {
-				logger.warn("deprecated parameter key: {} better use {}", secondKey, key);
-			}
-			return output;
-		}
-
-		String value = String.valueOf(parameters.getOrDefault(key, defaultValue));
-		if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
-			return defaultValue;
-		}
-		try {
-			return value;
-		} catch (Exception e) {
-			System.err.println(String.format("wrong parameter %s with value %s", key, value));
-			throw e;
-		}
-	}
-
-	protected String[] getParameterArrayString(Map<String, Object> parameters, String key) {
-		String value = String.valueOf(parameters.get(key));
-		if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
-			return null;
-		}
-		if (value == null || value.trim().isEmpty()) {
-			return null;
-		}
-		try {
-			String[] output = null;
-			value = value.replace(START_ARRAY_PARAMETERS, "").replace(END_ARRAY_PARAMETERS, "");
-			if (!value.contains(SEPARATOR_ARRAY_PARAMETERS)) {
-				parameters.put(key, value);
-				try {
-					String valueIn = getParameterString(parameters, key);
-					output = new String[] { valueIn };
-				} catch (Exception e) {
-					logger.error("error reading getParameterArrayString on key {} and value {} -> return null", key,
-							value, e);
-					return null;
-				}
-			} else {
-				String[] splitted = value.split(SEPARATOR_ARRAY_PARAMETERS);
-				output = new String[splitted.length];
-				for (int index = 0; index < splitted.length; index++) {
-					output[index] = splitted[index];
-				}
-			}
-			return output;
-		} catch (NullPointerException e) {
-			System.err.println(String.format("wrong parameter %s with value %s", key, value));
-			throw e;
-		}
-	}
-
-	protected double[] getParameterArrayDouble(Map<String, Object> parameters, String key) {
-		String value = String.valueOf(parameters.get(key));
-		if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
-			return null;
-		}
-		try {
-			double[] output = null;
-			value = value.replace(START_ARRAY_PARAMETERS, "").replace(END_ARRAY_PARAMETERS, "");
-			if (!value.contains(SEPARATOR_ARRAY_PARAMETERS)) {
-				parameters.put(key, value);
-				try {
-					double valueIn = getParameterDouble(parameters, key);
-					output = new double[] { valueIn };
-				} catch (Exception e) {
-					logger.error("error reading getParameterArrayDouble on key {} and value {} -> return null", key,
-							value, e);
-					return null;
-					//					output = new double[0];
-				}
-			} else {
-				String[] splitted = value.split(SEPARATOR_ARRAY_PARAMETERS);
-				output = new double[splitted.length];
-				for (int index = 0; index < splitted.length; index++) {
-					output[index] = Double.valueOf(splitted[index]);
-				}
-			}
-			return output;
-		} catch (NullPointerException e) {
-			System.err.println(String.format("wrong parameter %s with value %s", key, value));
-			throw e;
-		}
-	}
-
-	protected int[] getParameterArrayInt(Map<String, Object> parameters, String key) {
-		String value = String.valueOf(parameters.get(key));
-		if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
-			return null;
-		}
-		try {
-			int[] output = null;
-			value = value.replace(START_ARRAY_PARAMETERS, "").replace(END_ARRAY_PARAMETERS, "");
-			if (!value.contains(SEPARATOR_ARRAY_PARAMETERS)) {
-				parameters.put(key, value);
-				try {
-					int valueIn = getParameterInt(parameters, key);
-					output = new int[] { valueIn };
-				} catch (Exception e) {
-					logger.error("error reading getParameterArrayInt on key {} and value {} -> return null", key, value,
-							e);
-					return null;
-				}
-			} else {
-				String[] splitted = value.split(SEPARATOR_ARRAY_PARAMETERS);
-				output = new int[splitted.length];
-				for (int index = 0; index < splitted.length; index++) {
-					output[index] = (int) Math.round(Double.valueOf(splitted[index]));
-				}
-			}
-			return output;
-		} catch (NullPointerException e) {
-			System.err.println(String.format("wrong parameter %s with value %s", key, value));
-			throw e;
-		}
-	}
-
-	public CandleFromTickUpdater getCandleFromTickUpdater() {
-		return candleFromTickUpdater;
-	}
-
-	public void constructorForAbstract(AlgorithmConnectorConfiguration algorithmConnectorConfiguration,
-			String algorithmInfo, Map<String, Object> parameters) {
-		candleFromTickUpdater = new CandleFromTickUpdater();
-		candleFromTickUpdater.register(this::onUpdateCandle);
-		algorithmPosition = new HashMap<>();
-
-		algorithmObservers = new ArrayList<>();
-		cfTradesProcessed = EvictingQueue.create(DEFAULT_QUEUE_CF_TRADE);
-		historicalOrdersRequestSent = new AlgorithmUtils.MaxSizeHashMap<String, OrderRequest>(
-				DEFAULT_QUEUE_HISTORICAL_ORDER_REQUEST);
-
-		if (algorithmConnectorConfiguration != null) {
-			isBacktest = false;
-			this.algorithmConnectorConfiguration = algorithmConnectorConfiguration;
-			if (this.algorithmConnectorConfiguration
-					.getTradingEngineConnector() instanceof AbstractBrokerTradingEngine) {
-				AbstractBrokerTradingEngine abstractBrokerTradingEngine = (AbstractBrokerTradingEngine) this.algorithmConnectorConfiguration
-						.getTradingEngineConnector();
-				isPaper = abstractBrokerTradingEngine.getPaperTradingEngine() != null;
-			}
-			if (this.algorithmConnectorConfiguration
-					.getTradingEngineConnector() instanceof ZeroMqTradingEngineConnector) {
-				ZeroMqTradingEngineConnector zeroMqTradingEngineConnector = (ZeroMqTradingEngineConnector) this.algorithmConnectorConfiguration
-						.getTradingEngineConnector();
-				isPaper = zeroMqTradingEngineConnector.isPaperTrading();
-			}
-			timeService = new TimeService("UTC");
-		} else {
-			logger.info("BACKTEST detected in {} -> Backtest TimeService", algorithmInfo);
-			isBacktest = true;
-			timeService = new BacktestTimeService("UTC");
-		}
-
-		if (!isBacktest) {
-			this.statistics = new Statistics(algorithmInfo, STATISTICS_PRINT_SECONDS * 1000);
-		}
-		this.algorithmInfo = algorithmInfo;
-		this.parameters = parameters;
-		this.defaultParameters = new ConcurrentHashMap<>(parameters);
-		instrumentQuoteManagerMap = new ConcurrentHashMap<>();
-
-		this.instrumentToManager = new ConcurrentHashMap<>();
-
-		this.portfolioManager = new PortfolioManager(this);
-
-		clientOrderIdLastCompletelyFillReceived = Collections
-				.synchronizedMap(new LinkedHashMap<String, ExecutionReport>(HISTORICAL_TRADES_SAVE) {
-
-					@Override protected boolean removeEldestEntry(Map.Entry<String, ExecutionReport> entry) {
-						return size() > HISTORICAL_TRADES_SAVE;
-					}
-				});
-		algorithmNotifier = new AlgorithmNotifier(this, 3);
-
-	}
-
-	public void setPlotStopHistorical(boolean plotStopHistorical) {
-		this.plotStopHistorical = plotStopHistorical;
-	}
-
-	public void setExitOnStop(boolean exitOnStop) {
-		this.exitOnStop = exitOnStop;
-	}
-
-	public InstrumentManager getInstrumentManager(String instrumentPk) {
-		InstrumentManager instrumentManager = instrumentToManager.get(instrumentPk);
-		if (instrumentManager == null) {
-			instrumentManager = new InstrumentManager(Instrument.getInstrument(instrumentPk), isBacktest);
-			instrumentToManager.put(instrumentPk, instrumentManager);
-		}
-		return instrumentToManager.get(instrumentPk);
-	}
-
-	public Map<String, ExecutionReport> getActiveOrders(Instrument instrument) {
-		InstrumentManager instrumentManager = getInstrumentManager(instrument.getPrimaryKey());
-		return instrumentManager.getAllActiveOrders();
-	}
-
-	public Map<String, OrderRequest> getRequestOrders(Instrument instrument) {
-		InstrumentManager instrumentManager = getInstrumentManager(instrument.getPrimaryKey());
-		return instrumentManager.getAllRequestOrders();
-	}
-
-	public void setAllRequestOrders(Instrument instrument, Map<String, OrderRequest> requestOrders) {
-		InstrumentManager instrumentManager = getInstrumentManager(instrument.getPrimaryKey());
-		instrumentManager.setAllRequestOrders(requestOrders);
-	}
-
-	public void register(AlgorithmObserver algorithmObserver) {
-		algorithmObservers.add(algorithmObserver);
-	}
-
-	public void deregister(AlgorithmObserver algorithmObserver) {
-		algorithmObservers.remove(algorithmObserver);
-	}
-
-	public List<AlgorithmObserver> getAlgorithmObservers() {
-		return algorithmObservers;
-	}
-
-	public void setAlgorithmConnectorConfiguration(AlgorithmConnectorConfiguration algorithmConnectorConfiguration) {
-		this.algorithmConnectorConfiguration = algorithmConnectorConfiguration;
-	}
-
-	//Parameter settings
-	public void setParameters(Map<String, Object> parameters) {
-		this.parameters = parameters;
-		this.firstHourOperatingIncluded = getParameterIntOrDefault(parameters, "firstHour", "first_hour",
-				FIRST_HOUR_DEFAULT);//UTC time 6 -9
-		this.lastHourOperatingIncluded = getParameterIntOrDefault(parameters, "lastHour", "last_hour",
-				LAST_HOUR_DEFAULT);//UTC  18-21
-
-		if (this.firstHourOperatingIncluded != FIRST_HOUR_DEFAULT
-				|| this.lastHourOperatingIncluded != LAST_HOUR_DEFAULT) {
-
-			logger.info("Current time {} in utc is {}", new Date(), Instant.now());
-			logger.info("start UTC hour at {} and finished on {} ,both included", this.firstHourOperatingIncluded,
-					this.lastHourOperatingIncluded);
-
-		}
-
-		algorithmNotifier.notifyObserversOnUpdateParams(this.parameters);
-
-	}
-
-	protected void setSeed(long seed) {
-		logger.info("setting seed from algorithm to {}", seed);
-		SET_RANDOM_SEED(seed);
-	}
-
-	public void setParameter(String name, Object value) {
-		this.parameters.put(name, value);
-		algorithmNotifier.notifyObserversOnUpdateParams(this.parameters);
-	}
-
-	public abstract String printAlgo();
-
-	public void init() {
-		if (algorithmState.getNumber() < 0) {
-			algorithmState = AlgorithmState.INITIALIZING;
-			logger.info("[{}]Initializing algorithm {}", getCurrentTime(), algorithmInfo);
-			if (algorithmConnectorConfiguration == null) {
-				logger.error("cant initialize {} without AlgorithmConnectorConfiguration set", algorithmInfo);
-			}
-			this.algorithmConnectorConfiguration.getTradingEngineConnector().register(this.algorithmInfo, this);
-			this.algorithmConnectorConfiguration.getMarketDataProvider().register(this);
-
-			this.seed = getParameterIntOrDefault(parameters, "seed", 0);//load it here for initialization
-			if (this.seed != 0) {
-				setSeed(this.seed);
-			}
-
-			algorithmState = AlgorithmState.INITIALIZED;
-			logger.info("[{}]initialized  {}\n{}", getCurrentTime(), algorithmInfo);
-
-		} else {
-			logger.warn("trying to init already initialized {}", algorithmInfo);
-		}
-	}
-
-	protected void setPortfolio(Portfolio portfolio) {
-		if (portfolio == null) {
-			logger.warn("initial portfolio is null on {} -> not setting it", this.algorithmInfo);
-		} else {
-			portfolioManager.setPortfolio(portfolio);
-		}
-	}
-
-	//PostContruct and destroy resset
-	public void start() {
-		if (algorithmState.equals(AlgorithmState.INITIALIZED) || algorithmState.equals(AlgorithmState.STOPPED)) {
-			algorithmState = AlgorithmState.STARTING;
-			logger.info("[{}]Starting algorithm {}", getCurrentTime(), algorithmInfo);
-
-			algorithmState = AlgorithmState.STARTED;
-
-			//set initial portfolio things from file
-			//			Portfolio portfolio = algorithmConnectorConfiguration.getTradingEngineConnector().getPortfolio();
-			//			setPortfolio(portfolio);
-
-			//send request
-			requestInfo(this.algorithmInfo + "." + REQUESTED_PORTFOLIO_INFO);
-		}
-	}
-
-	public void stop() {
-		if (algorithmState.equals(AlgorithmState.STARTED)) {
-			algorithmState = AlgorithmState.STOPPING;
-
-			logger.info("[{}]Stopping algorithm {}", getCurrentTime(), algorithmInfo);
-			algorithmState = AlgorithmState.STOPPED;
-			//To be sure everything has finished
-			//			try {
-			//				if (!isBacktest) {
-			//					timeService.sleepMs(200);
-			//				}
-			//			} catch (InterruptedException e) {
-			//				logger.error("cant sleep on stopped algorithm", e);
-			//			}
-			for (InstrumentManager instrumentManager : instrumentToManager.values()) {
-				Instrument instrument = instrumentManager.getInstrument();
-				try {
-					getQuoteManager(instrument.getPrimaryKey()).unquote();
-				} catch (LambdaTradingException e) {
-					logger.error("cant unquote instrument {} on stop algorithm", instrument.getPrimaryKey(), e);
-				}
-				cancelAll(instrument);
-			}
-
-			if (!isBacktest) {
-				//save trades
-				String todayStr = getCurrentDayStr();
-				for (String instrumentPk : instrumentToManager.keySet()) {
-					try {
-						String basePath = BASE_PATH_OUTPUT + File.separator + "live_trades_table_" + algorithmInfo + "_"
-								+ instrumentPk + "_" + todayStr;
-						File file = new File(basePath).getParentFile();
-						file.mkdirs();//create if not exist
-						Map<Instrument, Table> tradesTable = portfolioManager.getTradesTable(basePath);
-						System.out.println("STOP algo -> " + instrumentPk + " saved trades at " + basePath);
-						logger.info("Stop livetrading algo {}-{} saving trades at {}", algorithmInfo, instrumentPk,
-								basePath);
-						printBacktestResults(tradesTable);
-					} catch (Exception e) {
-						logger.error("something goes wrong on {} stop function", instrumentPk, e);
-						System.err.println(Configuration
-								.formatLog("something goes wrong on {} stop function", instrumentPk, e.getMessage()));
-					}
-                }
+    protected Integer firstHourOperatingIncluded = FIRST_HOUR_DEFAULT;//starting
+    protected Integer lastHourOperatingIncluded = LAST_HOUR_DEFAULT;//stopping
 
+    private AtomicInteger depthReceived = new AtomicInteger(0);
+    private AtomicInteger tradeReceived = new AtomicInteger(0);
+
+    protected Logger logger = LogManager.getLogger(Algorithm.class);
+    protected boolean verbose = true;
+
+    protected AlgorithmConnectorConfiguration algorithmConnectorConfiguration; //must be private because send orders must pass from here except for Portfolio
+    protected String algorithmInfo;
+
+    protected final Object lockLatchPosition = new Object();
+    protected CountDownLatch lastPositionUpdateCountDown = new CountDownLatch(1);
+
+    public String getAlgorithmInfo() {
+        return algorithmInfo;
+    }
+
+    protected Map<String, InstrumentManager> instrumentToManager;
+
+    protected long seed = 0;
+
+    protected Map<String, Double> algorithmPosition;
+
+    protected HedgeManager hedgeManager = new NoHedgeManager();
+
+    protected ExecutionReportManager executionReportManager;
+
+    public QuoteManager getQuoteManager(String instrumentPk) {
+
+        QuoteManager quoteManager = instrumentQuoteManagerMap.get(instrumentPk);
+        if (quoteManager == null) {
+            quoteManager = new QuoteManager(this, Instrument.getInstrument(instrumentPk));
+            instrumentQuoteManagerMap.put(instrumentPk, quoteManager);
+        }
+        return instrumentQuoteManagerMap.get(instrumentPk);
+    }
+
+    public boolean isRlAlgorithm() {
+        return this instanceof SingleInstrumentRLAlgorithm;
+    }
+    public void setVerbose(boolean verbose) {
+        this.verbose = verbose;
+    }
+
+    public boolean isVerbose() {
+        return verbose;
+    }
+
+    private Map<String, Object> defaultParameters;
+    protected Map<String, Object> parameters;
+
+    protected Statistics statistics;
+
+    public void setWaitDone(boolean waitDone) {
+        this.waitDone = waitDone;
+    }
+
+    public PnlSnapshot getLastPnlSnapshot(String instrumentPk) {
+        return portfolioManager.getLastPnlSnapshot(instrumentPk);
+    }
+
+    public void addCurrentCustomColumn(String instrumentPk, String key, Double value) {
+        portfolioManager.addCurrentCustomColumn(instrumentPk, key, value);
+    }
+
+    public PortfolioManager getPortfolioManager() {
+        return portfolioManager;
+    }
+
+    protected PortfolioManager portfolioManager;
+    protected AlgorithmNotifier algorithmNotifier;
+
+    protected boolean isBacktest = false;
+    protected boolean uiStarted = false;
+    protected ChartTheme theme;
+
+    protected boolean uiEnabled = false;
+    protected MainMenuGUI algorithmicTradingGUI;
+    protected boolean saveBacktestOutputTrades = true;
+
+    protected boolean printSummaryBacktest = true;
+    protected boolean isPaper = false;
+    protected TimeServiceIfc timeService;
+    protected AlgorithmState algorithmState = AlgorithmState.NOT_INITIALIZED;
+    protected String summaryResultsAppend = null;
+
+    public boolean isReady() {
+        return getAlgorithmState().equals(AlgorithmState.STARTED);
+    }
+
+    public AlgorithmState getAlgorithmState() {
+        return algorithmState;
+    }
+
+    public Map<String, Object> getParameters() {
+        return parameters;
+    }
+
+    public Map<String, ExecutionReport> clientOrderIdLastCompletelyFillReceived;
+    private static int HISTORICAL_TRADES_SAVE = 50;
+    private boolean plotStopHistorical = false;
+    protected boolean exitOnStop = true;
+
+    protected boolean waitDone = false;
+    private int lastCurrentDay = 0;
+
+    protected boolean algoQuotesEnabled = true;
+    //	private List<String> pendingToRemoveClientOrderId;
+    private Map<String, QuoteManager> instrumentQuoteManagerMap = new ConcurrentHashMap<>();
+
+    private Map<String, OrderRequest> clientOrderIdToCancelWhenActive = new ConcurrentHashMap<>();
+    private CandleFromTickUpdater candleFromTickUpdater;
+    public static final Object EXECUTION_REPORT_LOCK = new Object();
+    protected Set<Instrument> instruments = new HashSet<>();
+
+    public Algorithm(AlgorithmConnectorConfiguration algorithmConnectorConfiguration, String algorithmInfo,
+                     Map<String, Object> parameters) {
+        constructorForAbstract(algorithmConnectorConfiguration, algorithmInfo, parameters);
+    }
+
+    //for backtesting
+    public Algorithm(String algorithmInfo, Map<String, Object> parameters) {
+        constructorForAbstract(null, algorithmInfo, parameters);
+    }
+
+    public void setHedgeManager(HedgeManager hedgeManager) {
+        this.hedgeManager = hedgeManager;
+    }
+
+    public HedgeManager getHedgeManager() {
+        return hedgeManager;
+    }
+
+
+    public void setSaveBacktestOutputTrades(boolean saveBacktestOutputTrades) {
+        this.saveBacktestOutputTrades = saveBacktestOutputTrades;
+    }
+
+    public void setPrintSummaryBacktest(boolean printSummaryBacktest) {
+        this.printSummaryBacktest = printSummaryBacktest;
+    }
+
+    public CandleFromTickUpdater getCandleFromTickUpdater() {
+        return candleFromTickUpdater;
+    }
+
+
+    private void configureIsPaper() {
+        if (this.algorithmConnectorConfiguration
+                .getTradingEngineConnector() instanceof AbstractBrokerTradingEngine) {
+            AbstractBrokerTradingEngine abstractBrokerTradingEngine = (AbstractBrokerTradingEngine) this.algorithmConnectorConfiguration
+                    .getTradingEngineConnector();
+            isPaper = abstractBrokerTradingEngine.getPaperTradingEngine() != null;
+        }
+        if (this.algorithmConnectorConfiguration
+                .getTradingEngineConnector() instanceof ZeroMqTradingEngineConnector) {
+            ZeroMqTradingEngineConnector zeroMqTradingEngineConnector = (ZeroMqTradingEngineConnector) this.algorithmConnectorConfiguration
+                    .getTradingEngineConnector();
+            isPaper = zeroMqTradingEngineConnector.isPaperTrading();
+        }
+
+    }
+
+    public void constructorForAbstract(AlgorithmConnectorConfiguration algorithmConnectorConfiguration,
+                                       String algorithmInfo, Map<String, Object> parameters) {
+
+        executionReportManager = new ExecutionReportManager();
+        candleFromTickUpdater = new CandleFromTickUpdater();
+        candleFromTickUpdater.register(this::onUpdateCandle);
+        algorithmPosition = new HashMap<>();
+
+        algorithmObservers = new ArrayList<>();
+        cfTradesProcessed = EvictingQueue.create(DEFAULT_QUEUE_CF_TRADE);
+        erTradesProcessed = EvictingQueue.create(DEFAULT_QUEUE_HISTORICAL_TRADES);
+        historicalOrdersRequestSent = new AlgorithmUtils.MaxSizeHashMap<String, OrderRequest>(
+                DEFAULT_QUEUE_HISTORICAL_ORDER_REQUEST);
+
+        if (algorithmConnectorConfiguration != null) {
+            isBacktest = false;
+            this.algorithmConnectorConfiguration = algorithmConnectorConfiguration;
+            configureIsPaper();
+        } else {
+            if (isVerbose()) {
+                logger.info("BACKTEST detected in {} -> Backtest TimeService", algorithmInfo);
+            }
+            isBacktest = true;
+        }
+        timeService = new BacktestTimeService("UTC");
+
+        if (!isBacktest) {
+            this.statistics = new Statistics(algorithmInfo, STATISTICS_PRINT_SECONDS * 1000);
+        }
+        this.algorithmInfo = algorithmInfo;
+        this.parameters = parameters;
+        this.defaultParameters = new ConcurrentHashMap<>(parameters);
+        instrumentQuoteManagerMap = new ConcurrentHashMap<>();
+
+        this.instrumentToManager = new ConcurrentHashMap<>();
+
+        this.portfolioManager = new PortfolioManager(this);
+
+        clientOrderIdLastCompletelyFillReceived = Collections
+                .synchronizedMap(new LinkedHashMap<String, ExecutionReport>(HISTORICAL_TRADES_SAVE) {
+
+                    @Override
+                    protected boolean removeEldestEntry(Map.Entry<String, ExecutionReport> entry) {
+                        return size() > HISTORICAL_TRADES_SAVE;
+                    }
+                });
+        algorithmNotifier = new AlgorithmNotifier(this, Configuration.THREADS_NOTIFY_ALGORITHM_OBSERVERS);
+
+    }
+
+    public void setPlotStopHistorical(boolean plotStopHistorical) {
+        this.plotStopHistorical = plotStopHistorical;
+    }
+
+    public void setExitOnStop(boolean exitOnStop) {
+//        if (isVerbose()) {
+//            logger.info("Set {} exitOnStop to {}", algorithmInfo, exitOnStop);
+//        }
+//        this.exitOnStop = exitOnStop;
+    }
+
+    public InstrumentManager getInstrumentManager(String instrumentPk) {
+        InstrumentManager instrumentManager = instrumentToManager.get(instrumentPk);
+        if (instrumentManager == null) {
+            instrumentManager = new InstrumentManager(Instrument.getInstrument(instrumentPk), isBacktest);
+            instrumentToManager.put(instrumentPk, instrumentManager);
+        }
+        return instrumentToManager.get(instrumentPk);
+    }
+
+    public Map<String, ExecutionReport> getActiveOrders(Instrument instrument) {
+        InstrumentManager instrumentManager = getInstrumentManager(instrument.getPrimaryKey());
+        return instrumentManager.getAllActiveOrders();
+    }
+
+    public Map<String, OrderRequest> getRequestOrders(Instrument instrument) {
+        InstrumentManager instrumentManager = getInstrumentManager(instrument.getPrimaryKey());
+        return instrumentManager.getAllRequestOrders();
+    }
+
+    public void setAllRequestOrders(Instrument instrument, Map<String, OrderRequest> requestOrders) {
+        InstrumentManager instrumentManager = getInstrumentManager(instrument.getPrimaryKey());
+        instrumentManager.setAllRequestOrders(requestOrders);
+    }
+
+    public void register(AlgorithmObserver algorithmObserver) {
+        algorithmObservers.add(algorithmObserver);
+        algorithmNotifier.notifyLastParams();
+    }
+
+    public void deregister(AlgorithmObserver algorithmObserver) {
+        algorithmObservers.remove(algorithmObserver);
+    }
+
+    public List<AlgorithmObserver> getAlgorithmObservers() {
+        return algorithmObservers;
+    }
+
+    public void setAlgorithmConnectorConfiguration(AlgorithmConnectorConfiguration algorithmConnectorConfiguration) {
+        this.algorithmConnectorConfiguration = algorithmConnectorConfiguration;
+    }
+
+    //Parameter settings
+    public void setParameters(Map<String, Object> parameters) {
+        this.parameters = parameters;
+        this.firstHourOperatingIncluded = getParameterIntOrDefault(parameters, "firstHour", "first_hour",
+                FIRST_HOUR_DEFAULT);//UTC time 6 -9
+        this.lastHourOperatingIncluded = getParameterIntOrDefault(parameters, "lastHour", "last_hour",
+                LAST_HOUR_DEFAULT);//UTC  18-21
+
+        if (this.firstHourOperatingIncluded != FIRST_HOUR_DEFAULT
+                || this.lastHourOperatingIncluded != LAST_HOUR_DEFAULT) {
+            if (isVerbose()) {
+                logger.info("Current time {} in utc is {}", new Date(), Instant.now());
+                logger.info("start UTC hour at {} and finished on {} ,both included", this.firstHourOperatingIncluded,
+                        this.lastHourOperatingIncluded);
+            }
+
+        }
+
+        this.seed = getParameterIntOrDefault(parameters, "seed", 0);//load it here for initialization
+        if (this.seed != 0) {
+            setSeed(this.seed);
+        }
+
+        uiEnabled = getParameterIntOrDefault(parameters, "ui", 0) == 1;
+        if (uiEnabled) {
+            System.out.println("UI ENABLED");
+            logger.info("UI ENABLED");
+        }
+
+        algorithmNotifier.notifyObserversOnUpdateParams(this.parameters);
+
+    }
+
+    public void setUiEnabled(boolean uiEnabled) {
+        this.uiEnabled = uiEnabled;
+    }
+
+    protected void setSeed(long seed) {
+        logger.info("setting seed from algorithm to {}", seed);
+        SET_RANDOM_SEED(seed);
+    }
+
+    public void setParameter(String name, Object value) {
+        this.parameters.put(name, value);
+        algorithmNotifier.notifyObserversOnUpdateParams(this.parameters);
+    }
+
+    public abstract String printAlgo();
+
+    public void init() {
+        if (algorithmState.getNumber() < 0) {
+            algorithmState = AlgorithmState.INITIALIZING;
+            if (isVerbose())
+                logger.info("[{}]Initializing algorithm {}", getCurrentTime(), algorithmInfo);
+
+            if (algorithmConnectorConfiguration == null) {
+                logger.error("can't initialize {} without AlgorithmConnectorConfiguration set", algorithmInfo);
+            }
+            this.algorithmConnectorConfiguration.getTradingEngineConnector().register(this.algorithmInfo, this);
+            this.algorithmConnectorConfiguration.getMarketDataProvider().register(this);
+
+            //send request
+            requestInfo(this.algorithmInfo + "." + REQUESTED_POSITION_INFO);
+
+            algorithmState = AlgorithmState.INITIALIZED;
+            if (isVerbose())
+                logger.info("[{}]initialized  {}", getCurrentTime(), algorithmInfo);
+
+        } else {
+            logger.warn("trying to init already initialized {}", algorithmInfo);
+        }
+    }
+
+    protected void setPortfolio(Portfolio portfolio) {
+        if (portfolio == null) {
+            logger.warn("initial portfolio is null on {} -> not setting it", this.algorithmInfo);
+        } else {
+            portfolioManager.setPortfolio(portfolio);
+        }
+    }
+
+    //PostContruct and destroy resset
+    public void start() {
+        if (algorithmState.equals(AlgorithmState.INITIALIZED) || algorithmState.equals(AlgorithmState.STOPPED)) {
+            algorithmState = AlgorithmState.STARTING;
+            if (isVerbose()) {
+                logger.info("[{}] Start algorithm {}", getCurrentTime(), algorithmInfo);
+            }
+            algorithmState = AlgorithmState.STARTED;
+
+            //set initial portfolio things from file
+            //			Portfolio portfolio = algorithmConnectorConfiguration.getTradingEngineConnector().getPortfolio();
+            //			setPortfolio(portfolio);
+
+            //send request
+            requestInfo(this.algorithmInfo + "." + REQUESTED_PORTFOLIO_INFO);
+
+            if (uiEnabled && !uiStarted) {
+                //start UI
+                startUI();
             }
         }
+    }
+
+    protected void startUI() {
+        setTheme();
+        uiStarted = true;
+    }
+
+    private void setTheme() {
+        //https://www.formdev.com/flatlaf/themes/
+        FlatLaf flatLaf = null;
+        if (isBacktest) {
+            flatLaf = new FlatDarculaLaf();
+        } else {
+            flatLaf = new FlatIntelliJLaf();
+        }
+
+        try {
+            UIManager.setLookAndFeel(flatLaf);
+        } catch (Exception ex) {
+            System.err.println("Failed to initialize LaF");
+        }
+        theme = getChartTheme();
+        ChartFactory.setChartTheme(theme);
+    }
+
+    public void stop() {
+        if (algorithmState.equals(AlgorithmState.STARTED)) {
+            algorithmState = AlgorithmState.STOPPING;
+            if (isVerbose()) {
+                logger.info("[{}] Stop received  {}", getCurrentTime(), algorithmInfo);
+            }
+            algorithmState = AlgorithmState.STOPPED;
+
+            cancelAllInstruments();//out of market
+
+            if (!isBacktest) {
+                //save trades
+                saveLiveOutputTrades();
+            }
+
+        }
+
+
+    }
+
+
+    private void saveLiveOutputTrades() {
+        String todayStr = getCurrentDayStr();
+        try {
+            String basePath = BASE_PATH_OUTPUT + File.separator + "live_trades_table_" + algorithmInfo + "_"
+                    + "_" + todayStr;
+            portfolioManager.getTradesTableAndSave(basePath);
+            System.out.println("STOP algo ->  saved trades at " + basePath + "_(instrument_pk).csv");
+            logger.info("Stop live trading algo {} saving trades at {}_(instrument_pk).csv", algorithmInfo,
+                    basePath);
+            printSummaryResults();
+
+        } catch (Exception e) {
+            logger.error("something goes wrong on {} stop function", e);
+            System.err.println(Configuration
+                    .formatLog("something goes wrong on {} stop function", e.getMessage()));
+        }
+
     }
 
     public Depth getLastDepth(Instrument instrument) {
@@ -707,14 +513,13 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
     public void resetAlgorithm() {
         logger.info("[{}]Reset algorithm {}", getCurrentTime(), algorithmInfo);
         //		this.portfolioManager.reset();//will reset trades!
-        clientOrderIdLastCompletelyFillReceived.clear();
-        for (InstrumentManager instrumentManager : instrumentToManager.values()) {
-            instrumentManager.reset();
-        }
-		clientOrderIdToCancelWhenActive.clear();
+
         for (QuoteManager quoteManager : instrumentQuoteManagerMap.values()) {
             quoteManager.reset();
         }
+
+        clientOrderIdLastCompletelyFillReceived.clear();
+        clientOrderIdToCancelWhenActive.clear();
         depthReceived = new AtomicInteger(0);
         tradeReceived = new AtomicInteger(0);
 
@@ -722,117 +527,134 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
             algorithmConnectorConfiguration.getMarketDataProvider().reset();
             algorithmConnectorConfiguration.getTradingEngineConnector().reset();
         }
-		timeService.reset();
-		algorithmState = AlgorithmState.INITIALIZED;
-		lastCurrentDay = 0;
+        timeService.reset();
+        algorithmState = AlgorithmState.INITIALIZED;
+        lastCurrentDay = 0;
+        portfolioManager.reset();
+
+        for (InstrumentManager instrumentManager : instrumentToManager.values()) {
+            instrumentManager.reset();
+        }
     }
 
 
-	//trading
+    //trading
 
-	protected String generateClientOrderId() {
-		byte[] dataInput = new byte[10];
-		RANDOM_GENERATOR.nextBytes(dataInput);
-		return UUID.nameUUIDFromBytes(dataInput).toString();
-	}
+    protected String generateClientOrderId() {
+        byte[] dataInput = new byte[10];
+        RANDOM_GENERATOR.nextBytes(dataInput);
+        return UUID.nameUUIDFromBytes(dataInput).toString();
+    }
 
-	protected void requestInfo(String info) {
-		algorithmConnectorConfiguration.getTradingEngineConnector().requestInfo(info);
-	}
+    protected void requestInfo(String info) {
+        algorithmConnectorConfiguration.getTradingEngineConnector().requestInfo(info);
+    }
 
-	public OrderRequest createCancel(Instrument instrument, String origClientOrderId) {
-		OrderRequest cancelOrderRequest = new OrderRequest();
-		cancelOrderRequest.setOrderRequestAction(OrderRequestAction.Cancel);
-		cancelOrderRequest.setOrigClientOrderId(origClientOrderId);
-		cancelOrderRequest.setAlgorithmInfo(algorithmInfo);
-		cancelOrderRequest.setClientOrderId(generateClientOrderId());
-		cancelOrderRequest.setInstrument(instrument.getPrimaryKey());
-		cancelOrderRequest.setTimestampCreation(getCurrentTimestamp());
-		return cancelOrderRequest;
-	}
+    public OrderRequest createCancel(Instrument instrument, String origClientOrderId) {
+        OrderRequest cancelOrderRequest = new OrderRequest();
+        cancelOrderRequest.setOrderRequestAction(OrderRequestAction.Cancel);
+        cancelOrderRequest.setOrigClientOrderId(origClientOrderId);
+        cancelOrderRequest.setAlgorithmInfo(algorithmInfo);
+        cancelOrderRequest.setClientOrderId(generateClientOrderId());
+        cancelOrderRequest.setInstrument(instrument.getPrimaryKey());
+        cancelOrderRequest.setTimestampCreation(getCurrentTimestamp());
+        return cancelOrderRequest;
+    }
 
-	public void cancelAllVerb(Instrument instrument, Verb verb) {
-		InstrumentManager instrumentManager = getInstrumentManager(instrument.getPrimaryKey());
-		Map<String, ExecutionReport> instrumentActiveOrders = instrumentManager.getAllActiveOrders();
+    public void cancelAllVerb(Instrument instrument, Verb verb) {
+        InstrumentManager instrumentManager = getInstrumentManager(instrument.getPrimaryKey());
+        Map<String, ExecutionReport> instrumentActiveOrders = instrumentManager.getAllActiveOrders();
 
-		if (instrumentActiveOrders.size() > 0 && LOG_LEVEL > LogLevels.DISABLE.ordinal()) {
-			logger.info("cancelAll verb {}  {} active orders {}", verb, instrument, instrumentActiveOrders.size());
-		}
-		for (String clientOrderId : instrumentActiveOrders.keySet()) {
-			ExecutionReport executionReport = instrumentActiveOrders.get(clientOrderId);
-			if (!executionReport.getVerb().equals(verb)) {
-				continue;
-			}
+        if (instrumentActiveOrders.size() > 0 && LOG_LEVEL > LogLevels.DISABLE.ordinal()) {
+            logger.info("cancelAll verb {}  {} active orders {}", verb, instrument, instrumentActiveOrders.size());
+        }
+        for (String clientOrderId : instrumentActiveOrders.keySet()) {
+            ExecutionReport executionReport = instrumentActiveOrders.get(clientOrderId);
+            if (!executionReport.getVerb().equals(verb)) {
+                continue;
+            }
 
-			OrderRequest cancelOrderRequest = createCancel(instrument, clientOrderId);
-			this.algorithmConnectorConfiguration.getTradingEngineConnector().orderRequest(cancelOrderRequest);
-		}
+            OrderRequest cancelOrderRequest = createCancel(instrument, clientOrderId);
+            this.algorithmConnectorConfiguration.getTradingEngineConnector().orderRequest(cancelOrderRequest);
+        }
 
-		//save requested orders to cancel after active received
-		Map<String, OrderRequest> requestOrders = instrumentManager.getAllRequestOrders();
+        //save requested orders to cancel after active received
+        Map<String, OrderRequest> requestOrders = instrumentManager.getAllRequestOrders();
 
-		try {
-			for (String clientOrderId : requestOrders.keySet()) {
-				OrderRequest orderRequest = requestOrders.get(clientOrderId);
-				if (orderRequest.getVerb().equals(verb)) {
-					clientOrderIdToCancelWhenActive.put(clientOrderId, orderRequest);
-				}
-			}
-		} catch (Exception e) {
-			logger.error("error on cancelAllVerb ", e);
-			e.printStackTrace();
-		}
+        try {
+            for (String clientOrderId : requestOrders.keySet()) {
+                OrderRequest orderRequest = requestOrders.get(clientOrderId);
+                if (orderRequest.getVerb().equals(verb)) {
+                    clientOrderIdToCancelWhenActive.put(clientOrderId, orderRequest);
+                }
+            }
+        } catch (Exception e) {
+            logger.error("error on cancelAllVerb ", e);
+            e.printStackTrace();
+        }
 
-	}
+    }
 
-	public void cancelAll(Instrument instrument) {
-		InstrumentManager instrumentManager = getInstrumentManager(instrument.getPrimaryKey());
-		Map<String, ExecutionReport> instrumentActiveOrders = instrumentManager.getAllActiveOrders();
+    private void cancelAllInstruments() {
+        for (InstrumentManager instrumentManager : instrumentToManager.values()) {
+            Instrument instrument = instrumentManager.getInstrument();
+            try {
+                getQuoteManager(instrument.getPrimaryKey()).unquote();
+            } catch (LambdaTradingException e) {
+                logger.error("can't unquote instrument {} on stop algorithm", instrument.getPrimaryKey(), e);
+            }
+            cancelAll(instrument);
+        }
+    }
 
-		if (instrumentActiveOrders.size() > 0 && LOG_LEVEL > LogLevels.DISABLE.ordinal()) {
-			logger.info("cancelAll {} active orders {}", instrument, instrumentActiveOrders.size());
-		}
-		for (String clientOrderId : instrumentActiveOrders.keySet()) {
-			OrderRequest cancelOrderRequest = createCancel(instrument, clientOrderId);
-			this.algorithmConnectorConfiguration.getTradingEngineConnector().orderRequest(cancelOrderRequest);
-		}
+    public void cancelAll(Instrument instrument) {
+        InstrumentManager instrumentManager = getInstrumentManager(instrument.getPrimaryKey());
+        Map<String, ExecutionReport> instrumentActiveOrders = instrumentManager.getAllActiveOrders();
 
-		//save requested orders to cancel after active received
-		Map<String, OrderRequest> requestOrders = instrumentManager.getAllRequestOrders();
-		try {
-			for (Map.Entry<String, OrderRequest> entry : requestOrders.entrySet()) {
-				String clientOrderId = entry.getKey();
-				OrderRequest requestOrder = entry.getValue();
-				if (clientOrderId != null && requestOrder != null) {
-					clientOrderIdToCancelWhenActive.put(clientOrderId, requestOrder);
-				}
+        if (instrumentActiveOrders.size() > 0 && LOG_LEVEL > LogLevels.DISABLE.ordinal()) {
+            logger.info("cancelAll {} active orders {}", instrument, instrumentActiveOrders.size());
+        }
+        for (String clientOrderId : instrumentActiveOrders.keySet()) {
+            OrderRequest cancelOrderRequest = createCancel(instrument, clientOrderId);
+            this.algorithmConnectorConfiguration.getTradingEngineConnector().orderRequest(cancelOrderRequest);
+        }
 
-			}
-		} catch (Exception e) {
-			logger.error("error on cancelAll ", e);
-			e.printStackTrace();
-		}
+        //save requested orders to cancel after active received
+        Map<String, OrderRequest> requestOrders = instrumentManager.getAllRequestOrders();
+        try {
+            for (Map.Entry<String, OrderRequest> entry : requestOrders.entrySet()) {
+                String clientOrderId = entry.getKey();
+                OrderRequest requestOrder = entry.getValue();
+                if (clientOrderId != null && requestOrder != null) {
+                    clientOrderIdToCancelWhenActive.put(clientOrderId, requestOrder);
+                }
 
-	}
+            }
+        } catch (Exception e) {
+            logger.error("error on cancelAll ", e);
+            e.printStackTrace();
+        }
 
-	public QuoteRequest createQuoteRequest(Instrument instrument) {
-		QuoteRequest quoteRequest = new QuoteRequest();
-		quoteRequest.setAlgorithmInfo(algorithmInfo);
-		quoteRequest.setInstrument(instrument);
-		return quoteRequest;
-	}
+    }
 
-	protected boolean inOperationalTime() {
-		int hour = getCurrentTimeHour();
-		if (hour >= firstHourOperatingIncluded && hour <= lastHourOperatingIncluded) {
-			return true;
-		}
-		return false;
-	}
+    public QuoteRequest createQuoteRequest(Instrument instrument) {
+        QuoteRequest quoteRequest = new QuoteRequest();
+        quoteRequest.setAlgorithmInfo(algorithmInfo);
+        quoteRequest.setInstrument(instrument);
+        return quoteRequest;
+    }
 
-    protected boolean isEndOfBacktestDay() {
+    public boolean inOperationalTime() {
         int hour = getCurrentTimeHour();
-        if (hour >= firstHourOperatingIncluded && hour >= lastHourOperatingIncluded) {
+        if (hour >= firstHourOperatingIncluded && hour <= lastHourOperatingIncluded) {
+            return true;
+        }
+        return false;
+    }
+
+    public boolean isEndOfBacktestDay() {
+        int hour = getCurrentTimeHour();
+        if (hour >= firstHourOperatingIncluded && hour > lastHourOperatingIncluded) {
             return true;
         }
         return false;
@@ -850,15 +672,15 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
             start();
             return true;
         } else {
-			if (getAlgorithmState().equals(AlgorithmState.STARTED)) {
-				logger.info(
-						"[{}] not inOperationalTime firstHourOperatingIncluded:{} lastHourOperatingIncluded:{} => stop ",
-						getCurrentTime(), firstHourOperatingIncluded, lastHourOperatingIncluded);
-			}
-			stop();
+            if (getAlgorithmState().equals(AlgorithmState.STARTED)) {
+                logger.info(
+                        "[{}] not inOperationalTime firstHourOperatingIncluded:{} lastHourOperatingIncluded:{} => stop ",
+                        getCurrentTime(), firstHourOperatingIncluded, lastHourOperatingIncluded);
+            }
+            stop();
 
 
-		}
+        }
 
         //check change of day
         if (lastCurrentDay == 0) {
@@ -872,8 +694,49 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
         return false;
     }
 
-    protected void onEndOfBacktestDay() {
-//		algorithmState = AlgorithmState.FINISHED;//for rl4j to know when backtest is finished
+    protected void onFinishedBacktest() {
+        if (isBacktest) {
+            if (saveBacktestOutputTrades) {
+                saveBacktestTrades();
+            }
+
+            if (printSummaryBacktest) {
+                printSummaryResults();
+            }
+
+            if (plotStopHistorical) {
+                plotBacktestResults();
+            }
+
+            if (exitOnStop) {
+                if (waitDone) {
+                    logger.info("waitDone to exit backtest...");
+                    System.out.println("waitDone to exit backtest...");
+                    waitDoneState();
+                }
+                System.out.println("Exit on stop in backtest");
+                logger.info("Exit on stop in backtest");
+                System.exit(0);
+            }
+        } else {
+            logger.warn("onFinishedBacktest called but is not backtest");
+            System.out.println("WARNING onFinishedBacktest called but is not backtest");
+        }
+
+    }
+
+    protected void waitDoneState() {
+        Date startWaiting = new Date();
+        while (waitDone) {
+            Thread.onSpinWait();
+            long elapsed = new Date().getTime() - startWaiting.getTime();
+            if (elapsed > TIMEOUT_WAIT_DONE_SECONDS * 1000) {
+                logger.error("waitDoneState timeout {} seconds elapsed", TIMEOUT_WAIT_DONE_SECONDS);
+                System.out.println("waitDoneState timeout " + TIMEOUT_WAIT_DONE_SECONDS + " seconds elapsed");
+                break;
+            }
+        }
+
     }
 
     protected void onNewDay() {
@@ -882,6 +745,10 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
     }
 
     private void updateAllActiveOrders(ExecutionReport executionReport) {
+        if (getAlgorithmState() == AlgorithmState.STOPPED) {
+            return;
+        }//required to not update when we are resetting RL
+
         boolean isActive =
                 executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Active) || executionReport
                         .getExecutionReportStatus().equals(ExecutionReportStatus.PartialFilled);
@@ -890,631 +757,774 @@ public abstract class Algorithm implements MarketDataListener, ExecutionReportLi
                         .getExecutionReportStatus().equals(ExecutionReportStatus.Rejected) || executionReport
                         .getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled);
 
-		boolean isCancelRejected = executionReport.getExecutionReportStatus()
-				.equals(ExecutionReportStatus.CancelRejected);
-		//todo search on active to delete in case
-
-		boolean isFilled = executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.PartialFilled)
-				|| executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled);
-
-		String instrumentPk = executionReport.getInstrument();
-		InstrumentManager instrumentManager = getInstrumentManager(instrumentPk);
-
-		Queue<String> tradesInstrument = instrumentManager.getCfTradesReceived();
-
-		//remove from requestOrders
-		Map<String, OrderRequest> instrumentSendOrders = instrumentManager.getAllRequestOrders();
-		//		if (!instrumentSendOrders.containsKey(executionReport.getClientOrderId())) {
-		//			logger.warn("received ER very fast {}    {}", executionReport.getClientOrderId(),executionReport.getExecutionReportStatus());
-		//			pendingToRemoveClientOrderId.add(executionReport.getClientOrderId());
-		//		}
-		instrumentSendOrders.remove(executionReport.getClientOrderId());
-		setAllRequestOrders(instrumentManager.getInstrument(), instrumentSendOrders);
-
-		if (isActive) {
-			boolean wasACfTrade = tradesInstrument.contains(executionReport.getClientOrderId());
-			if (!wasACfTrade) {
-
-				Map<String, ExecutionReport> instrumentActiveOrders = instrumentManager.getAllActiveOrders();
-
-				instrumentActiveOrders.put(executionReport.getClientOrderId(), executionReport);
-				//remove in case of modify!
-				if (executionReport.getOrigClientOrderId() != null) {
-					instrumentActiveOrders.remove(executionReport.getOrigClientOrderId());
-				}
-				//update it
-				instrumentManager.setAllActiveOrders(instrumentActiveOrders);
-				if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal()) {
-					logger.debug("ER {} received active  {} ", executionReport.getClientOrderId(),
-							executionReport.getVerb());
-				}
-
-				if (clientOrderIdToCancelWhenActive.containsKey(executionReport.getClientOrderId())) {
-					if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal()) {
-						logger.debug("ER {} detected to be canceled", executionReport.getClientOrderId());
-					}
-					OrderRequest cancelRequest = createCancel(instrumentManager.getInstrument(),
-							executionReport.getClientOrderId());
-					try {
-						sendOrderRequest(cancelRequest);
-						clientOrderIdToCancelWhenActive.remove(executionReport.getClientOrderId());
-					} catch (LambdaTradingException e) {
-						logger.error("cant cancel waiting order {}", executionReport.getClientOrderId());
-					}
-				}
-
-			} else {
-				if (LOG_LEVEL > LogLevels.ALL_ITERATION_LOG.ordinal()) {
-					logger.warn("received active {} of previous Cf trade => ignore",
-							executionReport.getClientOrderId());
-				}
-			}
-		}
-
-		if (isInactive) {
-			if (executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled)) {
-				tradesInstrument.offer(executionReport.getClientOrderId());
-				instrumentManager.setCfTradesReceived(tradesInstrument);
-			}
-
-			Map<String, ExecutionReport> instrumentActiveOrders = instrumentManager.getAllActiveOrders();
-			instrumentActiveOrders.remove(executionReport.getClientOrderId());
-			//just in case
-			if (executionReport.getOrigClientOrderId() != null) {
-				instrumentActiveOrders.remove(executionReport.getOrigClientOrderId());
-			}
-			instrumentManager.setAllActiveOrders(instrumentActiveOrders);
-			if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal()) {
-				logger.debug("ER {} received inactive ", executionReport.getClientOrderId());
-			}
-
-		}
-
-		if (isCancelRejected) {
-			Map<String, ExecutionReport> instrumentActiveOrders = instrumentManager.getAllActiveOrders();
-			if (executionReport.getRejectReason().contains(REJECTION_NOT_FOUND) && instrumentActiveOrders
-					.containsKey(executionReport.getOrigClientOrderId())) {
-				//remove it from active
-				instrumentActiveOrders.remove(executionReport.getOrigClientOrderId());
-				instrumentActiveOrders.remove(executionReport.getClientOrderId());//just in case
-				instrumentManager.setAllActiveOrders(instrumentActiveOrders);
-			}
-			if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal()) {
-				logger.debug("ER {} cancel rejected on {} ", executionReport.getClientOrderId(),
-						executionReport.getOrigClientOrderId());
-			}
-
-		}
-
-		if (isFilled) {
-			if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal()) {
-				logger.debug("ER filled {} {}    {}@{} ", executionReport.getClientOrderId(),
-						executionReport.getExecutionReportStatus(), executionReport.getLastQuantity(),
-						executionReport.getPrice());
-			}
-
-			Map<Verb, Long> currentLastTradeTimestamp = instrumentManager.getLastTradeTimestamp();
-			currentLastTradeTimestamp.put(executionReport.getVerb(), getCurrentTimestamp());
-			instrumentManager.setLastTradeTimestamp(currentLastTradeTimestamp);
-		}
-
-	}
-
-	private OrderRequest checkOrderRequest(OrderRequest orderRequest) throws LambdaTradingException {
-		String instrumentPk = orderRequest.getInstrument();
-		InstrumentManager instrumentManager = getInstrumentManager(instrumentPk);
-
-		//Check order request
-		if (orderRequest.getClientOrderId() == null) {
-			orderRequest.setClientOrderId(generateClientOrderId());
-		}
-
-		if (orderRequest.getAlgorithmInfo() == null) {
-			orderRequest.setAlgorithmInfo(algorithmInfo);
-		}
-
-		if (orderRequest.getOrderRequestAction() == null) {
-			throw new LambdaTradingException("OrderRequest without action");
-		}
-
-		if (orderRequest.getOrderRequestAction().equals(OrderRequestAction.Send) || orderRequest.getOrderRequestAction()
-				.equals(OrderRequestAction.Modify)) {
-			if (orderRequest.getOrderType() == null) {
-				throw new LambdaTradingException(
-						String.format("%s OrderRequest %s without ordertype", orderRequest.getClientOrderId(),
-								orderRequest.getOrderRequestAction().name()));
-			}
-
-			if (orderRequest.getVerb() == null) {
-				throw new LambdaTradingException(
-						String.format("OrderRequest %s without verb", orderRequest.getOrderRequestAction().name()));
-			}
-			if (orderRequest.getOrderType() != null && !orderRequest.getOrderType().equals(OrderType.Market) && (
-					orderRequest.getPrice() == OrderRequest.NOT_SET_PRICE_VALUE)) {
-				throw new LambdaTradingException(
-						String.format("%s OrderRequest %s %s without price!", orderRequest.getClientOrderId(),
-								orderRequest.getOrderRequestAction().name(), orderRequest.getOrderType().toString()));
-			}
-			if (orderRequest.getQuantity() <= 0) {
-				throw new LambdaTradingException(String.format("%s OrderRequest  %s without valid quantity %.3f",
-						orderRequest.getClientOrderId(), orderRequest.getOrderRequestAction().name(),
-						orderRequest.getQuantity()));
-			}
-
-
-		}
-
-		boolean needOrigClientOrdId =
-				orderRequest.getOrderRequestAction().equals(OrderRequestAction.Modify) || orderRequest
-						.getOrderRequestAction().equals(OrderRequestAction.Cancel);
-
-		if (needOrigClientOrdId && orderRequest.getOrigClientOrderId() == null) {
-			String message = String
-					.format("%s is a %s need a OrigClientOrderId !=null in %s", orderRequest.getClientOrderId(),
-							orderRequest.getOrderRequestAction(), algorithmInfo);
-			throw new LambdaTradingException(message);
-		}
-
-		if (needOrigClientOrdId && orderRequest.getOrigClientOrderId() != null) {
-			String origClientOrderId = orderRequest.getOrigClientOrderId();
-			Map<String, ExecutionReport> instrumentActiveOrders = instrumentManager.getAllActiveOrders();
-			boolean isConfirmed = instrumentActiveOrders.containsKey(origClientOrderId);
-			if (!isConfirmed) {
-				String message = String
-						.format("%s is a %s need a OrigClientOrderId[%s] active in %s", orderRequest.getClientOrderId(),
-								orderRequest.getOrderRequestAction(), orderRequest.getOrigClientOrderId(),
-								algorithmInfo);
-				throw new LambdaTradingException(message);
-			}
-
-		}
-
-		return orderRequest;
-	}
-
-	public void sendQuoteRequest(QuoteRequest quoteRequest) throws LambdaTradingException {
-		if (quoteRequest.getQuoteRequestAction().equals(QuoteRequestAction.On) && !getAlgorithmState()
-				.equals(AlgorithmState.STARTED)) {
-			throw new LambdaTradingException("cant quote with algo not started");
-		}
-		QuoteManager quoteManager = getQuoteManager(quoteRequest.getInstrument().getPrimaryKey());
-		quoteRequest.setBidPrice(quoteRequest.getInstrument().roundPrice(quoteRequest.getBidPrice()));
-		quoteRequest.setAskPrice(quoteRequest.getInstrument().roundPrice(quoteRequest.getAskPrice()));
-		quoteManager.quoteRequest(quoteRequest);
-	}
-
-	private void addStatistics(String topic) {
-		if (this.statistics != null) {
-			this.statistics.addStatistics(topic);
-		}
-	}
-
-	protected void retryExecutionReportRejected(ExecutionReport executionReport, long delayMs) {
-		boolean isRejected = executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Rejected);
-		if (isRejected) {
-			logger.info("ER rej received {}", executionReport.getRejectReason());
-			// retry last action in another thread
-			String instrumentPk = executionReport.getInstrument();
-			InstrumentManager instrumentManager = getInstrumentManager(instrumentPk);
-			Map<String, OrderRequest> instrumentSendOrders = instrumentManager.getAllRequestOrders();
-			OrderRequest orderRequest = instrumentSendOrders.get(executionReport.getClientOrderId());
-			//null pointer!!!!
-			if (orderRequest != null) {
-				orderRequest.setClientOrderId(generateClientOrderId());
-
-				Runnable methodRun = new Runnable() {
-
-					@Override public void run() {
-						try {
-							sendOrderRequest(orderRequest);
-						} catch (LambdaTradingException e) {
-							e.printStackTrace();
-							logger.error("error retrying to send {}", orderRequest, e);
-						}
-					}
-				};
-
-				ThreadUtils.schedule("retry_rejected", methodRun, delayMs);
-			} else {
-				System.err.println(Configuration.formatLog("{} not found to retry!   instrument orders map of size {}",
-						executionReport.getClientOrderId(), instrumentSendOrders.size()));
-				logger.warn("{} not found to retry!   instrument orders map of size {}",
-						executionReport.getClientOrderId(), instrumentSendOrders.size());
-			}
-		}
-	}
-
-	public OrderRequest getOrderRequestHistorical(String clientOrderId) {
-		return historicalOrdersRequestSent.get(clientOrderId);
-	}
-
-	public void sendOrderRequest(OrderRequest orderRequest) throws LambdaTradingException {
-		if (!algorithmState.equals(AlgorithmState.STARTED) && !orderRequest.getOrderRequestAction()
-				.equals(OrderRequestAction.Cancel)) {
-			//cancel can be sent_
-			throw new LambdaTradingException(
-					"cant send new/modify order with algo " + this.algorithmInfo + " not started");
-		}
-
-		String instrumentPk = orderRequest.getInstrument();
-		InstrumentManager instrumentManager = getInstrumentManager(instrumentPk);
-
-		orderRequest = checkOrderRequest(orderRequest);
-		orderRequest.setTimestampCreation(getCurrentTimestamp());
-
-		//updating the OrderRequestMap before sending
-		Instrument instrumentOrder = instrumentManager.getInstrument();
-		orderRequest.setPrice(instrumentOrder.roundPrice(orderRequest.getPrice()));
-
-		Map<String, OrderRequest> instrumentSendOrders = instrumentManager.getAllRequestOrders();
-		//		if(pendingToRemoveClientOrderId.contains(orderRequest.getClientOrderId())){
-		//			pendingToRemoveClientOrderId.remove(orderRequest.getClientOrderId());
-		//		}else {
-		instrumentSendOrders.put(orderRequest.getClientOrderId(), orderRequest);
-		setAllRequestOrders(instrumentOrder, instrumentSendOrders);
-		//		}
-
-		historicalOrdersRequestSent.put(orderRequest.getClientOrderId(), orderRequest);
-		this.algorithmConnectorConfiguration.getTradingEngineConnector().orderRequest(orderRequest);
-
-		addStatistics("orderRequest." + orderRequest.getOrderRequestAction().name() + " " + SEND_STATS);
-		algorithmNotifier.notifyObserversOnOrderRequest(orderRequest);
-	}
-
-	protected long generateRandomSeed() {
-		return System.currentTimeMillis() + (RANDOM_GENERATOR).nextLong();
-	}
-
-	public void onUpdateCandle(Candle candle) {
-	}
-
-	@Override public boolean onDepthUpdate(Depth depth) {
-		long timestamp = depth.getTimestamp();
-		try {
-			try {
-				candleFromTickUpdater.onDepthUpdate(depth);
-			} catch (IndexOutOfBoundsException e) {
-				//no one of the sides
-			}
-			if (timestamp != 0 && isBacktest) {
-				timeService.setCurrentTimestamp(timestamp);
-			}
-			if (!isBacktest) {
-				timeService.setCurrentTimestamp(new Date().getTime());
-			}
-
-			//check depth
-		} catch (Exception e) {
-			logger.warn("error capture onDepthUpdate on algorithm {} ", this.algorithmInfo, e);
-		}
-		checkDepth(depth);
-		//update cache
-		portfolioManager.updateDepth(depth);
-		algorithmNotifier.notifyObserversOnUpdateDepth(depth);//to stateManager - to state
-
-		if (!checkOperationalTime()) {
-			return false;
-		}
-
-		InstrumentManager instrumentManager = getInstrumentManager(depth.getInstrument());
-		instrumentManager.setLastDepth(depth);
-		addStatistics(RECEIVE_STATS + " depth");
-		depthReceived.incrementAndGet();
-
-		hedgeManager.onDepthUpdate(depth);
-		return true;
-	}
-
-	private void checkDepth(Depth depth) {
-		if (depth.isDepthFilled() && depth.getBestAsk() < depth.getBestBid()) {
-			logger.warn("ask {} is lower than bid {}", depth.getBestAsk(), depth.getBestBid());
-		}
-	}
-
-	@Override public boolean onTradeUpdate(Trade trade) {
-		long timestamp = trade.getTimestamp();
-		candleFromTickUpdater.onTradeUpdate(trade);
-		if (timestamp != 0 && isBacktest) {
-			timeService.setCurrentTimestamp(timestamp);
-		}
-		if (!isBacktest) {
-			timeService.setCurrentTimestamp(new Date().getTime());
-		}
-		if (!checkOperationalTime()) {
-			return false;
-		}
-		//update cache
-		InstrumentManager instrumentManager = getInstrumentManager(trade.getInstrument());
-		instrumentManager.setLastTrade(trade);
-
-		addStatistics(RECEIVE_STATS + " trade");
-		tradeReceived.incrementAndGet();
-		algorithmNotifier.notifyObserversOnUpdateClose(trade);
-		hedgeManager.onTradeUpdate(trade);
-		return true;
-	}
-
-	protected void printBacktestResults(Map<Instrument, Table> tradesTable) {
-
-		for (Instrument instrument : tradesTable.keySet()) {
-
-			String output = (portfolioManager.summary(instrument));
-			Table tradesInstrument = tradesTable.get(instrument);
-			if (isBacktest) {
-				System.out.println(instrument);
-				System.out.println(output);
-			}
-
-			//			logger.info("\n\n\n");
-			//			logger.info("---  {}  ---", instrument.getPrimaryKey());
-			//			for (Row rowTrades : tradesInstrument) {
-			//
-			//				long timestamp = rowTrades.getLong("timestamp");
-			//				Calendar calendar = (Calendar) timeService.getCalendar().clone();
-			//				calendar.setTimeInMillis(timestamp);
-			//				Date date = calendar.getTime();
-			//				String verb = rowTrades.getString("verb");
-			//				double price = rowTrades.getDouble("price");
-			//				double quantity = rowTrades.getDouble("quantity");
-			//				double position = rowTrades.getDouble("netPosition");
-			//				logger.info("\t[{}] {}  {}@{}   [{}]", date, verb, quantity, price, position);
-			//			}
-			//			logger.info("----------");
-
-		}
-
-	}
-
-	private void plotResultsTrade() {
-		String basePath = BASE_PATH_OUTPUT + File.separator + "trades_table_" + algorithmInfo;
-		logger.info("plotResultsTrade received => saving {} trades in {}.csv", portfolioManager.numberOfTrades,
-				basePath);
-
-		File file = new File(basePath).getParentFile();
-		file.mkdirs();//create if not exist
-		Map<Instrument, Table> tradesTable = portfolioManager.getTradesTable(basePath);
-		printBacktestResults(tradesTable);
-
-	}
-
-	@Override public boolean onCommandUpdate(Command command) {
-		//Command received from backtest
-		boolean isNotStop = !command.getMessage().equalsIgnoreCase(Command.ClassMessage.stop.name());
-		long timestamp = command.getTimestamp();
-		if (timestamp != 0 && isBacktest && isNotStop) {
-			timeService.setCurrentTimestamp(timestamp);
-		}
-		if (!isBacktest) {
-			timeService.setCurrentTimestamp(new Date().getTime());
-		}
-
-		logger.info("command received {}  ", command.getMessage());
-		if (command.getMessage().equalsIgnoreCase(Command.ClassMessage.stop.name())) {
-            String basePath = BASE_PATH_OUTPUT + File.separator + "trades_table_" + algorithmInfo;
-            logger.info("Stop received => saving {} trades in {}.csv", portfolioManager.numberOfTrades, basePath);
-            if (isBacktest) {
-                if (saveBacktestOutputTrades) {
-                    File file = new File(basePath).getParentFile();
-                    file.mkdirs();//create if not exist
-
-                    Map<Instrument, Table> tradesTable = portfolioManager.getTradesTable(basePath);
-                    printBacktestResults(tradesTable);
-                } else {
-                    for (Instrument instrument : instruments) {
-                        String output = (portfolioManager.summary(instrument));
-                        System.out.println(instrument);
-                        System.out.println(output);
-
+        boolean isCancelRejected = executionReport.getExecutionReportStatus()
+                .equals(ExecutionReportStatus.CancelRejected);
+        //todo search on active to delete in case
+
+        boolean isFilled = executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.PartialFilled)
+                || executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled);
+
+        String instrumentPk = executionReport.getInstrument();
+        InstrumentManager instrumentManager = getInstrumentManager(instrumentPk);
+
+        Queue<String> tradesInstrument = instrumentManager.getCfTradesReceived();
+
+        //remove from requestOrders
+        Map<String, OrderRequest> instrumentSendOrders = instrumentManager.getAllRequestOrders();
+        //		if (!instrumentSendOrders.containsKey(executionReport.getClientOrderId())) {
+        //			logger.warn("received ER very fast {}    {}", executionReport.getClientOrderId(),executionReport.getExecutionReportStatus());
+        //			pendingToRemoveClientOrderId.add(executionReport.getClientOrderId());
+        //		}
+        instrumentSendOrders.remove(executionReport.getClientOrderId());
+        setAllRequestOrders(instrumentManager.getInstrument(), instrumentSendOrders);
+
+        if (isActive) {
+            boolean wasACfTrade = tradesInstrument.contains(executionReport.getClientOrderId());
+            if (!wasACfTrade) {
+
+                Map<String, ExecutionReport> instrumentActiveOrders = instrumentManager.getAllActiveOrders();
+
+                instrumentActiveOrders.put(executionReport.getClientOrderId(), executionReport);
+                //remove in case of modify!
+                if (executionReport.getOrigClientOrderId() != null) {
+                    instrumentActiveOrders.remove(executionReport.getOrigClientOrderId());
+                }
+                //update it
+                instrumentManager.setAllActiveOrders(instrumentActiveOrders);
+                if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal()) {
+                    logger.debug("ER {} received active  {} ", executionReport.getClientOrderId(),
+                            executionReport.getVerb());
+                }
+
+                if (clientOrderIdToCancelWhenActive.containsKey(executionReport.getClientOrderId())) {
+                    if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal()) {
+                        logger.debug("ER {} detected to be canceled", executionReport.getClientOrderId());
+                    }
+                    OrderRequest cancelRequest = createCancel(instrumentManager.getInstrument(),
+                            executionReport.getClientOrderId());
+                    try {
+                        sendOrderRequest(cancelRequest);
+                        clientOrderIdToCancelWhenActive.remove(executionReport.getClientOrderId());
+                    } catch (LambdaTradingException e) {
+                        logger.error("can't cancel waiting order {}", executionReport.getClientOrderId());
                     }
                 }
-			}
-			if (plotStopHistorical) {
-				try {
-					for (InstrumentManager instrumentManager : instrumentToManager.values()) {
-						Instrument instrument = instrumentManager.getInstrument();
-						portfolioManager.plotHistorical(instrument);
-					}
-				} catch (Exception e) {
-					logger.error("cant plot historical ", e);
-				}
-			}
 
-			stop();
+            } else {
+                if (LOG_LEVEL > LogLevels.ALL_ITERATION_LOG.ordinal()) {
+                    logger.warn("received active {} of previous Cf trade => ignore",
+                            executionReport.getClientOrderId());
+                }
+            }
+        }
 
-			if (isBacktest && exitOnStop) {
-				System.exit(0);
-			}
-		}
+        if (isInactive) {
+            if (executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled)) {
+                tradesInstrument.offer(executionReport.getClientOrderId());
+                instrumentManager.setCfTradesReceived(tradesInstrument);
+            }
 
-		if (command.getMessage().equalsIgnoreCase(Command.ClassMessage.finishedBacktest.name())) {
-			onEndOfBacktestDay();
-		}
+            Map<String, ExecutionReport> instrumentActiveOrders = instrumentManager.getAllActiveOrders();
+            instrumentActiveOrders.remove(executionReport.getClientOrderId());
+            //just in case
+            if (executionReport.getOrigClientOrderId() != null) {
+                instrumentActiveOrders.remove(executionReport.getOrigClientOrderId());
+            }
+            instrumentManager.setAllActiveOrders(instrumentActiveOrders);
+            if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal()) {
+                logger.debug("ER {} received inactive ", executionReport.getClientOrderId());
+            }
 
-		if (command.getMessage().equalsIgnoreCase(Command.ClassMessage.start.name())) {
-			start();
-		}
+        }
 
-		return true;
-	}
+        if (isCancelRejected) {
+            Map<String, ExecutionReport> instrumentActiveOrders = instrumentManager.getAllActiveOrders();
+            if (executionReport.getRejectReason().contains(REJECTION_NOT_FOUND) && instrumentActiveOrders
+                    .containsKey(executionReport.getOrigClientOrderId())) {
+                //remove it from active
+                instrumentActiveOrders.remove(executionReport.getOrigClientOrderId());
+                instrumentActiveOrders.remove(executionReport.getClientOrderId());//just in case
+                instrumentManager.setAllActiveOrders(instrumentActiveOrders);
+            }
+            if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal()) {
+                logger.debug("ER {} cancel rejected on {} ", executionReport.getClientOrderId(),
+                        executionReport.getOrigClientOrderId());
+            }
 
-	public Set<Instrument> getInstruments() {
-		return instruments;
-	}
+        }
 
-	/**
-	 * Has to be called by the algo extending
-	 *
-	 * @param executionReport
-	 */
-	@Override public boolean onExecutionReportUpdate(ExecutionReport executionReport) {
-		synchronized (EXECUTION_REPORT_LOCK) {
-			if (!executionReport.getAlgorithmInfo().equalsIgnoreCase(getAlgorithmInfo())) {
-				//is not mine
-				return true;
-			}
-			updateAllActiveOrders(executionReport);
+        if (isFilled) {
+            if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal()) {
+                logger.debug("ER filled {} {}    {}@{} ", executionReport.getClientOrderId(),
+                        executionReport.getExecutionReportStatus(), executionReport.getLastQuantity(),
+                        executionReport.getPrice());
+            }
 
-			boolean isTrade = executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled)
-					|| executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.PartialFilled);
-			if (isTrade) {
-				if (executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled)) {
-					if (cfTradesProcessed.contains(executionReport.getClientOrderId())) {
-						//already processed
-						return false;
-					}
-					cfTradesProcessed.offer(executionReport.getClientOrderId());
-				}
+            Map<Verb, Long> currentLastTradeTimestamp = instrumentManager.getLastTradeTimestamp();
+            currentLastTradeTimestamp.put(executionReport.getVerb(), getCurrentTimestamp());
+            instrumentManager.setLastTradeTimestamp(currentLastTradeTimestamp);
+        }
 
-				addToPersist(executionReport);
-				addPosition(executionReport);
-				if (executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled)) {
-					clientOrderIdLastCompletelyFillReceived.put(executionReport.getClientOrderId(), executionReport);
-				}
-			}
-			getQuoteManager(executionReport.getInstrument()).onExecutionReportUpdate(executionReport);
-			addStatistics(RECEIVE_STATS + " executionReport." + executionReport.getExecutionReportStatus().name());
-			algorithmNotifier.notifyObserversonExecutionReportUpdate(executionReport);
+    }
 
-			hedgeManager.onExecutionReportUpdate(executionReport);
+    private OrderRequest checkOrderRequest(OrderRequest orderRequest) throws LambdaTradingException {
+        String instrumentPk = orderRequest.getInstrument();
+        InstrumentManager instrumentManager = getInstrumentManager(instrumentPk);
 
-			return true;
-		}
+        //Check order request
+        if (orderRequest.getClientOrderId() == null) {
+            orderRequest.setClientOrderId(generateClientOrderId());
+        }
 
-	}
+        if (orderRequest.getAlgorithmInfo() == null) {
+            orderRequest.setAlgorithmInfo(algorithmInfo);
+        }
 
-	private void addPosition(ExecutionReport executionReport) {
-		InstrumentManager instrumentManager = getInstrumentManager(executionReport.getInstrument());
-		double previousPosition = instrumentManager.getPosition();
-		double lastQty = executionReport.getLastQuantity();
-		if (executionReport.getVerb().equals(Verb.Sell)) {
-			lastQty = lastQty * -1;
-		}
-		double newPosition = previousPosition + lastQty;
-		instrumentManager.setPosition(newPosition);
+        if (orderRequest.getOrderRequestAction() == null) {
+            throw new LambdaTradingException("OrderRequest without action");
+        }
 
-		double myPosition = algorithmPosition.getOrDefault(executionReport.getInstrument(), 0.0);
-		myPosition += lastQty;
-		algorithmPosition.put(executionReport.getInstrument(), myPosition);
-	}
+        if (orderRequest.getOrderRequestAction().equals(OrderRequestAction.Send) || orderRequest.getOrderRequestAction()
+                .equals(OrderRequestAction.Modify)) {
+            if (orderRequest.getOrderType() == null) {
+                throw new LambdaTradingException(
+                        String.format("%s OrderRequest %s without ordertype", orderRequest.getClientOrderId(),
+                                orderRequest.getOrderRequestAction().name()));
+            }
 
-	protected double getPosition(Instrument instrument) {
-		return getInstrumentManager(instrument.getPrimaryKey()).getPosition();
-	}
+            if (orderRequest.getVerb() == null) {
+                throw new LambdaTradingException(
+                        String.format("OrderRequest %s without verb", orderRequest.getOrderRequestAction().name()));
+            }
+            if (orderRequest.getOrderType() != null && !orderRequest.getOrderType().equals(OrderType.Market) && (
+                    orderRequest.getPrice() == OrderRequest.NOT_SET_PRICE_VALUE)) {
+                throw new LambdaTradingException(
+                        String.format("%s OrderRequest %s %s without price!", orderRequest.getClientOrderId(),
+                                orderRequest.getOrderRequestAction().name(), orderRequest.getOrderType().toString()));
+            }
+            if (orderRequest.getQuantity() <= 0) {
+                throw new LambdaTradingException(String.format("%s OrderRequest  %s without valid quantity %.3f",
+                        orderRequest.getClientOrderId(), orderRequest.getOrderRequestAction().name(),
+                        orderRequest.getQuantity()));
+            }
 
-	protected double getAlgorithmPosition(Instrument instrument) {
-		return algorithmPosition.getOrDefault(instrument.getPrimaryKey(), 0.0);
-	}
 
-	public OrderRequest createMarketOrderRequest(Instrument instrument, Verb verb, double quantity) {
-		///controled market request
-		String newClientOrderId = this.generateClientOrderId();
-		OrderRequest output = new OrderRequest();
-		output.setAlgorithmInfo(algorithmInfo);
-		output.setInstrument(instrument.getPrimaryKey());
-		output.setVerb(verb);
-		output.setOrderRequestAction(OrderRequestAction.Send);
-		output.setClientOrderId(newClientOrderId);
-		output.setQuantity(quantity);
-		//		Depth lastDepth = getLastDepth(instrument);
-		//		if (verb.equals(Verb.Sell)){
-		//			output.setPrice(lastDepth.getBestBid()-lastDepth.getSpread());
-		//		}
-		//		if (verb.equals(Verb.Buy)){
-		//			output.setPrice(lastDepth.getBestAsk()+lastDepth.getSpread());
-		//		}
+        }
 
-		output.setTimestampCreation(getCurrentTimestamp());
-		output.setOrderType(OrderType.Market);//limit for quoting
-		output.setMarketOrderType(MarketOrderType.FAS);//default FAS
-		return output;
-	}
+        boolean needOrigClientOrdId =
+                orderRequest.getOrderRequestAction().equals(OrderRequestAction.Modify) || orderRequest
+                        .getOrderRequestAction().equals(OrderRequestAction.Cancel);
 
-	protected OrderRequest createLimitOrderRequest(Instrument instrument, Verb verb, double price, double quantity) {
-		String newClientOrderId = generateClientOrderId();
-		OrderRequest output = new OrderRequest();
-		output.setAlgorithmInfo(algorithmInfo);
-		output.setInstrument(instrument.getPrimaryKey());
-		output.setVerb(verb);
-		output.setOrderRequestAction(OrderRequestAction.Send);
-		output.setClientOrderId(newClientOrderId);
-		output.setQuantity(quantity);
-		output.setPrice(price);
+        if (needOrigClientOrdId && orderRequest.getOrigClientOrderId() == null) {
+            String message = String
+                    .format("%s is a %s need a OrigClientOrderId !=null in %s", orderRequest.getClientOrderId(),
+                            orderRequest.getOrderRequestAction(), algorithmInfo);
+            throw new LambdaTradingException(message);
+        }
 
-		output.setTimestampCreation(getCurrentTimestamp());
+        if (needOrigClientOrdId && orderRequest.getOrigClientOrderId() != null) {
+            String origClientOrderId = orderRequest.getOrigClientOrderId();
+            Map<String, ExecutionReport> instrumentActiveOrders = instrumentManager.getAllActiveOrders();
+            boolean isConfirmed = instrumentActiveOrders.containsKey(origClientOrderId);
+            if (!isConfirmed) {
+                String message = String
+                        .format("%s is a %s need a OrigClientOrderId[%s] active in %s", orderRequest.getClientOrderId(),
+                                orderRequest.getOrderRequestAction(), orderRequest.getOrigClientOrderId(),
+                                algorithmInfo);
+                throw new LambdaTradingException(message);
+            }
 
-		output.setOrderType(OrderType.Limit);//limit for quoting
-		output.setMarketOrderType(MarketOrderType.FAS);//default FAS
+        }
 
-		return output;
-	}
+        return orderRequest;
+    }
 
-	protected void addToPersist(ExecutionReport executionReport) {
-		PnlSnapshot pnlSnapshot = portfolioManager.addTrade(executionReport);
-		algorithmNotifier.notifyObserversOnUpdateTrade(pnlSnapshot);
-		if (!isBacktest) {
-			printRowTrade(executionReport);
-			//			System.out.println(
-			//					String.format("%s   %.4f@%.4f  ->\n %s", executionReport.getVerb(), executionReport.getQuantity(),
-			//							executionReport.getPrice(), executionReport));
-			//			plotResultsTrade();
-		}
-	}
+    public void sendQuoteRequest(QuoteRequest quoteRequest) throws LambdaTradingException {
+        if (quoteRequest.getQuoteRequestAction().equals(QuoteRequestAction.On) && !getAlgorithmState()
+                .equals(AlgorithmState.STARTED)) {
+            throw new LambdaTradingException("can't quote with algo not started");
+        }
+        QuoteManager quoteManager = getQuoteManager(quoteRequest.getInstrument().getPrimaryKey());
+        quoteRequest.setBidPrice(quoteRequest.getInstrument().roundPrice(quoteRequest.getBidPrice()));
+        quoteRequest.setAskPrice(quoteRequest.getInstrument().roundPrice(quoteRequest.getAskPrice()));
+        //TODO DELETE
+//        if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal()) {
+//            double bestBid = getLastDepth(quoteRequest.getInstrument()).getBestBid();
+//            double bestAsk = getLastDepth(quoteRequest.getInstrument()).getBestAsk();
+//            logger.info("[{} bid:{} ask:{}] send quote -> {} ", getCurrentTime(), bestBid, bestAsk, quoteRequest.toString());
+//        }
 
-	protected void printRowTrade(ExecutionReport executionReport) {
+        quoteManager.quoteRequest(quoteRequest);
+    }
 
-		for (String instrumentPk : instrumentToManager.keySet()) {
-			PnlSnapshot pnlSnapshot = portfolioManager.getLastPnlSnapshot(instrumentPk);
-			if (pnlSnapshot == null || pnlSnapshot.numberOfTrades.get() == 0) {
-				continue;
-			}
-			String output = String
-					.format("\r %s  trades:%d  position:%.3f totalPnl:%.3f realizedPnl:%.3f unrealizedPnl:%.3f  ",
-							instrumentPk, pnlSnapshot.numberOfTrades.get(), pnlSnapshot.netPosition,
-							pnlSnapshot.totalPnl, pnlSnapshot.realizedPnl, pnlSnapshot.unrealizedPnl);
-			if (isBacktest) {
-				System.out.print(output);
-			} else {
-				System.out.println(output);
-			}
+    private void addStatistics(String topic) {
+        if (this.statistics != null) {
+            this.statistics.addStatistics(topic);
+        }
+    }
 
-		}
-	}
+    protected void retryExecutionReportRejected(ExecutionReport executionReport, long delayMs) {
+        boolean isRejected = executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Rejected);
+        if (isRejected) {
+            logger.info("ER rej received {}", executionReport.getRejectReason());
+            // retry last action in another thread
+            String instrumentPk = executionReport.getInstrument();
+            InstrumentManager instrumentManager = getInstrumentManager(instrumentPk);
+            Map<String, OrderRequest> instrumentSendOrders = instrumentManager.getAllRequestOrders();
+            OrderRequest orderRequest = instrumentSendOrders.get(executionReport.getClientOrderId());
+            //null pointer!!!!
+            if (orderRequest != null) {
+                orderRequest.setClientOrderId(generateClientOrderId());
 
-	public Date getCurrentTime() {
-		return timeService.getCurrentTime();
-	}
+                Runnable methodRun = new Runnable() {
 
-	public String getCurrentDayStr() {
-		return DAY_STR_DATE_FORMAT.format(getCurrentTime());
-	}
+                    @Override
+                    public void run() {
+                        try {
+                            sendOrderRequest(orderRequest);
+                        } catch (LambdaTradingException e) {
+                            e.printStackTrace();
+                            logger.error("error retrying to send {}", orderRequest, e);
+                        }
+                    }
+                };
 
-	public long getCurrentTimestamp() {
-		if (!this.isBacktest) {
-			long currentTime = System.currentTimeMillis();
-			timeService.setCurrentTimestamp(currentTime);
-		}
-		return timeService.getCurrentTimestamp();
-	}
+                ThreadUtils.schedule("retry_rejected", methodRun, delayMs);
+            } else {
+                System.err.println(Configuration.formatLog("{} not found to retry!   instrument orders map of size {}",
+                        executionReport.getClientOrderId(), instrumentSendOrders.size()));
+                logger.warn("{} not found to retry!   instrument orders map of size {}",
+                        executionReport.getClientOrderId(), instrumentSendOrders.size());
+            }
+        }
+    }
 
-	protected int getCurrentTimeHour() {
-		return timeService.getCurrentTimeHour();
-	}
+    public OrderRequest getOrderRequestHistorical(String clientOrderId) {
+        return historicalOrdersRequestSent.get(clientOrderId);
+    }
 
-	protected int getCurrentTimeDay() {
-		return timeService.getCurrentTimeDay();
-	}
+    public void sendOrderRequest(OrderRequest orderRequest) throws LambdaTradingException {
+        if (!algorithmState.equals(AlgorithmState.STARTED) && !orderRequest.getOrderRequestAction()
+                .equals(OrderRequestAction.Cancel)) {
+            //cancel can be sent_
+            throw new LambdaTradingException(
+                    "can't send new/modify order with algo " + this.algorithmInfo + " not started");
+        }
 
-	protected int getCurrentTimeMinute() {
-		return timeService.getCurrentTimeMinute();
-	}
+        String instrumentPk = orderRequest.getInstrument();
+        InstrumentManager instrumentManager = getInstrumentManager(instrumentPk);
 
-	@Override public boolean onInfoUpdate(String header, String message) {
-		Portfolio portfolio = GSON_STRING.fromJson(message, Portfolio.class);
-		if (isBacktest) {
-			return true;
-		}
-		logger.info("received portfolio from broker -> set");
-		setPortfolio(portfolio);
-		return true;
-	}
+        orderRequest = checkOrderRequest(orderRequest);
+        orderRequest.setTimestampCreation(getCurrentTimestamp());
+
+        //updating the OrderRequestMap before sending
+        Instrument instrumentOrder = instrumentManager.getInstrument();
+        orderRequest.setPrice(instrumentOrder.roundPrice(orderRequest.getPrice()));
+
+        Map<String, OrderRequest> instrumentSendOrders = instrumentManager.getAllRequestOrders();
+        //		if(pendingToRemoveClientOrderId.contains(orderRequest.getClientOrderId())){
+        //			pendingToRemoveClientOrderId.remove(orderRequest.getClientOrderId());
+        //		}else {
+        instrumentSendOrders.put(orderRequest.getClientOrderId(), orderRequest);
+        setAllRequestOrders(instrumentOrder, instrumentSendOrders);
+        //		}
+
+        historicalOrdersRequestSent.put(orderRequest.getClientOrderId(), orderRequest);
+        this.algorithmConnectorConfiguration.getTradingEngineConnector().orderRequest(orderRequest);
+
+        addStatistics("orderRequest." + orderRequest.getOrderRequestAction().name() + " " + SEND_STATS);
+        algorithmNotifier.notifyObserversOnOrderRequest(orderRequest);
+    }
+
+    protected long generateRandomSeed() {
+        return System.currentTimeMillis() + (RANDOM_GENERATOR).nextLong();
+    }
+
+    public void onUpdateCandle(Candle candle) {
+    }
+
+    @Override
+    public boolean onDepthUpdate(Depth depth) {
+        long timestamp = depth.getTimestamp();
+        try {
+            try {
+                candleFromTickUpdater.onDepthUpdate(depth);
+            } catch (IndexOutOfBoundsException e) {
+                //no one of the sides
+            }
+            if (timestamp != 0 && isBacktest) {
+                timeService.setCurrentTimestamp(timestamp);
+            }
+            if (!isBacktest) {
+                timeService.setCurrentTimestamp(new Date().getTime());
+            }
+
+            //check depth
+        } catch (Exception e) {
+            logger.warn("error capture onDepthUpdate on algorithm {} ", this.algorithmInfo, e);
+        }
+        depth = removeMe(depth);
+        checkDepth(depth);
+        //update cache
+        portfolioManager.updateDepth(depth);
+        algorithmNotifier.notifyObserversOnUpdateDepth(depth);//to stateManager - to state
+
+        if (!checkOperationalTime()) {
+            return false;
+        }
+
+        InstrumentManager instrumentManager = getInstrumentManager(depth.getInstrument());
+        instrumentManager.setLastDepth(depth);
+        addStatistics(RECEIVE_STATS + " depth");
+        depthReceived.incrementAndGet();
+
+        hedgeManager.onDepthUpdate(depth);
+        return true;
+    }
+
+    private Depth removeMe(Depth depth) {
+
+        String instrumentPk = depth.getInstrument();
+        InstrumentManager instrumentManager = getInstrumentManager(instrumentPk);
+        Map<String, ExecutionReport> activeOrdersByClordID = instrumentManager.getAllActiveOrders();
+        if (activeOrdersByClordID == null || activeOrdersByClordID.size() == 0) {
+            return depth;
+        }
+        try {
+            Depth output = (Depth) depth.clone();
+            for (ExecutionReport executionReport : activeOrdersByClordID.values()) {
+                double price = executionReport.getPrice();
+                double quantity = executionReport.getQuantity();
+                Verb verb = executionReport.getVerb();
+                //if verb is Buy remove that price from the depth in the bid side
+                output.removeOrder(price, quantity, verb, getAlgorithmInfo());
+            }
+            return output;
+
+        } catch (CloneNotSupportedException e) {
+            logger.error("error cloning depth", e);
+            return depth;
+        }
+    }
+
+    private void checkDepth(Depth depth) {
+        if (depth.isDepthFilled() && depth.getBestAsk() < depth.getBestBid()) {
+            logger.warn("ask {} is lower than bid {}", depth.getBestAsk(), depth.getBestBid());
+        }
+    }
+
+    @Override
+    public boolean onTradeUpdate(Trade trade) {
+        long timestamp = trade.getTimestamp();
+        candleFromTickUpdater.onTradeUpdate(trade);
+        if (timestamp != 0 && isBacktest) {
+            timeService.setCurrentTimestamp(timestamp);
+        }
+        if (!isBacktest) {
+            timeService.setCurrentTimestamp(new Date().getTime());
+        }
+        if (!checkOperationalTime()) {
+            return false;
+        }
+
+        if (isMyLastTrade(trade)) {
+            return false;
+        }
+
+        //update cache
+        InstrumentManager instrumentManager = getInstrumentManager(trade.getInstrument());
+        instrumentManager.setLastTrade(trade);
+
+        addStatistics(RECEIVE_STATS + " trade");
+        tradeReceived.incrementAndGet();
+        algorithmNotifier.notifyObserversOnUpdatePnlSnapshot(trade);
+        hedgeManager.onTradeUpdate(trade);
+        return true;
+    }
+
+    private boolean isMyLastTrade(Trade trade) {
+        for (ExecutionReport executionReport : erTradesProcessed) {
+            //first is the last one
+            boolean sameInstrument = executionReport.getInstrument().equals(trade.getInstrument());
+            boolean samePrice = executionReport.getPrice() == trade.getPrice();
+            boolean sameQuantity = executionReport.getLastQuantity() == trade.getQuantity();
+            boolean sameTrade = sameInstrument && samePrice && sameQuantity;
+            if (sameTrade) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public boolean onCommandUpdate(Command command) {
+        //Command received from backtest
+        boolean isNotStop = !command.getMessage().equalsIgnoreCase(Command.ClassMessage.stop.name());
+        boolean isStart = command.getMessage().equalsIgnoreCase(Command.ClassMessage.start.name());
+        long timestamp = command.getTimestamp();
+        if (isVerbose())
+            logger.info("[{}] command received {} with timestamp {}[{}]  ", getCurrentTime(), command.getMessage(), new Date(timestamp), timestamp);
+        if (timestamp != 0 && isBacktest && isStart) {
+            timeService.reset();
+            timeService.setCurrentTimestamp(timestamp);
+            if (isVerbose())
+                logger.info("Start backtest set timestamp to {} -> {}", new Date(timestamp), getCurrentTime());
+
+            for (QuoteManager quoteManager : instrumentQuoteManagerMap.values()) {
+                quoteManager.reset();
+            }
+
+        }
+
+        if (!isBacktest) {
+            timeService.setCurrentTimestamp(new Date().getTime());
+        }
+
+
+        if (command.getMessage().equalsIgnoreCase(Command.ClassMessage.stop.name())) {
+            stop();
+        }
+
+        if (command.getMessage().equalsIgnoreCase(Command.ClassMessage.finishedBacktest.name())) {
+            onFinishedBacktest();
+        }
+
+        if (command.getMessage().equalsIgnoreCase(Command.ClassMessage.start.name())) {
+            start();
+        }
+
+        return true;
+    }
+
+    private void plotBacktestResults() {
+        try {
+            for (InstrumentManager instrumentManager : instrumentToManager.values()) {
+                Instrument instrument = instrumentManager.getInstrument();
+                portfolioManager.plotHistorical(instrument);
+            }
+        } catch (Exception e) {
+            logger.error("can't plot historical ", e);
+        }
+    }
+
+    private void saveBacktestTrades() {
+        String basePath = BASE_PATH_OUTPUT + File.separator + "trades_table_" + algorithmInfo;
+        logger.info("{} saving {} trades in {}_(instrument_pk).csv", getCurrentTime(), portfolioManager.numberOfTrades, basePath);
+
+        portfolioManager.getTradesTableAndSave(basePath);
+        logger.info("{} saved in {}_(instrument_pk).csv", getCurrentTime(), portfolioManager.numberOfTrades, basePath);
+    }
+
+    protected void printSummaryResults() {
+        double totalPnl = 0.0;
+        double realizedPnl = 0.0;
+        double unrealizedPnl = 0.0;
+
+        double totalFees = 0.0;
+        double realizedFees = 0.0;
+        double unrealizedFees = 0.0;
+        int totalTrades = 0;
+        Set<Instrument> instruments = getInstruments();
+
+        for (Instrument instrument : instruments) {
+            String output = (portfolioManager.summary(instrument));
+            if (instruments.size() == 1) {
+                if (summaryResultsAppend != null && !summaryResultsAppend.isEmpty()) {
+                    output += "\n\t" + summaryResultsAppend;
+                }
+            }
+
+            System.out.println(Configuration.formatLog("{}:{}", algorithmInfo, instrument.getPrimaryKey()));
+            System.out.println(output);
+            logger.info(output);
+
+            PnlSnapshot pnlSnapshot = portfolioManager.getLastPnlSnapshot(instrument.getPrimaryKey());
+            if (pnlSnapshot != null) {
+                totalPnl += pnlSnapshot.getTotalPnl();
+                realizedPnl += pnlSnapshot.getRealizedPnl();
+                unrealizedPnl += pnlSnapshot.getUnrealizedPnl();
+                totalFees += pnlSnapshot.totalFees;
+                realizedFees += pnlSnapshot.realizedFees;
+                unrealizedFees += pnlSnapshot.unrealizedFees;
+                totalTrades += pnlSnapshot.getNumberOfTrades().get();
+            } else {
+                logger.warn("pnlSnapshot is null for {}", instrument.getPrimaryKey());
+                System.out.println("pnlSnapshot is null for " + instrument.getPrimaryKey());
+            }
+        }
+        if (instruments.size() > 1) {
+            String header = Configuration.formatLog("\n********\nTOTAL: {} instruments\n********", instruments.size());
+
+            String body = String
+                    .format("\ttrades:%d  totalPnl:%.3f totalFees:%.3f\n\trealizedPnl:%.3f  realizedFees:%.3f \n\tunrealizedPnl:%.3f  unrealizedFees:%.3f ",
+                            totalTrades, totalPnl,
+                            totalFees, realizedPnl, realizedFees,
+                            unrealizedPnl, unrealizedFees);
+
+            if (summaryResultsAppend != null && !summaryResultsAppend.isEmpty()) {
+                body += "\n\t" + summaryResultsAppend;
+            }
+
+            logger.info(header);
+            logger.info(body);
+
+            System.out.println(header);
+            System.out.println(body);
+
+
+        }
+    }
+
+    public Set<Instrument> getInstruments() {
+        return instruments;
+    }
+
+    /**
+     * Has to be called by the algo extending
+     *
+     * @param executionReport
+     */
+    @Override
+    public boolean onExecutionReportUpdate(ExecutionReport executionReport) {
+        synchronized (EXECUTION_REPORT_LOCK) {
+            if (!executionReport.getAlgorithmInfo().equalsIgnoreCase(getAlgorithmInfo())) {
+                //is not mine
+                return true;
+            }
+            boolean hasPriority = executionReportManager.isNewStatus(executionReport);
+            if (!hasPriority) {
+                //already processed
+                return false;
+            }
+
+            updateAllActiveOrders(executionReport);
+
+            boolean isTrade = executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled)
+                    || executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.PartialFilled);
+            if (isTrade) {
+                erTradesProcessed.offer(executionReport);
+                if (executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled)) {
+                    if (cfTradesProcessed.contains(executionReport.getClientOrderId())) {
+                        //already processed
+                        return false;
+                    }
+                    cfTradesProcessed.offer(executionReport.getClientOrderId());
+                }
+
+                addToPersist(executionReport);
+                addPosition(executionReport);
+                if (executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled)) {
+                    clientOrderIdLastCompletelyFillReceived.put(executionReport.getClientOrderId(), executionReport);
+                }
+            }
+
+            if (algoQuotesEnabled) {
+                getQuoteManager(executionReport.getInstrument()).onExecutionReportUpdate(executionReport);
+                addStatistics(RECEIVE_STATS + " executionReport." + executionReport.getExecutionReportStatus().name());
+            }
+
+            algorithmNotifier.notifyObserversonExecutionReportUpdate(executionReport);
+
+            hedgeManager.onExecutionReportUpdate(executionReport);
+
+            return true;
+        }
+
+    }
+
+    private void addPosition(ExecutionReport executionReport) {
+        InstrumentManager instrumentManager = getInstrumentManager(executionReport.getInstrument());
+        double previousPosition = instrumentManager.getPosition();
+        double lastQty = executionReport.getLastQuantity();
+        if (executionReport.getVerb().equals(Verb.Sell)) {
+            lastQty = lastQty * -1;
+        }
+        double newPosition = previousPosition + lastQty;
+        instrumentManager.setPosition(newPosition);
+
+        double myPosition = algorithmPosition.getOrDefault(executionReport.getInstrument(), 0.0);
+        myPosition += lastQty;
+        algorithmPosition.put(executionReport.getInstrument(), myPosition);
+    }
+
+    protected double getPosition(Instrument instrument) {
+        return getInstrumentManager(instrument.getPrimaryKey()).getPosition();
+    }
+
+    protected double getAlgorithmPosition(Instrument instrument) {
+        return algorithmPosition.getOrDefault(instrument.getPrimaryKey(), 0.0);
+    }
+
+    public OrderRequest createMarketOrderRequest(Instrument instrument, Verb verb, double quantity) {
+        ///controled market request
+        String newClientOrderId = this.generateClientOrderId();
+        OrderRequest output = new OrderRequest();
+        output.setAlgorithmInfo(algorithmInfo);
+        output.setInstrument(instrument.getPrimaryKey());
+        output.setVerb(verb);
+        output.setOrderRequestAction(OrderRequestAction.Send);
+        output.setClientOrderId(newClientOrderId);
+        output.setQuantity(quantity);
+        //		Depth lastDepth = getLastDepth(instrument);
+        //		if (verb.equals(Verb.Sell)){
+        //			output.setPrice(lastDepth.getBestBid()-lastDepth.getSpread());
+        //		}
+        //		if (verb.equals(Verb.Buy)){
+        //			output.setPrice(lastDepth.getBestAsk()+lastDepth.getSpread());
+        //		}
+
+        output.setTimestampCreation(getCurrentTimestamp());
+        output.setOrderType(OrderType.Market);//limit for quoting
+        output.setMarketOrderType(MarketOrderType.FAS);//default FAS
+        return output;
+    }
+
+    protected OrderRequest createLimitOrderRequest(Instrument instrument, Verb verb, double price, double quantity) {
+        String newClientOrderId = generateClientOrderId();
+        OrderRequest output = new OrderRequest();
+        output.setAlgorithmInfo(algorithmInfo);
+        output.setInstrument(instrument.getPrimaryKey());
+        output.setVerb(verb);
+        output.setOrderRequestAction(OrderRequestAction.Send);
+        output.setClientOrderId(newClientOrderId);
+        output.setQuantity(quantity);
+        output.setPrice(price);
+
+        output.setTimestampCreation(getCurrentTimestamp());
+
+        output.setOrderType(OrderType.Limit);//limit for quoting
+        output.setMarketOrderType(MarketOrderType.FAS);//default FAS
+
+        return output;
+    }
+
+    protected void addToPersist(ExecutionReport executionReport) {
+        PnlSnapshot pnlSnapshot = portfolioManager.addTrade(executionReport);
+        algorithmNotifier.notifyObserversOnUpdatePnlSnapshot(pnlSnapshot);
+        if (!isBacktest) {
+            printRowTrade(executionReport);
+            //			System.out.println(
+            //					String.format("%s   %.4f@%.4f  ->\n %s", executionReport.getVerb(), executionReport.getQuantity(),
+            //							executionReport.getPrice(), executionReport));
+            //			plotResultsTrade();
+        }
+    }
+
+    protected void printRowTrade(ExecutionReport executionReport) {
+
+        for (String instrumentPk : instrumentToManager.keySet()) {
+            PnlSnapshot pnlSnapshot = portfolioManager.getLastPnlSnapshot(instrumentPk);
+            if (pnlSnapshot == null || pnlSnapshot.numberOfTrades.get() == 0) {
+                continue;
+            }
+            String output = String
+                    .format("\r %s  trades:%d  position:%.3f totalPnl:%.3f realizedPnl:%.3f unrealizedPnl:%.3f  ",
+                            instrumentPk, pnlSnapshot.numberOfTrades.get(), pnlSnapshot.netPosition,
+                            pnlSnapshot.totalPnl, pnlSnapshot.realizedPnl, pnlSnapshot.unrealizedPnl);
+            if (isBacktest) {
+                System.out.print(output);
+            } else {
+                System.out.println(output);
+            }
+
+        }
+    }
+
+    public Date getCurrentTime() {
+        return timeService.getCurrentTime();
+    }
+
+    public String getCurrentDayStr() {
+        return DAY_STR_DATE_FORMAT.format(getCurrentTime());
+    }
+
+    public long getCurrentTimestamp() {
+        if (!this.isBacktest) {
+            long currentTime = System.currentTimeMillis();
+            timeService.setCurrentTimestamp(currentTime);
+        }
+        return timeService.getCurrentTimestamp();
+    }
+
+    protected int getCurrentTimeHour() {
+        return timeService.getCurrentTimeHour();
+    }
+
+    protected int getCurrentTimeDay() {
+        return timeService.getCurrentTimeDay();
+    }
+
+    protected int getCurrentTimeMinute() {
+        return timeService.getCurrentTimeMinute();
+    }
+
+    public boolean onPosition(Map<String, Double> positions) {
+        algorithmPosition = positions;//override it
+        Set<String> instrumentPks = instrumentToManager.keySet();
+        for (String instrumentPK : instrumentPks) {
+            Instrument instrument = Instrument.getInstrument(instrumentPK);
+            if (instrument == null) {
+                logger.warn("received position of instrumentPK not found {}", instrumentPK);
+                continue;
+            }
+            InstrumentManager instrumentManager = getInstrumentManager(instrumentPK);
+            double position = positions.getOrDefault(instrumentPK, 0.0);
+            logger.info("onPosition {} = {}", instrumentPK, position);
+            if (!isBacktest) {
+                System.out.println(Configuration.formatLog("onPosition {} = {}", instrumentPK, position));
+            }
+            instrumentManager.setPosition(position);
+        }
+
+        synchronized (lockLatchPosition) {
+            if (lastPositionUpdateCountDown != null) {
+                lastPositionUpdateCountDown.countDown();
+            }
+        }
+
+        return true;
+    }
+
+    protected void requestUpdatePosition(boolean synchronous) {
+        if (isBacktest) {
+            return;
+        }
+        if (synchronous) {
+            synchronized (lockLatchPosition) {
+                if (lastPositionUpdateCountDown == null || lastPositionUpdateCountDown.getCount() == 0) {
+                    lastPositionUpdateCountDown = new CountDownLatch(1);
+                }
+            }
+        }
+        requestInfo(algorithmInfo + "." + REQUESTED_POSITION_INFO);
+
+        if (synchronous) {
+            try {
+                lastPositionUpdateCountDown.await();
+            } catch (Exception e) {
+                ;
+            }
+        }
+
+    }
+
+    @Override
+    public boolean onInfoUpdate(String header, String message) {
+        if (header.startsWith(REQUESTED_POSITION_INFO)) {
+            logger.info("received position from broker {}", message);
+            Map<String, Double> positions = GSON_STRING.fromJson(message, Map.class);
+            return onPosition(positions);
+        }
+        if (header.endsWith(REQUESTED_PORTFOLIO_INFO)) {
+            Portfolio portfolio = GSON_STRING.fromJson(message, Portfolio.class);
+            if (isBacktest) {
+                return true;
+            }
+            logger.info("received portfolio from broker -> set");
+            setPortfolio(portfolio);
+            return true;
+        }
+        logger.warn("unknown onInfoUpdate header {} -> return false", header);
+        return false;
+    }
 }

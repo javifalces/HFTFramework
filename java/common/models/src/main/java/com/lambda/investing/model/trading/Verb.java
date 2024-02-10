@@ -1,7 +1,7 @@
 package com.lambda.investing.model.trading;
 
 public enum Verb {
-	Buy, Sell;//bid ask
+	Buy, Sell, NotSet;//bid ask
 
 	public static Verb OtherSideVerb(Verb verb) {
 		if (verb == null) {

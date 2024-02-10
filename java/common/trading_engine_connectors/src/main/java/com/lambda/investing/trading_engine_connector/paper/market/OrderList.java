@@ -139,4 +139,8 @@ public class OrderList implements Iterable<OrderOrderbook>, Iterator<OrderOrderb
 		return String.join(",", algorithmsInfo.keySet());
 	}
 
+	public List<String> getAlgorithmsList() {
+		return new ArrayList<>(algorithmsInfo.keySet());
+	}
+
 }

@@ -20,6 +20,9 @@ public class ConstantSpreadAction extends AbstractAction {
 
 	private BiMap<Integer, ActionRow> actionIndexToArr;
 
+	public int getNumberActionColumns() {
+		return SIZE_ARRAY_ACTION;
+	}
 	public ConstantSpreadAction(int[] levels, int[] skewLevels) {
 
 		List<Integer> validInputsSize = new ArrayList<>();
@@ -67,9 +70,9 @@ public class ConstantSpreadAction extends AbstractAction {
 			}
 		}
 
-		assert counter == getNumberActions();
 		assert actionIndexToArr.size() == counter;
-		System.out.println("ConstantSpreadAction has " + String.valueOf(actionIndexToArr.size()) + " actions");
+		numberOfActions = counter;
+		System.out.println("ConstantSpreadAction has " + String.valueOf(numberOfActions) + " actions");
 
 	}
 
@@ -111,7 +114,7 @@ public class ConstantSpreadAction extends AbstractAction {
 		//			double positionSkew = 0;
 		//			try {
 		//				positionSkew = binomialCoefficientDouble(
-		//						skewPricePct.length - ArrayUtils.indexOf(skewPricePct, skew) + 1, 1);
+		//						skew.length - ArrayUtils.indexOf(skew, skew) + 1, 1);
 		//			} catch (NumberIsTooLargeException ex) {
 		//			}
 		//			int actionPosition = (int) (positionWindows + positionRisk + positionSkew);

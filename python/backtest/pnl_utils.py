@@ -131,7 +131,7 @@ def __calculate_close_returns_numba__(trades_input):
                         quantity_to_save_dict -= entry_quantity
                         remaining_position -= entry_quantity
                         closed_return += -entry_quantity * (
-                            row[price_column] - entry_price
+                                row[price_column] - entry_price
                         )
 
                         entry_remain_position = sell_dict[entry_price] - entry_quantity
@@ -260,16 +260,22 @@ def get_drawdown(equity_curve: pd.Series) -> pd.Series:
     return highest_value - data_ser_df
 
 
-def get_sortino(equity_curve: pd.Series, rfr=0, target=0) -> float:
+def get_sortino(equity_curve: pd.Series, rfr=0.0, target=0.0) -> float:
+
     # rfr = 0
     # target = 0
     df = equity_curve.diff().to_frame('Returns')
-    df['downside_returns'] = 0
-    df.loc[df['Returns'] < target, 'downside_returns'] = df['Returns'] ** 2
+    df['downside_returns'] = 0.0
+    # FutureWarning:  has dtype incompatible with int64, please explicitly cast to a compatible dtype first.
+
+    df.loc[df['Returns'] < target, 'downside_returns'] = df['Returns'] ** 2.0
     expected_return = df['Returns'].mean()
     down_stdev = np.sqrt(df['downside_returns'].mean())
     if down_stdev == 0:
-        down_stdev = 0.000001
+        print(
+            rf"WARNING: get_sortino down_stdev == 0 change to ZERO_VALUE_DEFAULT {ZERO_VALUE_DEFAULT}"
+        )
+        down_stdev = ZERO_VALUE_DEFAULT
 
     sortino_ratio = (expected_return - rfr) / down_stdev
     return sortino_ratio
@@ -278,8 +284,13 @@ def get_sortino(equity_curve: pd.Series, rfr=0, target=0) -> float:
 def get_sharpe(equity_curve: pd.Series, rfr=0) -> float:
     df = equity_curve.diff().to_frame('Returns')
     expected_return = df['Returns'].mean()
-    down_stdev = df['Returns'].std()
-    sharpe = (expected_return - rfr) / down_stdev
+    stdev = df['Returns'].std()
+    if stdev == 0:
+        print(
+            rf"WARNING: get_sharpe stdev == 0 change to ZERO_VALUE_DEFAULT {ZERO_VALUE_DEFAULT}"
+        )
+        stdev = ZERO_VALUE_DEFAULT
+    sharpe = (expected_return - rfr) / stdev
     return sharpe
 
 
@@ -312,14 +323,17 @@ def get_ulcer_index(equity_curve: pd.Series):
     returns = equity_curve.diff()
     max_dd = get_max_drawdown(equity_curve=equity_curve)
     if max_dd == 0:
+        print(
+            rf"WARNING: get_ulcer_index max_dd == 0 change to ZERO_VALUE_DEFAULT {ZERO_VALUE_DEFAULT}"
+        )
         max_dd = ZERO_VALUE_DEFAULT
 
     return returns.mean() / max_dd
 
 
 def get_pnl_to_map(
-    equity_curve: pd.Series,
-    position: pd.Series,
+        equity_curve: pd.Series,
+        position: pd.Series,
 ) -> float:
     '''
     Pnl to mean absolute position
@@ -360,12 +374,54 @@ def get_max_drawdown_pct(equity_curve: pd.Series) -> float:
         return 0.0
 
 
+def get_backtest_df_date_indexed(backtest_df: pd.DataFrame) -> pd.DataFrame:
+    column_datetime = ['date', 'time']
+    for column in column_datetime:
+        if (
+                not isinstance(backtest_df.index, pd.DatetimeIndex)
+                and column in backtest_df.columns
+        ):
+            if not isinstance(backtest_df[column], pd.DatetimeIndex):
+                backtest_df[column] = pd.to_datetime(backtest_df[column])
+            backtest_df = backtest_df.set_index(column)
+            break
+
+    return backtest_df
+
+
 def get_score(
-    backtest_df: pd.DataFrame,
-    score_enum: ScoreEnum,
-    equity_column_score: ScoreEnum = ScoreEnum.total_pnl,
+        backtest_df: pd.DataFrame,
+        score_enum: ScoreEnum,
+        equity_column_score: ScoreEnum = ScoreEnum.total_pnl,
 ) -> float:
-    equity_curve = backtest_df[get_score_enum_csv_column(equity_column_score)]
+    '''
+
+    Parameters
+    ----------
+    backtest_df output from output_test[algorithm_name]
+    score_enum
+    equity_column_score realized_pnl , unrealized_pnl
+
+    Returns score , greater the better
+    -------
+
+    '''
+    if backtest_df is None or len(backtest_df) == 0:
+        print('No trades to get_score > return 0.0')
+        return 0.0
+
+    # group by time
+    from configuration import SHARPE_BACKTEST_FREQ
+
+    backtest_df = get_backtest_df_date_indexed(backtest_df=backtest_df)
+    backtest_df_indexed = backtest_df.groupby(
+        pd.Grouper(freq=SHARPE_BACKTEST_FREQ)
+    ).last()
+
+    equity_curve = backtest_df_indexed[
+        get_score_enum_csv_column(equity_column_score)
+    ].ffill()
+
     trades = len(backtest_df)
     score = 0
     if score_enum == ScoreEnum.falcma_ratio:
@@ -373,6 +429,7 @@ def get_score(
     if score_enum == ScoreEnum.sharpe:
         score = get_sharpe(equity_curve=equity_curve)
     if score_enum == ScoreEnum.max_dd:
+        # greater the better -> negative
         score = -get_max_drawdown(equity_curve=equity_curve)
     if score_enum == ScoreEnum.sortino:
         score = get_sortino(equity_curve=equity_curve)
@@ -381,6 +438,16 @@ def get_score(
         score = equity_curve.iloc[-1]
     if score_enum == ScoreEnum.realized_pnl:
         score = backtest_df[get_score_enum_csv_column(ScoreEnum.realized_pnl)].iloc[-1]
+    if score_enum == ScoreEnum.pnl_to_map:
+        open_pnl_equity_curve = backtest_df_indexed[
+            get_score_enum_csv_column(ScoreEnum.total_pnl)
+        ].ffill()
+        position = backtest_df_indexed['netPosition'].ffill()
+
+        score = get_pnl_to_map(equity_curve=open_pnl_equity_curve, position=position)
+
+    if score_enum == ScoreEnum.number_trades:
+        score = trades
 
     return score
 

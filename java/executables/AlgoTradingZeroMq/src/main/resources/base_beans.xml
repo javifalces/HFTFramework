@@ -4,9 +4,7 @@
        xmlns:context="http://www.springframework.org/schema/context"
        xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
 
-    <import resource="classpath:metatrader_instruments.xml"></import>
-    <import resource="classpath:darwinex_instruments.xml"></import>
-    <import resource="classpath:binance_instruments.xml"></import>
+    <import resource="classpath:all_instruments.xml"></import>
 
     <bean
             class="org.springframework.context.support.PropertySourcesPlaceholderConfigurer">
@@ -25,6 +23,7 @@
         <property name="host" value="${marketdata.host}"/>
     </bean>
 
+
     <bean id="connectorPublisher" class="com.lambda.investing.connector.zero_mq.ZeroMqPublisher">
         <constructor-arg index="0" value="zeroMqConnectorPublisher"/>
         <constructor-arg index="1" value="0"/>
@@ -34,6 +33,18 @@
     <bean id="marketDataAndERconnectorProvider" class="com.lambda.investing.connector.zero_mq.ZeroMqProvider"
           factory-method="getInstance" init-method="start">
         <constructor-arg index="0" ref="marketDataAndERconnectorConfiguration"/>
+        <constructor-arg index="1" value="1"/>
+    </bean>
+
+    <!--factor listener-->
+    <bean id="factorConnectorConfiguration" class="com.lambda.investing.connector.zero_mq.ZeroMqConfiguration">
+        <property name="port" value="${factor.port}"/>
+        <property name="host" value="${factor.host}"/>
+    </bean>
+
+    <bean id="factorConnectorProvider" class="com.lambda.investing.factor_investing_connector.ZeroMqFactorProvider"
+          init-method="start">
+        <constructor-arg index="0" ref="factorConnectorConfiguration"/>
         <constructor-arg index="1" value="1"/>
     </bean>
 
@@ -80,6 +91,7 @@
           class="com.lambda.investing.market_data_connector.ZeroMqMarketDataConnector" init-method="start">
         <constructor-arg index="0" ref="marketDataAndERconnectorConfiguration"/>
         <constructor-arg index="1" value="1"/>
+        <property name="listenER" value="false"></property>
     </bean>
 
 
@@ -88,6 +100,7 @@
           class="com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration">
         <constructor-arg index="0" ref="zeroMQTradingEngine"/>
         <constructor-arg index="1" ref="marketDataConnector"/>
+        <property name="factorProvider" ref="factorConnectorProvider"></property>
     </bean>
 
 

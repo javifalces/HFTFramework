@@ -3,7 +3,6 @@ package com.lambda.investing.trading_engine_connector.paper;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorPublisher;
 import com.lambda.investing.market_data_connector.AbstractMarketDataConnectorPublisher;
-
 import com.lambda.investing.model.messaging.TopicUtils;
 import com.lambda.investing.model.messaging.TypeMessage;
 import com.lambda.investing.model.trading.ExecutionReport;

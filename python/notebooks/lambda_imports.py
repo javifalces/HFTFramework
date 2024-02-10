@@ -9,6 +9,9 @@ import seaborn as sns
 import pandas as pd
 import numpy as np
 import time
+import random
+from pandas.tseries.offsets import BDay
+
 import datetime
 import tqdm
 import os
@@ -20,49 +23,41 @@ import pickle
 
 sns.set_theme()
 import pylab
+import json
 
+from backtest.input_configuration import (
+    BacktestConfiguration,
+    AlgorithmConfiguration,
+    InputConfiguration,
+    JAR_PATH,
+    MultiThreadConfiguration,
+)
+from utils.paralellization_util import *
+from utils.date_utils import *
+from utils.pandas_utils.dataframe_utils import *
 
 from database.tick_db import *
 
 from backtest.parameter_tuning.ga_configuration import GAConfiguration
 from backtest.parameter_tuning.ga_parameter_tuning import GAParameterTuning
 
+
 # import plotly.graph_objects as go
 from notebooks.email_util import EmailConnector
 from configuration import *
 
-from trading_algorithms.iterations_period_time import IterationsPeriodTime
-from trading_algorithms.score_enum import ScoreEnum
-from trading_algorithms.state_utils import *
-from trading_algorithms.candles_type import *
-from trading_algorithms.algorithm_enum import *
 from utils.pandas_utils.dataframe_utils import *
 from utils.date_utils import *
 from backtest.pnl_utils import *
 
-from trading_algorithms.algorithm import Algorithm
-from trading_algorithms.dqn_algorithm import DQNAlgorithm
-
-from trading_algorithms.market_making.avellaneda_stoikov import AvellanedaStoikov
-from trading_algorithms.market_making.alpha_avellaneda_stoikov import (
-    AlphaAvellanedaStoikov,
-)
-from trading_algorithms.market_making.rl4j_alpha_avellaneda_stoikov import (
-    Rl4jAlphaAvellanedaStoikov,
-)
-
-from trading_algorithms.market_making.constant_spread import ConstantSpread
-from trading_algorithms.market_making.linear_constant_spread import LinearConstantSpread
-from trading_algorithms.market_making.alpha_constant_spread import AlphaConstantSpread
-
-
-
+from trading_algorithms.trading_algorithms_import import *
 
 plt.rcParams['figure.figsize'] = [12, 8]
 plt.rcParams['figure.dpi'] = 100  # 200 e.g. is really fine, but slower
 # pd.options.plotting.backend ='matplotlib'# "plotly"
 pd.set_option('display.max_rows', 50)
 pd.set_option('display.max_columns', 50)
+
 
 # pd.set_option('display.width', 1000)
 def plot_with_style():
@@ -131,4 +126,6 @@ def plot_with_dark_style():
 # plot_with_dark_style()
 plt.ion()  # plt show not required
 
+
 # from utils.tensorflow_utils import *
+from backtest.parameter_tuning.optuna.optuna_configuration import OptunaConfiguration

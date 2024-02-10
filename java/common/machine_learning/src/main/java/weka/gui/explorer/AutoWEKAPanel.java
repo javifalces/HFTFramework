@@ -188,7 +188,7 @@ public class AutoWEKAPanel extends ClassifierPanel implements ExplorerPanel, Log
 		m_History.setBorder(BorderFactory.createTitledBorder("Result list (right-click for options)"));
 
 		m_ClassifierEditor.setClassType(Classifier.class);
-		m_ClassifierEditor.setValue(new weka.classifiers.meta.AutoWEKAClassifier());
+		m_ClassifierEditor.setValue(new AutoWEKAClassifier());
 		m_ClassifierEditor.addPropertyChangeListener(new PropertyChangeListener() {
 
 			public void propertyChange(PropertyChangeEvent e) {
@@ -611,7 +611,7 @@ public class AutoWEKAPanel extends ClassifierPanel implements ExplorerPanel, Log
 			jf.setVisible(true);
 			if (args.length == 1) {
 				System.err.println("Loading instances from " + args[0]);
-				Reader r = new java.io.BufferedReader(new java.io.FileReader(args[0]));
+				Reader r = new BufferedReader(new FileReader(args[0]));
 				Instances i = new Instances(r);
 				sp.setInstances(i);
 			}

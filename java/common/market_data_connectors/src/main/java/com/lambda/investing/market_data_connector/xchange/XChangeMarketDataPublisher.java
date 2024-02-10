@@ -1,8 +1,5 @@
 package com.lambda.investing.market_data_connector.xchange;
 
-import com.binance.api.client.domain.event.DepthEvent;
-import com.binance.api.client.domain.market.OrderBookEntry;
-import com.lambda.investing.binance.BinanceBrokerConnector;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorPublisher;
 import com.lambda.investing.market_data_connector.AbstractMarketDataConnectorPublisher;
@@ -14,7 +11,6 @@ import com.lambda.investing.xchange.BinanceXchangeBrokerConnector;
 import com.lambda.investing.xchange.CoinbaseBrokerConnector;
 import com.lambda.investing.xchange.KrakenBrokerConnector;
 import com.lambda.investing.xchange.XChangeBrokerConnector;
-import info.bitrich.xchangestream.core.ProductSubscription;
 import info.bitrich.xchangestream.core.StreamingExchange;
 import io.reactivex.disposables.Disposable;
 import org.apache.commons.lang3.ArrayUtils;
@@ -23,7 +19,10 @@ import org.apache.logging.log4j.Logger;
 import org.knowm.xchange.currency.CurrencyPair;
 import org.knowm.xchange.dto.trade.LimitOrder;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 

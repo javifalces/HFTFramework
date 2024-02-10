@@ -1,11 +1,6 @@
 from typing import Type
 
-from trading_algorithms.state_utils import (
-    StateType,
-    StateUtils,
-    PRIVATE_COLUMNS,
-    INDIVIDUAL_COLUMNS,
-)
+from trading_algorithms.state_utils import StateType, StateUtils, PRIVATE_COLUMNS
 
 from trading_algorithms.algorithm import Algorithm
 import copy
@@ -29,14 +24,14 @@ from backtest.input_configuration import (
     AlgorithmConfiguration,
     InputConfiguration,
     JAR_PATH,
-    TrainInputConfiguration,
 )
 from backtest.backtest_launcher import BacktestLauncher, BacktestLauncherController
 import shutil
-from backtest.train_launcher import clean_gpu_memory
 from configuration import LAMBDA_OUTPUT_PATH
+from utils.list_utils import list_to_str
 
 
+# deprecated
 class ReinforcementLearningType:
     q_learn = "q_learn"
     double_deep_q_learn = "double_deep_q_learn"
@@ -52,15 +47,15 @@ class TrainType:
 
 DEFAULT_PARAMETERS = {
     # DQN parameter tuning
-    "learningRateParameterTuning": [0.00001, 0.0001, 0.001, 0.01],
-    "hiddenSizeNodesMultiplierParameterTuning": [2.0, 1.0, 0.5],
-    "epochMultiplierParameterTuning": [1.0, 2.0, 0.5],
-    "momentumParameterTuning": [0.0, 0.5, 0.8],
-    "l1ParameterTuning": [0.0, 0.1, 0.01, 0.001],
-    "l2ParameterTuning": [0.0, 0.1, 0.01, 0.001],
-    "batchSizeParameterTuning": [32, 64, 128],
-    #
-    "parameterTuningBeforeTraining": 0,
+    # "learningRateParameterTuning": [0.00001, 0.0001, 0.001, 0.01],
+    # "hiddenSizeNodesMultiplierParameterTuning": [2.0, 1.0, 0.5],
+    # "epochMultiplierParameterTuning": [1.0, 2.0, 0.5],
+    # "momentumParameterTuning": [0.0, 0.5, 0.8],
+    # "l1ParameterTuning": [0.0, 0.1, 0.01, 0.001],
+    # "l2ParameterTuning": [0.0, 0.1, 0.01, 0.001],
+    # "batchSizeParameterTuning": [32, 64, 128],
+    # #
+    # "parameterTuningBeforeTraining": 0,
     "earlyStoppingTraining": 0,
     "earlyStoppingDataSplitTrainingPct": 0.6,
     "hiddenSizeNodesMultiplier": 2,
@@ -68,6 +63,7 @@ DEFAULT_PARAMETERS = {
     "trainingStats": 0,  # to enable training UI interface on localhost:9000
     # DQN parameters
     "maxBatchSize": 1000,
+    "batchSize": 25,
     "trainingPredictIterationPeriod": IterationsPeriodTime.END_OF_SESSION,  # train only at the end,offline
     "trainingTargetIterationPeriod": IterationsPeriodTime.END_OF_SESSION,  # train at the end,offline
     "epoch": 75,
@@ -96,6 +92,7 @@ DEFAULT_PARAMETERS = {
     "otherInstrumentsStates": [],
     "otherInstrumentsMsPeriods": [],
     "stopActionOnFilled": 0,
+    "baseModel": "DQN",  # DQN ,PPO , SAC
 }
 
 
@@ -111,9 +108,9 @@ class DQNAlgorithm(Algorithm):
         self.train_type = self.get_train_type(parameters)
         self.is_filtered_states = False
         if (
-            'stateColumnsFilter' in parameters.keys()
-            and parameters['stateColumnsFilter'] is not None
-            and len(parameters['stateColumnsFilter']) > 0
+                'stateColumnsFilter' in parameters.keys()
+                and parameters['stateColumnsFilter'] is not None
+                and len(parameters['stateColumnsFilter']) > 0
         ):
             self.is_filtered_states = True
 
@@ -141,6 +138,8 @@ class DQNAlgorithm(Algorithm):
             return self._get_market_state_columns()
         if self.state_type == StateType.ta_state:
             return self._get_ta_state_columns()
+        if self.state_type == StateType.ta_state_fx:
+            return self._get_ta_state_columns(True)
 
     def _get_market_state_columns(self):
         private_horizon_ticks = self.parameters['horizonTicksPrivateState']
@@ -164,7 +163,7 @@ class DQNAlgorithm(Algorithm):
             multimarket_periods=multimarket_periods,
         )
 
-    def _get_ta_state_columns(self):
+    def _get_ta_state_columns(self, is_fx: bool = False):
         is_binary = False
         if "binaryStateOutputs" in self.parameters.keys():
             is_binary = self.parameters["binaryStateOutputs"] > 0
@@ -188,6 +187,7 @@ class DQNAlgorithm(Algorithm):
             periods=periods,
             multimarket_instruments=multimarket_instruments,
             multimarket_periods=multimarket_periods,
+            is_fx=is_fx,
         )
 
     # get states
@@ -196,11 +196,11 @@ class DQNAlgorithm(Algorithm):
         raise NotImplementedError
 
     def get_memory_replay_df(
-        self, memory_replay_file: str = None, state_columns: list = None
+            self, memory_replay_file: str = None, state_columns: list = None
     ) -> pd.DataFrame:
         if memory_replay_file is None:
             memory_replay_file = (
-                LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename()
+                    LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename()
             )
         print(rf"getting memory from {memory_replay_file}")
 
@@ -212,7 +212,7 @@ class DQNAlgorithm(Algorithm):
                     state_columns_temp = []
                     if not REMOVE_PRIVATE_STATES:
                         for private_state_horizon in range(
-                            private_horizon_ticks - 1, -1, -1
+                                private_horizon_ticks - 1, -1, -1
                         ):
                             state_columns_temp.append(
                                 'inventory_%d' % private_state_horizon
@@ -250,7 +250,7 @@ class DQNAlgorithm(Algorithm):
             return None
         my_data = genfromtxt(memory_replay_file, delimiter=',')
         last_column_is_all_None = (
-            len(my_data[:, -1][np.logical_not(np.isnan(my_data[:, -1]))]) == 0
+                len(my_data[:, -1][np.logical_not(np.isnan(my_data[:, -1]))]) == 0
         )
         if last_column_is_all_None:
             my_data = my_data[:, :-1]  # last column is reading as all nulls
@@ -265,17 +265,19 @@ class DQNAlgorithm(Algorithm):
         output = pd.DataFrame(my_data, columns=all_columns)
         return output
 
-    def get_number_of_state_columns(self, parameters: dict) -> int:
+    def get_number_of_state_columns(self, parameters: dict, print_it: bool = False) -> int:
         state_columns = []
         if 'stateColumnsFilter' in list(parameters.keys()):
             state_columns = parameters['stateColumnsFilter']
             for state_str in copy.copy(state_columns):
                 # remove private not filtered! to add it later
-                if 'score' in state_str or 'inventory' in state_str:
-                    del state_columns[state_str]
+                for private_prefix in PRIVATE_COLUMNS:
+                    if private_prefix in state_str:
+                        del state_columns[state_str]
 
         if state_columns is None or len(state_columns) == 0:
-            number_state_columns = len(self._get_default_state_columns())
+            state_columns = self._get_default_state_columns()
+            number_state_columns = len(state_columns)
             # number_state_columns = parameters['horizonTicksPrivateState'] * PRIVATE_COLUMNS + parameters[
             #     'horizonTicksMarketState'] * MARKET_COLUMNS + parameters[
             #                            'horizonCandlesState'] * CANDLE_COLUMNS + CANDLE_INDICATOR_COLUMNS
@@ -283,11 +285,15 @@ class DQNAlgorithm(Algorithm):
             # add private columns
             number_state_columns = len(state_columns)
             if self.state_type == StateType.market_state:
-                number_state_columns += (
-                    parameters['horizonTicksPrivateState'] * PRIVATE_COLUMNS
+                private_columns = StateUtils.get_private_state_columns(
+                    parameters['horizonTicksPrivateState']
                 )
-                number_state_columns += INDIVIDUAL_COLUMNS
+                individual_columns = StateUtils.get_individual_state_columns()
+                number_state_columns += len(private_columns) + len(individual_columns)
+                state_columns = private_columns + individual_columns + state_columns
 
+        if print_it:
+            print(rf"states(PYTHON) [{len(state_columns)}] : {list_to_str(state_columns)}")
         return number_state_columns
 
     def get_number_of_action_columns(self, parameters: dict) -> int:
@@ -295,7 +301,7 @@ class DQNAlgorithm(Algorithm):
         return len(actions)
 
     def get_rewards(
-        self, memory_replay_file: str = None, state_columns: list = None
+            self, memory_replay_file: str = None, state_columns: list = None
     ) -> pd.DataFrame:
         memory_df = self.get_memory_replay_df(
             memory_replay_file=memory_replay_file, state_columns=state_columns
@@ -307,14 +313,14 @@ class DQNAlgorithm(Algorithm):
         # df_state_columns = list(memory_df.columns)[:number_state_columns]
         # df_next_state_columns = list(memory_df.columns)[-number_state_columns:]
         df_reward_columns = list(memory_df.columns)[
-            number_state_columns:-number_state_columns
-        ]
+                            number_state_columns:-number_state_columns
+                            ]
         rewards = memory_df[df_reward_columns]
         assert number_of_actions == rewards.shape[1]
         return rewards
 
     def get_states(
-        self, memory_replay_file: str = None, state_columns: list = None
+            self, memory_replay_file: str = None, state_columns: list = None
     ) -> pd.DataFrame:
         memory_df = self.get_memory_replay_df(
             memory_replay_file=memory_replay_file, state_columns=state_columns
@@ -324,14 +330,14 @@ class DQNAlgorithm(Algorithm):
         df_state_columns = list(memory_df.columns)[:number_state_columns]
         # df_next_state_columns = list(memory_df.columns)[-number_state_columns:]
         df_reward_columns = list(memory_df.columns)[
-            number_state_columns:-number_state_columns
-        ]
+                            number_state_columns:-number_state_columns
+                            ]
         states = memory_df[df_state_columns]
         return states
 
     @staticmethod
     def merge_array_matrix(
-        array_list: list, number_state_columns: int, number_of_actions: int
+            array_list: list, number_state_columns: int, number_of_actions: int
     ) -> pd.DataFrame:
         output_array = None
         for my_data in array_list:
@@ -371,10 +377,10 @@ class DQNAlgorithm(Algorithm):
         return df
 
     def merge_q_matrix(
-        self,
-        backtest_launchers: list,
-        algos_per_iteration: int = None,
-        include_original: bool = False,
+            self,
+            backtest_launchers: list,
+            algos_per_iteration: int = None,
+            include_original: bool = False,
     ) -> list:
         # base_path_search = backtest_launchers[0].output_path
         base_path_search = LAMBDA_OUTPUT_PATH
@@ -387,7 +393,7 @@ class DQNAlgorithm(Algorithm):
 
         csv_files_out = []
         main_memory_file = (
-            LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename()
+                LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename()
         )
         if algos_per_iteration > 1:
             for csv_file in csv_files:
@@ -525,10 +531,10 @@ class DQNAlgorithm(Algorithm):
         return rf"target_model_{self.get_test_name(name=self.NAME, algorithm_number=algorithm_number)}.model"
 
     def get_memory_size(
-        self,
-        memory_replay_file: str = None,
-        algorithm_number: int = None,
-        with_rewards: bool = False,
+            self,
+            memory_replay_file: str = None,
+            algorithm_number: int = None,
+            with_rewards: bool = False,
     ) -> int:
         try:
             memory_df = self.get_memory_replay_df(memory_replay_file=memory_replay_file)
@@ -556,22 +562,22 @@ class DQNAlgorithm(Algorithm):
         memory_size_with_rewards = self.get_memory_size(with_rewards=True)
         memory_size = self.get_memory_size(with_rewards=False)
         if (
-            memory_size_with_rewards < self.get_max_batch_size() / 2
-            or memory_size < self.get_max_batch_size()
+                memory_size_with_rewards < self.get_max_batch_size() / 2
+                or memory_size < self.get_max_batch_size()
         ):
             return False
         else:
             return True
 
     def fill_memory(
-        self,
-        start_date: datetime.datetime,
-        end_date: datetime,
-        instrument_pk: str,
-        algos_per_iteration: int,
-        simultaneous_algos: int = 1,
-        clean_initial_experience: bool = False,
-        max_iterations: int = -1,
+            self,
+            start_date: datetime.datetime,
+            end_date: datetime,
+            instrument_pk: str,
+            algos_per_iteration: int,
+            simultaneous_algos: int = 1,
+            clean_initial_experience: bool = False,
+            max_iterations: int = -1,
     ):
 
         backtest_configuration = BacktestConfiguration(
@@ -673,15 +679,15 @@ class DQNAlgorithm(Algorithm):
             ## all backtest launchers are ready
             # clean before
             if (
-                clean_initial_experience
-                and iteration == 0
-                and os.path.isdir(LAMBDA_OUTPUT_PATH)
+                    clean_initial_experience
+                    and iteration == 0
+                    and os.path.isdir(LAMBDA_OUTPUT_PATH)
             ):
                 # clean it
                 print('cleaning experience on training  path %s' % LAMBDA_OUTPUT_PATH)
                 self.clean_experience(output_path=LAMBDA_OUTPUT_PATH)
                 memory_file_path = (
-                    LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename()
+                        LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename()
                 )
                 if os.path.isfile(memory_file_path):
                     os.remove(memory_file_path)
@@ -711,7 +717,7 @@ class DQNAlgorithm(Algorithm):
                 else:
                     # copying into orignial name memoryReplay
                     memory_replay_out = (
-                        LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename()
+                            LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename()
                     )
                     if memory_files[0] != memory_replay_out:
                         print(
@@ -735,13 +741,13 @@ class DQNAlgorithm(Algorithm):
                 iteration += 1
             else:
                 memory_backup = (
-                    LAMBDA_OUTPUT_PATH
-                    + os.sep
-                    + self.get_memory_replay_filename()
-                    + ".backup"
+                        LAMBDA_OUTPUT_PATH
+                        + os.sep
+                        + self.get_memory_replay_filename()
+                        + ".backup"
                 )
                 memory_replay_out = (
-                    LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename()
+                        LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename()
                 )
                 shutil.copy(memory_replay_out, memory_backup)
                 print(
@@ -754,18 +760,18 @@ class DQNAlgorithm(Algorithm):
         return self.train_type in policy_gradients
 
     def parameter_tuning(
-        self,
-        algorithm_enum: AlgorithmEnum,
-        start_date: datetime.datetime,
-        end_date: datetime,
-        instrument_pk: str,
-        parameters_base: dict,
-        parameters_min: dict,
-        parameters_max: dict,
-        max_simultaneous: int,
-        generations: int,
-        ga_configuration: Type[GAConfiguration],
-        clean_initial_generation_experience: bool = True,
+            self,
+            algorithm_enum: AlgorithmEnum,
+            start_date: datetime.datetime,
+            end_date: datetime,
+            instrument_pk: str,
+            parameters_base: dict,
+            parameters_min: dict,
+            parameters_max: dict,
+            max_simultaneous: int,
+            generations: int,
+            ga_configuration: GAConfiguration,
+            clean_initial_generation_experience: bool = True,
     ) -> (dict, pd.DataFrame):
         # disable fit model!
         if max_simultaneous > 1:
@@ -788,49 +794,44 @@ class DQNAlgorithm(Algorithm):
         )
 
     def train(
-        self,
-        start_date: datetime.datetime,
-        end_date: datetime,
-        instrument_pk: str,
-        iterations: int,
-        algos_per_iteration: int,
-        simultaneous_algos: int = 1,
-        score_early_stopping: ScoreEnum = ScoreEnum.realized_pnl,  # in case of iterations<0
-        patience: int = -1,
-        clean_initial_experience: bool = False,
-        train_each_iteration: bool = False,
-        min_iterations: int = None,
-        force_explore_prob: float = None,
-        plot_training: bool = True,
-        plot_training_iterations: int = 0,
-        fill_memory_max_iterations: int = None,
+            self,
+            start_date: datetime.datetime,
+            end_date: datetime,
+            instrument_pk: str,
+            iterations: int,
+            simultaneous_algos: int = 1,
+            score_early_stopping: ScoreEnum = ScoreEnum.realized_pnl,  # in case of iterations<0
+            patience: int = -1,
+            clean_initial_experience: bool = False,
+            min_iterations: int = None,
+            plot_training: bool = True,
     ) -> list:
 
         max_batch_size = self.parameters['maxBatchSize']
         memory_size = self.get_memory_size()
-        if clean_initial_experience or not self._is_memory_size_enough():
+        # if clean_initial_experience or not self._is_memory_size_enough():
 
-            if fill_memory_max_iterations is None:
-                fill_memory_max_iterations = (
-                    len(self._get_action_columns()) * 5
-                ) / algos_per_iteration
+        # if fill_memory_max_iterations is None:
+        #     fill_memory_max_iterations = (
+        #                                          len(self._get_action_columns()) * 5
+        #                                  ) / algos_per_iteration
 
-            if fill_memory_max_iterations > 0:
-                print(
-                    rf"fill_memory before training clean_initial_experience:{clean_initial_experience} {self.get_memory_size(with_rewards=True)}[{memory_size}]/{max_batch_size} "
-                )
-
-                self.fill_memory(
-                    start_date=start_date,
-                    end_date=end_date,
-                    instrument_pk=instrument_pk,
-                    algos_per_iteration=algos_per_iteration,
-                    simultaneous_algos=simultaneous_algos,
-                    clean_initial_experience=clean_initial_experience,
-                    max_iterations=fill_memory_max_iterations,
-                )
-                print("finished fill memory=> set training to one worker only")
-                clean_initial_experience = False
+        # if fill_memory_max_iterations > 0:
+        #     print(
+        #         rf"fill_memory before training clean_initial_experience:{clean_initial_experience} {self.get_memory_size(with_rewards=True)}[{memory_size}]/{max_batch_size} "
+        #     )
+        #
+        #     self.fill_memory(
+        #         start_date=start_date,
+        #         end_date=end_date,
+        #         instrument_pk=instrument_pk,
+        #         algos_per_iteration=algos_per_iteration,
+        #         simultaneous_algos=simultaneous_algos,
+        #         clean_initial_experience=clean_initial_experience,
+        #         max_iterations=fill_memory_max_iterations,
+        #     )
+        #     print("finished fill memory=> set training to one worker only")
+        #     clean_initial_experience = False
 
         # training has to be sequential!
         algos_per_iteration = 1
@@ -845,8 +846,8 @@ class DQNAlgorithm(Algorithm):
             fees_commissions_included=self.FEES_COMMISSIONS_INCLUDED,
         )
         explore_prob = 1.0  # i dont care
-        if force_explore_prob is not None:
-            explore_prob = force_explore_prob
+        # if force_explore_prob is not None:
+        #     explore_prob = force_explore_prob
 
         momentum_nesterov = self.parameters['momentumNesterov']
         learning_rate = self.parameters['learningRateNN']
@@ -898,8 +899,8 @@ class DQNAlgorithm(Algorithm):
                     else:
                         explore_prob = 1 - iterations_discount / iterations
                     # maintain
-                    if force_explore_prob is not None:
-                        explore_prob = force_explore_prob
+                    # if force_explore_prob is not None:
+                    #     explore_prob = force_explore_prob
 
                     keep_same_iteration = False
                 if iterations <= 0 and explore_prob <= 0.01:
@@ -959,9 +960,9 @@ class DQNAlgorithm(Algorithm):
             if is_finished:
                 break
             if (
-                clean_initial_experience
-                and iteration == 0
-                and os.path.isdir(backtest_launchers[0].output_path)
+                    clean_initial_experience
+                    and iteration == 0
+                    and os.path.isdir(backtest_launchers[0].output_path)
             ):
                 # clean it
                 # print('cleaning experience on training  path %s' % backtest_launchers[0].output_path)
@@ -976,14 +977,14 @@ class DQNAlgorithm(Algorithm):
             if not clean_initial_experience and iteration == 0:
                 # copy original into different instances
                 original_file = (
-                    LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename()
+                        LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename()
                 )
                 print(f'copy {original_file}  on {algos_per_iteration} algos')
                 for algos_it in range(algos_per_iteration):
                     target_file = (
-                        LAMBDA_OUTPUT_PATH
-                        + os.sep
-                        + self.get_memory_replay_filename(algorithm_number=algos_it + 1)
+                            LAMBDA_OUTPUT_PATH
+                            + os.sep
+                            + self.get_memory_replay_filename(algorithm_number=algos_it + 1)
                     )
                     shutil.copy(original_file, target_file)
 
@@ -1009,7 +1010,7 @@ class DQNAlgorithm(Algorithm):
             else:
                 # copying into orignial name memoryReplay
                 memory_replay_out = (
-                    LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename()
+                        LAMBDA_OUTPUT_PATH + os.sep + self.get_memory_replay_filename()
                 )
                 if memory_replay_out != memory_files[0]:
                     print(
@@ -1088,8 +1089,8 @@ class DQNAlgorithm(Algorithm):
             best_score = np.mean(scores_iteration)
 
             if (
-                "useAsQLearn" in self.parameters.keys()
-                and self.parameters["useAsQLearn"] == 1
+                    "useAsQLearn" in self.parameters.keys()
+                    and self.parameters["useAsQLearn"] == 1
             ):
                 print("useAsQLearn detected=> not train")
                 train_each_iteration = False  # dont need to train anything
@@ -1105,20 +1106,20 @@ class DQNAlgorithm(Algorithm):
 
                 state_columns = self.get_number_of_state_columns(self.parameters)
                 action_columns = self.get_number_of_action_columns(self.parameters)
-                train_input_configuration = TrainInputConfiguration(
-                    memory_path=memory_file,
-                    output_model_path=predict_model,
-                    state_columns=state_columns,
-                    action_columns=action_columns,
-                    number_epochs=number_epochs,
-                    learning_rate=learning_rate,
-                    l1=l1,
-                    l2=l2,
-                    momentum_nesterov=momentum_nesterov,
-                    max_batch_size=max_batch_size,
-                    batch_size=batch_size,
-                    train_type=self.train_type,
-                )
+                # train_input_configuration = TrainInputConfiguration(
+                #     memory_path=memory_file,
+                #     output_model_path=predict_model,
+                #     state_columns=state_columns,
+                #     action_columns=action_columns,
+                #     number_epochs=number_epochs,
+                #     learning_rate=learning_rate,
+                #     l1=l1,
+                #     l2=l2,
+                #     momentum_nesterov=momentum_nesterov,
+                #     max_batch_size=max_batch_size,
+                #     batch_size=batch_size,
+                #     train_type=self.train_type,
+                # )
                 print(f'training {predict_model} on {memory_file}')
                 self.train_model(
                     jar_path=JAR_PATH,
@@ -1145,8 +1146,8 @@ class DQNAlgorithm(Algorithm):
                             shutil.copy(predict_model, target_model_it)
 
                 if (
-                    not self.train_type == DQNAlgorithm.DEFAULT_TRAIN_TYPE
-                    and os.path.exists(target_model)
+                        not self.train_type == DQNAlgorithm.DEFAULT_TRAIN_TYPE
+                        and os.path.exists(target_model)
                 ):
                     for target_model_it in target_models:
                         if target_model == target_model_it:
@@ -1196,10 +1197,10 @@ class DQNAlgorithm(Algorithm):
             rewards[iteration] = reward_mean
             scores[iteration] = best_score
             if (
-                plot_training_iterations is not None
-                and plot_training_iterations > 0
-                and iterations_discount - 1 > 0
-                and (iterations_discount - 1) % plot_training_iterations == 0
+                    plot_training_iterations is not None
+                    and plot_training_iterations > 0
+                    and iterations_discount - 1 > 0
+                    and (iterations_discount - 1) % plot_training_iterations == 0
             ):
                 fig = self.plot_training_results(
                     score_early_stopping,
@@ -1245,7 +1246,7 @@ class DQNAlgorithm(Algorithm):
 
     @staticmethod
     def plot_training_results(
-        score_enum: ScoreEnum, scores: dict, rewards: dict, title=None, figsize=None
+            score_enum: ScoreEnum, scores: dict, rewards: dict, title=None, figsize=None
     ):
         import seaborn as sns
 
@@ -1301,16 +1302,19 @@ class DQNAlgorithm(Algorithm):
         return fig
 
     def test(
-        self,
-        start_date: datetime.datetime,
-        end_date: datetime,
-        instrument_pk: str,
-        explore_prob: float = 0.2,
-        trainingPredictIterationPeriod: int = None,  # -1 offline train at the end
-        trainingTargetIterationPeriod: int = None,  # -1 offline train at the end
-        algorithm_number: int = None,
-        clean_experience: bool = False,
+            self,
+            start_date: datetime.datetime,
+            end_date: datetime,
+            instrument_pk: str,
+            explore_prob: float = 0.2,
+            trainingPredictIterationPeriod: int = None,  # -1 offline train at the end
+            trainingTargetIterationPeriod: int = None,  # -1 offline train at the end
+            algorithm_number: int = None,
+            clean_experience: bool = False,
     ) -> dict:
+        from trading_algorithms.reinforcement_learning.rl_algorithm import (
+            RlAlgorithmParameters,
+        )
 
         backtest_configuration = BacktestConfiguration(
             start_date=start_date,
@@ -1323,10 +1327,12 @@ class DQNAlgorithm(Algorithm):
         parameters = self.get_parameters(explore_prob=explore_prob)
         if trainingPredictIterationPeriod is not None:
             parameters[
-                'trainingPredictIterationPeriod'
+                RlAlgorithmParameters.training_predict_iteration_period
             ] = trainingPredictIterationPeriod
         if trainingTargetIterationPeriod is not None:
-            parameters['trainingTargetIterationPeriod'] = trainingTargetIterationPeriod
+            parameters[
+                RlAlgorithmParameters.training_target_iteration_period
+            ] = trainingTargetIterationPeriod
 
         algorithm_name = self.get_test_name(
             name=self.NAME, algorithm_number=algorithm_number
@@ -1373,8 +1379,8 @@ class DQNAlgorithm(Algorithm):
     def set_parameters(self, parameters: dict):
         super().set_parameters(parameters)
         if (
-            'stateColumnsFilter' in parameters.keys()
-            and parameters['stateColumnsFilter'] is not None
-            and len(parameters['stateColumnsFilter']) > 0
+                'stateColumnsFilter' in parameters.keys()
+                and parameters['stateColumnsFilter'] is not None
+                and len(parameters['stateColumnsFilter']) > 0
         ):
             self.is_filtered_states = True

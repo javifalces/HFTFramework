@@ -1,6 +1,5 @@
 package com.lambda.investing.model.market_data;
 
-import com.lambda.investing.model.asset.Instrument;
 import lombok.Getter;
 import lombok.Setter;
 

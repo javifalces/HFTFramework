@@ -1,17 +1,22 @@
 {
   "backtest": {
-    "startDate": "20220127 11:00:00",
-    "endDate": "20220127 14:00:00",
-    "instrument": "eurusd_darwinex"
+    "startDate": "20231113 06:00:00",
+    "endDate": "20231113 20:00:00",
+    "instrument": "btcusdt_kraken",
+    "delayOrderMs": 0,
+    "feesCommissionsIncluded": false,
+    "multithreadConfiguration": "single_thread"
   },
   "algorithm": {
     "algorithmName": "ConstantSpread_test",
     "parameters": {
-      "level": "1",
+      "level": "0",
+      "skewLevel": "0",
       "seed": 5,
       "quantity": "0.001",
       "firstHour": "7.0",
-      "lastHour": "19.0"
+      "lastHour": "19.0",
+      "ui": 1
     }
   }
 }

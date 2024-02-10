@@ -1,6 +1,5 @@
 package com.lambda.investing.model.candle;
 
-import com.lambda.investing.model.asset.Instrument;
 import lombok.Getter;
 import lombok.Setter;
 

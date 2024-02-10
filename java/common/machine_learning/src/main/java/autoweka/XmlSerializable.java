@@ -39,7 +39,7 @@ public class XmlSerializable {
 	 */
 	public void toXML(String filename) {
 		try {
-			toXML(new PrintStream(new java.io.File(filename)));
+			toXML(new PrintStream(new File(filename)));
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}

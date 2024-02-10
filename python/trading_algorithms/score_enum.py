@@ -10,6 +10,7 @@ class ScoreEnum:
     max_dd = 'max_dd'
     falcma_ratio = 'falcma_ratio'
     asymmetric_dampened_pnl_to_map = 'asymmetric_dampened_pnl_to_map'
+    number_trades = 'number_trades'
 
 
 def get_score_enum_csv_column(score_enum: ScoreEnum):
@@ -19,3 +20,5 @@ def get_score_enum_csv_column(score_enum: ScoreEnum):
         return 'historicalRealizedPnl'
     if score_enum is ScoreEnum.unrealized_pnl:
         return 'historicalUnrealizedPnl'
+    if score_enum is ScoreEnum.number_trades:
+        return 'numberTrades'

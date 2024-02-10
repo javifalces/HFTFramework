@@ -1,0 +1,29 @@
+{
+  "backtest": {
+    "startDate": "20220115 01:00:00",
+    "endDate": "20220115 01:15:00",
+    "instrument": "btcusdt_binance",
+    "delayOrderMs": 0,
+    "feesCommissionsIncluded": false,
+    "multithreadConfiguration": "single_thread",
+    "seed": 42
+  },
+  "algorithm": {
+    "algorithmName": "AvellanedaStoikov_test",
+    "parameters": {
+      "riskAversion": 0.1,
+      "midpricePeriodSeconds": 1,
+      "midpricePeriodWindow": 60,
+      "changeKPeriodSeconds": 30.0,
+      "quantity": 0.0001,
+      "firstHour": 0.0,
+      "lastHour": 23.0,
+      "kDefault": -1,
+      "spreadMultiplier": 1.0,
+      "positionMultiplier": 1.0,
+      "spreadCalculation": "Avellaneda",
+      "kCalculation": "Pct",
+      "ui": 0
+    }
+  }
+}

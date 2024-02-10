@@ -99,7 +99,7 @@ import java.util.stream.Collectors;
 		StringBuilder symbolsList = new StringBuilder();
 		ProductSubscription.ProductSubscriptionBuilder productSubscriptionBuilder = ProductSubscription.create();
 
-		for (com.lambda.investing.model.asset.Instrument instrument : instrumentList) {
+		for (Instrument instrument : instrumentList) {
 			symbolsList.append(instrument.getPrimaryKey().toLowerCase());
 			symbolToInstrument.put(instrument.getSymbol().toLowerCase(), instrument);
 			symbolsList.append(',');

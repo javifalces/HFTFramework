@@ -206,7 +206,7 @@ import org.slf4j.LoggerFactory;
 			}
 
 			//See if we can get the path
-			File executable = autoweka.Util.findExecutableOnPath(exp.callString.get(0));
+			File executable = Util.findExecutableOnPath(exp.callString.get(0));
 			if (executable == null)
 				throw new RuntimeException("Failed to find the executable '" + exp.callString.get(0) + "'");
 

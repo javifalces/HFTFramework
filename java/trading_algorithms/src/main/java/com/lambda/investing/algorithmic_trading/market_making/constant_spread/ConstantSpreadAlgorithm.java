@@ -1,9 +1,9 @@
 package com.lambda.investing.algorithmic_trading.market_making.constant_spread;
 
 
+import com.lambda.investing.ArrayUtils;
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
 import com.lambda.investing.algorithmic_trading.market_making.MarketMakingAlgorithm;
-import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.exception.LambdaTradingException;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.trading.ExecutionReport;
@@ -24,7 +24,7 @@ public class ConstantSpreadAlgorithm extends MarketMakingAlgorithm {
 	private double lastValidSpread, lastValidMid = 0.01;
 
 	public ConstantSpreadAlgorithm(AlgorithmConnectorConfiguration algorithmConnectorConfiguration,
-			String algorithmInfo, Map<String, Object> parameters) {
+								   String algorithmInfo, Map<String, Object> parameters) {
 		super(algorithmConnectorConfiguration, algorithmInfo, parameters);
 		setParameters(parameters);
 	}
@@ -34,9 +34,6 @@ public class ConstantSpreadAlgorithm extends MarketMakingAlgorithm {
 		setParameters(parameters);
 	}
 
-	public void setInstrument(Instrument instrument) {
-		this.instrument = instrument;
-	}
 
 	@Override public void setParameters(Map<String, Object> parameters) {
 		super.setParameters(parameters);
@@ -64,6 +61,7 @@ public class ConstantSpreadAlgorithm extends MarketMakingAlgorithm {
 	//		return AlgorithmState.STARTED;
 	//	}
 
+
 	@Override public boolean onDepthUpdate(Depth depth) {
 		if (!super.onDepthUpdate(depth) || !depth.isDepthFilled()) {
 			stop();
@@ -79,15 +77,20 @@ public class ConstantSpreadAlgorithm extends MarketMakingAlgorithm {
 			double askPrice = 0.0;
 			double bidPrice = 0.0;
 			try {
+				Double[] asks = depth.getAsks();
+				Double[] bids = depth.getBids();
+				int maxLevelAsk = ArrayUtils.getNonNullLength(asks) - 1;
+				int maxLevelBid = ArrayUtils.getNonNullLength(bids) - 1;
+
 				currentSpread = depth.getSpread();
 				midPrice = depth.getMidPrice();
 				//ASK = level+skew
-				int askPriceLevel = Math.min(Math.max(level + skewLevel, 1), depth.getAskLevels());
-				askPrice = depth.getAsks()[askPriceLevel - 1];
+				int askPriceLevel = Math.min(Math.max(level + skewLevel, 1), maxLevelAsk);
+				askPrice = asks[askPriceLevel - 1];
 
 				//BID = level-skew
-				int bidPriceLevel = Math.min(Math.max(level - skewLevel, 1), depth.getBidLevels());
-				bidPrice = depth.getBids()[bidPriceLevel - 1];
+				int bidPriceLevel = Math.min(Math.max(level - skewLevel, 1), maxLevelBid);
+				bidPrice = bids[bidPriceLevel - 1];
 			} catch (Exception e) {
 				return false;
 			}
@@ -147,7 +150,7 @@ public class ConstantSpreadAlgorithm extends MarketMakingAlgorithm {
 						quantity, askPrice, e);
 			}
 		} catch (Exception e) {
-			logger.error("error onDepth constant Spread : ", e);
+			logger.error("error onDepth  : ", e);
 		}
 
 		return true;

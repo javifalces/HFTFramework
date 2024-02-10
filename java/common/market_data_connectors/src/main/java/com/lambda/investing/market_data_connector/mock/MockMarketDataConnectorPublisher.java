@@ -3,22 +3,18 @@ package com.lambda.investing.market_data_connector.mock;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorPublisher;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
-import com.lambda.investing.market_data_connector.*;
+import com.lambda.investing.market_data_connector.AbstractMarketDataConnectorPublisher;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
-import com.lambda.investing.model.messaging.TypeMessage;
 import com.lambda.investing.model.trading.Verb;
 import org.apache.commons.math3.util.Precision;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.text.DecimalFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
-
-import static com.lambda.investing.market_data_connector.AbstractMarketDataProvider.GSON;
 
 public class MockMarketDataConnectorPublisher extends AbstractMarketDataConnectorPublisher implements Runnable{
 
@@ -44,10 +40,6 @@ public class MockMarketDataConnectorPublisher extends AbstractMarketDataConnecto
 		this.sleepUpdatesMs=sleepUpdatesMs;
 
 
-
-
-
-
 	}
 
 	public void setMarketDataConfigurationList(List<MockMarketDataConfiguration> marketDataConfigurationList) {
@@ -68,7 +60,6 @@ public class MockMarketDataConnectorPublisher extends AbstractMarketDataConnecto
 		this.seed = seed;
 		this.random = new Random(this.seed);
 	}
-
 
 
 	private Depth createDepth(MockMarketDataConfiguration mockMarketDataConfiguration) {
@@ -188,8 +179,8 @@ public class MockMarketDataConnectorPublisher extends AbstractMarketDataConnecto
 	@Override public void run() {
 		ZeroMqConfiguration zeroMqConfiguration = (ZeroMqConfiguration)connectorConfiguration;
 		for(MockMarketDataConfiguration mockMarketDataConfiguration:lastDepthSent.keySet()) {
-			logger.info("Starting publishing {}   in tcp://{}:{}",
-					mockMarketDataConfiguration.getInstrument().getPrimaryKey(),zeroMqConfiguration.getHost(),zeroMqConfiguration.getPort());
+			logger.info("Starting publishing {}   in {}",
+					mockMarketDataConfiguration.getInstrument().getPrimaryKey(), zeroMqConfiguration.getUrl());
 		}
 
 
@@ -197,7 +188,7 @@ public class MockMarketDataConnectorPublisher extends AbstractMarketDataConnecto
 			if(enable) {
 
 				for(MockMarketDataConfiguration mockMarketDataConfiguration:lastDepthSent.keySet()){
-					if (this.random.nextDouble()>mockMarketDataConfiguration.getProbabilityTrade()) {
+					if (this.random.nextDouble() > mockMarketDataConfiguration.getProbabilityTrade()) {
 						//create orderbook depth
 						Depth lastDepth = lastDepthSent.getOrDefault(mockMarketDataConfiguration, createDepth(mockMarketDataConfiguration));
 						Depth newDepth = modifyDepth(mockMarketDataConfiguration, lastDepth);
@@ -205,24 +196,20 @@ public class MockMarketDataConnectorPublisher extends AbstractMarketDataConnecto
 
 						//publish Depth//
 						String topic = mockMarketDataConfiguration.getInstrument().getPrimaryKey();
-						notifyDepth(topic,newDepth);
+						notifyDepth(topic, newDepth);
 						lastDepthSent.put(mockMarketDataConfiguration, newDepth);
-					}
-					else{
+					} else {
 						//create last trade
 						Trade lastTrade = lastTradeSent.getOrDefault(mockMarketDataConfiguration, createTrade(mockMarketDataConfiguration));
 						Trade newTrade = modifyTrade(mockMarketDataConfiguration, lastTrade);
 
 						String topic = mockMarketDataConfiguration.getInstrument().getPrimaryKey();
-						notifyTrade(topic,newTrade);
+						notifyTrade(topic, newTrade);
 						lastTradeSent.put(mockMarketDataConfiguration, newTrade);
 					}
 
 
-
 				}
-
-
 
 
 			}

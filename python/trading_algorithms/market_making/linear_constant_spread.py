@@ -1,7 +1,7 @@
 import datetime
 from typing import Type
 
-from trading_algorithms.algorithm import Algorithm
+from trading_algorithms.algorithm import Algorithm, AlgorithmParameters
 from trading_algorithms.algorithm_enum import AlgorithmEnum
 from backtest.backtest_launcher import BacktestLauncher, BacktestLauncherController
 from backtest.input_configuration import (
@@ -16,12 +16,19 @@ import pandas as pd
 
 from backtest.parameter_tuning.ga_configuration import GAConfiguration
 
+
+class LinearConstantSpreadParameters:
+    quantity_limit = 'quantityLimit'
+    level = 'level'  # 0 - 4
+
+
 DEFAULT_PARAMETERS = {
-    "quantity": (0.0001),
-    "level": (0),
-    "quantityLimit": (0.001),  # x10
-    "firstHour": (7),
-    "lastHour": (19),
+    AlgorithmParameters.quantity: (0.0001),
+    AlgorithmParameters.first_hour: (0),
+    AlgorithmParameters.last_hour: (24),
+    AlgorithmParameters.ui: 0,
+    LinearConstantSpreadParameters.level: (0),
+    LinearConstantSpreadParameters.quantity_limit: (0.001),  # x10
 }
 
 
@@ -38,13 +45,13 @@ class LinearConstantSpread(Algorithm):
         return parameters
 
     def train(
-        self,
-        start_date: datetime.datetime,
-        end_date: datetime,
-        instrument_pk: str,
-        iterations: int,
-        algos_per_iteration: int,
-        simultaneous_algos: int = 1,
+            self,
+            start_date: datetime.datetime,
+            end_date: datetime,
+            instrument_pk: str,
+            iterations: int,
+            algos_per_iteration: int,
+            simultaneous_algos: int = 1,
     ) -> list:
         # makes no sense
 
@@ -96,16 +103,16 @@ class LinearConstantSpread(Algorithm):
         return output_list
 
     def parameter_tuning(
-        self,
-        start_date: datetime.datetime,
-        end_date: datetime,
-        instrument_pk: str,
-        parameters_min: dict,
-        parameters_max: dict,
-        max_simultaneous: int,
-        generations: int,
-        ga_configuration: Type[GAConfiguration],
-        parameters_base: dict = DEFAULT_PARAMETERS,
+            self,
+            start_date: datetime.datetime,
+            end_date: datetime,
+            instrument_pk: str,
+            parameters_min: dict,
+            parameters_max: dict,
+            max_simultaneous: int,
+            generations: int,
+            ga_configuration: Type[GAConfiguration],
+            parameters_base: dict = DEFAULT_PARAMETERS,
     ) -> (dict, pd.DataFrame):
 
         return super().parameter_tuning(

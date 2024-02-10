@@ -1,6 +1,6 @@
 import datetime
-
-from trading_algorithms.algorithm import Algorithm
+import copy
+from trading_algorithms.algorithm import Algorithm, AlgorithmParameters
 from trading_algorithms.algorithm_enum import AlgorithmEnum
 from backtest.backtest_launcher import BacktestLauncher, BacktestLauncherController
 from backtest.input_configuration import (
@@ -8,6 +8,7 @@ from backtest.input_configuration import (
     AlgorithmConfiguration,
     InputConfiguration,
     JAR_PATH,
+    MultiThreadConfiguration,
 )
 import os
 import copy
@@ -19,6 +20,7 @@ from backtest.parameter_tuning.ga_configuration import GAConfiguration
 class KCalculationEnum:
     Quotes = "Quotes"
     Alridge = "Alridge"
+    Pct = 'Pct'
 
 
 class SpreadCalculationEnum:
@@ -27,29 +29,58 @@ class SpreadCalculationEnum:
     GueantTapia = "GueantTapia"
 
 
+class AvellanedaStoikovParameters:
+    skew = 'skew'
+    risk_aversion = 'riskAversion'
+    midprice_period_seconds = 'midpricePeriodSeconds'
+    midprice_period_window = 'midpricePeriodWindow'
+    seconds_change_k = 'changeKPeriodSeconds'
+    k_default = "kDefault"
+    a_default = 'aDefault'
+    spread_calculation = 'spreadCalculation'
+    k_calculation = 'kCalculation'
+    position_multiplier = 'positionMultiplier'
+    spread_multiplier = 'spreadMultiplier'
+    calculate_Tt = 'calculateTt'
+    sigma_default = 'sigmaDefault'
+
+
 DEFAULT_PARAMETERS = {
     # Avellaneda default
-    "riskAversion": (0.68),
-    "windowTick": (25),  # for midPrice variance calculation
-    "quantity": (0.0001),
-    "firstHour": (7),
-    "lastHour": (19),
-    "calculateTt": 1,  # if 1 reserve price effect will be less affected by position with the session time
-    "minutesChangeK": (1),
-    "kDefault": (-1),
-    "aDefault": (-1),
-    "sigmaDefault": (-1),
-    "spreadCalculation": SpreadCalculationEnum.Avellaneda,
-    "kCalculation": KCalculationEnum.Alridge,
-    "positionMultiplier": (335.35),  # not modify original results  1/quantity
-    "spreadMultiplier": (5.0),
+    AvellanedaStoikovParameters.skew: (0),
+    AvellanedaStoikovParameters.risk_aversion: (0.68),
+    AvellanedaStoikovParameters.midprice_period_seconds: (
+        60
+    ),  # for midPrice variance calculation
+    AvellanedaStoikovParameters.midprice_period_window: (15),
+    # for midPrice variance calculation , 15 windows of 60 seconds
+    AlgorithmParameters.quantity: (0.0001),
+    AlgorithmParameters.first_hour: (0),
+    AlgorithmParameters.last_hour: (24),
+    AlgorithmParameters.ui: 0,
+    AvellanedaStoikovParameters.calculate_Tt: 0,
+    # if 1 reserve price effect will be less affected by position with the session time
+    AvellanedaStoikovParameters.seconds_change_k: (60),
+    AvellanedaStoikovParameters.k_default: (-1),
+    AvellanedaStoikovParameters.a_default: (-1),
+    AvellanedaStoikovParameters.sigma_default: (-1),
+    AvellanedaStoikovParameters.spread_calculation: SpreadCalculationEnum.Avellaneda,
+    AvellanedaStoikovParameters.k_calculation: KCalculationEnum.Pct,
+    AvellanedaStoikovParameters.position_multiplier: (
+        1.0
+    ),  # not modify original results  1/quantity
+    AvellanedaStoikovParameters.spread_multiplier: (1.0),
 }
 
 
 class AvellanedaStoikov(Algorithm):
     NAME = AlgorithmEnum.avellaneda_stoikov
 
-    def __init__(self, algorithm_info: str, parameters: dict = DEFAULT_PARAMETERS):
+    def __init__(self, algorithm_info: str, parameters: dict = None):
+
+        if parameters is None:
+            parameters = copy.copy(DEFAULT_PARAMETERS)
+
         parameters = Algorithm.set_defaults_parameters(
             parameters=parameters, DEFAULT_PARAMETERS=DEFAULT_PARAMETERS
         )
@@ -62,13 +93,13 @@ class AvellanedaStoikov(Algorithm):
         return parameters
 
     def train(
-        self,
-        start_date: datetime.datetime,
-        end_date: datetime,
-        instrument_pk: str,
-        iterations: int,
-        algos_per_iteration: int,
-        simultaneous_algos: int = 1,
+            self,
+            start_date: datetime.datetime,
+            end_date: datetime,
+            instrument_pk: str,
+            iterations: int,
+            algos_per_iteration: int,
+            simultaneous_algos: int = 1,
     ) -> list:
         # makes no sense
 
@@ -166,16 +197,16 @@ class AvellanedaStoikov(Algorithm):
         return output_dict
 
     def parameter_tuning(
-        self,
-        start_date: datetime.datetime,
-        end_date: datetime,
-        instrument_pk: str,
-        parameters_min: dict,
-        parameters_max: dict,
-        max_simultaneous: int,
-        generations: int,
-        ga_configuration: GAConfiguration,
-        parameters_base: dict = None,
+            self,
+            start_date: datetime.datetime,
+            end_date: datetime,
+            instrument_pk: str,
+            parameters_min: dict,
+            parameters_max: dict,
+            max_simultaneous: int,
+            generations: int,
+            ga_configuration: GAConfiguration,
+            parameters_base: dict = None,
     ) -> (dict, pd.DataFrame):
 
         if parameters_base is None:
@@ -197,30 +228,20 @@ class AvellanedaStoikov(Algorithm):
 
 if __name__ == '__main__':
     avellaneda_stoikov = AvellanedaStoikov(algorithm_info='test_main')
-    avellaneda_stoikov.parameter_tuning(
-        start_date=datetime.datetime(year=2022, day=14, month=6),
-        end_date=datetime.datetime(year=2022, day=14, month=6),
-        parameters_min={"kDefault": 0.0},
-        parameters_max={"kDefault": 1.0},
-        instrument_pk='btcusdt_binance',
-        max_simultaneous=1,
-        generations=5,
-        ga_configuration=GAConfiguration(),
-    )
-    new_parameters = copy.copy(DEFAULT_PARAMETERS)
-    new_parameters["spreadCalculation"] = SpreadCalculationEnum.GueantTapia
-    new_parameters["kDefault"] = 0.3
-    new_parameters["aDefault"] = 0.9
-    new_parameters["calculateTt"] = 0.0
-    avellaneda_stoikov.set_parameters(new_parameters)
+
+    avellaneda_stoikov.MULTITHREAD_CONFIGURATION = MultiThreadConfiguration.multithread
+    avellaneda_stoikov.DELAY_MS = 0.0
+    avellaneda_stoikov.FEES_COMMISSIONS_INCLUDED = False
 
     output_test = avellaneda_stoikov.test(
-        instrument_pk='btcusdt_binance',
-        start_date=datetime.datetime(year=2022, day=14, month=6),
-        end_date=datetime.datetime(year=2022, day=14, month=6),
+        instrument_pk='btcusdt_kraken',
+        start_date=datetime.datetime(year=2023, day=9, month=11, hour=7),
+        end_date=datetime.datetime(year=2023, day=9, month=11, hour=15),
     )
+
     name_output = avellaneda_stoikov.get_test_name(name=avellaneda_stoikov.NAME)
     backtest_df = output_test[name_output]
     avellaneda_stoikov.plot_trade_results(backtest_df)
+
     # import matplotlib.pyplot as plt
     # plt.show()

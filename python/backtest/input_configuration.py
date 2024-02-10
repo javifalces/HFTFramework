@@ -42,20 +42,66 @@ class MultiThreadConfiguration:
 
 class BacktestConfiguration:
     def __init__(
-        self,
-        start_date: datetime.datetime,
-        end_date: datetime.datetime,
-        instrument_pk: str,
-        delay_order_ms: int = 65,
-        multithread_configuration: str = MultiThreadConfiguration.multithread,
-        fees_commissions_included: bool = True,
+            self,
+            start_date: datetime.datetime,
+            end_date: datetime.datetime,
+            instrument_pk: str,
+            delay_order_ms: int = 65,
+            multithread_configuration: str = MultiThreadConfiguration.multithread,
+            fees_commissions_included: bool = True,
+            bucle_run: bool = False,
+            seed: int = None,
     ):
+        '''
+
+        Parameters
+        ----------
+        start_date
+        end_date
+        instrument_pk
+        delay_order_ms
+        multithread_configuration
+        fees_commissions_included
+        bucle_run: if true , backtest in java is going to bucle running ,for training gym
+        seed:
+        '''
         self.delay_order_ms = delay_order_ms
         self.start_date = start_date
         self.end_date = end_date
         self.instrument_pk = instrument_pk
         self.multithread_configuration = multithread_configuration
         self.fees_commissions_included = fees_commissions_included
+        self.bucle_run = bucle_run
+        self.initial_sleep_seconds = -1
+        self.seed = seed
+
+    @staticmethod
+    def read_json(json_input: str):
+        json_dict = json.loads(json_input)
+        try:
+            start_date = datetime.datetime.strptime(json_dict['startDate'], format_date)
+        except:
+            start_date = datetime.datetime.strptime(
+                json_dict['startDate'], format_date_hour
+            )
+        try:
+            end_date = datetime.datetime.strptime(json_dict['endDate'], format_date)
+        except:
+            end_date = datetime.datetime.strptime(
+                json_dict['endDate'], format_date_hour
+            )
+        if 'testingGym' not in json_dict.keys():
+            json_dict['testingGym'] = False
+
+        return BacktestConfiguration(
+            start_date=start_date,
+            end_date=end_date,
+            instrument_pk=json_dict['instrument'],
+            delay_order_ms=json_dict['delayOrderMs'],
+            multithread_configuration=json_dict['multithreadConfiguration'],
+            fees_commissions_included=json_dict['feesCommissionsIncluded'],
+            bucle_run=json_dict['bucleRun'],
+        )
 
     def get_json(self) -> str:
         output_dict = {}
@@ -68,6 +114,9 @@ class BacktestConfiguration:
             # hour format
             output_dict['startDate'] = self.start_date.strftime(format_date_hour)
             output_dict['endDate'] = self.end_date.strftime(format_date_hour)
+
+        output_dict['bucleRun'] = self.bucle_run
+        output_dict['initialSleepSeconds'] = self.initial_sleep_seconds
         output_dict['instrument'] = self.instrument_pk
         output_dict['delayOrderMs'] = self.delay_order_ms
         output_dict['multithreadConfiguration'] = self.multithread_configuration
@@ -108,6 +157,14 @@ class AlgorithmConfiguration:
         self.algorithm_name = algorithm_name
         self.parameters = parameters
 
+    @staticmethod
+    def read_json(json_input: str):
+        json_dict = json.loads(json_input)
+        return AlgorithmConfiguration(
+            algorithm_name=json_dict['algorithmName'],
+            parameters=json_dict['parameters'],
+        )
+
     def get_json(self) -> str:
         output_dict = self.get_json_dict()
         json_object = json.dumps(output_dict)
@@ -124,12 +181,76 @@ class AlgorithmConfiguration:
 
 class InputConfiguration:
     def __init__(
-        self,
-        backtest_configuration: BacktestConfiguration,
-        algorithm_configuration: AlgorithmConfiguration,
+            self,
+            backtest_configuration: BacktestConfiguration,
+            algorithm_configuration: AlgorithmConfiguration,
     ):
         self.backtest_configuration = backtest_configuration
         self.algorithm_configuration = algorithm_configuration
+
+        self._check_params()
+
+    def _check_params(self):
+        from trading_algorithms.algorithm import AlgorithmParameters
+
+        first_hour_trading = int(
+            self.algorithm_configuration.parameters[AlgorithmParameters.first_hour]
+        )
+        last_hour_trading = int(
+            self.algorithm_configuration.parameters[AlgorithmParameters.last_hour]
+        )
+        we_are_not_operating = (
+                self.backtest_configuration.end_date.hour < first_hour_trading
+        )
+        if we_are_not_operating:
+            print(
+                rf"WARNING: {self.algorithm_configuration.algorithm_name} is not operating at {self.backtest_configuration.end_date} hour {self.backtest_configuration.end_date.hour} < firstHour: {first_hour_trading}"
+            )
+
+    @staticmethod
+    def copy_from_input_configuration(
+            input_configuration: 'InputConfiguration',
+            rl_host: str = None,
+            rl_port: int = None,
+            algorithm_name: str = None,
+            seed: int = None,
+    ) -> 'InputConfiguration':
+        from trading_algorithms.reinforcement_learning.rl_algorithm import (
+            RlAlgorithmParameters,
+        )
+        from trading_algorithms.algorithm import AlgorithmParameters
+
+        output = InputConfiguration(
+            backtest_configuration=input_configuration.backtest_configuration,
+            algorithm_configuration=input_configuration.algorithm_configuration,
+        )
+        if rl_host is not None:
+            output.algorithm_configuration.parameters[
+                RlAlgorithmParameters.rl_host
+            ] = rl_host
+        if rl_port is not None:
+            output.algorithm_configuration.parameters[
+                RlAlgorithmParameters.rl_port
+            ] = rl_port
+        if algorithm_name is not None:
+            output.algorithm_configuration.algorithm_name = algorithm_name
+        if seed is not None:
+            output.algorithm_configuration.parameters[AlgorithmParameters.seed] = seed
+            output.backtest_configuration.seed = seed
+
+        return output
+
+    @staticmethod
+    def read_json(json_input: str):
+        json_dict = json.loads(json_input)
+        return InputConfiguration(
+            backtest_configuration=BacktestConfiguration.read_json(
+                json.dumps(json_dict['backtest'])
+            ),
+            algorithm_configuration=AlgorithmConfiguration.read_json(
+                json.dumps(json_dict['algorithm'])
+            ),
+        )
 
     def get_json(self) -> str:
         json_backtest__object = rf'"backtest":{self.backtest_configuration.get_json()}'
@@ -137,109 +258,9 @@ class InputConfiguration:
         return '{' + json_backtest__object + ',\n' + json_algo__object + "}"
 
     def get_filename(self):
-
         return (
-            self.algorithm_configuration.algorithm_name
-            + '_'
-            + str(uuid.uuid1())
-            + '.json'
+                self.algorithm_configuration.algorithm_name
+                + '_'
+                + str(uuid.uuid1())
+                + '.json'
         )
-
-
-class TrainInputConfiguration:
-    '''
-        {
-      "memoryPath": "memoryReplay_avellanedaDQNsample_btcusdt_binance.csv",
-      "outputModelPath":"memoryReplay_avellanedaDQNsample_btcusdt_binance_csv.model",
-      "actionColumns":4,
-      "stateColumns":6,
-      "nEpoch":100,
-      "l2":0.0001,
-      "l1":0.0,
-      "learningRate":0.25,
-      "momentumNesterov":0.5,
-      "trainingStats":0,
-      "batchSize":500,
-      "maxBatchSize":5000,
-      "isRNN":False,
-      "hyperparameterTuning":False,
-      "trainType":"standard"
-    }
-
-    '''
-
-    def __init__(
-        self,
-        memory_path: str,
-        output_model_path: str,
-        action_columns: int,
-        state_columns: int,
-        number_epochs: int,
-        batch_size: int,
-        max_batch_size: int,
-        l2: float = 0.0001,
-        l1: float = 0.0,
-        learning_rate: float = 0.25,
-        momentum_nesterov: float = 0.5,
-        training_stats: int = 0,
-        is_rnn: bool = False,
-        hyperparameter_tuning: bool = False,
-        train_type: str = "standard",
-    ):
-        self.memory_path = memory_path
-        if not os.path.exists(self.memory_path):
-            raise Exception('memory_path not found %s ' % self.memory_path)
-        # else:
-        #     self.memory_path=os.path.abspath(self.memory_path)
-        self.output_model_path = output_model_path
-        self.action_columns = action_columns
-        self.state_columns = state_columns
-        self.number_epochs = number_epochs
-        self.l2 = l2
-        self.l1 = l1
-        self.learning_rate = learning_rate
-        self.momentum_nesterov = momentum_nesterov
-        self.training_stats = training_stats
-        self.batch_size = batch_size
-        self.max_batch_size = max_batch_size
-        self.hyperparameter_tuning = hyperparameter_tuning
-        self.is_rnn = is_rnn
-        self.train_type = train_type
-        self.check_memory_inputs()
-
-    def check_memory_inputs(self):
-        df_memory = pd.read_csv(self.memory_path)
-        columns_memory = len(df_memory.columns)
-        try:
-            assert columns_memory == self.action_columns + 2 * self.state_columns
-        except Exception as e:
-            print(
-                rf"columns in memory {columns_memory} != action_columns*2 + state_columns [{self.action_columns}*2+{self.state_columns}]"
-            )
-            raise e
-
-    def get_json(self) -> str:
-        output_dict = {}
-        output_dict['memoryPath'] = self.memory_path
-        output_dict['outputModelPath'] = self.output_model_path
-
-        output_dict['actionColumns'] = self.action_columns
-        output_dict['stateColumns'] = self.state_columns
-        output_dict['nEpoch'] = self.number_epochs
-        output_dict['l2'] = self.l2
-        output_dict['l1'] = self.l1
-        output_dict['learningRate'] = self.learning_rate
-        output_dict['momentumNesterov'] = self.momentum_nesterov
-        output_dict['trainingStats'] = self.training_stats
-        output_dict['batchSize'] = self.batch_size
-        output_dict['maxBatchSize'] = self.max_batch_size
-        output_dict['hyperparameterTuning'] = self.hyperparameter_tuning
-        output_dict['isRNN'] = self.is_rnn
-        output_dict['trainType'] = self.train_type
-
-        json_object = json.dumps(output_dict)
-        return json_object
-
-    def get_filename(self):
-
-        return 'train_input' + '_' + str(uuid.uuid1()) + '.json'
