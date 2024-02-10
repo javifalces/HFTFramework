@@ -66,7 +66,7 @@ specified path format:
 
 The marketDataPort and tradeEnginePort must be congruent with the configuration in the Market Engine:
 
-* [XChangeEngine](java/executables/XChangeEngine) :  [application.properties](../java/executables/XChangeEngine/src/main/resources/application.properties)
+* [XChangeEngine](../java/executables/XChangeEngine) :  [application.properties](../java/executables/XChangeEngine/src/main/resources/application.properties)
 
 ```
   binance.marketdata.port=6600
@@ -77,7 +77,7 @@ The marketDataPort and tradeEnginePort must be congruent with the configuration 
   kraken.tradeengine.port=6621
 ```
 
-* [MetatraderEngine](java/executables/MetatraderEngine) :  [application.properties](../java/executables/MetatraderEngine/src/main/resources/application.properties)
+* [MetatraderEngine](../java/executables/MetatraderEngine) :  [application.properties](../java/executables/MetatraderEngine/src/main/resources/application.properties)
 
 ```
 marketdata.port=666
