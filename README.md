@@ -3,15 +3,15 @@
 
 # HFT Framework
 
-This repository contains a High-Frequency Trading (HFT) framework developed in Java and Python,
-utilized for [academic research purposes](https://journals.plos.org/plosone/article/authors?id=10.1371/journal.pone.0277042). The framework is capable of interfacing with live markets via
-the [Connectors](java/trading_algorithms/src/main/java/com/lambda/investing/connector) that can be embedded in the same
-process (Ordinary) or remotely ZeroMQ
-networking library, employing the same codebase used for backtesting.
+This repository is home to a High-Frequency Trading (HFT) framework, developed using Java and Python, primarily for
+[research applications](#reference). The framework is engineered to interface with live markets through the use of
+[Connectors](java/trading_algorithms/src/main/java/com/lambda/investing/connector) , which can be integrated within the
+same process or remotely via the ZeroMQ networking library.
 
-The framework is designed to be modular, allowing for the creation of new trading algorithms and market data connectors.
-The framework is also capable of interfacing with machine learning models, allowing for the development of reinforcement
-learning algorithms.
+A significant feature of this framework is its ability to perform backtesting at the L2 tick data level,
+utilizing the same codebase as that used for live market interfacing.
+This capability allows for a detailed and granular analysis of trading strategies,
+providing valuable insights into their potential performance in live markets.
 
 **Feedback, suggestions, and modifications are welcomed and appreciated.**<br>
 <br>
@@ -37,7 +37,6 @@ associated risks.**
     * [Java projects](docs/java_projects.md)
     * [Reinforcement learning](docs/reinforcement_learning.md)
     * [Configuration](docs/json_config.md)
-
     * [I owe you one](#i-owe-you-one)
     * [TODO](#todo)
 * [Alpha-Avellaneda](docs/alpha_as.md)
@@ -46,14 +45,16 @@ associated risks.**
 <!-- TOC -->
 
 ## How-to use
+
 ![Ui](fig/UI.jpg?raw=true "UI")
+
 ### 1. Create algorithm and backtest
 
 In this instance, we execute a backtest for the Java
 strategies [ConstantSpread](java/trading_algorithms/src/main/java/com/lambda/investing/algorithmic_trading/market_making/constant_spread/ConstantSpreadAlgorithm.java)
 and [LinearConstantSpread](java/trading_algorithms/src/main/java/com/lambda/investing/algorithmic_trading/market_making/constant_spread/LinearConstantSpreadAlgorithm.java),
-as well as their Python counterparts [ConstantSpread](python_lambda/trading_algorithms/market_making/constant_spread.py)
-and [LinearConstantSpread](python_lambda/trading_algorithms/market_making/linear_constant_spread.py).
+as well as their Python counterparts [ConstantSpread](python/trading_algorithms/market_making/constant_spread.py)
+and [LinearConstantSpread](python/trading_algorithms/market_making/linear_constant_spread.py).
 These instructions pertain to the execution of pre-existing algorithms.
 
 To develop a new algorithm, one must create a new class that extends
@@ -71,7 +72,7 @@ in [AlgorithmCreationTools](java/trading_algorithms/src/main/java/com/lambda/inv
     * **Java:** configuring json [ConstantSpread backtest](java/executables/Backtest/example_ConstantSpread.json)
       ```java -jar Backtest.jar example_ConstantSpread.json```
     * **Python:** like in the ConstantSpread
-      example [ConstantSpread](python_lambda/trading_algorithms/market_making/constant_spread.py)
+      example [ConstantSpread](python/trading_algorithms/market_making/constant_spread.py)
     ```
    constant_spread = ConstantSpread(algorithm_info='test_main')
    output_test = constant_spread.test(
@@ -100,7 +101,7 @@ in [AlgorithmCreationTools](java/trading_algorithms/src/main/java/com/lambda/inv
       json [parameters_constant_spread.json](java/executables/AlgoTradingZeroMq/parameters_constant_spread.json)
       ```java -jar AlgoTradingZeroMq.jar parameters_constant_spread.json```
     * **Python:** running the
-      class [AlgoTradingZeroMqLauncher](python_lambda/zeromq_trading/algotrading_zeromq_launcher.py)
+      class [AlgoTradingZeroMqLauncher](python/zeromq_trading/algotrading_zeromq_launcher.py)
     ```
    configuration_file = 'parameters_constant_spread.json'
    launcher = AlgoTradingZeroMqLauncher(
@@ -117,9 +118,9 @@ the [AlgorithmConnectorConfiguration](java/trading_algorithms/src/main/java/com/
 and are in charge of translate market messages into the format our framework can understand and send orders to the
 market.
 
-MarketDataProvider : receive depth and trades . listen(TypeMessage.depth, TypeMessage.trade, TypeMessage.command)
-TradingEngineConnector: send request and listen to execution reports listen(TypeMessage.execution_report,
-TypeMessage.info)
+* MarketDataProvider : receive depth and trades . listen(TypeMessage.depth, TypeMessage.trade, TypeMessage.command)
+* TradingEngineConnector: send request and listen to execution reports listen(TypeMessage.execution_report,
+  TypeMessage.info)
 
 #### [XChangeEngine](java/executables/XChangeEngine)
 
@@ -153,24 +154,23 @@ metatrader.pull.port=32768
 
 ### Backtest
 
-![Backtest Architecture](fig/BacktestArquitecture.jpg?raw=true "Backtest")
+![Backtest Architecture](fig/BacktestArquitecture.JPG?raw=true "Backtest")
 
 ### Live trading
 
-![Live Architecture](fig/LiveArquitecture.jpg?raw=true "Live trading")
+![Live Architecture](fig/LiveArquitecture.JPG?raw=true "Live trading")
 
 ## Environment settings
 
 * LAMBDA_JAR_PATH = path of the backtest jar path to run from python
 * LAMBDA_ZEROMQ_JAR_PATH = path of the zeromq live trading jar path to run from python
 * LAMBDA_DATA_PATH = Folder where the DB was saved
+* LAMBDA_LOGS_PATH = where we are going to save the logs
 
 #### Optional
-
-* LAMBDA_LOGS_PATH = where we are going to save the logs
-* LAMBDA_PYTHON_PATH = Folder where python source code is,used in scripts( .../market_making_fw/python_lambda)
+* LAMBDA_PYTHON_PATH = Folder where python source code is,used in scripts( .../HFTFramework/python)
 * LAMBDA_OUTPUT_PATH = base path where the ml models will be saved
-* LAMBDA_INPUT_PATH = base path where the configuration of algorithms will be read automatically, soon
+* LAMBDA_INPUT_PATH = base path where the configuration of algorithms will be read automatically
 * LAMBDA_TEMP_PATH = temp of java algorithms must be the same as application.properties
 
 ## I owe you one
@@ -202,7 +202,11 @@ metatrader.pull.port=32768
 * Add more documentation
 
 ### Reference
+
+[A reinforcement learning approach to improve the performance of the Avellaneda-Stoikov market-making algorithm](https://journals.plos.org/plosone/article/authors?id=10.1371/journal.pone.0277042)<br>
+
 **bibtex**
+
 ``` bibtex
 @article{10.1371/journal.pone.0277042,
     doi = {10.1371/journal.pone.0277042},
@@ -222,6 +226,7 @@ metatrader.pull.port=32768
 ```
 
 **ris**
+
 ```ris
 TY  - JOUR
 T1  - A reinforcement learning approach to improve the performance of the Avellaneda-Stoikov market-making algorithm
