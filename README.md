@@ -1,4 +1,4 @@
-[![Java Unit Tests Workflow](https://github.com/javifalces/HFTFramework/actions/workflows/java_test.yml/badge.svg)](https://github.com/javifalces/HFTFramework/actions/workflows/java_test.yml)
+[![Java Unit Tests Workflow](https://github.com/javifalces/HFTFramework/actions/workflows/java_test.yml/badge.svg)](https://github.com/javifalces/HFTFramework/actions/workflows/java_test.yml)<br>
 [![Python Unit Tests Workflow](https://github.com/javifalces/HFTFramework/actions/workflows/python_test.yml/badge.svg)](https://github.com/javifalces/HFTFramework/actions/workflows/python_test.yml)
 
 # HFT Framework
