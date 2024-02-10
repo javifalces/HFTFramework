@@ -26,7 +26,7 @@ advantages:
    outperform traditional market making strategies, as demonstrated in academic research.
 6. Flexibility: The RL can be trained with different types of algorithms (like DQN, PPO, etc.), providing flexibility in
    choosing the most suitable one for the specific market conditions and trading objectives.
-
+[Notebook](../python/notebooks/AlphaAvellanedaStoikov.ipynb)
 ### Avellaneda Stoikov implementation
 
 * [Java](../java/trading_algorithms/src/main/java/com/lambda/investing/algorithmic_trading/market_making/avellaneda_stoikov/AvellanedaStoikov.java)
