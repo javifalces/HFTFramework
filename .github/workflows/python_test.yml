@@ -27,7 +27,7 @@ jobs:
         with:
           path: ~/.cache # what we cache: the virtualenv
           # The cache key depends on requirements.txt
-          key: ${{ runner.os }}-venv-${{ hashFiles('python_lambda/requirements.txt') }}
+          key: ${{ runner.os }}-venv-${{ hashFiles('python/requirements.txt') }}
          
             
       - name: Install dependencies
