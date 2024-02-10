@@ -27,16 +27,16 @@ jobs:
         with:
           path: ~/.cache # what we cache: the virtualenv
           # The cache key depends on requirements.txt
-          key: ${{ runner.os }}-venv-${{ hashFiles('python_lambda/requirements.txt') }}
+          key: ${{ runner.os }}-venv-${{ hashFiles('python/requirements.txt') }}
          
             
       - name: Install dependencies
         if: steps.cache-venv.outputs.cache-hit != 'true'
         run: python -m venv ~/.cache && . ~/.cache/bin/activate && 
-           ~/.cache/bin/pip install -r python_lambda/requirements.txt
+           ~/.cache/bin/pip install -r python/requirements.txt
       
       - name: Set Python dir and env
-        working-directory: ./python_lambda
+        working-directory: ./python
         run: source ~/.cache/bin/activate
         
      # - name: Lint with flake8
