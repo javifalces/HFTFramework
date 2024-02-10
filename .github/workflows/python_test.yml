@@ -1,0 +1,87 @@
+name: Python Unit Tests Workflow
+on:
+  workflow_dispatch:
+  
+  schedule:
+    - cron: '0 15,22 * * *'
+  pull_request:
+    branches:
+      - master
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+    
+      - name: Checkout code
+        uses: actions/checkout@v3.5.2        
+        
+      - name: Set up Python 3.10.13 and dependencies
+        uses: actions/setup-python@v4   
+        id: python_lambda
+        with:
+          python-version: '3.10.13'
+
+          
+      - uses: actions/cache@v3
+        id: cache-venv  # name for referring later
+        with:
+          path: ~/.cache # what we cache: the virtualenv
+          # The cache key depends on requirements.txt
+          key: ${{ runner.os }}-venv-${{ hashFiles('python_lambda/requirements.txt') }}
+         
+            
+      - name: Install dependencies
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        run: python -m venv ~/.cache && . ~/.cache/bin/activate && 
+           ~/.cache/bin/pip install -r python_lambda/requirements.txt
+      
+      - name: Set Python dir and env
+        working-directory: ./python_lambda
+        run: source ~/.cache/bin/activate
+        
+     # - name: Lint with flake8
+     #   run: |
+     #     ~/.cache/bin/activate
+     #     pip install flake8
+     #     # stop the build if there are Python syntax errors or undefined names
+     #     flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+     #     # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+     #     flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      - name: Create Matplotlib config directory
+        run: mkdir -p $HOME/.config/matplotlib
+        
+      - name: Set Matplotlib backend to Agg
+        run: |
+          echo "backend : Agg" >> $HOME/.config/matplotlib/matplotlibrc
+        
+      - name: Test with pytest
+        working-directory: ./python
+        run: |
+         ~/.cache/bin/pip install pytest
+         ~/.cache/bin/pip install ipython
+         ~/.cache/bin/python -m pytest
+          
+     # - name: Coveralls
+     #   uses: coverallsapp/github-action@master
+     #   with:
+     #     github-token: ${{ secrets.GITHUB_TOKEN }}
+     #     path--to-lcov: coverage.xml
+        
+      - name: Send Email if failed
+        if: failure()
+        uses: dawidd6/action-send-mail@v3.7.2
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.EMAIL_FROM }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: (HFTFramework)Python Unit Tests Failed
+          body: |
+            The Python unit tests failed. Please investigate and fix the issues. `${{ github.sha }}\`  by ${{ github.event.pull_request.user.login }} with message "${{ github.event.pull_request.title }}".
+          from: ${{ secrets.EMAIL_FROM }}
+          to: javifalces@gmail.com
+
+
+      - name: PrintIfSucceeded
+        if: success()
+        run: echo "Success"

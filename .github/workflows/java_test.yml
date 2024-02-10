@@ -1,0 +1,53 @@
+name: Java Unit Tests Workflow
+on:
+  workflow_dispatch:
+  
+  schedule:
+    - cron: '0 15,22 * * *'    
+#  push:
+#    branches:
+#      - master
+  pull_request:
+    branches:
+      - master    
+      
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:    
+    - name: Checkout code
+      uses: actions/checkout@v3.5.2
+        
+    - name: Set up JDK 11
+      uses: actions/setup-java@v3
+      with:
+        java-version: 11     
+        distribution: 'temurin'
+        cache: 'maven'
+        check-latest: false
+        
+    - name: Build and test with Maven
+      working-directory: ./java
+      run: mvn -B package --file pom.xml
+     
+      
+    - name: Send Email if failed
+      if: failure()
+      uses: dawidd6/action-send-mail@v3.7.2
+      with:
+        server_address: smtp.gmail.com
+        server_port: 465
+        username: ${{ secrets.EMAIL_FROM }}
+        password: ${{ secrets.EMAIL_PASSWORD }}
+        subject: (HFTFramework) Java Unit Tests Failed
+        body: |
+          The Java unit tests failed. Please investigate and fix the issues. ${{ github.sha }} by ${{ github.event.pull_request.user.login }} with message "${{ github.event.pull_request.title }}".
+        from: ${{ secrets.EMAIL_FROM }}
+        to: javifalces@gmail.com
+        
+
+    - name: PrintIfSucceeded
+      if: success()
+      run: echo "Success"
+

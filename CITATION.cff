@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Falces Marin"
+  given-names: "Javier"
+  orcid: "https://orcid.org/0000-0002-3891-8023"
+title: "HFT Framework: A reinforcement learning approach to improve the performance of the Avellaneda-Stoikov market-making algorithm"
+version: 1.0.0
+doi: 10.1371/journal.pone.0277042
+date-released: 2022-12-20
+url: "https://journals.plos.org/plosone/article/authors?id=10.1371/journal.pone.0277042"
