@@ -198,11 +198,13 @@ metatrader.pull.port=32768
     * [Chronicle](https://github.com/OpenHFT)
     * [LMAX Disruptor](https://lmax-exchange.github.io/disruptor/)
     * [Aeron](https://github.com/real-logic/aeron)
+* Add support to Ray for Reinforcement Learning
 * Test with more exchanges
 * Add more connectors
 * Add more algorithms
 * Add more tests
 * Add more documentation
+* ...
 
 ### Reference
 
