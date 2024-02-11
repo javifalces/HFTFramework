@@ -64,7 +64,7 @@ class CompareTradingAlgorithmsTest(unittest.TestCase):
         as_2.parameters[AvellanedaStoikovParameters.risk_aversion] = 0.01
         algorithms = [as_1, as_2]
 
-        other_algorithms = [AlgorithmEnum.constant_spread, AlgorithmEnum.stat_arb]
+        other_algorithms = [AlgorithmEnum.constant_spread, AlgorithmEnum.linear_constant_spread]
         for algorithm_enum in other_algorithms:
             algorithm = self.generate_algorithm(
                 algorithm_enum=algorithm_enum,
