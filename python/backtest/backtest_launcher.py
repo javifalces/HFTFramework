@@ -326,18 +326,18 @@ class BacktestLauncherController:
             algo_name = input_configuration.algorithm_configuration.algorithm_name
             output[backtest_launcher.id] = None
             instrument_pk = input_configuration.backtest_configuration.instrument_pk
-            if algo_name.startswith(AlgorithmEnum.stat_arb):
-                df, path = self._get_start_arb_trades_df(
-                    backtest_launcher, algo_name, path
-                )
+            # if algo_name.startswith(AlgorithmEnum.stat_arb):
+            #     df, path = self._get_start_arb_trades_df(
+            #         backtest_launcher, algo_name, path
+            #     )
+            # else:
+            csv_filename = 'trades_table_%s_%s.csv' % (algo_name, instrument_pk)
+            path = backtest_launcher.output_path + os.sep + csv_filename
+            if not os.path.exists(path):
+                print('%s output file %s not exist' % (backtest_launcher.id, path))
+                continue
             else:
-                csv_filename = 'trades_table_%s_%s.csv' % (algo_name, instrument_pk)
-                path = backtest_launcher.output_path + os.sep + csv_filename
-                if not os.path.exists(path):
-                    print('%s output file %s not exist' % (backtest_launcher.id, path))
-                    continue
-                else:
-                    df = pd.read_csv(path)
+                df = pd.read_csv(path)
 
             if df['date'].iloc[0].startswith("1970"):
                 df = df.iloc[1:]
