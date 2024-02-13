@@ -30,7 +30,7 @@
     <bean id="ethusdt_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
         <property name="symbol" value="ethusdt"></property>
         <property name="market" value="binance"></property>
-        <property name="currency" value="USD"></property>
+        <property name="currency" value="USDT"></property>
         <property name="priceTick" value="0.01"></property>
         <property name="quantityTick" value="0.00001"></property>
 

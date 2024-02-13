@@ -3,15 +3,17 @@
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:util="http://www.springframework.org/schema/util"
        xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
     <!--{"EURUSD","GBPUSD","EURGBP","EURJPY","EURCHF","EURCAD","EURNZD","EURAUD","CADCHF","USDJPY","USDCAD","AUDUSD","GBPJPY","AUDJPY","NZDUSD","USDCHF","XAUUSD","XAGUSD"};-->
+
     <bean id="eurusd_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
         <property name="symbol" value="eurusd"></property>
         <property name="market" value="darwinex"></property>
         <property name="currency" value="USD"></property>
         <property name="priceTick" value="0.00001"></property>
-
+        <property name="quantityTick" value="0.01"></property>
 
         <property name="volumeFeePct" value="0.0025"></property>
     </bean>
+
 
     <bean id="gbpusd_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
         <property name="symbol" value="gbpusd"></property>
