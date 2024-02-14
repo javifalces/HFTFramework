@@ -224,81 +224,27 @@ if __name__ == '__main__':
 
     alpha_constant_spread.set_parameters(parameters=parameters_base_pt)
 
-    # print('Starting training')
-    # output_train = avellaneda_dqn.train(
-    #     instrument_pk='btcusdt_binance',
-    #     start_date=datetime.datetime(year=2020, day=8, month=12, hour=10),
-    #     end_date=datetime.datetime(year=2020, day=8, month=12, hour=14),
-    #     iterations=3,
-    #     # algos_per_iteration=1,
-    #     # simultaneous_algos=1,
-    # )
-
-    # name_output = avellaneda_dqn.NAME + '_' + avellaneda_dqn.algorithm_info + '_0'
-
-    # backtest_result_train = output_train[0][name_output]
-    # # memory_replay_file = r'E:\Usuario\Coding\Python\market_making_fw\python_lambda\output\memoryReplay_AvellanedaDQN_test_main_dqn_0.csv'
-    # # memory_replay_df=avellaneda_dqn.get_memory_replay_df(memory_replay_file=memory_replay_file)
-    #
-    # avellaneda_dqn.plot_trade_results(raw_trade_pnl_df=backtest_result_train,title='train initial')
-    #
-    # backtest_result_train = output_train[-1][name_output]
-    # avellaneda_dqn.plot_trade_results(raw_trade_pnl_df=backtest_result_train,title='train final')
-
+    print('Starting training')
+    output_train = alpha_constant_spread.train(
+        instrument_pk='btcusdt_binance',
+        start_date=datetime.datetime(year=2023, day=13, month=11, hour=7),
+        end_date=datetime.datetime(year=2023, day=13, month=11, hour=15),
+        iterations=3,
+        # algos_per_iteration=1,
+        # simultaneous_algos=1,
+    )
     print('Starting testing')
+    output_test = alpha_constant_spread.test(
+        instrument_pk='btcusdt_kraken',
+        start_date=datetime.datetime(year=2023, day=13, month=11, hour=15),
+        end_date=datetime.datetime(year=2023, day=13, month=11, hour=20),
+        clean_experience=False,
+    )
 
-    results = []
-    scores = []
-    alpha_constant_spread.clean_model(output_path=LAMBDA_OUTPUT_PATH)
-    iterations = 0
-    explore_prob = 1.0
-    while True:
+    name_output = alpha_constant_spread.get_test_name(name=alpha_constant_spread.NAME)
+    backtest_df = output_test[name_output]
+    alpha_constant_spread.plot_trade_results(raw_trade_pnl_df=backtest_df)
+    import matplotlib.pyplot as plt
+    plt.show()
 
-        parameters = alpha_constant_spread.get_parameters(explore_prob=explore_prob)
-        alpha_constant_spread.set_parameters(parameters)
-        if iterations == 0:
-            clean_experience = True
-        else:
-            clean_experience = False
-        print(
-            rf"starting training with explore_prob = {alpha_constant_spread.parameters['epsilon']}"
-        )
-        output_test = alpha_constant_spread.test(
-            instrument_pk='btcusdt_kraken',
-            start_date=datetime.datetime(year=2023, day=13, month=11, hour=7),
-            end_date=datetime.datetime(year=2023, day=13, month=11, hour=15),
-            trainingPredictIterationPeriod=IterationsPeriodTime.END_OF_SESSION,
-            trainingTargetIterationPeriod=IterationsPeriodTime.END_OF_SESSION,
-            clean_experience=clean_experience,
-        )
-        # name_output = avellaneda_dqn.NAME + '_' + avellaneda_dqn.algorithm_info + '_0'
-        name_output = alpha_constant_spread.get_test_name(
-            name=alpha_constant_spread.NAME, algorithm_number=0
-        )
-        backtest_df = output_test[name_output]
 
-        score = get_score(
-            backtest_df=backtest_df,
-            score_enum=ScoreEnum.realized_pnl,
-            equity_column_score=ScoreEnum.realized_pnl,
-        )
-
-        results.append(backtest_df)
-        scores.append(score)
-
-        import matplotlib.pyplot as plt
-
-        alpha_constant_spread.plot_trade_results(
-            raw_trade_pnl_df=output_test[name_output], title='test %d' % iterations
-        )
-        plt.show()
-
-        alpha_constant_spread.plot_params(raw_trade_pnl_df=output_test[name_output])
-        plt.show()
-
-        pd.Series(scores).plot()
-        plt.title(f'scores evolution {explore_prob} {iterations} ')
-        plt.show()
-        iterations += 1
-        explore_prob -= 0.05
-        explore_prob = max(explore_prob, 0.05)

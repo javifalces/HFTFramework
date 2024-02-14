@@ -337,8 +337,9 @@ class AlphaAvellanedaStoikov(RLAlgorithm):
 
 if __name__ == '__main__':
     import os
+    import datetime
 
-    os.environ["LOG_STATE_STEPS"] = "1"  # print each step state in logs
+    # os.environ["LOG_STATE_STEPS"] = "1"  # print each step state in logs
     Algorithm.MULTITHREAD_CONFIGURATION = MultiThreadConfiguration.singlethread
     Algorithm.FEES_COMMISSIONS_INCLUDED = False
     Algorithm.DELAY_MS = 0
@@ -376,30 +377,22 @@ if __name__ == '__main__':
         AlgorithmParameters.ui: 0,
         RlAlgorithmParameters.training_stats: False,
         RlAlgorithmParameters.action_type: ReinforcementLearningActionType.discrete,
-        RlAlgorithmParameters.model: BaseModelType.PPO,
-        RlAlgorithmParameters.custom_neural_networks: {"net_arch": [256, 256]},
+        RlAlgorithmParameters.model: BaseModelType.PPO
+
     }
-    # best_avellaneda_param_dict = {
-    #     AvellanedaStoikovParameters.risk_aversion: 0.079665431,
-    #     AvellanedaStoikovParameters.midprice_period_window: 60,
-    #     AvellanedaStoikovParameters.seconds_change_k: 60
-    # }
+
 
     algorithm_info_dqn = 'ppo_pytest'
 
-    avellaneda_dqn = AlphaAvellanedaStoikov(
-        algorithm_info=algorithm_info_dqn, parameters=parameters_default_dqn
-    )
-    # avellaneda_dqn.set_parameters(
-    #     best_avellaneda_param_dict
-    # )  # same optimization as benchmark
+    alpha_avellaneda = AlphaAvellanedaStoikov(
+        algorithm_info=algorithm_info_dqn, parameters=parameters_default_dqn)
 
-    # print('Starting training')
-    output_train = avellaneda_dqn.train(
+    print('Starting training')
+    output_train = alpha_avellaneda.train(
         instrument_pk=instrument_pk,
         start_date=datetime.datetime(year=2023, day=13, month=11, hour=7),
         end_date=datetime.datetime(year=2023, day=13, month=11, hour=15),
-        iterations=10,
+        iterations=3,
         simultaneous_algos=1,
         clean_initial_experience=True,
         plot_training=True,
@@ -409,39 +402,17 @@ if __name__ == '__main__':
     )
 
     print('Starting testing')
-
-    results = []
-    scores = []
-    # avellaneda_dqn.clean_model(output_path=BACKTEST_OUTPUT_PATH)
-    iterations = 0
-    explore_prob = 1.0
-
-    parameters = avellaneda_dqn.get_parameters(explore_prob=explore_prob)
-    avellaneda_dqn.set_parameters(parameters)
-
-    output_test = avellaneda_dqn.test(
+    output_test = alpha_avellaneda.test(
         instrument_pk=instrument_pk,
-        start_date=datetime.datetime(year=2023, day=13, month=11, hour=10),
-        end_date=datetime.datetime(year=2023, day=13, month=11, hour=12),
+        start_date=datetime.datetime(year=2023, day=13, month=11, hour=15),
+        end_date=datetime.datetime(year=2023, day=13, month=11, hour=20),
+        clean_experience=False,
     )
 
-    name_output = avellaneda_dqn.get_test_name(name=avellaneda_dqn.NAME)
-    print(rf"output_test.keys() = {output_test.keys()}")
+    name_output = alpha_avellaneda.get_test_name(name=alpha_avellaneda.NAME)
     backtest_df = output_test[name_output]
-
-    score = get_score(
-        backtest_df=backtest_df,
-        score_enum=ScoreEnum.realized_pnl,
-        equity_column_score=ScoreEnum.realized_pnl,
-    )
+    alpha_avellaneda.plot_trade_results(raw_trade_pnl_df=backtest_df)
     import matplotlib.pyplot as plt
+    plt.show()
 
-    plt.figure()
-    fig, df = avellaneda_dqn.plot_trade_results(
-        raw_trade_pnl_df=output_test[name_output], title='test %d' % iterations
-    )
-    # fig.savefig(rf"{name_output}_test.png")
-    # plt.show()
-    #
-    # avellaneda_dqn.plot_params(raw_trade_pnl_df=output_test[name_output])
-    # plt.show()
+
