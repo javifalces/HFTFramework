@@ -264,9 +264,9 @@ if __name__ == '__main__':
             rf"starting training with explore_prob = {alpha_constant_spread.parameters['epsilon']}"
         )
         output_test = alpha_constant_spread.test(
-            instrument_pk='btcusdt_binance',
-            start_date=datetime.datetime(year=2020, day=9, month=12, hour=7),
-            end_date=datetime.datetime(year=2020, day=9, month=12, hour=9),
+            instrument_pk='btcusdt_kraken',
+            start_date=datetime.datetime(year=2023, day=13, month=11, hour=7),
+            end_date=datetime.datetime(year=2023, day=13, month=11, hour=15),
             trainingPredictIterationPeriod=IterationsPeriodTime.END_OF_SESSION,
             trainingTargetIterationPeriod=IterationsPeriodTime.END_OF_SESSION,
             clean_experience=clean_experience,

@@ -229,19 +229,19 @@ class AvellanedaStoikov(Algorithm):
 if __name__ == '__main__':
     avellaneda_stoikov = AvellanedaStoikov(algorithm_info='test_main')
 
-    avellaneda_stoikov.MULTITHREAD_CONFIGURATION = MultiThreadConfiguration.multithread
+    avellaneda_stoikov.MULTITHREAD_CONFIGURATION = MultiThreadConfiguration.singlethread
     avellaneda_stoikov.DELAY_MS = 0.0
     avellaneda_stoikov.FEES_COMMISSIONS_INCLUDED = False
 
     output_test = avellaneda_stoikov.test(
         instrument_pk='btcusdt_kraken',
-        start_date=datetime.datetime(year=2023, day=9, month=11, hour=7),
-        end_date=datetime.datetime(year=2023, day=9, month=11, hour=15),
+        start_date=datetime.datetime(year=2023, day=13, month=11, hour=7),
+        end_date=datetime.datetime(year=2023, day=13, month=11, hour=15),
     )
 
     name_output = avellaneda_stoikov.get_test_name(name=avellaneda_stoikov.NAME)
     backtest_df = output_test[name_output]
     avellaneda_stoikov.plot_trade_results(backtest_df)
 
-    # import matplotlib.pyplot as plt
-    # plt.show()
+    import matplotlib.pyplot as plt
+    plt.show()

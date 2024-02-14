@@ -397,8 +397,8 @@ if __name__ == '__main__':
     # print('Starting training')
     output_train = avellaneda_dqn.train(
         instrument_pk=instrument_pk,
-        start_date=datetime.datetime(year=2023, day=12, month=11, hour=9),
-        end_date=datetime.datetime(year=2023, day=12, month=11, hour=15),
+        start_date=datetime.datetime(year=2023, day=13, month=11, hour=7),
+        end_date=datetime.datetime(year=2023, day=13, month=11, hour=15),
         iterations=10,
         simultaneous_algos=1,
         clean_initial_experience=True,
