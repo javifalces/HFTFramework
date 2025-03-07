@@ -1,20 +1,34 @@
 package com.lambda.investing.market_data_connector.parquet_file_reader;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+
 import com.lambda.investing.ArrayUtils;
 import com.lambda.investing.Configuration;
+import com.lambda.investing.data_manager.DataManager;
+
 import lombok.Getter;
 import lombok.Setter;
+import net.tlabs.tablesaw.parquet.TablesawParquetReadOptions;
+import net.tlabs.tablesaw.parquet.TablesawParquetReader;
+import net.tlabs.tablesaw.parquet.TablesawParquetWriteOptions;
+import net.tlabs.tablesaw.parquet.TablesawParquetWriter;
 import org.apache.commons.lang3.SerializationUtils;
 import org.apache.hadoop.fs.Path;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.springframework.format.Printer;
+import tech.tablesaw.api.ColumnType;
 import tech.tablesaw.api.Table;
+import tech.tablesaw.columns.Column;
+import tech.tablesaw.columns.numbers.DoubleColumnType;
+import tech.tablesaw.io.csv.CsvReadOptions;
+import tech.tablesaw.io.csv.CsvWriteOptions;
 
 import java.io.File;
 import java.io.Serializable;
 import java.lang.reflect.Modifier;
+
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.text.Format;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -36,9 +50,7 @@ public class CacheManager implements Serializable {
     private String depthFilesString;
     private String tradeFilesString;
 
-    public static Gson GSON = new GsonBuilder()
-            .excludeFieldsWithModifiers(Modifier.STATIC, Modifier.TRANSIENT, Modifier.VOLATILE, Modifier.FINAL)
-            .serializeSpecialFloatingPointValues().disableHtmlEscaping().create();
+
     private static String DATE_PATTERN = "ddMMyyyy";
     private static String START_END_DATE_PATTERN = "ddMMyyyyHH";
 
@@ -95,7 +107,7 @@ public class CacheManager implements Serializable {
 
     public File getCacheFile() {
         //https://stackoverflow.com/questions/10587506/creating-a-hash-from-several-java-string-objects
-        String filenameCache = Configuration.formatLog("{}.csv", getUUID());
+        String filenameCache = Configuration.formatLog("{}.parquet", getUUID());
         File cacheFile = new File(CACHE_BASE_PATH + "\\" + filenameCache);
 
         return cacheFile;
@@ -119,7 +131,16 @@ public class CacheManager implements Serializable {
                 System.err.println(Configuration.formatLog("error reading cache {} not found", cacheFile.getAbsolutePath()));
                 return null;
             }
-            Table output = Table.read().csv(cacheFile);
+            //add csv read options force double format to avoid scientific notation
+//            CsvReadOptions csvReadOptions =
+//                    CsvReadOptions.builder(cacheFile)
+//                            .separator(',')
+//                            .header(true)
+//                            .build();
+//
+//            Table output = Table.read().usingOptions(csvReadOptions);
+            Table output = new TablesawParquetReader().read(TablesawParquetReadOptions.builder(cacheFile).build());
+
             return output;
 
         } catch (Exception e) {
@@ -135,11 +156,19 @@ public class CacheManager implements Serializable {
                 cacheFile.delete();
             }
             cacheFile.getParentFile().mkdirs();
+            TablesawParquetWriter tablesawParquetWriter = new TablesawParquetWriter();
+            tablesawParquetWriter.write(output, TablesawParquetWriteOptions.builder(cacheFile).build());
 
-            output.write().toFile(cacheFile);
+//            CsvWriteOptions csvWriteOptions =
+//                    CsvWriteOptions.builder(cacheFile)
+//                            .separator(',')
+//                            .header(true)
+//                            .build();
+//            output.write().usingOptions(csvWriteOptions);
 
         } catch (Exception e) {
             System.err.println(Configuration.formatLog("error saving cache {} {}", cacheFile.getAbsolutePath(), e.getMessage()));
+            e.printStackTrace();
             logger.error("error saving cache {} {}", cacheFile.getAbsolutePath(), e.getMessage(), e);
         }
     }

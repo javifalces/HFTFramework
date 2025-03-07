@@ -1,9 +1,14 @@
 package com.lambda.investing.algorithmic_trading.reinforcement_learning;
 
+import org.apache.commons.math3.util.MathUtils;
+import org.paukov.combinatorics3.Generator;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Queue;
+
+import static org.apache.commons.math3.util.CombinatoricsUtils.binomialCoefficient;
 
 public class MatrixRoundUtils {
 

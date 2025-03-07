@@ -1,5 +1,6 @@
 package com.lambda.investing.algorithmic_trading;
 
+import com.lambda.investing.Configuration;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 

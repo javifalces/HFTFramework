@@ -31,13 +31,10 @@
     <loggers>
 
 
-        <Logger name="com.lambda.investing.trading_engine_connector" level="debug">
-            <AppenderRef ref="file"/>
-        </Logger>
-
         <!--Console info output-->
         <root level="INFO">
             <appender-ref ref="console"/>
+            <appender-ref ref="file"/>
         </root>
 
 

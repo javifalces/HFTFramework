@@ -3,6 +3,7 @@ package com.lambda.investing;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.slf4j.helpers.MessageFormatter;
+import org.springframework.core.env.Environment;
 
 import java.text.SimpleDateFormat;
 import java.util.Random;
@@ -26,7 +27,7 @@ public class Configuration {
     public static int BACKTEST_THREADS_LISTENING_ORDER_REQUEST = 0;//listening threads on backtest
 
     public static int BACKTEST_BUSY_THREADPOOL_TRESHOLD = 3;
-    public static int BACKTEST_SYNCHRONIZED_TRADES_DEPTH_MAX_MS = 500;
+    public static int BACKTEST_SYNCHRONIZED_TRADES_DEPTH_MAX_MS = 0;//Already Synchronizing in PersistorMarketDataConnector InstrumentCache
 
     //algos engine
     public static int BACKTEST_THREADS_PUBLISHING_ORDER_REQUEST = 1;//required >0 for latency simulation

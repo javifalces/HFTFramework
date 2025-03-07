@@ -39,7 +39,7 @@
         <property name="symbol" value="eurjpy"></property>
         <property name="market" value="darwinex"></property>
         <property name="currency" value="JPY"></property>
-        <property name="priceTick" value="0.00001"></property>
+        <property name="priceTick" value="0.001"></property>
         <property name="quantityTick" value="0.01"></property>
 
         <property name="volumeFeePct" value="0.0025"></property>
@@ -100,7 +100,7 @@
         <property name="symbol" value="usdjpy"></property>
         <property name="market" value="darwinex"></property>
         <property name="currency" value="JPY"></property>
-        <property name="priceTick" value="0.00001"></property>
+        <property name="priceTick" value="0.001"></property>
         <property name="quantityTick" value="0.01"></property>
 
         <property name="volumeFeePct" value="0.0025"></property>
@@ -130,7 +130,7 @@
         <property name="symbol" value="gbpjpy"></property>
         <property name="market" value="darwinex"></property>
         <property name="currency" value="JPY"></property>
-        <property name="priceTick" value="0.00001"></property>
+        <property name="priceTick" value="0.001"></property>
         <property name="quantityTick" value="0.01"></property>
 
         <property name="volumeFeePct" value="0.0025"></property>
@@ -140,7 +140,7 @@
         <property name="symbol" value="audjpy"></property>
         <property name="market" value="darwinex"></property>
         <property name="currency" value="JPY"></property>
-        <property name="priceTick" value="0.00001"></property>
+        <property name="priceTick" value="0.001"></property>
         <property name="quantityTick" value="0.01"></property>
 
         <property name="volumeFeePct" value="0.0025"></property>
@@ -185,6 +185,76 @@
         <property name="volumeFeePct" value="0.0025"></property>
     </bean>
 
+    <bean id="eurnok_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="eurnok"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="NOK"></property>
+
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+
+    <bean id="eurmxn_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="eurmxn"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="MXN"></property>
+
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+
+    <bean id="eursgd_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="eursgd"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="SGD"></property>
+
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+
+
+    <bean id="usdnok_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="usdnok"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="NOK"></property>
+
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+    <bean id="eursek_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="eursek"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="SEK"></property>
+
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+    <bean id="usdsek_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="usdsek"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="SEK"></property>
+
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+
+    <bean id="eurtry_darwinex" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="eurtry"></property>
+        <property name="market" value="darwinex"></property>
+        <property name="currency" value="TRY"></property>
+
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
+        <property name="volumeFeePct" value="0.0025"></property>
+    </bean>
+
+
 
     <util:list id="darwinex_instruments" value-type="com.lambda.investing.model.asset.Instrument">
         <ref bean="eurusd_darwinex"/>
@@ -205,6 +275,13 @@
         <ref bean="cadchf_darwinex"/>
         <ref bean="gbpjpy_darwinex"/>
         <ref bean="audjpy_darwinex"/>
+        <ref bean="eurnok_darwinex"/>
+        <ref bean="usdnok_darwinex"/>
+        <ref bean="eursek_darwinex"/>
+        <ref bean="usdsek_darwinex"/>
+
+        <ref bean="eurmxn_darwinex"/>
+        <ref bean="eurtry_darwinex"/>
     </util:list>
 
 </beans>

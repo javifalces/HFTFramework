@@ -22,4 +22,6 @@ public interface AlgorithmObserver {
 	void onOrderRequest(String algorithmInfo, OrderRequest orderRequest);
 
 	void onExecutionReportUpdate(String algorithmInfo, ExecutionReport executionReport);
+
+	void onCustomColumns(long timestamp, String algorithmInfo, String instrumentPk, String key, Double value);
 }

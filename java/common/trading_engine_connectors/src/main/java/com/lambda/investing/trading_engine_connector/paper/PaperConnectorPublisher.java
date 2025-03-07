@@ -3,6 +3,7 @@ package com.lambda.investing.trading_engine_connector.paper;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorPublisher;
 import com.lambda.investing.market_data_connector.AbstractMarketDataConnectorPublisher;
+
 import com.lambda.investing.model.messaging.TopicUtils;
 import com.lambda.investing.model.messaging.TypeMessage;
 import com.lambda.investing.model.trading.ExecutionReport;
@@ -11,7 +12,8 @@ import com.lambda.investing.trading_engine_connector.ExecutionReportPublisher;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import static com.lambda.investing.market_data_connector.AbstractMarketDataProvider.GSON;
+
+import static com.lambda.investing.model.Util.toJsonString;
 
 /***
  * Will publish the market data after filling own orderbook and Execution reports
@@ -33,7 +35,7 @@ public class PaperConnectorPublisher extends AbstractMarketDataConnectorPublishe
 	@Override public void notifyExecutionReport(ExecutionReport executionReport) {
 
 		String topic = TopicUtils.getTopic(executionReport.getInstrument(), TypeMessage.execution_report);
-		String executionReportJson = GSON.toJson(executionReport);
+		String executionReportJson = toJsonString(executionReport);
 		topic = topic + "." + TypeMessage.execution_report.name();
 		//		logger.debug("notify ER {}",executionReport);
 		boolean isTrade = executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled)

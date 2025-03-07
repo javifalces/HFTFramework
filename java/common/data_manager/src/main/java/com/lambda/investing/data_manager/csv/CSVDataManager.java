@@ -6,8 +6,12 @@ import com.lambda.investing.model.market_data.CSVable;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import tech.tablesaw.api.Table;
+import tech.tablesaw.io.Destination;
+import tech.tablesaw.io.csv.CsvWriter;
 
+import javax.security.sasl.SaslServer;
 import java.io.BufferedWriter;
+import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;

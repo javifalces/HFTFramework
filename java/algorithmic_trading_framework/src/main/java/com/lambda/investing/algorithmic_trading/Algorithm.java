@@ -4,6 +4,8 @@ import com.formdev.flatlaf.FlatDarculaLaf;
 import com.formdev.flatlaf.FlatIntelliJLaf;
 import com.formdev.flatlaf.FlatLaf;
 import com.lambda.investing.Configuration;
+import com.lambda.investing.algorithmic_trading.candle_manager.CandleFromTickUpdater;
+import com.lambda.investing.algorithmic_trading.candle_manager.CandleListener;
 import com.lambda.investing.algorithmic_trading.gui.main.MainMenuGUI;
 import com.lambda.investing.algorithmic_trading.hedging.HedgeManager;
 import com.lambda.investing.algorithmic_trading.hedging.NoHedgeManager;
@@ -19,9 +21,9 @@ import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.messaging.Command;
 import com.lambda.investing.model.portfolio.Portfolio;
 import com.lambda.investing.model.trading.*;
-import com.lambda.investing.trading_engine_connector.AbstractBrokerTradingEngine;
-import com.lambda.investing.trading_engine_connector.ExecutionReportListener;
-import com.lambda.investing.trading_engine_connector.ZeroMqTradingEngineConnector;
+import com.lambda.investing.trading_engine_connector.*;
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -40,15 +42,18 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.lambda.investing.Configuration.*;
+import static com.lambda.investing.model.Util.fromJsonString;
 import static com.lambda.investing.model.portfolio.Portfolio.*;
 import static org.jfree.chart.ChartFactory.getChartTheme;
 
-public abstract class Algorithm extends AlgorithmParameters implements MarketDataListener, ExecutionReportListener {
+public abstract class Algorithm extends AlgorithmParameters implements MarketDataListener, ExecutionReportListener, CandleListener {
+
 
     protected static long TIMEOUT_WAIT_DONE_SECONDS = 15;
     protected static int DEFAULT_QUEUE_CF_TRADE = 20;
     protected static int DEFAULT_QUEUE_HISTORICAL_ORDER_REQUEST = 20;
     protected static int DEFAULT_QUEUE_HISTORICAL_TRADES = 5;
+    protected static long WARN_LATENCY_ORDER_REQUEST_MS = 500;
     protected Queue<String> cfTradesProcessed;
 
     protected Queue<ExecutionReport> erTradesProcessed;
@@ -75,6 +80,9 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     private AtomicInteger tradeReceived = new AtomicInteger(0);
 
     protected Logger logger = LogManager.getLogger(Algorithm.class);
+
+    @Getter
+    @Setter
     protected boolean verbose = true;
 
     protected AlgorithmConnectorConfiguration algorithmConnectorConfiguration; //must be private because send orders must pass from here except for Portfolio
@@ -97,6 +105,9 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
     protected ExecutionReportManager executionReportManager;
 
+    @Getter
+    protected AlgorithmType algorithmType = AlgorithmType.MarketMaking;
+
     public QuoteManager getQuoteManager(String instrumentPk) {
 
         QuoteManager quoteManager = instrumentQuoteManagerMap.get(instrumentPk);
@@ -110,18 +121,14 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     public boolean isRlAlgorithm() {
         return this instanceof SingleInstrumentRLAlgorithm;
     }
-    public void setVerbose(boolean verbose) {
-        this.verbose = verbose;
-    }
 
-    public boolean isVerbose() {
-        return verbose;
-    }
 
     private Map<String, Object> defaultParameters;
     protected Map<String, Object> parameters;
 
     protected Statistics statistics;
+    protected LatencyStatistics latencyStatistics;
+    protected SlippageStatistics slippageStatistics;
 
     public void setWaitDone(boolean waitDone) {
         this.waitDone = waitDone;
@@ -133,6 +140,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
     public void addCurrentCustomColumn(String instrumentPk, String key, Double value) {
         portfolioManager.addCurrentCustomColumn(instrumentPk, key, value);
+        algorithmNotifier.notifyObserversCustomColumns(getCurrentTimestamp(), instrumentPk, key, value);
     }
 
     public PortfolioManager getPortfolioManager() {
@@ -238,7 +246,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
         executionReportManager = new ExecutionReportManager();
         candleFromTickUpdater = new CandleFromTickUpdater();
-        candleFromTickUpdater.register(this::onUpdateCandle);
+        candleFromTickUpdater.register(this);
         algorithmPosition = new HashMap<>();
 
         algorithmObservers = new ArrayList<>();
@@ -261,6 +269,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
         if (!isBacktest) {
             this.statistics = new Statistics(algorithmInfo, STATISTICS_PRINT_SECONDS * 1000);
+            this.latencyStatistics = new LatencyStatistics(algorithmInfo, STATISTICS_PRINT_SECONDS * 1000);
+            this.slippageStatistics = new SlippageStatistics(algorithmInfo, STATISTICS_PRINT_SECONDS * 1000);
         }
         this.algorithmInfo = algorithmInfo;
         this.parameters = parameters;
@@ -558,6 +568,9 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         cancelOrderRequest.setClientOrderId(generateClientOrderId());
         cancelOrderRequest.setInstrument(instrument.getPrimaryKey());
         cancelOrderRequest.setTimestampCreation(getCurrentTimestamp());
+        if (latencyStatistics != null) {
+            latencyStatistics.startKeyStatistics("cancel", cancelOrderRequest.getClientOrderId(), cancelOrderRequest.getTimestampCreation());
+        }
         return cancelOrderRequest;
     }
 
@@ -639,6 +652,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
     public QuoteRequest createQuoteRequest(Instrument instrument) {
         QuoteRequest quoteRequest = new QuoteRequest();
+        quoteRequest.setReferenceTimestamp(getLastDepth(instrument).getTimestamp());
         quoteRequest.setAlgorithmInfo(algorithmInfo);
         quoteRequest.setInstrument(instrument);
         return quoteRequest;
@@ -748,29 +762,33 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         if (getAlgorithmState() == AlgorithmState.STOPPED) {
             return;
         }//required to not update when we are resetting RL
-
-        boolean isActive =
-                executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Active) || executionReport
-                        .getExecutionReportStatus().equals(ExecutionReportStatus.PartialFilled);
-        boolean isInactive =
-                executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Cancelled) || executionReport
-                        .getExecutionReportStatus().equals(ExecutionReportStatus.Rejected) || executionReport
-                        .getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled);
-
-        boolean isCancelRejected = executionReport.getExecutionReportStatus()
-                .equals(ExecutionReportStatus.CancelRejected);
-        //todo search on active to delete in case
-
-        boolean isFilled = executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.PartialFilled)
-                || executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled);
-
         String instrumentPk = executionReport.getInstrument();
         InstrumentManager instrumentManager = getInstrumentManager(instrumentPk);
 
         Queue<String> tradesInstrument = instrumentManager.getCfTradesReceived();
 
-        //remove from requestOrders
+
         Map<String, OrderRequest> instrumentSendOrders = instrumentManager.getAllRequestOrders();
+
+        boolean isActive =
+                executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Active) || executionReport
+                        .getExecutionReportStatus().equals(ExecutionReportStatus.PartialFilled);
+
+        boolean orderRequestNew = instrumentSendOrders.containsKey(executionReport.getClientOrderId()) && instrumentSendOrders
+                .get(executionReport.getClientOrderId()).getOrderRequestAction().equals(OrderRequestAction.Send);
+
+        boolean isNewRejected = executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Rejected) && orderRequestNew;
+        boolean isInactive =
+                executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Cancelled) || isNewRejected || executionReport
+                        .getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled);
+
+        boolean isCancelRejected = executionReport.getExecutionReportStatus()
+                .equals(ExecutionReportStatus.CancelRejected);
+        //todo search on active to delete in case
+        boolean isFilled = executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.PartialFilled)
+                || executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled);
+
+        //remove from requestOrders
         //		if (!instrumentSendOrders.containsKey(executionReport.getClientOrderId())) {
         //			logger.warn("received ER very fast {}    {}", executionReport.getClientOrderId(),executionReport.getExecutionReportStatus());
         //			pendingToRemoveClientOrderId.add(executionReport.getClientOrderId());
@@ -936,6 +954,18 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
         }
 
+        //check latency statistics
+
+        if (orderRequest.getReferenceTimestamp() != 0) {
+            long latencyMs = getCurrentTime().getTime() - orderRequest.getReferenceTimestamp();
+            if (latencyMs > WARN_LATENCY_ORDER_REQUEST_MS) {
+                logger.warn("OrderRequest {} with latency {} ms > {} from depth reference", orderRequest, latencyMs, WARN_LATENCY_ORDER_REQUEST_MS);
+                if (!isBacktest) {
+                    System.err.println(Configuration.formatLog("OrderRequest {} with latency {} ms > {} from depth reference", orderRequest, latencyMs, WARN_LATENCY_ORDER_REQUEST_MS));
+                }
+            }
+        }
+
         return orderRequest;
     }
 
@@ -962,6 +992,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             this.statistics.addStatistics(topic);
         }
     }
+
 
     protected void retryExecutionReportRejected(ExecutionReport executionReport, long delayMs) {
         boolean isRejected = executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Rejected);
@@ -1030,9 +1061,35 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         //		}
 
         historicalOrdersRequestSent.put(orderRequest.getClientOrderId(), orderRequest);
+        if (latencyStatistics != null) {
+            try {
+                String keyStatistic = Configuration.formatLog("{} {}", orderRequest.getOrderRequestAction().name(), orderRequest.getOrderType().name());
+                latencyStatistics.startKeyStatistics(keyStatistic, orderRequest.getClientOrderId(), orderRequest.getTimestampCreation());
+            } catch (Exception e) {
+                logger.error("error starting latency statistics", e);
+            }
+        }
+        if (slippageStatistics != null && orderRequest.getOrderType().equals(OrderType.Market)) {
+            try {
+                String instrument = orderRequest.getInstrument();
+                Instrument instrument1 = Instrument.getInstrument(instrument);
+                Verb sideToGet = orderRequest.getVerb();
+                double marketPrice = getLastDepth(instrument1).getMidPrice();
+                if (sideToGet.equals(Verb.Buy)) {
+                    marketPrice = getLastDepth(instrument1).getBestAsk();
+                }
+                if (sideToGet.equals(Verb.Sell)) {
+                    marketPrice = getLastDepth(instrument1).getBestBid();
+                }
+                slippageStatistics.registerPriceSent(sideToGet, instrument1, orderRequest.getClientOrderId(), marketPrice);
+            } catch (Exception e) {
+                logger.error("error registering slippage", e);
+            }
+        }
+
         this.algorithmConnectorConfiguration.getTradingEngineConnector().orderRequest(orderRequest);
 
-        addStatistics("orderRequest." + orderRequest.getOrderRequestAction().name() + " " + SEND_STATS);
+        addStatistics("orderRequest." + orderRequest.getOrderRequestAction().name() + "." + orderRequest.getInstrument() + " " + SEND_STATS);
         algorithmNotifier.notifyObserversOnOrderRequest(orderRequest);
     }
 
@@ -1040,13 +1097,40 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         return System.currentTimeMillis() + (RANDOM_GENERATOR).nextLong();
     }
 
-    public void onUpdateCandle(Candle candle) {
+    public void onCandleUpdate(Candle candle) {
+        long timestamp = candle.getTimestamp();
+        if (timestamp != 0 && isBacktest) {
+            timeService.setCurrentTimestamp(timestamp);
+        }
+        addStatistics(RECEIVE_STATS + " candle." + candle.getCandleType().name() + "." + candle.getInstrumentPk());
+    }
+
+    private boolean depthTimestampAlreadyProccess(Depth depth) {
+        long timestamp = depth.getTimestamp();
+        if (isBacktest && instrumentToManager != null && instrumentToManager.containsKey(depth.getInstrument())) {
+            InstrumentManager instrumentManager = getInstrumentManager(depth.getInstrument());
+            Depth lastDepth = instrumentManager.getLastDepth();
+            if (lastDepth == null) {
+                return false;
+            }
+            long lastDepthTimestamp = lastDepth.getTimestamp();
+            if (timestamp <= lastDepthTimestamp) {
+                //avoid self updates from orderbook with same timestamp
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
     public boolean onDepthUpdate(Depth depth) {
         long timestamp = depth.getTimestamp();
         try {
+            if (depthTimestampAlreadyProccess(depth)) {
+                //avoid self updates from orderbook with same timestamp
+                return false;
+            }
+
             try {
                 candleFromTickUpdater.onDepthUpdate(depth);
             } catch (IndexOutOfBoundsException e) {
@@ -1075,7 +1159,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
         InstrumentManager instrumentManager = getInstrumentManager(depth.getInstrument());
         instrumentManager.setLastDepth(depth);
-        addStatistics(RECEIVE_STATS + " depth");
+        addStatistics(RECEIVE_STATS + " depth." + depth.getInstrument());
         depthReceived.incrementAndGet();
 
         hedgeManager.onDepthUpdate(depth);
@@ -1113,6 +1197,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         }
     }
 
+
     @Override
     public boolean onTradeUpdate(Trade trade) {
         long timestamp = trade.getTimestamp();
@@ -1135,7 +1220,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         InstrumentManager instrumentManager = getInstrumentManager(trade.getInstrument());
         instrumentManager.setLastTrade(trade);
 
-        addStatistics(RECEIVE_STATS + " trade");
+        addStatistics(RECEIVE_STATS + " trade." + trade.getInstrument());
         tradeReceived.incrementAndGet();
         algorithmNotifier.notifyObserversOnUpdatePnlSnapshot(trade);
         hedgeManager.onTradeUpdate(trade);
@@ -1193,6 +1278,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             start();
         }
 
+        addStatistics(RECEIVE_STATS + " command." + command.getMessage());
+
         return true;
     }
 
@@ -1234,9 +1321,9 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                 }
             }
 
-            System.out.println(Configuration.formatLog("{}:{}", algorithmInfo, instrument.getPrimaryKey()));
+            System.out.println(Configuration.formatLog("{}", instrument.getPrimaryKey()));
             System.out.println(output);
-            logger.info(output);
+            logger.info("{}\n{}", instrument.getPrimaryKey(), output);
 
             PnlSnapshot pnlSnapshot = portfolioManager.getLastPnlSnapshot(instrument.getPrimaryKey());
             if (pnlSnapshot != null) {
@@ -1297,11 +1384,20 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                 return false;
             }
 
+            if (latencyStatistics != null) {
+                latencyStatistics.stopKeyStatistics(executionReport.getClientOrderId(), executionReport.getTimestampCreation());
+            }
+
             updateAllActiveOrders(executionReport);
 
             boolean isTrade = executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled)
                     || executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.PartialFilled);
             if (isTrade) {
+
+                if (slippageStatistics != null) {
+                    slippageStatistics.registerPriceExecuted(executionReport.getClientOrderId(), executionReport.getPrice());
+                }
+
                 erTradesProcessed.offer(executionReport);
                 if (executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled)) {
                     if (cfTradesProcessed.contains(executionReport.getClientOrderId())) {
@@ -1320,7 +1416,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
             if (algoQuotesEnabled) {
                 getQuoteManager(executionReport.getInstrument()).onExecutionReportUpdate(executionReport);
-                addStatistics(RECEIVE_STATS + " executionReport." + executionReport.getExecutionReportStatus().name());
+                addStatistics(RECEIVE_STATS + " executionReport." + executionReport.getExecutionReportStatus().name() + "." + executionReport.getInstrument());
             }
 
             algorithmNotifier.notifyObserversonExecutionReportUpdate(executionReport);
@@ -1512,11 +1608,11 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     public boolean onInfoUpdate(String header, String message) {
         if (header.startsWith(REQUESTED_POSITION_INFO)) {
             logger.info("received position from broker {}", message);
-            Map<String, Double> positions = GSON_STRING.fromJson(message, Map.class);
+            Map<String, Double> positions = fromJsonString(message, Map.class);
             return onPosition(positions);
         }
         if (header.endsWith(REQUESTED_PORTFOLIO_INFO)) {
-            Portfolio portfolio = GSON_STRING.fromJson(message, Portfolio.class);
+            Portfolio portfolio = fromJsonString(message, Portfolio.class);
             if (isBacktest) {
                 return true;
             }

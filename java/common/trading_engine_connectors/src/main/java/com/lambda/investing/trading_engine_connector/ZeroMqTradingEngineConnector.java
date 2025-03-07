@@ -1,7 +1,4 @@
 package com.lambda.investing.trading_engine_connector;
-
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorConfiguration;
@@ -27,13 +24,13 @@ import com.lambda.investing.trading_engine_connector.paper.PaperTradingEngineCon
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+
 import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static com.lambda.investing.model.Util.fromJsonString;
+import static com.lambda.investing.model.Util.toJsonString;
 import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_POSITION_INFO;
 
 //Think how to add paper trading here!
@@ -47,16 +44,13 @@ public class ZeroMqTradingEngineConnector implements TradingEngineConnector, Con
 	private ZeroMqPublisher zeroMqPublisher;
 	private ExecutionReportListener allAlgorithmsExecutionReportListener;
 
-	public static Gson GSON = new GsonBuilder()
-			.excludeFieldsWithModifiers(Modifier.STATIC, Modifier.TRANSIENT, Modifier.VOLATILE, Modifier.FINAL)
-			.serializeSpecialFloatingPointValues().disableHtmlEscaping().create();
-
 	protected Map<String, Map<ExecutionReportListener, String>> listenersManager;
 
 	private boolean isPaperTrading = false;
 	private PaperTradingEngine paperTradingEngine = null;
 	private List<Instrument> instrumentList = null;//for paper trading only
 	private List<String> cfTradesNotified;
+
 
 	/***
 	 * Trader engine for generic brokers
@@ -75,15 +69,16 @@ public class ZeroMqTradingEngineConnector implements TradingEngineConnector, Con
 		zeroMqExecutionReportProvider = ZeroMqProvider
 				.getInstance(this.zeroMqConfigurationExecutionReportListening, threadsListen);
 		zeroMqExecutionReportProvider.register(this.zeroMqConfigurationExecutionReportListening, this);
-		logger.info("Listening ExecutionReports on {}   in {}}",
+		logger.info("Listening ExecutionReports on topic {}   in {}",
 				zeroMqConfigurationExecutionReportListening.getTopic(),
 				zeroMqConfigurationExecutionReportListening.getUrl());
 
 		//publish the request here
 		this.zeroMqConfigurationOrderRequest = zeroMqConfigurationOrderRequest;
 		this.zeroMqPublisher = new ZeroMqPublisher(name, threadsPublish);
+		this.zeroMqPublisher.setServer(false);
 
-		logger.info("Publishing OrderRequests on {}   in {}", this.zeroMqConfigurationOrderRequest.getTopic(),
+		logger.info("Publishing OrderRequests on topic {}   in {}", this.zeroMqConfigurationOrderRequest.getTopic(),
 				this.zeroMqConfigurationOrderRequest.getUrl());
 
 		this.zeroMqPublisher
@@ -130,7 +125,7 @@ public class ZeroMqTradingEngineConnector implements TradingEngineConnector, Con
 			return this.paperTradingEngine.orderRequest(orderRequest);
 		} else {
 			String topic = TopicUtils.getTopic(orderRequest.getInstrument(), TypeMessage.order_request);
-			String message = GSON.toJson(orderRequest);
+			String message = toJsonString(orderRequest);
 			this.zeroMqPublisher
 					.publish(this.zeroMqConfigurationOrderRequest, TypeMessage.order_request, topic, message);
 			logger.info("ZeroMQ order request -> {}", orderRequest);
@@ -206,7 +201,7 @@ public class ZeroMqTradingEngineConnector implements TradingEngineConnector, Con
 		//ER read
 
 		if (typeMessage.equals(TypeMessage.execution_report)) {
-			ExecutionReport executionReport = GSON.fromJson(content, ExecutionReport.class);
+			ExecutionReport executionReport = fromJsonString(content, ExecutionReport.class);
 			notifyExecutionReport(executionReport);
 		}
 		if (typeMessage.equals(TypeMessage.info)) {

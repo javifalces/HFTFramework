@@ -1,11 +1,22 @@
 package com.lambda.investing.model.trading;
 
+import com.lambda.investing.ArrayUtils;
+import com.lambda.investing.model.Util;
+import com.lambda.investing.model.asset.Instrument;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.ToString;
+
+import java.util.List;
 
 @Getter @Setter
 //@ToString
 public class ExecutionReport {
+
+	public static List<ExecutionReportStatus> tradeStatus = ArrayUtils.ArrayToList(new ExecutionReportStatus[]{ExecutionReportStatus.CompletellyFilled, ExecutionReportStatus.PartialFilled});
+	public static List<ExecutionReportStatus> liveStatus = ArrayUtils.ArrayToList(new ExecutionReportStatus[]{ExecutionReportStatus.Active, ExecutionReportStatus.PartialFilled});
+	public static List<ExecutionReportStatus> removedStatus = ArrayUtils.ArrayToList(new ExecutionReportStatus[]{ExecutionReportStatus.CompletellyFilled, ExecutionReportStatus.Cancelled});
+
 
 	private String algorithmInfo, freeText;
 	private String instrument;
@@ -15,6 +26,10 @@ public class ExecutionReport {
 	private Verb verb;
 
 	private long timestampCreation;
+
+	public ExecutionReport() {
+		//for fastJson construction
+	}
 
 	/**
 	 * Generates new Execution report from orderRequestPattern
@@ -33,6 +48,10 @@ public class ExecutionReport {
 		this.price = orderRequest.getPrice();
 		this.timestampCreation = System.currentTimeMillis();//has to be updated
 		this.verb = orderRequest.getVerb();
+	}
+
+	public String toJsonString() {
+		return Util.toJsonString(this);
 	}
 
 	@Override public String toString() {

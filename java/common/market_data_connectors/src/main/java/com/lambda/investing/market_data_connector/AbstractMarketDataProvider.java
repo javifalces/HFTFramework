@@ -1,17 +1,21 @@
 package com.lambda.investing.market_data_connector;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+
+import com.lambda.investing.connector.zero_mq.ZeroMqPublisher;
+import com.lambda.investing.market_data_connector.ordinary.OrdinaryMarketDataProvider;
+import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.messaging.Command;
+import com.lambda.investing.model.trading.ExecutionReport;
+import com.lambda.investing.model.trading.ExecutionReportStatus;
+import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.lang.reflect.Modifier;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public abstract class AbstractMarketDataProvider implements MarketDataProvider {
 
@@ -21,10 +25,6 @@ public abstract class AbstractMarketDataProvider implements MarketDataProvider {
     private Map<String, Long> lastTradeSentReceived;
 
     protected Statistics statisticsReceived;//= new Statistics("Data received", 15 * 1000);
-
-    public static Gson GSON = new GsonBuilder()
-            .excludeFieldsWithModifiers(Modifier.STATIC, Modifier.TRANSIENT, Modifier.VOLATILE, Modifier.FINAL)
-            .serializeSpecialFloatingPointValues().disableHtmlEscaping().create();
 
     protected Logger logger = LogManager.getLogger(AbstractMarketDataProvider.class);
     protected Map<MarketDataListener, String> listenersManager;

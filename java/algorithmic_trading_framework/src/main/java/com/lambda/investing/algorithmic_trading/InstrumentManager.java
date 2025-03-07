@@ -75,13 +75,16 @@ public class InstrumentManager {
                 Map<String, OrderRequest> requestOrdersCopy = new ConcurrentHashMap<>(getAllRequestOrders());
                 boolean foundErrorsRequest = false;
                 List<String> cfTrades = null;
+                List<String> cfRequestsClOrdId = new ArrayList<>();
                 //checking requestOrderMap is okey
                 if (requestOrdersCopy.size() > 0) {
                     //check with active
+
                     for (String activeOrdersClientOrderId : getAllActiveOrders().keySet()) {
                         if (requestOrdersCopy.containsKey(activeOrdersClientOrderId)) {
                             //remove it
                             requestOrdersCopy.remove(activeOrdersClientOrderId);
+                            cfRequestsClOrdId.add(activeOrdersClientOrderId);
                             foundErrorsRequest = true;
                         }
                     }
@@ -91,36 +94,42 @@ public class InstrumentManager {
                         if (requestOrdersCopy.containsKey(cfTradesClientOrderId)) {
                             //remove it
                             requestOrdersCopy.remove(cfTradesClientOrderId);
+                            cfRequestsClOrdId.add(cfTradesClientOrderId);
                             foundErrorsRequest = true;
                         }
                     }
 
                     if (foundErrorsRequest) {
                         //correct it
-                        logger.warn("Error found in the AllRequestMaps ,cleaning from {} to {}",
-                                getAllRequestOrders().size(), requestOrdersCopy.size());
+                        //string of comma separated cfRequestsClOrdId
+                        String cfRequestsClOrdIdString = String.join(",", cfRequestsClOrdId);
+                        logger.warn("Found requests in {} already received as active/trade , clean it: {}", instrument.getPrimaryKey(), cfRequestsClOrdIdString);
                         setAllRequestOrders(requestOrdersCopy);
                     }
                 }
                 //
                 boolean foundErrorsActive = false;
                 Map<String, ExecutionReport> activeOrdersCopy = new ConcurrentHashMap<>(getAllActiveOrders());
-
+                List<String> cfTradesClOrdId = new ArrayList<>();
                 if (activeOrdersCopy.size() > 0) {
                     if (cfTrades == null) {
                         cfTrades = new ArrayList<>(getCfTradesReceived());
                     }
+
                     for (String cfClientOrderId : cfTrades) {
                         if (activeOrdersCopy.containsKey(cfClientOrderId)) {
                             activeOrdersCopy.remove(cfClientOrderId);
+                            cfTradesClOrdId.add(cfClientOrderId);
                             foundErrorsActive = true;
                         }
                     }
                 }
                 if (foundErrorsActive) {
                     //correct it
-                    logger.warn("Error found in the AllActiveMaps ,cleaning from {} to {}", getAllActiveOrders().size(),
-                            activeOrdersCopy.size());
+                    //string of comma separated cfTradesClOrdId
+                    String cfTradesClOrdIdString = String.join(",", cfTradesClOrdId);
+
+                    logger.warn("Found active in clOrdId {} already traded , clean it: {}", instrument.getPrimaryKey(), cfTradesClOrdIdString);
                     setAllActiveOrders(activeOrdersCopy);
                 }
 

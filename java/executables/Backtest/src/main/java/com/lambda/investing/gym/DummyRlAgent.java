@@ -1,31 +1,35 @@
 package com.lambda.investing.gym;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+
 import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.Algorithm;
+import com.lambda.investing.algorithmic_trading.AlgorithmParameters;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.SingleInstrumentRLAlgorithm;
 import com.lambda.investing.backtest.InputConfiguration;
 import com.lambda.investing.backtest_engine.BacktestConfiguration;
 import com.lambda.investing.backtest_engine.ordinary.OrdinaryBacktestRLGym;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
+import com.lambda.investing.connector.zero_mq.ZeroMqReplier;
 import com.lambda.investing.connector.zero_mq.ZeroMqRequester;
 import com.lambda.investing.model.rl_gym.InputGymMessage;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.ToString;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Modifier;
 import java.util.Map;
 
 import static com.lambda.investing.Configuration.logger;
+import static com.lambda.investing.model.Util.fromJsonString;
+import static com.lambda.investing.model.Util.toJsonString;
+
 
 @Getter
 @Setter
 public class DummyRlAgent implements Runnable {
-    public static Gson GSON = new GsonBuilder()
-            .excludeFieldsWithModifiers(Modifier.STATIC, Modifier.TRANSIENT, Modifier.VOLATILE, Modifier.FINAL)
-            .serializeSpecialFloatingPointValues().disableHtmlEscaping().create();
 
     private long delayStepMs = 1000;
     private long initialSleepSeconds = 1;
@@ -44,7 +48,7 @@ public class DummyRlAgent implements Runnable {
     public DummyRlAgent(String launcherJson) {
 
         this.launcherJson = launcherJson;
-        inputConfiguration = GSON.fromJson(launcherJson, InputConfiguration.class);
+        inputConfiguration = fromJsonString(launcherJson, InputConfiguration.class);
         try {
             BacktestConfiguration backtestConfiguration = inputConfiguration.getBacktestConfiguration();
 
@@ -109,12 +113,12 @@ public class DummyRlAgent implements Runnable {
         InputGymMessage readyMessageRequest = new InputGymMessage();
         readyMessageRequest.setType("backtest_is_ready");
         readyMessageRequest.setValue(new double[0]);
-        zeroMqRequester.request(zeroMqConfiguration, GSON.toJson(readyMessageRequest));
+        zeroMqRequester.request(zeroMqConfiguration, toJsonString(readyMessageRequest));
 
         InputGymMessage startMessageRequest = new InputGymMessage();
         startMessageRequest.setType("start");
         startMessageRequest.setValue(new double[0]);
-        zeroMqRequester.request(zeroMqConfiguration, GSON.toJson(startMessageRequest));
+        zeroMqRequester.request(zeroMqConfiguration, toJsonString(startMessageRequest));
 
         int iterations = 0;
         while (dummyAgent) {
@@ -124,8 +128,8 @@ public class DummyRlAgent implements Runnable {
             InputGymMessage stepMessageRequest = new InputGymMessage();
             stepMessageRequest.setType("action");
             stepMessageRequest.setValue(randomAction());
-            String receive = zeroMqRequester.request(zeroMqConfiguration, GSON.toJson(stepMessageRequest));
-            MessageReceive messageReceive = GSON.fromJson(receive, MessageReceive.class);
+            String receive = zeroMqRequester.request(zeroMqConfiguration, toJsonString(stepMessageRequest));
+            MessageReceive messageReceive = fromJsonString(receive, MessageReceive.class);
             if (messageReceive.done) {
                 String messagePrint = Configuration.formatLog("DUMMY_AGENT done : {} iterations", iterations);
                 System.out.println(messagePrint);
@@ -168,7 +172,7 @@ public class DummyRlAgent implements Runnable {
 
         @Override
         public String toString() {
-            return GSON.toJson(this);
+            return toJsonString(this);
         }
     }
 

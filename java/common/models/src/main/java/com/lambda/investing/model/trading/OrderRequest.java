@@ -1,8 +1,10 @@
 package com.lambda.investing.model.trading;
 
+import com.lambda.investing.model.Util;
 import com.lambda.investing.model.asset.Instrument;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.ToString;
 
 import java.util.Random;
 import java.util.UUID;
@@ -24,6 +26,8 @@ import java.util.UUID;
 	private String algorithmInfo;
 	private String freeText;
 	public static Random RANDOM_GENERATOR = new Random();
+
+	private long referenceTimestamp;
 
 	public Object clone() {
 		OrderRequest orderRequest;
@@ -56,6 +60,10 @@ import java.util.UUID;
 			return "uknown action " + orderRequestAction + " " + clientOrderId + " " + super.toString();
 		}
 
+	}
+
+	public String toJsonString() {
+		return Util.toJsonString(this);
 	}
 
 	protected static String generateClientOrderId() {
@@ -138,4 +146,5 @@ import java.util.UUID;
 
 		return modifyOrderRequest;
 	}
+
 }

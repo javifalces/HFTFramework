@@ -1,9 +1,9 @@
 package com.lambda.investing.algorithmic_trading.reinforcement_learning;
 
 import com.google.common.primitives.Doubles;
-import com.lambda.investing.ArrayUtils;
 import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
+import com.lambda.investing.ArrayUtils;
 import com.lambda.investing.algorithmic_trading.AlgorithmState;
 import com.lambda.investing.algorithmic_trading.PnlSnapshot;
 import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
@@ -23,10 +23,10 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static com.lambda.investing.ArrayUtils.PrintDoubleArrayString;
 import static com.lambda.investing.Configuration.DELTA_REWARD_REINFORCEMENT_LEARNING;
 import static com.lambda.investing.Configuration.DISCOUNT_REWARD_NO_TRADE;
 import static com.lambda.investing.algorithmic_trading.AlgorithmState.STOPPED;
+import static com.lambda.investing.ArrayUtils.PrintDoubleArrayString;
 import static com.lambda.investing.algorithmic_trading.reinforcement_learning.SingleInstrumentRLReplier.GetStateColumnsAlgorithm;
 
 @Getter

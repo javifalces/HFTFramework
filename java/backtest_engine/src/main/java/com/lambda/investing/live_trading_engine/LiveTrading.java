@@ -11,6 +11,7 @@ import com.lambda.investing.trading_engine_connector.paper.PaperTradingEngine;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class LiveTrading {

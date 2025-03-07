@@ -5,12 +5,16 @@ import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
 import com.lambda.investing.connector.zero_mq.ZeroMqProvider;
+import com.lambda.investing.market_data_connector.ZeroMqMarketDataConnector;
 import com.lambda.investing.model.messaging.TypeMessage;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.lang.reflect.Type;
 import java.util.Map;
+
+import static com.lambda.investing.model.Util.GSON;
+
 
 public class ZeroMqFactorProvider extends AbstractFactorProvider implements ConnectorListener {
     Logger logger = LogManager.getLogger(ZeroMqFactorProvider.class);

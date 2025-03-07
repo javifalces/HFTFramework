@@ -1,5 +1,6 @@
 package com.lambda.investing.market_data_connector.ordinary;
 
+
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorConfiguration;
@@ -12,6 +13,7 @@ import com.lambda.investing.model.messaging.TypeMessage;
 import lombok.Getter;
 import lombok.Setter;
 
+import static com.lambda.investing.model.Util.fromJsonString;
 
 
 @Getter @Setter public class OrdinaryMarketDataProvider extends AbstractMarketDataProvider
@@ -37,14 +39,14 @@ import lombok.Setter;
 			TypeMessage typeMessage, String content) {
 
 		if (typeMessage.equals(TypeMessage.depth)) {
-			Depth depth = GSON.fromJson(content, Depth.class);
+			Depth depth = fromJsonString(content, Depth.class);
 			depth.setLevelsFromData();
 			notifyDepth(depth);
 		} else if (typeMessage.equals(TypeMessage.trade)) {
-			Trade trade = GSON.fromJson(content, Trade.class);
+			Trade trade = fromJsonString(content, Trade.class);
 			notifyTrade(trade);
 		} else if (typeMessage.equals(TypeMessage.command)) {
-			Command command = GSON.fromJson(content, Command.class);
+			Command command = fromJsonString(content, Command.class);
 			notifyCommand(command);
 			//All is set => start backtest
 		}

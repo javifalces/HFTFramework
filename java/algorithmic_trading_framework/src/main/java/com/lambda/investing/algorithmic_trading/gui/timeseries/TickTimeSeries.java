@@ -1,29 +1,27 @@
 package com.lambda.investing.algorithmic_trading.gui.timeseries;
 
-import com.lambda.investing.ArrayUtils;
-import lombok.Getter;
-import org.jfree.chart.ChartFactory;
-import org.jfree.chart.ChartPanel;
-import org.jfree.chart.ChartTheme;
-import org.jfree.chart.JFreeChart;
-import org.jfree.chart.axis.DateAxis;
-import org.jfree.chart.plot.XYPlot;
-import org.jfree.chart.renderer.xy.XYItemRenderer;
-import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer;
-import org.jfree.chart.ui.ApplicationFrame;
-import org.jfree.chart.ui.RectangleInsets;
-import org.jfree.data.time.Minute;
-import org.jfree.data.time.RegularTimePeriod;
-import org.jfree.data.time.TimeSeries;
-import org.jfree.data.time.TimeSeriesCollection;
-
-import javax.swing.*;
 import java.awt.*;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+import javax.swing.*;
+
+import com.lambda.investing.ArrayUtils;
+import lombok.Getter;
+import org.jfree.chart.*;
+import org.jfree.chart.axis.DateAxis;
+import org.jfree.chart.plot.XYPlot;
+import org.jfree.chart.renderer.xy.XYItemRenderer;
+import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer;
+import org.jfree.chart.ui.ApplicationFrame;
+import org.jfree.chart.ui.RectangleInsets;
+import org.jfree.chart.ui.UIUtils;
+import org.jfree.data.time.*;
+import org.jfree.data.xy.XYDataset;
 
 @Getter
 public class TickTimeSeries extends ApplicationFrame {

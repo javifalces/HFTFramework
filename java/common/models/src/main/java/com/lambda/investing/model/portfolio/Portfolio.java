@@ -1,7 +1,5 @@
 package com.lambda.investing.model.portfolio;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.ExecutionReportStatus;
 import lombok.Getter;
@@ -16,15 +14,17 @@ import java.io.IOException;
 import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+
+import static com.lambda.investing.model.Util.fromJsonString;
+import static com.lambda.investing.model.Util.toJsonString;
 
 @Getter @Setter public class Portfolio implements Runnable {
 
 	private static Map<String, Portfolio> pathToInstance = new HashMap<>();
-	public static Gson GSON_STRING = new GsonBuilder()
-			.excludeFieldsWithModifiers(Modifier.STATIC, Modifier.TRANSIENT, Modifier.VOLATILE, Modifier.FINAL)
-			.serializeSpecialFloatingPointValues().create();
 	public static String REQUESTED_PORTFOLIO_INFO = "portfolio";
     public static String REQUESTED_POSITION_INFO = "position";
     protected static Logger logger = LogManager.getLogger(Portfolio.class);
@@ -51,7 +51,7 @@ import java.util.Map;
 			///read it
 			try {
 				String fileContent = new String(Files.readAllBytes(Paths.get(path)));
-				portfolio = GSON_STRING.fromJson(fileContent, Portfolio.class);
+				portfolio = fromJsonString(fileContent, Portfolio.class);
 				new Thread(portfolio, "portfolio_autosave").start();
 
 			} catch (IOException e) {
@@ -77,7 +77,7 @@ import java.util.Map;
 	}
 
 	private void savePortfolio() {
-		String content = GSON_STRING.toJson(this);
+		String content = toJsonString(this);
 		try {
 			BufferedWriter writer = new BufferedWriter(new FileWriter(path));
 			writer.write(content);

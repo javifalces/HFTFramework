@@ -1,146 +1,171 @@
 package com.lambda.investing.trading_engine_connector.paper.market;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class OrderList implements Iterable<OrderOrderbook>, Iterator<OrderOrderbook> {
 
-	/*
-	 * This class create a sorted, iterable list or orders for each price  level
-	 * in the order tree.
-	 */
-	private OrderOrderbook headOrder = null;
-	;
-	private OrderOrderbook tailOrder = null;
-	;
-	private int length = 0;
-	private double volume = 0;    // Total volume at this price level
-	private OrderOrderbook last = null;
+    /*
+     * This class create a sorted, iterable list or orders for each price  level
+     * in the order tree.
+     */
+    @Getter
+    private OrderOrderbook headOrder = null;
+    ;
+    @Getter
+    @Setter
+    private OrderOrderbook tailOrder = null;
+    @Getter
+    private int length = 0;
+    @Setter
+    @Getter
+    private double volume = 0;    // Total volume at this price level
+    private OrderOrderbook last = null;
 
-	private Map<String, String> algorithmsInfo = new ConcurrentHashMap<String, String>();
+    private Map<String, String> algorithmsInfo = new ConcurrentHashMap<String, String>();
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
-	// The next three methods implement Iterator.
-	public boolean hasNext() {
-		if (this.last == null) {
-			return false;
-		}
-		return true;
-	}
+    //
 
-	public OrderOrderbook next() {
-		if (this.last == null) {
-			throw new NoSuchElementException();
-		}
-		OrderOrderbook returnVal = this.last;
-		this.last = this.last.getNextOrder();
-		return returnVal;
-	}
 
-	public void remove() {
-		throw new UnsupportedOperationException();
-	}
+    // The next three methods implement Iterator.
+    public boolean hasNext() {
+        if (this.last == null) {
+            return false;
+        }
+        return true;
+    }
 
-	// This method implements Iterable.
-	public Iterator<OrderOrderbook> iterator() {
-		this.last = headOrder;
-		return this;
-	}
+    public OrderOrderbook next() {
+        if (this.last == null) {
+            throw new NoSuchElementException();
+        }
+        OrderOrderbook returnVal = this.last;
+        this.last = this.last.getNextOrder();
+        return returnVal;
+    }
 
-	public void appendOrder(OrderOrderbook incomingOrder) {
-		if (length == 0) {
-			incomingOrder.setNextOrder(null);
-			incomingOrder.setPrevOrder(null);
-			headOrder = incomingOrder;
-			tailOrder = incomingOrder;
+    public void remove() {
+        throw new UnsupportedOperationException();
+    }
 
-		} else {
-			incomingOrder.setPrevOrder(tailOrder);
-			incomingOrder.setNextOrder(null);
-			tailOrder.setNextOrder(incomingOrder);
-			tailOrder = incomingOrder;
-		}
-		algorithmsInfo.put(incomingOrder.getAlgorithmInfo(), "");
-		length += 1;
-		volume += incomingOrder.getQuantity();
-	}
 
-	public void removeOrder(OrderOrderbook order) {
-		this.volume -= order.getQuantity();
-		this.length -= 1;
-		if (this.length == 0) {
-			return;
-		}
-		OrderOrderbook tempNextOrder = order.getNextOrder();
-		OrderOrderbook tempPrevOrder = order.getPrevOrder();
-		if ((tempNextOrder != null) && (tempPrevOrder != null)) {
-			tempNextOrder.setPrevOrder(tempPrevOrder);
-			tempPrevOrder.setNextOrder(tempNextOrder);
-		} else if (tempNextOrder != null) {
-			tempNextOrder.setPrevOrder(null);
-			this.headOrder = tempNextOrder;
-		} else if (tempPrevOrder != null) {
-			tempPrevOrder.setNextOrder(null);
-			this.tailOrder = tempPrevOrder;
-		}
-		algorithmsInfo.remove(order.getAlgorithmInfo());
-	}
+    public void appendOrder(OrderOrderbook incomingOrder) {
+        lock.writeLock().lock();
+        try {
+            if (length == 0) {
+                headOrder = tailOrder = incomingOrder;
+            } else {
+                incomingOrder.setPrevOrder(tailOrder);
+                tailOrder.setNextOrder(incomingOrder);
+                tailOrder = incomingOrder;
+            }
+            algorithmsInfo.put(incomingOrder.getAlgorithmInfo(), "");
+            length++;
+            volume += incomingOrder.getQuantity();
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
 
-	public void moveTail(OrderOrderbook order) {
-		/*
-		 * Move 'order' to the tail of the list (after modification for e.g.)
-		 */
-		if (order.getPrevOrder() != null) {
-			order.getPrevOrder().setNextOrder(order.getNextOrder());
-		} else {
-			// Update head order
-			this.headOrder = order.getNextOrder();
-		}
-		order.getNextOrder().setPrevOrder(order.getPrevOrder());
-		// Set the previous tail's next order to this order
-		this.tailOrder.setNextOrder(order);
-		order.setPrevOrder(this.tailOrder);
-		this.tailOrder = order;
-		order.setNextOrder(null);
-	}
 
-	public String toString() {
-		String outString = "";
-		for (OrderOrderbook o : this) {
-			outString += ("| " + o.toString() + "\n");
-		}
-		return outString;
-	}
+    public void removeOrder(OrderOrderbook order) {
+        lock.writeLock().lock();
+        try {
+            volume -= order.getQuantity();
+            length--;
+            if (length == 0) {
+                headOrder = tailOrder = null;
+                return;
+            }
+            if (order.getPrevOrder() != null) {
+                order.getPrevOrder().setNextOrder(order.getNextOrder());
+            } else {
+                headOrder = order.getNextOrder();
+            }
+            if (order.getNextOrder() != null) {
+                order.getNextOrder().setPrevOrder(order.getPrevOrder());
+            } else {
+                tailOrder = order.getPrevOrder();
+            }
+            algorithmsInfo.remove(order.getAlgorithmInfo());
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
 
-	public Integer getLength() {
-		return length;
-	}
+    public void moveTail(OrderOrderbook order) {
+        /*
+         * Move 'order' to the tail of the list (after modification for e.g.)
+         */
+        lock.writeLock().lock();
+        try {
+            if (order == tailOrder) return; // Already at tail
+            if (order.getPrevOrder() != null) {
+                order.getPrevOrder().setNextOrder(order.getNextOrder());
+            } else {
+                headOrder = order.getNextOrder();
+            }
+            if (order.getNextOrder() != null) {
+                order.getNextOrder().setPrevOrder(order.getPrevOrder());
+            }
+            tailOrder.setNextOrder(order);
+            order.setPrevOrder(tailOrder);
+            tailOrder = order;
+            order.setNextOrder(null);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
 
-	public OrderOrderbook getHeadOrder() {
-		return headOrder;
-	}
+    public String toString() {
+        String outString = "";
+        for (OrderOrderbook o : this) {
+            outString += ("| " + o.toString() + "\n");
+        }
+        return outString;
+    }
 
-	public OrderOrderbook getTailOrder() {
-		return tailOrder;
-	}
 
-	public void setTailOrder(OrderOrderbook tailOrder) {
-		this.tailOrder = tailOrder;
-	}
+    public String getAlgorithms() {
+        return String.join(",", algorithmsInfo.keySet());
+    }
 
-	public double getVolume() {
-		return volume;
-	}
+    public List<String> getAlgorithmsList() {
+        return new ArrayList<>(algorithmsInfo.keySet());
+    }
 
-	public void setVolume(double volume) {
-		this.volume = volume;
-	}
 
-	public String getAlgorithms() {
-		return String.join(",", algorithmsInfo.keySet());
-	}
+    // This method implements Iterable.
+    public Iterator<OrderOrderbook> iterator() {
+        return new OrderIterator(headOrder);
+    }
 
-	public List<String> getAlgorithmsList() {
-		return new ArrayList<>(algorithmsInfo.keySet());
-	}
+    private class OrderIterator implements Iterator<OrderOrderbook> {
+        private OrderOrderbook current;
 
+        public OrderIterator(OrderOrderbook start) {
+            current = start;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return current != null;
+        }
+
+        @Override
+        public OrderOrderbook next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            OrderOrderbook temp = current;
+            current = current.getNextOrder();
+            return temp;
+        }
+    }
 }

@@ -9,10 +9,12 @@ import com.lambda.investing.model.exception.LambdaTradingException;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.trading.*;
 import lombok.Getter;
+import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 
 public abstract class AbstractSideQuoting extends SingleInstrumentAlgorithm {
@@ -131,8 +133,8 @@ public abstract class AbstractSideQuoting extends SingleInstrumentAlgorithm {
     }
 
 
-
-    @Override public void onUpdateCandle(Candle candle) {
+    @Override
+    public void onCandleUpdate(Candle candle) {
 
         if (!candleTypeBusiness.equals(candle.getCandleType()) || !candle.getInstrumentPk()
                 .equals(this.instrument.getPrimaryKey())) {
@@ -371,6 +373,7 @@ public abstract class AbstractSideQuoting extends SingleInstrumentAlgorithm {
             //			bidPrice = Math.max(bidPrice, minBidPrice);
 
         }
+        quoteRequest.setReferenceTimestamp(depth.getTimestamp());
         quoteRequest.setBidPrice(bidPrice);
         quoteRequest.setAskPrice(askPrice);
         quoteRequest.setBidQuantity(bidQuantity);

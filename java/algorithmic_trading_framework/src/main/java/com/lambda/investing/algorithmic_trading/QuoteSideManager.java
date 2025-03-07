@@ -7,12 +7,14 @@ import com.lambda.investing.model.trading.*;
 import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.joda.time.DateTime;
 
-import java.util.Date;
-import java.util.Map;
+import java.util.*;
+
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static com.lambda.investing.algorithmic_trading.Algorithm.EXECUTION_REPORT_LOCK;
 import static com.lambda.investing.algorithmic_trading.Algorithm.LOG_LEVEL;
 
 public class QuoteSideManager {
@@ -113,7 +115,7 @@ public class QuoteSideManager {
         return cfTradesClientOrderId;
     }
 
-    private OrderRequest createOrderRequest(Instrument instrument, Verb verb, double price, double quantity) {
+    private OrderRequest createOrderRequest(Instrument instrument, Verb verb, double price, double quantity, long referenceTimestamp) {
         String newClientOrderId = algorithm.generateClientOrderId();
         OrderRequest output = new OrderRequest();
         output.setAlgorithmInfo(algorithm.algorithmInfo);
@@ -123,6 +125,7 @@ public class QuoteSideManager {
         output.setClientOrderId(newClientOrderId);
         output.setQuantity(quantity);
         output.setPrice(price);
+        output.setReferenceTimestamp(referenceTimestamp);
 
         output.setTimestampCreation(algorithm.getCurrentTimestamp());
 
@@ -159,13 +162,13 @@ public class QuoteSideManager {
             //						"cant quote " + verb + " same price/quantity as before " + clientOrderIdSent);
         }
 
-        OrderRequest orderRequest = createOrderRequest(instrument, verb, price, quantity);
+        OrderRequest orderRequest = createOrderRequest(instrument, verb, price, quantity, quoteRequest.getReferenceTimestamp());
         orderRequest.setFreeText(quoteRequest.getFreeText());
         if (activeClientOrderId != null) {
             orderRequest.setOrderRequestAction(OrderRequestAction.Modify);
             orderRequest.setOrigClientOrderId(activeClientOrderId);
         }
-        if (quantity == 0) {
+        if (Math.abs(quantity) < 1e-6) {
             if (orderRequest.getOrigClientOrderId() != null && cancelConfirmedOriginalClientOrderId
                     .contains(orderRequest.getOrigClientOrderId())) {
                 isDisablePending = false;
@@ -315,9 +318,16 @@ public class QuoteSideManager {
         boolean isActive =
                 executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Active) || executionReport
                         .getExecutionReportStatus().equals(ExecutionReportStatus.PartialFilled);
+
+        //replace rejected are active!
+        boolean newOrderRejected = executionReport
+                .getExecutionReportStatus().equals(ExecutionReportStatus.Rejected) && activeClientOrderId == null;
+
+        boolean replaceOrderRejected = executionReport
+                .getExecutionReportStatus().equals(ExecutionReportStatus.Rejected) && activeClientOrderId != null;
+
         boolean isInactive =
-                executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Cancelled) || executionReport
-                        .getExecutionReportStatus().equals(ExecutionReportStatus.Rejected) || executionReport
+                executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Cancelled) || newOrderRejected || executionReport
                         .getExecutionReportStatus().equals(ExecutionReportStatus.CompletellyFilled);
 
         boolean isCancelRej = executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CancelRejected);

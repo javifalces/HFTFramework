@@ -25,6 +25,18 @@
             <DefaultRolloverStrategy max="${numFiles}"/>
         </RollingFile>
 
+        <RollingFile name="fileStatistics"
+                     fileName="${sys:log.path}/${sys:log.appName:-ZTrading}_${timestamp}_statistics.log"
+                     filePattern="${sys:log.path}/${sys:log.appName:-ZTrading}_${timestamp}_statistics.log.%d{yyMMdd_HHmmss}">
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} %-5p [%t] %c{1} - %m%n"/>
+
+            <Policies>
+                <SizeBasedTriggeringPolicy size="${sys:log.fileSize}"/>
+            </Policies>
+            <DefaultRolloverStrategy max="${numFiles}"/>
+        </RollingFile>
+
+
     </appenders>
 
     <loggers>
@@ -38,6 +50,18 @@
         <root level="INFO">
             <appender-ref ref="file"/>
         </root>
+
+
+        <!--Configure LatencyStatistics logs and Statistics logs into fileStatistics info level-->
+        <Logger name="com.lambda.investing.trading_engine_connector.LatencyStatistics" level="info">
+            <AppenderRef ref="fileStatistics"/>
+        </Logger>
+        <Logger name="com.lambda.investing.trading_engine_connector.SlippageStatistics" level="info">
+            <AppenderRef ref="fileStatistics"/>
+        </Logger>
+        <Logger name="com.lambda.investing.market_data_connector.Statistics" level="info">
+            <AppenderRef ref="fileStatistics"/>
+        </Logger>
 
 
     </loggers>

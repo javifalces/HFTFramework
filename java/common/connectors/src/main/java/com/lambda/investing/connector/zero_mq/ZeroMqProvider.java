@@ -26,7 +26,7 @@ public class ZeroMqProvider implements ConnectorProvider {
 
     private static Integer THREADS_ON_UPDATE = 3;
 
-    private com.lambda.investing.connector.zero_mq.ZeroMqConfiguration zeroMqConfiguration;
+    private ZeroMqConfiguration zeroMqConfiguration;
     Logger logger = LogManager.getLogger(ZeroMqProvider.class);
     private Map<ConnectorListener, ConnectorConfiguration> listenerManager;
 
@@ -37,7 +37,7 @@ public class ZeroMqProvider implements ConnectorProvider {
 
     private long sleepMsBetweenMessages = 0;
     protected List<String> topicListSubscribed;
-    private static Map<com.lambda.investing.connector.zero_mq.ZeroMqConfiguration, ZeroMqProvider> INSTANCES = new ConcurrentHashMap<>();
+    private static Map<ZeroMqConfiguration, ZeroMqProvider> INSTANCES = new ConcurrentHashMap<>();
     String url;
     private ZMQ.Socket socketSub;
     private ZMQ.Socket socketReq;//forACks
@@ -45,10 +45,13 @@ public class ZeroMqProvider implements ConnectorProvider {
 
     protected boolean parsedObjects = true;
     ZContext context;
+    private static boolean DEFAULT_SERVER = false;
+    private boolean isServer = DEFAULT_SERVER;
 
-    public static ZeroMqProvider getInstance(com.lambda.investing.connector.zero_mq.ZeroMqConfiguration zeroMqConfiguration, int threadsListening) {
+    public static ZeroMqProvider getInstance(ZeroMqConfiguration zeroMqConfiguration, int threadsListening, boolean isServer) {
         ZeroMqProvider output = INSTANCES
                 .getOrDefault(zeroMqConfiguration, new ZeroMqProvider(zeroMqConfiguration, threadsListening));
+        output.setServer(isServer);
         INSTANCES.put(zeroMqConfiguration, output);
 
         //subscribe to topic
@@ -61,16 +64,29 @@ public class ZeroMqProvider implements ConnectorProvider {
         return output;
     }
 
+    public static ZeroMqProvider getInstance(ZeroMqConfiguration zeroMqConfiguration, int threadsListening) {
+        return getInstance(zeroMqConfiguration, threadsListening, DEFAULT_SERVER);
+    }
+
+    public void setServer(boolean server) {
+        isServer = server;
+        if (isServer) {
+            url = zeroMqConfiguration.getBindUrl();
+        } else {
+            url = zeroMqConfiguration.getUrl();
+        }
+    }
+
     public void setParsedObjects(boolean parsedObjects) {
         this.parsedObjects = parsedObjects;
     }
 
-    private ZeroMqProvider(com.lambda.investing.connector.zero_mq.ZeroMqConfiguration zeroMqConfiguration, int threadsListening) {
+    private ZeroMqProvider(ZeroMqConfiguration zeroMqConfiguration, int threadsListening) {
         this.zeroMqConfiguration = zeroMqConfiguration;
         listenerManager = new ConcurrentHashMap<>();
         topicListSubscribed = new ArrayList<>();
         //socket of zero mq
-        context = com.lambda.investing.connector.zero_mq.ZeroMqConfiguration.GetZContext();//create here to avoid remove by GC
+        context = ZeroMqConfiguration.GetZContext();//create here to avoid remove by GC
 
         this.socketSub = getSubscribeSocket(zeroMqConfiguration);
 
@@ -114,24 +130,39 @@ public class ZeroMqProvider implements ConnectorProvider {
     }
 
     public void start(boolean hardTopicFilter, boolean sendAck) {
-        boolean isConnected = socketSub.connect(url);
+
+        if (isServer) {
+            socketSub.bind(url);
+        } else {
+            socketSub.connect(url);
+        }
+
 
         if (hardTopicFilter) {
             if (topicListSubscribed.size() == 0) {
                 logger.error("Starting without topics subscribed!");
             }
             for (String topic : topicListSubscribed) {
-                logger.info("SUB {} to {}", url, topic);
+                String topicSuffix = "";
+                if (!topic.isEmpty()) {
+                    topicSuffix = "to " + topic;
+                }
+                logger.info("SUB (server {}) {} {}", isServer, url, topicSuffix);
                 socketSub.subscribe(topic.getBytes(ZMQ.CHARSET));
             }
         } else {
-            logger.info("SUB {} to {}", url, "all -> filtering on listener");
+            logger.info("SUB (server {}){} to {}", isServer, url, "all -> filtering on listener");
             socketSub.subscribe(" ".getBytes(ZMQ.CHARSET));
         }
         if (sendAck) {
             //ACK REP publisher
-            String urlAck = String.format("%s://*:%d", this.zeroMqConfiguration.getProtocol(), this.zeroMqConfiguration.getPort() + 1);
-            this.socketReq.connect(urlAck);
+            if (!isServer) {
+                String urlAck = String.format("%s://*:%d", this.zeroMqConfiguration.getProtocol(), this.zeroMqConfiguration.getPort() + 1);
+                this.socketReq.connect(urlAck);
+            } else {
+                String urlAck = String.format("%s://%s:%d", this.zeroMqConfiguration.getProtocol(), this.zeroMqConfiguration.getHost(), this.zeroMqConfiguration.getPort() + 1);
+                this.socketReq.bind(urlAck);
+            }
         }
 
         //Receiver thread
@@ -169,9 +200,9 @@ public class ZeroMqProvider implements ConnectorProvider {
         for (Map.Entry<ConnectorListener, ConnectorConfiguration> entry : listenerManager.entrySet()) {
             ConnectorListener listener = entry.getKey();
             ConnectorConfiguration configuration = entry.getValue();
-            if (this.parsedObjects && configuration instanceof com.lambda.investing.connector.zero_mq.ZeroMqConfiguration) {
+            if (this.parsedObjects && configuration instanceof ZeroMqConfiguration) {
                 //add topic
-                com.lambda.investing.connector.zero_mq.ZeroMqConfiguration zeroMqConfiguration = (com.lambda.investing.connector.zero_mq.ZeroMqConfiguration) configuration;
+                ZeroMqConfiguration zeroMqConfiguration = (ZeroMqConfiguration) configuration;
                 zeroMqConfiguration.setTopic(topic);
                 configuration = zeroMqConfiguration;
             }
@@ -180,17 +211,23 @@ public class ZeroMqProvider implements ConnectorProvider {
         }
     }
 
-    private ZMQ.Socket getSubscribeSocket(com.lambda.investing.connector.zero_mq.ZeroMqConfiguration configuration) {
+    private ZMQ.Socket getSubscribeSocket(ZeroMqConfiguration configuration) {
         //		http://zguide.zeromq.org/java:psenvsub
         ZMQ.Socket subscribeSocket = null;
         subscribeSocket = context.createSocket(ZMQ.SUB);
         subscribeSocket.setHWM(1);
         subscribeSocket.setLinger(0);
 
-        url = configuration.getUrl();
-        //		logger.info("Starting connecting to messages on socket {}", url);
-
-        subscribeSocket.connect(url);
+        if (isServer) {
+            url = configuration.getBindUrl();
+            logger.info("Creating Sub server socket {} ", url);
+            subscribeSocket.bind(url);
+        } else {
+            url = configuration.getUrl();
+            logger.info("Connecting Sub socket {} ", url);
+            //		logger.info("Starting connecting to messages on socket {}", url);
+            subscribeSocket.connect(url);
+        }
 
         return subscribeSocket;
 
@@ -198,7 +235,7 @@ public class ZeroMqProvider implements ConnectorProvider {
 
     private class ZeroMqThreadReceiver implements Runnable {
 
-        private com.lambda.investing.connector.zero_mq.ZeroMqConfiguration zeroMqConfiguration;
+        private ZeroMqConfiguration zeroMqConfiguration;
         final AtomicBoolean running = new AtomicBoolean(false);
 
         public ZeroMqThreadReceiver(ZeroMqConfiguration zeroMqConfiguration) {

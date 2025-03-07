@@ -1,5 +1,6 @@
 package com.lambda.investing.model.market_data;
 
+import com.lambda.investing.model.asset.Instrument;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -51,6 +52,8 @@ import lombok.Setter;
 	public DepthParquet(Depth depth) {
 		this.timestamp = depth.getTimestamp();
 		int levels = getLevels();
+		int maxLevels = depth.getAskLevels() > depth.getBidLevels() ? depth.getAskLevels() : depth.getBidLevels();
+		levels = Math.min(maxLevels, levels);
 		switch (levels) {
 			//			case 6:
 			//				this.bidQuantity5 = depth.getBidsQuantities()[5];

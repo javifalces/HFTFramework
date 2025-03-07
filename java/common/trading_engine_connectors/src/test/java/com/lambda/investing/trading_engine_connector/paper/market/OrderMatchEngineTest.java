@@ -14,6 +14,7 @@ import org.mockito.runners.MockitoJUnitRunner;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
@@ -31,13 +32,14 @@ import static org.mockito.Mockito.doAnswer;
 	OrderMatchEngine orderMatchEngine;
 	private Trade lastTradeListen;
 	private Depth lastDepthListen;
+	private List<ExecutionReport> lastExecutionReportListenList;
 	private ExecutionReport lastExecutionReportListen;
 	private String algoId = "junitAlgo";
 
 	@Before public void setUp() throws Exception {
 		OrderMatchEngine.REFRESH_DEPTH_ORDER_REQUEST = true;
 		OrderMatchEngine.REFRESH_DEPTH_ORDER_REQUEST = true;
-
+		lastExecutionReportListenList = new ArrayList<>();
 		Orderbook orderbook = new Orderbook(0.00001);
 		paperTradingEngine = Mockito.mock(PaperTradingEngine.class);
 		lastTradeListen = null;
@@ -68,6 +70,7 @@ import static org.mockito.Mockito.doAnswer;
 			public Void answer(InvocationOnMock invocation) {
 				//				Object[] args = invocation.getArguments();
 				ExecutionReport executionReport = invocation.getArgumentAt(0, ExecutionReport.class);
+				lastExecutionReportListenList.add(executionReport);
 				lastExecutionReportListen = executionReport;
 				return null;
 			}
@@ -338,7 +341,7 @@ import static org.mockito.Mockito.doAnswer;
 
 		lastDepthListen = null;
 		orderMatchEngine.refreshMarketMakerDepth(depth2);
-		Assert.assertNull(lastDepthListen);
+		Assert.assertNotNull(lastDepthListen);
 
 	}
 
@@ -816,4 +819,74 @@ import static org.mockito.Mockito.doAnswer;
 		Assert.assertEquals(bidLevels, bidLevels4);
 
 	}
+
+	@Test
+	public void refreshAlgoAndFilledVeryBigMarketOrder() {
+		lastDepthListen = null;
+		Depth depth = createDepth(85, 95, 2, 2);
+		orderMatchEngine.refreshMarketMakerDepth(depth);
+		Assert.assertEquals(depth.getBestBid(), lastDepthListen.getBestBid(), 0.0001);
+		Assert.assertEquals(depth.getBestAsk(), lastDepthListen.getBestAsk(), 0.0001);
+		lastExecutionReportListenList.clear();
+		OrderRequest orderRequest = createOrderRequest(96, 10, Verb.Buy);
+		orderMatchEngine.orderRequest(orderRequest);
+
+
+		//check ER
+		Assert.assertEquals(ExecutionReportStatus.PartialFilled, lastExecutionReportListen.getExecutionReportStatus());
+
+		Assert.assertEquals(4, lastExecutionReportListen.getQuantityFill(), 0.0001);
+		Assert.assertEquals(2, lastExecutionReportListen.getLastQuantity(), 0.0001);
+
+		//check depth
+		Assert.assertEquals(Double.MAX_VALUE, lastDepthListen.getBestAsk(), 0.0001);
+		Assert.assertEquals(orderRequest.getPrice(), lastDepthListen.getBestBid(), 0.0001);
+		Assert.assertEquals(orderRequest.getQuantity() - lastExecutionReportListen.getQuantityFill(), lastDepthListen.getBestBidQty(), 0.0001);
+		Assert.assertEquals(3, lastDepthListen.getBidLevels(), 0.0001);
+		Assert.assertEquals(0, lastDepthListen.getBestAskQty(), 0.0001);
+
+		//check trade
+		Assert.assertEquals(2, lastTradeListen.getQuantity(), 0.001);
+		Assert.assertEquals(depth.getAsks()[1], lastTradeListen.getPrice(), 0.001);
+
+	}
+
+	@Test
+	public void orderInLevelRelativeNotFilled() {
+		lastDepthListen = null;
+		lastTradeListen = null;
+		lastExecutionReportListen = null;
+
+		Depth depth = createDepth(85, 95, 2, 2);
+		orderMatchEngine.refreshMarketMakerDepth(depth);
+		Assert.assertEquals(depth.getBestBid(), lastDepthListen.getBestBid(), 0.0001);
+		Assert.assertEquals(depth.getBestAsk(), lastDepthListen.getBestAsk(), 0.0001);
+		Assert.assertEquals(depth.getLevels(), 2, 0.0001);
+		lastDepthListen = null;
+
+		lastExecutionReportListenList.clear();
+		OrderRequest orderRequest = createOrderRequest(85, 1, Verb.Buy);
+		orderMatchEngine.orderRequest(orderRequest);
+		Assert.assertEquals(ExecutionReportStatus.Active, lastExecutionReportListen.getExecutionReportStatus());
+		Assert.assertEquals(depth.getBestBid(), lastDepthListen.getBestBid(), 0.0001);
+		Assert.assertEquals(depth.getBestAsk(), lastDepthListen.getBestAsk(), 0.0001);
+		Assert.assertEquals(depth.getLevels(), 2, 0.0001);
+		Assert.assertEquals(depth.getBestBidQty() + orderRequest.getQuantity(), lastDepthListen.getBestBidQty(), 0.0001);
+
+		lastExecutionReportListen = null;
+
+		Trade trade = createTrade(85, 2, Verb.Sell);
+		orderMatchEngine.refreshFillMarketTrade(trade);
+		Assert.assertNull(lastExecutionReportListen);
+
+
+		orderMatchEngine.refreshFillMarketTrade(trade);
+		Assert.assertNull(lastExecutionReportListen);
+
+		Trade trade1 = createTrade(85, 3, Verb.Sell);
+		orderMatchEngine.refreshFillMarketTrade(trade1);
+		Assert.assertEquals(ExecutionReportStatus.CompletellyFilled, lastExecutionReportListen.getExecutionReportStatus());
+
+	}
+
 }

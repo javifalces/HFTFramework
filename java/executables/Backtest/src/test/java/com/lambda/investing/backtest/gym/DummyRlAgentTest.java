@@ -13,7 +13,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 import static com.lambda.investing.backtest.UtilsTest.AddTestInstruments;
-import static com.lambda.investing.backtest.UtilsTest.GSON;
+import static com.lambda.investing.model.Util.fromJsonString;
 
 @RunWith(MockitoJUnitRunner.class)
 public class DummyRlAgentTest {
@@ -26,7 +26,7 @@ public class DummyRlAgentTest {
     public DummyRlAgentTest() throws Exception {
         InputStream inputStream = Configuration.class.getClassLoader().getResourceAsStream(jsonPath);
         backtestConfigurationJson = new String(inputStream.readAllBytes());
-        inputConfiguration = GSON.fromJson(backtestConfigurationJson, InputConfiguration.class);
+        inputConfiguration = fromJsonString(backtestConfigurationJson, InputConfiguration.class);
 
         String lambdaDataPathCompletePath = Configuration.class.getClassLoader().getResource(lambdaDataPath).getPath();
         String tempPathCompletePath = Configuration.class.getClassLoader().getResource(tempDataPath).getPath();

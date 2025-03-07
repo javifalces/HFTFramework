@@ -17,7 +17,9 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
-import static com.lambda.investing.model.portfolio.Portfolio.GSON_STRING;
+import static com.lambda.investing.model.Util.fromJsonString;
+import static com.lambda.investing.model.Util.toJsonString;
+
 
 public class SingleInstrumentRLReplier implements ConnectorReplier {
     protected static Map<ZeroMqConfiguration, SingleInstrumentRLReplier> INSTANCES = new HashMap<>();
@@ -96,20 +98,20 @@ public class SingleInstrumentRLReplier implements ConnectorReplier {
         //map json content into InputGymMessage object
         InputGymMessage inputGymMessage = null;
         try {
-            InputGymMessageValue inputGymMessageValue = GSON_STRING.fromJson(content, InputGymMessageValue.class);
+            InputGymMessageValue inputGymMessageValue = fromJsonString(content, InputGymMessageValue.class);
             inputGymMessage = new InputGymMessage(inputGymMessageValue);
         } catch (Exception e) {
-            inputGymMessage = GSON_STRING.fromJson(content, InputGymMessage.class);
+            inputGymMessage = fromJsonString(content, InputGymMessage.class);
         }
         if (inputGymMessage.getType().equals("action") && algorithm.isReady()) {
             double[] action = inputGymMessage.getValue();
             StepOutput stepOutput = this.algorithm.step(action);
             Map<String, String> info = this.algorithm.getInfo();
-            output = GSON_STRING.toJson(new OutputGymMessage(false, stepOutput.getState(), stepOutput.getReward(), info));
+            output = toJsonString(new OutputGymMessage(false, stepOutput.getState(), stepOutput.getReward(), info));
         } else {
             //return something to keep the connection alive
             OutputGymMessage defaultOutputGymMessage = getDefaultOutputGymState();
-            output = GSON_STRING.toJson(defaultOutputGymMessage);
+            output = toJsonString(defaultOutputGymMessage);
         }
 
         if (Configuration.LOG_STATE_STEPS) {

@@ -1,7 +1,8 @@
 package com.lambda.investing.factor_investing_connector;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+
+import com.lambda.investing.market_data_connector.AbstractMarketDataProvider;
+import com.lambda.investing.market_data_connector.MarketDataListener;
 import com.lambda.investing.market_data_connector.Statistics;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -16,10 +17,6 @@ public class AbstractFactorProvider implements FactorProvider {
     protected Logger logger = LogManager.getLogger(AbstractFactorProvider.class);
     protected Map<FactorListener, String> listenersManager;
     protected Statistics statisticsReceived;//= new Statistics("Data received", 15 * 1000);
-
-    public static Gson GSON = new GsonBuilder()
-            .excludeFieldsWithModifiers(Modifier.STATIC, Modifier.TRANSIENT, Modifier.VOLATILE, Modifier.FINAL)
-            .serializeSpecialFloatingPointValues().disableHtmlEscaping().create();
 
 
     public AbstractFactorProvider() {

@@ -19,9 +19,7 @@ import me.tongfei.progressbar.ProgressBar;
 import me.tongfei.progressbar.ProgressBarStyle;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import tech.tablesaw.api.Row;
-import tech.tablesaw.api.StringColumn;
-import tech.tablesaw.api.Table;
+import tech.tablesaw.api.*;
 import tech.tablesaw.columns.Column;
 
 import java.io.File;
@@ -107,7 +105,16 @@ public class ParquetMarketDataConnectorPublisher extends AbstractMarketDataConne
             //		for (String tradeFile : parquetFileConfiguration.getTradeFilesPath()) {
             logger.info("reading {}...", tradeFile);
             int sizeMb = (int) (file.length() / 1E6);
-            System.out.println(Configuration.formatLog("reading {} ({} MB)", tradeFile, sizeMb));
+            String sizeString = "";
+            if (sizeMb > 0) {
+                sizeString = Configuration.formatLog("({} MB)", sizeMb);
+            } else {
+                sizeMb = (int) (file.length() / 1E3);
+                sizeString = Configuration.formatLog("({} KB)", sizeMb);
+            }
+
+
+            System.out.println(Configuration.formatLog("reading {} {}", tradeFile, sizeString));
             Table tableTrade = (Table) dataManager.getData(tradeFile, TradeParquet.class);
             tableTrade.setName(tradeFile);
 
@@ -115,9 +122,13 @@ public class ParquetMarketDataConnectorPublisher extends AbstractMarketDataConne
             typeColumn.setMissingTo("trade");
             tableTrade = tableTrade.addColumns(typeColumn);
 
-            Column<String> pathColumn = StringColumn.create(PATH_COLUMN, tableTrade.rowCount());
-            pathColumn.setMissingTo(tradeFile);
-            tableTrade = tableTrade.addColumns(pathColumn);
+//            Column<String> pathColumn = StringColumn.create(PATH_COLUMN, tableTrade.rowCount());
+//            pathColumn.setMissingTo(tradeFile);
+//            tableTrade = tableTrade.addColumns(pathColumn);
+
+            Column<Double> timestampDiff = DoubleColumn.create(MS_TO_NEXT_UPDATE_COL, tableTrade.rowCount());
+            timestampDiff.setMissingTo(1.0);
+            tableTrade = tableTrade.addColumns(timestampDiff);
 
 
             Column<String> instrument = StringColumn.create(INSTRUMENT_COLUMN, tableTrade.rowCount());
@@ -146,7 +157,15 @@ public class ParquetMarketDataConnectorPublisher extends AbstractMarketDataConne
             //		for (String depthFile : parquetFileConfiguration.getDepthFilesPath().get(date)) {
             logger.info("reading {}...", depthFile);
             int sizeMb = (int) (file.length() / 1E6);
-            System.out.println(Configuration.formatLog("reading {} ({} MB)", depthFile, sizeMb));
+            String sizeString = "";
+            if (sizeMb > 0) {
+                sizeString = Configuration.formatLog("({} MB)", sizeMb);
+            } else {
+                sizeMb = (int) (file.length() / 1E3);
+                sizeString = Configuration.formatLog("({} KB)", sizeMb);
+            }
+            System.out.println(Configuration.formatLog("reading {} {}", depthFile, sizeString));
+
             Table tableDepth = (Table) dataManager.getData(depthFile, DepthParquet.class);
             tableDepth = tableDepth.setName(depthFile);
 
@@ -154,14 +173,20 @@ public class ParquetMarketDataConnectorPublisher extends AbstractMarketDataConne
             typeColumn.setMissingTo("depth");
             tableDepth = tableDepth.addColumns(typeColumn);
 
-            Column<String> pathColumn = StringColumn.create(PATH_COLUMN, tableDepth.rowCount());
-            typeColumn.setMissingTo(depthFile);
-            tableDepth = tableDepth.addColumns(pathColumn);
+//            Column<String> pathColumn = StringColumn.create(PATH_COLUMN, tableDepth.rowCount());
+//            typeColumn.setMissingTo(depthFile);
+//            tableDepth = tableDepth.addColumns(pathColumn);
 
             Column<String> instrument = StringColumn.create(INSTRUMENT_COLUMN, tableDepth.rowCount());
             Instrument instrumentObject = PATH_TO_INSTRUMENT.get(tableDepth.name());
             instrument.setMissingTo(instrumentObject.getPrimaryKey());
             tableDepth = tableDepth.addColumns(instrument);
+
+            //create a column with the Timestamp in milliseconds diff
+            Column<Double> timestampDiff = tableDepth.longColumn(TIMESTAMP_COL).difference().lag(-1);
+            timestampDiff.setName(MS_TO_NEXT_UPDATE_COL);
+            timestampDiff.setMissingTo(0.0);
+            tableDepth = tableDepth.addColumns(timestampDiff);
 
 
             logger.info("added {} ", depthFile);
@@ -176,9 +201,18 @@ public class ParquetMarketDataConnectorPublisher extends AbstractMarketDataConne
 
     private static Table readCacheFile(File cacheFile, Logger logger, CacheManager cacheManager) {
         logger.info("reading cache {}...", cacheFile.getAbsolutePath());
+
         int sizeMb = (int) (cacheFile.length() / 1E6);
+        String sizeString = "";
+        if (sizeMb > 0) {
+            sizeString = Configuration.formatLog("({} MB)", sizeMb);
+        } else {
+            sizeMb = (int) (cacheFile.length() / 1E3);
+            sizeString = Configuration.formatLog("({} KB)", sizeMb);
+        }
+        System.out.println(Configuration.formatLog("reading cache {} {}", cacheFile.getAbsolutePath(), sizeString));
+
         long currentTime = new Date().getTime();
-        System.out.println(Configuration.formatLog("reading cache {} ({} MB) ...", cacheFile.getAbsolutePath(), sizeMb));
         Table output = cacheManager.loadCache(cacheFile);
         if (output != null) {
             long elapsedSeconds = (new Date().getTime() - currentTime) / 1000;
@@ -190,7 +224,14 @@ public class ParquetMarketDataConnectorPublisher extends AbstractMarketDataConne
         return null;
     }
 
-    private static Table loadMarketData(Date date, Date startDateTotal, Date endDateTotal, DataManager dataManager, List<String> depthFiles, List<String> tradesFile) {
+    private static Table loadMarketData(Date date, Date startDateTotal, Date endDateTotal, DataManager dataManager, List<String> depthFiles, List<String> tradesFile) throws Exception {
+        if (startDateTotal.getTime() > endDateTotal.getTime()) {
+            throw new Exception("startDateTotal>endDateTotal -> fix backtest configuration");
+        }
+        if (startDateTotal.getTime() == endDateTotal.getTime() && startDateTotal.getHours() == 0) {
+            System.err.println("startDateTotal.getTime()==endDateTotal.getTime() and hour==0 -> change to all day date");
+            endDateTotal = new Date(endDateTotal.getTime() + 23 * 60 * 60 * 1000 + 59 * 60 * 1000);
+        }
         CacheManager cacheManager = new CacheManager(date, startDateTotal, endDateTotal, depthFiles, tradesFile);
         File cacheFile = cacheManager.getCacheFile();
         Logger logger = LogManager.getLogger(ParquetMarketDataConnectorPublisher.class);
@@ -252,19 +293,6 @@ public class ParquetMarketDataConnectorPublisher extends AbstractMarketDataConne
 
         readingTable.put(date, dayData);
 
-    }
-
-
-    private long getTimeToNextUpdate(int currentRowNumber, Table readingTableDate) {
-        long currentTimestamp = readingTableDate.row(currentRowNumber).getLong(TIMESTAMP_COL);
-        int nextRowNumber = currentRowNumber + 1;
-        if (nextRowNumber > readingTableDate.rowCount() - 1) {
-            return currentTimestamp;
-        }
-
-        long nextTimestamp = readingTableDate.row(currentRowNumber + 1).getLong(TIMESTAMP_COL);
-        long timeToNextUpdateMs = nextTimestamp - currentTimestamp;
-        return timeToNextUpdateMs;
     }
 
     public int getSpeed() {
@@ -337,16 +365,22 @@ public class ParquetMarketDataConnectorPublisher extends AbstractMarketDataConne
         }
         long startTimeParquet = parquetFileConfiguration.getStartTime().getTime();
         long endTimeParquet = parquetFileConfiguration.getEndTime().getTime();
+        if (startTimeParquet == endTimeParquet && parquetFileConfiguration.getStartTime().getHours() == 0) {
+            endTimeParquet = endTimeParquet + 23 * 60 * 60 * 1000 + 59 * 60 * 1000;
+        }
+
+
         Map<Instrument, Depth> lastDepth = new HashMap<>();
         Stopwatch stopwatch = Stopwatch.createStarted();
 
         for (Date date : dates) {
+            String dateRowString = "";
             readingTableDate = readingTable.get(date);
             readingTableDate = readingTableDate.where(readingTableDate.longColumn(TIMESTAMP_COL).isBetweenInclusive(startTimeParquet, endTimeParquet));
             //System.setErr(App.ERR_STREAM_CONSOLE);
             //			new ProgressBar("parquet_reader", readingTableDate.size(), 1000, System.err, ProgressBarStyle.ASCII, "", 1L, false, (DecimalFormat)null, ChronoUnit.SECONDS, 0L, Duration.ZERO))
             //			new ProgressBar("parquet_reader", readingTableDate.size())
-            try (ProgressBar pb = new ProgressBar("backtest", readingTableDate.rowCount(), 1000, System.err,
+            try (ProgressBar pb = new ProgressBar("backtest", readingTableDate.rowCount(), 1000, System.out,
                     ProgressBarStyle.ASCII, "", 1L, false, (DecimalFormat) null, ChronoUnit.SECONDS, 0L,
                     Duration.ZERO)) {
 
@@ -371,7 +405,7 @@ public class ParquetMarketDataConnectorPublisher extends AbstractMarketDataConne
                         pb.step();
                         Date dateRow = new Date(timeStamp);
                         //format dateRow to string with format DATE_FORMAT
-                        String dateRowString = DATE_FORMAT.format(dateRow);
+                        dateRowString = DATE_FORMAT.format(dateRow);
 
                         if (Configuration.BACKTEST_MESSAGE_PRINT != null) {
                             String extraMessage = Configuration.formatLog("{}{}", dateRowString, Configuration.BACKTEST_MESSAGE_PRINT);
@@ -391,16 +425,13 @@ public class ParquetMarketDataConnectorPublisher extends AbstractMarketDataConne
                             }
                         }
 
-
                         String type = row.getString(TYPE_COLUMN);
-
-
-                        long timeToNextUpdateMs = getTimeToNextUpdate(rowNumber, readingTableDate);
                         String instrumentPk = row.getString(INSTRUMENT_COLUMN);
                         Instrument instrument = Instrument.getInstrument(instrumentPk);
 
                         try {
                             if (type.equalsIgnoreCase("depth")) {
+                                long timeToNextUpdateMs = (long) readingTableDate.row(rowNumber).getDouble(MS_TO_NEXT_UPDATE_COL);
                                 Depth depth = createDepth(row, instrument);
                                 if (timeToNextUpdateMs != Long.MIN_VALUE) {
                                     depth.setTimeToNextUpdateMs(timeToNextUpdateMs);
@@ -415,6 +446,7 @@ public class ParquetMarketDataConnectorPublisher extends AbstractMarketDataConne
                             }
 
                             if (type.equalsIgnoreCase("trade")) {
+                                long timeToNextUpdateMs = 1L;
                                 Trade trade = createTrade(row, instrument);
                                 if (timeToNextUpdateMs != Long.MIN_VALUE) {
                                     trade.setTimeToNextUpdateMs(timeToNextUpdateMs);

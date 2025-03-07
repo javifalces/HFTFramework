@@ -9,9 +9,7 @@ import org.apache.logging.log4j.Logger;
 import java.io.StringWriter;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
 
 import static com.lambda.investing.trading_engine_connector.paper.market.OrderbookManager.MARKET_MAKER_ALGORITHM_INFO;
 
@@ -169,13 +167,13 @@ public class Orderbook {
 		double qtyRemaining = quote.getQuantity();
 		if (side == "bid") {
 			this.lastOrderSign = 1;
-			while ((qtyRemaining > 0) && (this.asks.getnOrders() > 0)) {
+			while ((qtyRemaining > 0) && (this.asks.getNOrders() > 0)) {
 				OrderList ordersAtBest = this.asks.minPriceList();
 				qtyRemaining = processOrderList(trades, ordersAtBest, qtyRemaining, quote, verbose, false);
 			}
 		} else if (side == "ask") {
 			this.lastOrderSign = -1;
-			while ((qtyRemaining > 0) && (this.bids.getnOrders() > 0)) {
+			while ((qtyRemaining > 0) && (this.bids.getNOrders() > 0)) {
 				OrderList ordersAtBest = this.bids.maxPriceList();
 				qtyRemaining = processOrderList(trades, ordersAtBest, qtyRemaining, quote, verbose, false);
 			}
@@ -201,7 +199,7 @@ public class Orderbook {
 		if (side == "bid") {
 			this.lastOrderSign = 1;
 			double qtyRemainingAsk = 0.;
-			while ((this.asks.getnOrders() > 0) && (qtyRemaining > 0) && (price >= asks.minPrice())) {
+			while ((this.asks.getNOrders() > 0) && (qtyRemaining > 0) && (price >= asks.minPrice())) {
 				OrderList ordersAtBest = asks.minPriceList();
 				qtyRemaining = processOrderList(trades, ordersAtBest, qtyRemaining, quote, verbose, fromTradeFill);
 				if (qtyRemainingAsk < TOLERANCE_ZERO) {
@@ -226,7 +224,7 @@ public class Orderbook {
 		} else if (side == "ask") {
 			this.lastOrderSign = -1;
 			double qtyRemainingBid = 0.;
-			while ((this.bids.getnOrders() > 0) && (qtyRemaining > 0) && (price <= bids.maxPrice())) {
+			while ((this.bids.getNOrders() > 0) && (qtyRemaining > 0) && (price <= bids.maxPrice())) {
 				OrderList ordersAtBest = bids.maxPriceList();
 				qtyRemaining = processOrderList(trades, ordersAtBest, qtyRemaining, quote, verbose, fromTradeFill);
 				if (qtyRemainingBid < TOLERANCE_ZERO) {
@@ -479,7 +477,7 @@ public class Orderbook {
 	}
 
 	public boolean bidsAndAsksExist() {
-		return ((this.bids.nOrders > 0) && (this.asks.nOrders > 0));
+		return ((this.bids.getNOrders() > 0) && (this.asks.getNOrders() > 0));
 	}
 
 	public String toString() {
@@ -488,11 +486,11 @@ public class Orderbook {
 		fileStr.write(" -------- The OrderOrderbook Book --------\n");
 		fileStr.write("|                                |\n");
 		fileStr.write("|   ------- Bid  Book --------   |\n");
-		if (bids.getnOrders() > 0) {
+		if (bids.getNOrders() > 0) {
 			fileStr.write(bids.toString());
 		}
 		fileStr.write("|   ------ Ask  Book -------   |\n");
-		if (asks.getnOrders() > 0) {
+		if (asks.getNOrders() > 0) {
 			fileStr.write(asks.toString());
 		}
 		fileStr.write("|   -------- Trades  ---------   |");

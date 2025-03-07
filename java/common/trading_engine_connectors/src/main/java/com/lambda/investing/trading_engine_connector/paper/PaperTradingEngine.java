@@ -9,6 +9,7 @@ import com.lambda.investing.market_data_connector.AbstractMarketDataConnectorPub
 import com.lambda.investing.market_data_connector.AbstractMarketDataProvider;
 import com.lambda.investing.market_data_connector.MarketDataConnectorPublisher;
 import com.lambda.investing.market_data_connector.MarketDataProvider;
+import com.lambda.investing.market_data_connector.parquet_file_reader.ParquetMarketDataConnectorPublisher;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
@@ -31,17 +32,16 @@ import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+
 import java.io.File;
 import java.util.*;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 import static com.lambda.investing.Configuration.DELAY_ORDER_BACKTEST_MS;
+import static com.lambda.investing.model.Util.toJsonString;
 import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_PORTFOLIO_INFO;
 import static com.lambda.investing.trading_engine_connector.ZeroMqTradingEngineConnector.ALL_ALGORITHMS_SUBSCRIPTION;
-import static com.lambda.investing.trading_engine_connector.ZeroMqTradingEngineConnector.GSON;
+
 
 public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPublisher
         implements TradingEngineConnector {
@@ -243,13 +243,13 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
     public void notifyDepth(Depth depth) {
         if (!depth.isDepthFilled()) {
             //stop here
-            logger.debug("");
+//            logger.debug("");
         }
         updateLatencyEngineTime(depth.getTimestamp(), depth.getTimeToNextUpdateMs());
         //Orderbook is filled -> notify the rest of algos
         Instrument instrument = Instrument.getInstrument(depth.getInstrument());
         String topic = getTopic(instrument);
-        logger.debug("Notifying depth -> \n{}", depth.toString());
+//        logger.debug("Notifying depth -> \n{}", depth.toString());//to much time consuming!
         this.marketDataProviderIn.notifyDepth(depth);
     }
 
@@ -261,7 +261,7 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
     public void notifyTrade(Trade trade) {
         if (trade.getQuantity() > 0) {
             String topic = getTopic(trade.getInstrument());
-            logger.debug("Notifying trade -> \n{}", trade.toString());
+//            logger.debug("Notifying trade -> \n{}", trade.toString());//to much time consuming!
             updateLatencyEngineTime(trade.getTimestamp(), trade.getTimeToNextUpdateMs());
             //trade is filled notify the rest
             this.marketDataProviderIn.notifyTrade(trade);
@@ -339,7 +339,7 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
                     Portfolio.getPortfolio(String.format(FORMAT_PORTFOLIO, algorithmInfo), isBacktest));
 
             portfolioMap.put(algorithmInfo, portfolio);
-            this.marketDataProviderIn.notifyInfo(info, GSON.toJson(portfolio));
+            this.marketDataProviderIn.notifyInfo(info, toJsonString(portfolio));
         }
     }
 

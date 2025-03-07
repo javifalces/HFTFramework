@@ -6,6 +6,7 @@ import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ConnectorProvider;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorConfiguration;
+import com.lambda.investing.market_data_connector.MarketDataConnectorPublisherListener;
 import com.lambda.investing.model.messaging.TypeMessage;
 import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.OrderRequest;
@@ -17,8 +18,8 @@ import java.util.Map;
 import java.util.concurrent.*;
 
 import static com.lambda.investing.Configuration.logger;
+import static com.lambda.investing.model.Util.fromJsonString;
 import static com.lambda.investing.trading_engine_connector.ZeroMqTradingEngineConnector.ALL_ALGORITHMS_SUBSCRIPTION;
-import static com.lambda.investing.trading_engine_connector.ZeroMqTradingEngineConnector.GSON;
 
 public class OrdinaryTradingEngine implements TradingEngineConnector, ConnectorListener {
     public static long DEFAULT_TIMEOUT_TERMINATION_POOL_MS = 60000;
@@ -202,7 +203,7 @@ public class OrdinaryTradingEngine implements TradingEngineConnector, ConnectorL
     private void _onUpdate(ConnectorConfiguration configuration, long timestampReceived, TypeMessage typeMessage, String content) {
 
         if (typeMessage.equals(TypeMessage.execution_report)) {
-            ExecutionReport executionReport = GSON.fromJson(content, ExecutionReport.class);
+            ExecutionReport executionReport = fromJsonString(content, ExecutionReport.class);
             notifyExecutionReport(executionReport);
             //			if (allAlgorithmsExecutionReportListener != null) {
             //				allAlgorithmsExecutionReportListener.onExecutionReportUpdate(executionReport);

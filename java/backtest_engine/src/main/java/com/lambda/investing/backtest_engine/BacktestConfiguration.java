@@ -9,10 +9,7 @@ import lombok.Setter;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
 
 import static com.lambda.investing.Configuration.*;
 
@@ -36,6 +33,7 @@ public class BacktestConfiguration {
     private long initialSleepSeconds = 5;
     private String multithreadConfiguration;
     private long delayOrderMs;
+    private boolean searchMatchMarketTrades = false;
     private boolean feesCommissionsIncluded = true;
     private long seed;
 
@@ -139,5 +137,9 @@ public class BacktestConfiguration {
 
     public void setBacktestExternalConnection(String backtestExternalConnection) {
         this.backtestExternalConnection = BacktestExternalConnection.valueOf(backtestExternalConnection);
+    }
+
+    public void setSearchMatchMarketTrades(boolean searchMatchMarketTrades) {
+        this.searchMatchMarketTrades = searchMatchMarketTrades;
     }
 }

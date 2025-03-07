@@ -3,7 +3,7 @@
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:util="http://www.springframework.org/schema/util"
        xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
 
-    <!--    https://support.kraken.com/hc/en-us/articles/360000526126-What-are-Maker-and-Taker-fees -->
+    <!--    https://support.kraken.com/hc/en-us/articles/360000526126-What-are-Maker-and-Taker-fees 0.25 -->
     <bean id="btcusdt_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
         <property name="symbol" value="btcusdt"></property>
         <property name="market" value="kraken"></property>
@@ -11,8 +11,10 @@
         <property name="priceTick" value="0.01"></property>
         <property name="quantityTick" value="0.00001"></property>
 
-        <property name="makerFeePct" value="0.16"></property>
-        <property name="takerFeePct" value="0.26"></property>
+        <!--        <property name="makerFeePct" value="0.25"></property>-->
+        <!--        <property name="takerFeePct" value="0.40"></property>-->
+        <property name="makerFeePct" value="0.0"></property>
+        <property name="takerFeePct" value="0.10"></property>
     </bean>
 
     <bean id="btceur_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
@@ -22,21 +24,26 @@
         <property name="priceTick" value="0.01"></property>
         <property name="quantityTick" value="0.00001"></property>
 
-        <property name="makerFeePct" value="0.16"></property>
-        <property name="takerFeePct" value="0.26"></property>
+        <!--        <property name="makerFeePct" value="0.25"></property>-->
+        <!--        <property name="takerFeePct" value="0.40"></property>-->
+        <property name="makerFeePct" value="0.0"></property>
+        <property name="takerFeePct" value="0.10"></property>
 
     </bean>
 
-    <bean id="ethusdt_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
-        <property name="symbol" value="ethusdt"></property>
-        <property name="market" value="kraken"></property>
-        <property name="currency" value="USDT"></property>
-        <property name="priceTick" value="0.01"></property>
-        <property name="quantityTick" value="0.00001"></property>
-        <property name="makerFeePct" value="0.16"></property>
-        <property name="takerFeePct" value="0.26"></property>
+    <!--    <bean id="ethusdt_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">-->
+    <!--        <property name="symbol" value="ethusdt"></property>-->
+    <!--        <property name="market" value="kraken"></property>-->
+    <!--        <property name="currency" value="USDT"></property>-->
+    <!--        <property name="priceTick" value="0.01"></property>-->
+    <!--        <property name="quantityTick" value="0.00001"></property>-->
 
-    </bean>
+    <!--        &lt;!&ndash;        <property name="makerFeePct" value="0.25"></property>&ndash;&gt;-->
+    <!--        &lt;!&ndash;        <property name="takerFeePct" value="0.40"></property>&ndash;&gt;-->
+    <!--        <property name="makerFeePct" value="0.0"></property>-->
+    <!--        <property name="takerFeePct" value="0.10"></property>-->
+
+    <!--    </bean>-->
 
     <bean id="etheur_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
         <property name="symbol" value="etheur"></property>
@@ -45,29 +52,295 @@
         <property name="priceTick" value="0.01"></property>
         <property name="quantityTick" value="0.00001"></property>
 
-        <property name="makerFeePct" value="0.16"></property>
-        <property name="takerFeePct" value="0.26"></property>
+        <!--        <property name="makerFeePct" value="0.25"></property>-->
+        <!--        <property name="takerFeePct" value="0.40"></property>-->
+        <property name="makerFeePct" value="0.0"></property>
+        <property name="takerFeePct" value="0.10"></property>
 
     </bean>
 
-    <bean id="ethbtc_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
-        <property name="symbol" value="ethbtc"></property>
+    <!--    <bean id="ethbtc_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">-->
+    <!--        <property name="symbol" value="ethbtc"></property>-->
+    <!--        <property name="market" value="kraken"></property>-->
+    <!--        <property name="currency" value="BTC"></property>-->
+    <!--        <property name="priceTick" value="0.01"></property>-->
+    <!--        <property name="quantityTick" value="0.00001"></property>-->
+
+    <!--        &lt;!&ndash;        <property name="makerFeePct" value="0.25"></property>&ndash;&gt;-->
+    <!--        &lt;!&ndash;        <property name="takerFeePct" value="0.40"></property>&ndash;&gt;-->
+    <!--        <property name="makerFeePct" value="0.0"></property>-->
+    <!--        <property name="takerFeePct" value="0.10"></property>-->
+    <!--    </bean>-->
+
+    <bean id="dogeeur_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="dogeeur"></property>
         <property name="market" value="kraken"></property>
-        <property name="currency" value="BTC"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.0001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <!--        <property name="makerFeePct" value="0.25"></property>-->
+        <!--        <property name="takerFeePct" value="0.40"></property>-->
+        <property name="makerFeePct" value="0.0"></property>
+        <property name="takerFeePct" value="0.10"></property>
+    </bean>
+
+    <bean id="shibeur_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="shibeur"></property>
+        <property name="market" value="kraken"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.0000001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <!--        <property name="makerFeePct" value="0.25"></property>-->
+        <!--        <property name="takerFeePct" value="0.40"></property>-->
+        <property name="makerFeePct" value="0.0"></property>
+        <property name="takerFeePct" value="0.10"></property>
+    </bean>
+
+    <bean id="pepeeur_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="pepeeur"></property>
+        <property name="market" value="kraken"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.00000001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <!--        <property name="makerFeePct" value="0.25"></property>-->
+        <!--        <property name="takerFeePct" value="0.40"></property>-->
+        <property name="makerFeePct" value="0.0"></property>
+        <property name="takerFeePct" value="0.10"></property>
+    </bean>
+
+    <bean id="wifeur_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="wifeur"></property>
+        <property name="market" value="kraken"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.0001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <!--        <property name="makerFeePct" value="0.25"></property>-->
+        <!--        <property name="takerFeePct" value="0.40"></property>-->
+        <property name="makerFeePct" value="0.0"></property>
+        <property name="takerFeePct" value="0.10"></property>
+    </bean>
+
+    <bean id="bonkeur_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="bonkeur"></property>
+        <property name="market" value="kraken"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.000000001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <!--        <property name="makerFeePct" value="0.25"></property>-->
+        <!--        <property name="takerFeePct" value="0.40"></property>-->
+        <property name="makerFeePct" value="0.0"></property>
+        <property name="takerFeePct" value="0.10"></property>
+    </bean>
+
+
+    <bean id="soleur_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="soleur"></property>
+        <property name="market" value="kraken"></property>
+        <property name="currency" value="EUR"></property>
         <property name="priceTick" value="0.01"></property>
         <property name="quantityTick" value="0.00001"></property>
 
-        <property name="makerFeePct" value="0.16"></property>
-        <property name="takerFeePct" value="0.26"></property>
+        <!--        <property name="makerFeePct" value="0.25"></property>-->
+        <!--        <property name="takerFeePct" value="0.40"></property>-->
+        <property name="makerFeePct" value="0.0"></property>
+        <property name="takerFeePct" value="0.10"></property>
     </bean>
 
+    <bean id="xrpeur_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="xrpeur"></property>
+        <property name="market" value="kraken"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <!--        <property name="makerFeePct" value="0.25"></property>-->
+        <!--        <property name="takerFeePct" value="0.40"></property>-->
+        <property name="makerFeePct" value="0.0"></property>
+        <property name="takerFeePct" value="0.10"></property>
+    </bean>
+
+    <bean id="adaeur_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="adaeur"></property>
+        <property name="market" value="kraken"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.000001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <!--        <property name="makerFeePct" value="0.25"></property>-->
+        <!--        <property name="takerFeePct" value="0.40"></property>-->
+        <property name="makerFeePct" value="0.0"></property>
+        <property name="takerFeePct" value="0.10"></property>
+    </bean>
+    <bean id="doteur_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="doteur"></property>
+        <property name="market" value="kraken"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.0001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <!--        <property name="makerFeePct" value="0.25"></property>-->
+        <!--        <property name="takerFeePct" value="0.40"></property>-->
+        <property name="makerFeePct" value="0.0"></property>
+        <property name="takerFeePct" value="0.10"></property>
+    </bean>
+
+    <bean id="usdteur_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="usdteur"></property>
+        <property name="market" value="kraken"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.0001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <!--        <property name="makerFeePct" value="0.25"></property>-->
+        <!--        <property name="takerFeePct" value="0.40"></property>-->
+        <property name="makerFeePct" value="0.0"></property>
+        <property name="takerFeePct" value="0.10"></property>
+    </bean>
+
+    <bean id="usdceur_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="usdceur"></property>
+        <property name="market" value="kraken"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.0001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <!--        <property name="makerFeePct" value="0.25"></property>-->
+        <!--        <property name="takerFeePct" value="0.40"></property>-->
+        <property name="makerFeePct" value="0.0"></property>
+        <property name="takerFeePct" value="0.10"></property>
+    </bean>
+
+    <!-- AI tokens-->
+    <bean id="neareur_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="neareur"></property>
+        <property name="market" value="kraken"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <!--        <property name="makerFeePct" value="0.25"></property>-->
+        <!--        <property name="takerFeePct" value="0.40"></property>-->
+        <property name="makerFeePct" value="0.0"></property>
+        <property name="takerFeePct" value="0.10"></property>
+    </bean>
+
+    <bean id="rendereur_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="rendereur"></property>
+        <property name="market" value="kraken"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <!--        <property name="makerFeePct" value="0.25"></property>-->
+        <!--        <property name="takerFeePct" value="0.40"></property>-->
+        <property name="makerFeePct" value="0.0"></property>
+        <property name="takerFeePct" value="0.10"></property>
+    </bean>
+
+    <bean id="icpeur_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="icpeur"></property>
+        <property name="market" value="kraken"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <!--        <property name="makerFeePct" value="0.25"></property>-->
+        <!--        <property name="takerFeePct" value="0.40"></property>-->
+        <property name="makerFeePct" value="0.0"></property>
+        <property name="takerFeePct" value="0.10"></property>
+    </bean>
+
+    <!-- gaming tokens-->
+    <bean id="imxeur_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="imxeur"></property>
+        <property name="market" value="kraken"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <!--        <property name="makerFeePct" value="0.25"></property>-->
+        <!--        <property name="takerFeePct" value="0.40"></property>-->
+        <property name="makerFeePct" value="0.0"></property>
+        <property name="takerFeePct" value="0.10"></property>
+    </bean>
+
+    <bean id="flokieur_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="flokieur"></property>
+        <property name="market" value="kraken"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.0000001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <!--        <property name="makerFeePct" value="0.25"></property>-->
+        <!--        <property name="takerFeePct" value="0.40"></property>-->
+        <property name="makerFeePct" value="0.0"></property>
+        <property name="takerFeePct" value="0.10"></property>
+    </bean>
+
+    <bean id="beameur_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="beameur"></property>
+        <property name="market" value="kraken"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <!--        <property name="makerFeePct" value="0.25"></property>-->
+        <!--        <property name="takerFeePct" value="0.40"></property>-->
+        <property name="makerFeePct" value="0.0"></property>
+        <property name="takerFeePct" value="0.10"></property>
+    </bean>
+
+    <bean id="galaeur_kraken" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="galaeur"></property>
+        <property name="market" value="kraken"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.0001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <!--        <property name="makerFeePct" value="0.25"></property>-->
+        <!--        <property name="takerFeePct" value="0.40"></property>-->
+        <property name="makerFeePct" value="0.0"></property>
+        <property name="takerFeePct" value="0.10"></property>
+    </bean>
 
     <util:list id="kraken_instruments" value-type="com.lambda.investing.model.asset.Instrument">
-        <ref bean="btcusdt_kraken"/>
-        <ref bean="ethusdt_kraken"/>
-        <ref bean="ethbtc_kraken"/>
+        <!--        <ref bean="btcusdt_kraken"/>-->
+        <!--        <ref bean="ethusdt_kraken"/>-->
+        <!--        <ref bean="ethbtc_kraken"/>-->
         <ref bean="btceur_kraken"/>
         <ref bean="etheur_kraken"/>
+        <ref bean="soleur_kraken"/>
+        <ref bean="xrpeur_kraken"/>
+        <ref bean="adaeur_kraken"/>
+        <ref bean="doteur_kraken"/>
+        <ref bean="usdteur_kraken"/>
+        <ref bean="usdceur_kraken"/>
+
+        <!--        MEME https://coinmarketcap.com/view/memes/-->
+        <ref bean="dogeeur_kraken"/>
+        <ref bean="shibeur_kraken"/>
+        <ref bean="pepeeur_kraken"/>
+        <ref bean="wifeur_kraken"/>
+        <ref bean="bonkeur_kraken"/>
+
+        <!-- AI https://coinmarketcap.com/view/ai-big-data/-->
+        <ref bean="neareur_kraken"/>
+        <ref bean="icpeur_kraken"/>
+        <ref bean="rendereur_kraken"/>
+
+
+        <!-- GAMING https://coinmarketcap.com/view/gaming/-->
+        <ref bean="imxeur_kraken"/>
+        <ref bean="flokieur_kraken"/>
+        <ref bean="galaeur_kraken"/>
+        <ref bean="beameur_kraken"/>
+
+
     </util:list>
 
 </beans>

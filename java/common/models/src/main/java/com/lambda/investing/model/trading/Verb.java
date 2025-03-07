@@ -7,6 +7,11 @@ public enum Verb {
 		if (verb == null) {
 			return null;
 		}
+		if (verb == Verb.NotSet) {
+			//opposite is the same not set
+			return Verb.NotSet;
+		}
+
 		Verb output = null;//verb is always set as original
 		//check change side onlt applied on the sideActive Map
 		if (verb.equals(Verb.Buy)) {

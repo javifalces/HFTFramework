@@ -23,13 +23,17 @@ import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static com.lambda.investing.model.Util.fromJsonString;
+import static com.lambda.investing.model.Util.toJsonString;
 import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_PORTFOLIO_INFO;
-import static com.lambda.investing.trading_engine_connector.ZeroMqTradingEngineConnector.GSON;
+import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_POSITION_INFO;
+
 
 public abstract class AbstractBrokerTradingEngine implements TradingEngineConnector, ConnectorListener {
 
@@ -166,7 +170,7 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
 		logger.info("notifyExecutionReportById {} : {} ", id, executionReport);
 		this.executionReportConnectorPublisher
 				.publish(executionReportConnectorConfiguration, TypeMessage.execution_report, id,
-						GSON.toJson(executionReport));
+						toJsonString(executionReport));
 
 	}
 
@@ -175,7 +179,7 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
 								   TypeMessage typeMessage, String content) {
 
 		if (typeMessage.equals(TypeMessage.order_request)) {
-			OrderRequest orderRequest = GSON.fromJson(content, OrderRequest.class);
+			OrderRequest orderRequest = fromJsonString(content, OrderRequest.class);
 			if (lastOrderRequestClOrdId.contains(orderRequest.getClientOrderId())) {
 				//
 				logger.warn("order already processed {}-> reject", orderRequest.getClientOrderId());
@@ -198,7 +202,7 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
 		}
 
 		if (typeMessage.equals(TypeMessage.execution_report)) {
-			ExecutionReport executionReport = GSON.fromJson(content, ExecutionReport.class);
+			ExecutionReport executionReport = fromJsonString(content, ExecutionReport.class);
 
 			System.out.println(Configuration.formatLog("onUpdate.execution_report  {}", executionReport));
 			logger.info("onUpdate.execution_report  {}", executionReport);
@@ -229,7 +233,7 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
 		logger.info("requestInfo: {} ", info);
 		if (info.endsWith(REQUESTED_PORTFOLIO_INFO)) {
 			//return portfolio on execution Report
-			notifyInfo(info, GSON.toJson(portfolio));
+			notifyInfo(info, toJsonString(portfolio));
 		}
 	}
 }

@@ -2,12 +2,13 @@ package com.lambda.investing.connector.zero_mq;
 
 import com.lambda.investing.Configuration;
 import com.lambda.investing.connector.ConnectorConfiguration;
-import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.messaging.TopicUtils;
 import com.lambda.investing.model.messaging.TypeMessage;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
+
+import com.lambda.investing.model.asset.*;
 import org.zeromq.ZContext;
 
 import java.util.ArrayList;

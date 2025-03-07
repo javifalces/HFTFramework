@@ -2,7 +2,7 @@ package com.lambda.investing.algorithmic_trading.reinforcement_learning.state;
 
 import com.lambda.investing.algorithmic_trading.Algorithm;
 import com.lambda.investing.algorithmic_trading.AlgorithmObserver;
-import com.lambda.investing.algorithmic_trading.CandleListener;
+import com.lambda.investing.algorithmic_trading.candle_manager.CandleListener;
 import com.lambda.investing.algorithmic_trading.PnlSnapshot;
 import com.lambda.investing.model.candle.Candle;
 import com.lambda.investing.model.market_data.Depth;
@@ -87,7 +87,7 @@ public class StateManager implements AlgorithmObserver, CandleListener, Runnable
 
     }
 
-    public void onUpdateCandle(Candle candle) {
+    public void onCandleUpdate(Candle candle) {
         abstractState.updateCandle(candle);
     }
 
@@ -113,6 +113,11 @@ public class StateManager implements AlgorithmObserver, CandleListener, Runnable
 
     @Override
     public void onExecutionReportUpdate(String algorithmInfo, ExecutionReport executionReport) {
+
+    }
+
+    @Override
+    public void onCustomColumns(long timestamp, String algorithmInfo, String instrumentPk, String key, Double value) {
 
     }
 

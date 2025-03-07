@@ -5,10 +5,12 @@ import com.lambda.investing.model.exception.LambdaTradingException;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.trading.*;
 import com.lambda.investing.trading_engine_connector.paper.PaperTradingEngine;
+import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.lambda.investing.market_data_connector.csv_file_reader.CSVMarketDataConnectorPublisher.ALGORITHM_INFO_MM;
@@ -41,11 +43,14 @@ public class OrderbookManager {
     private long lastTimestamp = -1;
     private Map<String, Depth> asyncNotification;
     protected String instrumentPk;
+    protected Instrument instrument;
 
     private Object lockOrderRequest = new Object();
 
     public OrderbookManager(Orderbook orderbook, PaperTradingEngine paperTradingEngineConnector, String instrument) {
         this.instrumentPk = instrument;
+        this.instrument = Instrument.getInstrument(this.instrumentPk);
+
         this.orderbook = orderbook;
         this.paperTradingEngineConnector = paperTradingEngineConnector;
 
@@ -227,7 +232,7 @@ public class OrderbookManager {
             orderTree = orderbook.getBids();
         }
         String side = getSide(verb);
-        Map<Integer, OrderOrderbook> orders = orderTree.orderMap;
+        Map<Integer, OrderOrderbook> orders = orderTree.getOrderMap();
         for (Map.Entry<Integer, OrderOrderbook> entry : orders.entrySet()) {
             Integer orderId = entry.getKey();
             OrderOrderbook orderOrderbook = entry.getValue();
@@ -244,7 +249,7 @@ public class OrderbookManager {
 
     /**
      * When a depth is read clean previous orders from MM and send the new snapshost
-     *
+     * DEPRECATED: now its using refreshMarketMakerDepth from OrderMatchEngine -> override it
      * @param depth new depth to refresh
      * @return
      */
@@ -327,7 +332,7 @@ public class OrderbookManager {
 
         double estimatedFilled = 0.;
         int level = 0;
-        for (OrderOrderbook orderOrderbook : orderTree.orderMap.values()) {
+        for (OrderOrderbook orderOrderbook : orderTree.getOrderMap().values()) {
             if (orderOrderbook.getAlgorithmInfo().equalsIgnoreCase(MARKET_MAKER_ALGORITHM_INFO)) {
                 estimatedFilled += orderOrderbook.getQuantity();
                 level++;

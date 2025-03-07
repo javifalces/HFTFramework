@@ -4,7 +4,6 @@
        xmlns:context="http://www.springframework.org/schema/context"
        xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
 
-    <import resource="classpath:metatrader_instruments.xml"></import>
     <import resource="classpath:darwinex_instruments.xml"></import>
     <bean
             class="org.springframework.context.support.PropertySourcesPlaceholderConfigurer">
@@ -78,6 +77,7 @@
           factory-method="getInstance" init-method="start">
         <constructor-arg index="0" ref="orderRequestConfiguration"/>
         <constructor-arg index="1" value="1"/>
+        <constructor-arg index="2" value="true"/>
     </bean>
 
 

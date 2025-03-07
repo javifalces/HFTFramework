@@ -26,7 +26,7 @@ public class ZeroMqPuller implements ConnectorProvider {
 
     private static Integer THREADS_ON_UPDATE = 3;
 
-    private com.lambda.investing.connector.zero_mq.ZeroMqConfiguration zeroMqConfiguration;
+    private ZeroMqConfiguration zeroMqConfiguration;
     Logger logger = LogManager.getLogger(ZeroMqPuller.class);
     private Map<ConnectorListener, ConnectorConfiguration> listenerManager;
 
@@ -37,15 +37,15 @@ public class ZeroMqPuller implements ConnectorProvider {
 
     private long sleepMsBetweenMessages = 0;
     protected List<String> topicListSubscribed;
-    private static Map<com.lambda.investing.connector.zero_mq.ZeroMqConfiguration, ZeroMqPuller> INSTANCES = new ConcurrentHashMap<>();
+    private static Map<ZeroMqConfiguration, ZeroMqPuller> INSTANCES = new ConcurrentHashMap<>();
     String url;
     private ZMQ.Socket socketPull;
     protected int threadsListening;
 
     protected boolean parsedObjects = true;
-    protected ZContext context = com.lambda.investing.connector.zero_mq.ZeroMqConfiguration.GetZContext();
+    protected ZContext context = ZeroMqConfiguration.GetZContext();
 
-    public static ZeroMqPuller getInstance(com.lambda.investing.connector.zero_mq.ZeroMqConfiguration zeroMqConfiguration, int threadsListening) {
+    public static ZeroMqPuller getInstance(ZeroMqConfiguration zeroMqConfiguration, int threadsListening) {
         ZeroMqPuller output = INSTANCES
                 .getOrDefault(zeroMqConfiguration, new ZeroMqPuller(zeroMqConfiguration, threadsListening));
         INSTANCES.put(zeroMqConfiguration, output);
@@ -57,7 +57,7 @@ public class ZeroMqPuller implements ConnectorProvider {
         this.parsedObjects = parsedObjects;
     }
 
-    private ZeroMqPuller(com.lambda.investing.connector.zero_mq.ZeroMqConfiguration zeroMqConfiguration, int threadsListening) {
+    private ZeroMqPuller(ZeroMqConfiguration zeroMqConfiguration, int threadsListening) {
         this.zeroMqConfiguration = zeroMqConfiguration;
         listenerManager = new ConcurrentHashMap<>();
         topicListSubscribed = new ArrayList<>();
@@ -132,9 +132,9 @@ public class ZeroMqPuller implements ConnectorProvider {
         for (Map.Entry<ConnectorListener, ConnectorConfiguration> entry : listenerManager.entrySet()) {
             ConnectorListener listener = entry.getKey();
             ConnectorConfiguration configuration = entry.getValue();
-            if (configuration instanceof com.lambda.investing.connector.zero_mq.ZeroMqConfiguration) {
+            if (configuration instanceof ZeroMqConfiguration) {
                 //add topic
-                com.lambda.investing.connector.zero_mq.ZeroMqConfiguration zeroMqConfiguration = (com.lambda.investing.connector.zero_mq.ZeroMqConfiguration) configuration;
+                ZeroMqConfiguration zeroMqConfiguration = (ZeroMqConfiguration) configuration;
                 zeroMqConfiguration.setTopic(topic);
                 configuration = zeroMqConfiguration;
             }
@@ -143,7 +143,7 @@ public class ZeroMqPuller implements ConnectorProvider {
         }
     }
 
-    private ZMQ.Socket getPullSocket(com.lambda.investing.connector.zero_mq.ZeroMqConfiguration configuration) {
+    private ZMQ.Socket getPullSocket(ZeroMqConfiguration configuration) {
         //		http://zguide.zeromq.org/java:psenvsub
         ZMQ.Socket pullSocket = null;
         pullSocket = context.createSocket(ZMQ.PULL);
@@ -160,7 +160,7 @@ public class ZeroMqPuller implements ConnectorProvider {
 
     private class ZeroMqThreadReceiver implements Runnable {
 
-        private com.lambda.investing.connector.zero_mq.ZeroMqConfiguration zeroMqConfiguration;
+        private ZeroMqConfiguration zeroMqConfiguration;
         final AtomicBoolean running = new AtomicBoolean(false);
 
         public ZeroMqThreadReceiver(ZeroMqConfiguration zeroMqConfiguration) {

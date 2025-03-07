@@ -249,7 +249,7 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 		}//update unrealized pnl
 		totalPnl = realizedPnl + unrealizedPnl;
 		totalFees = realizedFees + unrealizedFees;
-		//historical
+		//historical only Cf or Pf
 		updateHistoricals(executionReport.getTimestampCreation());
 		processedClOrdId.put(executionReport.getClientOrderId(), executionReport.getExecutionReportStatus());
 

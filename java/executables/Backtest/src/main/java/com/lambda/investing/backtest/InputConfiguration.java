@@ -1,5 +1,6 @@
 package com.lambda.investing.backtest;
 
+import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.AlgorithmCreationUtils;
 import com.lambda.investing.algorithmic_trading.AlgorithmUtils;
 import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
@@ -14,8 +15,8 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.*;
 
-import static com.lambda.investing.backtest.App.GSON;
 import static com.lambda.investing.backtest_engine.BacktestConfiguration.dateFormatTime;
+import static com.lambda.investing.model.Util.toJsonString;
 
 @Setter
 @ToString
@@ -65,6 +66,11 @@ public class InputConfiguration implements Cloneable {
         return backtest.getBacktestConfiguration(algorithm.getAlgorithm());
     }
 
+//    @Override
+//    public String toString() {
+//        return toJsonString(this);
+//    }
+
     @Getter
     @Setter
     public class Backtest {
@@ -76,6 +82,7 @@ public class InputConfiguration implements Cloneable {
         private String instrument;
         private String multithreadConfiguration = null;
         private int initialSleepSeconds = 3;
+        private boolean searchMatchMarketTrades = false;//we are already synchronizing PersistorMarketDataConnector InstrumentCache
 
         public Backtest() {
         }
@@ -146,11 +153,23 @@ public class InputConfiguration implements Cloneable {
             if (multithreadConfiguration != null) {
                 backtestConfiguration.setMultithreadConfiguration(multithreadConfiguration);
             }
+
+            //Already Synchronizing in PersistorMarketDataConnector InstrumentCache
+//            backtestConfiguration.setSearchMatchMarketTrades(searchMatchMarketTrades);
+//            if (!searchMatchMarketTrades) {
+//                logger.info("searchMatchMarketTrades is disabled");
+//                Configuration.BACKTEST_SYNCHRONIZED_TRADES_DEPTH_MAX_MS = 0;
+//            }
             backtestConfiguration.setBacktestSource("parquet");
             backtestConfiguration.setSpeed(-1);
             backtestConfiguration.setBacktestExternalConnection("ordinary");
 
             return backtestConfiguration;
+        }
+
+        @Override
+        public String toString() {
+            return toJsonString(this);
         }
     }
 
@@ -172,6 +191,11 @@ public class InputConfiguration implements Cloneable {
 
         public Algorithm() {
         }
+
+//        @Override
+//        public String toString() {
+//            return toJsonString(this);
+//        }
     }
 
     public Object clone() throws CloneNotSupportedException {
@@ -181,8 +205,4 @@ public class InputConfiguration implements Cloneable {
         return output;
     }
 
-    @Override
-    public String toString() {
-        return GSON.toJson(this);
-    }
 }

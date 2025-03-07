@@ -1,5 +1,6 @@
 package com.lambda.investing.algorithmic_trading;
 
+import com.lambda.investing.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -12,9 +13,9 @@ public class AlgorithmParameters {
     private static String START_ARRAY_PARAMETERS = "[";
     private static String END_ARRAY_PARAMETERS = "]";
 
-    protected Logger logger = LogManager.getLogger(AlgorithmParameters.class);
+    protected static Logger logger = LogManager.getLogger(AlgorithmParameters.class);
 
-    protected double getParameterDoubleOrDefault(Map<String, Object> parameters, String key, double defaultValue) {
+    public static double getParameterDoubleOrDefault(Map<String, Object> parameters, String key, double defaultValue) {
         String value = String.valueOf(parameters.getOrDefault(key, String.valueOf(defaultValue)));
         if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
             return defaultValue;
@@ -28,7 +29,7 @@ public class AlgorithmParameters {
     }
 
 
-    protected double getParameterDoubleOrDefault(Map<String, Object> parameters, String key, String secondKey,
+    public static double getParameterDoubleOrDefault(Map<String, Object> parameters, String key, String secondKey,
                                                  double defaultValue) {
         if (!parameters.containsKey(key)) {
             double output = getParameterDoubleOrDefault(parameters, secondKey, defaultValue);
@@ -50,7 +51,7 @@ public class AlgorithmParameters {
         }
     }
 
-    protected double getParameterDouble(Map<String, Object> parameters, String key) {
+    public static double getParameterDouble(Map<String, Object> parameters, String key) {
         String value = String.valueOf(parameters.get(key));
 
         try {
@@ -61,7 +62,7 @@ public class AlgorithmParameters {
         }
     }
 
-    protected double getParameterDouble(Map<String, Object> parameters, String key, String secondKey) {
+    public static double getParameterDouble(Map<String, Object> parameters, String key, String secondKey) {
         if (!parameters.containsKey(key)) {
             logger.warn("deprecated parameter key: {} better use {}", secondKey, key);
             return getParameterDouble(parameters, secondKey);
@@ -77,7 +78,7 @@ public class AlgorithmParameters {
         }
     }
 
-    protected int getParameterIntOrDefault(Map<String, Object> parameters, String key, int defaultValue) {
+    public static int getParameterIntOrDefault(Map<String, Object> parameters, String key, int defaultValue) {
         String value = String.valueOf(parameters.getOrDefault(key, String.valueOf(defaultValue)));
         if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
             return defaultValue;
@@ -98,7 +99,7 @@ public class AlgorithmParameters {
         }
     }
 
-    public int getParameterIntOrDefault(Map<String, Object> parameters, String key, String secondKey,
+    public static int getParameterIntOrDefault(Map<String, Object> parameters, String key, String secondKey,
                                         int defaultValue) {
         if (!parameters.containsKey(key)) {
             int output = getParameterIntOrDefault(parameters, secondKey, defaultValue);
@@ -120,7 +121,7 @@ public class AlgorithmParameters {
         }
     }
 
-    protected int getParameterInt(Map<String, Object> parameters, String key) {
+    public static int getParameterInt(Map<String, Object> parameters, String key) {
         String value = String.valueOf(parameters.get(key));
         try {
             if (key.equalsIgnoreCase("TRUE")) {
@@ -138,7 +139,7 @@ public class AlgorithmParameters {
 
     }
 
-    protected int getParameterInt(Map<String, Object> parameters, String key, String secondKey) {
+    public static int getParameterInt(Map<String, Object> parameters, String key, String secondKey) {
         if (!parameters.containsKey(key)) {
             int output = getParameterIntOrDefault(parameters, secondKey, -666);
             if (output != -666) {
@@ -158,11 +159,11 @@ public class AlgorithmParameters {
 
     }
 
-    protected Object getParameterObject(Map<String, Object> parameters, String key) {
+    public static Object getParameterObject(Map<String, Object> parameters, String key) {
         return parameters.get(key);
     }
 
-    protected String getParameterString(Map<String, Object> parameters, String key) {
+    public static String getParameterString(Map<String, Object> parameters, String key) {
         String output = String.valueOf(parameters.get(key));
         if (output.equalsIgnoreCase("null")) {
             return null;
@@ -170,7 +171,7 @@ public class AlgorithmParameters {
         return output;
     }
 
-    protected String getParameterString(Map<String, Object> parameters, String key, String secondKey) {
+    public static String getParameterString(Map<String, Object> parameters, String key, String secondKey) {
         if (!parameters.containsKey(key)) {
             String output = getParameterString(parameters, secondKey);
             if (output != null) {
@@ -187,7 +188,7 @@ public class AlgorithmParameters {
         return output;
     }
 
-    public String getParameterStringOrDefault(Map<String, Object> parameters, String key, String defaultValue) {
+    public static String getParameterStringOrDefault(Map<String, Object> parameters, String key, String defaultValue) {
         String value = String.valueOf(parameters.getOrDefault(key, defaultValue));
         if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
             return defaultValue;
@@ -200,7 +201,7 @@ public class AlgorithmParameters {
         }
     }
 
-    public String getParameterStringOrDefault(Map<String, Object> parameters, String key, String secondKey,
+    public static String getParameterStringOrDefault(Map<String, Object> parameters, String key, String secondKey,
                                               String defaultValue) {
         if (!parameters.containsKey(key)) {
             String output = getParameterStringOrDefault(parameters, secondKey, defaultValue);
@@ -222,7 +223,7 @@ public class AlgorithmParameters {
         }
     }
 
-    protected String[] getParameterArrayString(Map<String, Object> parameters, String key) {
+    public static String[] getParameterArrayString(Map<String, Object> parameters, String key) {
         String value = String.valueOf(parameters.get(key));
         if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
             return null;
@@ -257,7 +258,7 @@ public class AlgorithmParameters {
         }
     }
 
-    protected double[] getParameterArrayDouble(Map<String, Object> parameters, String key) {
+    public static double[] getParameterArrayDouble(Map<String, Object> parameters, String key) {
         String value = String.valueOf(parameters.get(key));
         if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
             return null;
@@ -294,7 +295,7 @@ public class AlgorithmParameters {
         }
     }
 
-    protected int[] getParameterArrayInt(Map<String, Object> parameters, String key) {
+    public static int[] getParameterArrayInt(Map<String, Object> parameters, String key) {
         String value = String.valueOf(parameters.get(key));
         if (value.trim().isEmpty() || value.equalsIgnoreCase("null")) {
             return null;

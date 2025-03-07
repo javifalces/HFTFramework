@@ -22,122 +22,154 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-@Getter @Setter public abstract class XChangeBrokerConnector {
+@Getter
+@Setter
+public abstract class XChangeBrokerConnector {
 
-	protected Logger logger = LogManager.getLogger(XChangeBrokerConnector.class);
-	protected StreamingExchange streamingExchange;
-	protected Exchange exchange;
-	protected ExchangeSpecification exchangeSpecification;
+    protected Logger logger = LogManager.getLogger(XChangeBrokerConnector.class);
+    protected StreamingExchange streamingExchange;
+    protected Exchange exchange;
+    protected ExchangeSpecification exchangeSpecification;
 
-	protected MarketDataService marketDataService;
+    protected MarketDataService marketDataService;
 
-	protected static NumberFormat NUMBER_FORMAT = NumberFormat
-			.getInstance(Locale.US);//US has dot instead of commas in decimals
+    protected static NumberFormat NUMBER_FORMAT = NumberFormat
+            .getInstance(Locale.US);//US has dot instead of commas in decimals
 
-	protected static Map<String, XChangeBrokerConnector> instances = new ConcurrentHashMap<>();
+    protected static Map<String, XChangeBrokerConnector> instances = new ConcurrentHashMap<>();
 
-	protected String userName, apiKey, secretKey;
+    protected String userName, apiKey, secretKey;
 
-	protected abstract void setPrivateAccountInfo();
+    protected abstract void setPrivateAccountInfo();
 
-	public abstract void resetClient();
+    public abstract void resetClient();
 
-	protected static Map<String, Currency> stringToCurrency = new HashMap<>();
-	protected static Map<String, CurrencyPair> stringToCurrencyPair = new HashMap<>();
-	protected StreamingExchange webSocketClient;
-	protected Map<String, Instrument> symbolToInstrument = new ConcurrentHashMap<>();
-	protected List<CurrencyPair> pairs = new ArrayList<>();
-	Map<CurrencyPair, Instrument> currencyPairToInstrument = new HashMap<>();
-	List<Instrument> lastInstrumentListSubscribed = null;
+    protected static Map<String, Currency> stringToCurrency = new HashMap<>();
+    protected static Map<String, CurrencyPair> stringToCurrencyPair = new HashMap<>();
+    protected StreamingExchange webSocketClient;
+    protected Map<String, Instrument> symbolToInstrument = new ConcurrentHashMap<>();
+    protected List<CurrencyPair> pairs = new ArrayList<>();
+    Map<CurrencyPair, Instrument> currencyPairToInstrument = new HashMap<>();
+    List<Instrument> lastInstrumentListSubscribed = null;
 
-	public static Currency getCurrency(String currency) {
-		if (stringToCurrency.containsKey(currency.toUpperCase())) {
-			return stringToCurrency.get(currency.toUpperCase());
-		} else {
-			for (Currency currencyIteration : Currency.getAvailableCurrencies()) {
-				stringToCurrency.put(currencyIteration.getCurrencyCode().toUpperCase(), currencyIteration);
-			}
-			Currency currencyOut = stringToCurrency.get(currency.toUpperCase());
-			if (currencyOut == null) {
-				System.err.println(Configuration.formatLog("Currency {} not found!!!", currency));
-			}
-			return currencyOut;
-		}
-	}
+    public static Currency getCurrency(String currency) {
+        return getCurrency(currency, true);
+    }
 
-	/**
-	 * @param instrumentPk BTCUSDT_coinbase
-	 * @return
-	 */
-	public static CurrencyPair getCurrencyPair(String instrumentPk) {
-		String instrumentSymbol = instrumentPk.toUpperCase();
-		if (instrumentPk.contains("_")) {
-			instrumentSymbol = instrumentPk.split("_")[0].toUpperCase();
-		}
-		String currency1Str = instrumentSymbol.substring(0, 3);
-		String currency2Str = instrumentSymbol.substring(3, instrumentSymbol.length());
+    public static Currency getSearchCurrency(boolean startFirst, String symbol) {
+        if (startFirst) {
+            for (Currency currency : Currency.getAvailableCurrencies()) {
+                if (symbol.startsWith(currency.getCurrencyCode())) {
+                    stringToCurrency.put(symbol, currency);
+                    return currency;
+                }
+            }
+        } else {
+            for (Currency currency : Currency.getAvailableCurrencies()) {
+                if (symbol.endsWith(currency.getCurrencyCode())) {
+                    stringToCurrency.put(symbol, currency);
+                    return currency;
+                }
+            }
+        }
+        return null;
+    }
 
-		Currency currency1 = getCurrency(currency1Str);
-		Currency currency2 = getCurrency(currency2Str);
+    public static Currency getCurrency(String currency, boolean printError) {
+        if (stringToCurrency.containsKey(currency.toUpperCase())) {
+            return stringToCurrency.get(currency.toUpperCase());
+        } else {
+            for (Currency currencyIteration : Currency.getAvailableCurrencies()) {
+                stringToCurrency.put(currencyIteration.getCurrencyCode().toUpperCase(), currencyIteration);
+            }
+            Currency currencyOut = stringToCurrency.get(currency.toUpperCase());
+            if (currencyOut == null && printError) {
+                System.err.println(Configuration.formatLog("Currency {} not found!!!", currency));
+            }
+            return currencyOut;
+        }
+    }
 
-		CurrencyPair pair = new CurrencyPair(currency1, currency2);
-		return pair;
-	}
 
-	public synchronized void connectWebsocket(List<Instrument> instrumentList) {
-		if (lastInstrumentListSubscribed != null) {
-			if (lastInstrumentListSubscribed.containsAll(instrumentList)) {
-				if (this.getStreamingExchange().isAlive()) {
-					return;
-				}
-			} else {
-				instrumentList.addAll(lastInstrumentListSubscribed);
-			}
-		}
-		instrumentList = instrumentList.stream().distinct().collect(Collectors.toList());
+    /**
+     * @param instrumentPk BTCUSDT_coinbase
+     * @return
+     */
+    public static CurrencyPair getCurrencyPair(String instrumentPk) {
+        String instrumentSymbol = instrumentPk.toUpperCase();
+        if (instrumentPk.contains("_")) {
+            instrumentSymbol = instrumentPk.split("_")[0].toUpperCase();
+        }
+        Currency currencyBaseObj = getSearchCurrency(true, instrumentSymbol);
+        Currency currencyQuoteObj = getSearchCurrency(false, instrumentSymbol);
+        if (currencyBaseObj != null && currencyQuoteObj != null) {
+            CurrencyPair pair = new CurrencyPair(currencyBaseObj, currencyQuoteObj);
+            return pair;
+        }
+        System.err.println(Configuration.formatLog("Currency pair {} not found!!!", instrumentPk));
+        return null;
 
-		StringBuilder symbolsList = new StringBuilder();
-		ProductSubscription.ProductSubscriptionBuilder productSubscriptionBuilder = ProductSubscription.create();
+    }
 
-		for (Instrument instrument : instrumentList) {
-			symbolsList.append(instrument.getPrimaryKey().toLowerCase());
-			symbolToInstrument.put(instrument.getSymbol().toLowerCase(), instrument);
-			symbolsList.append(',');
+    public synchronized void connectWebsocket(List<Instrument> instrumentList) {
+        if (lastInstrumentListSubscribed != null) {
+            if (lastInstrumentListSubscribed.containsAll(instrumentList)) {
+                if (this.getStreamingExchange().isAlive()) {
+                    return;
+                }
+            } else {
+                instrumentList.addAll(lastInstrumentListSubscribed);
+            }
+        }
+        instrumentList = instrumentList.stream().distinct().collect(Collectors.toList());
 
-			CurrencyPair currencyPair = XChangeBrokerConnector.getCurrencyPair(instrument.getPrimaryKey());
-			pairs.add(currencyPair);
-			currencyPairToInstrument.put(currencyPair, instrument);
+        StringBuilder symbolsList = new StringBuilder();
+        ProductSubscription.ProductSubscriptionBuilder productSubscriptionBuilder = ProductSubscription.create();
 
-			productSubscriptionBuilder.addAll(currencyPair);
-			//
-			//			productSubscriptionBuilder.addUserTrades(currencyPair);
-			//			productSubscriptionBuilder.addTrades(currencyPair);
-			//			productSubscriptionBuilder.addTicker(currencyPair);
-			//			productSubscriptionBuilder.addOrderbook(currencyPair);
+        for (Instrument instrument : instrumentList) {
+            symbolsList.append(instrument.getPrimaryKey().toLowerCase());
+            symbolToInstrument.put(instrument.getSymbol().toLowerCase(), instrument);
+            symbolsList.append(',');
 
-		}
+            CurrencyPair currencyPair = XChangeBrokerConnector.getCurrencyPair(instrument.getPrimaryKey());
+            pairs.add(currencyPair);
+            currencyPairToInstrument.put(currencyPair, instrument);
 
-		logger.info("subscribing to websocket on symbols {}", symbolsList.toString());
+            productSubscriptionBuilder.addAll(currencyPair);
+            //
+            //			productSubscriptionBuilder.addUserTrades(currencyPair);
+            //			productSubscriptionBuilder.addTrades(currencyPair);
+            //			productSubscriptionBuilder.addTicker(currencyPair);
+            //			productSubscriptionBuilder.addOrderbook(currencyPair);
 
-		webSocketClient = this.getStreamingExchange();
-		if (!webSocketClient.isAlive()) {
-			logger.info("connecting websocket ");
-			webSocketClient.connect(productSubscriptionBuilder.build()).blockingAwait();
-		} else {
-			logger.info("disconnecting previous websocket ....");
-			webSocketClient.disconnect();
+        }
 
-			while (webSocketClient.isAlive()) {
-				try {
-					Thread.sleep(100);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
-			}
-			logger.info("connecting websocket ...");
-			webSocketClient.connect(productSubscriptionBuilder.build()).blockingAwait();
-		}
-		lastInstrumentListSubscribed = instrumentList;
-	}
+        logger.info("subscribing to websocket on symbols {}", symbolsList.toString());
+
+        webSocketClient = this.getStreamingExchange();
+        if (webSocketClient == null) {
+
+            logger.error("webSocketClient is null");
+            return;
+        }
+        if (!webSocketClient.isAlive()) {
+            logger.info("connecting websocket ");
+            webSocketClient.connect(productSubscriptionBuilder.build()).blockingAwait();
+        } else {
+            logger.info("disconnecting previous websocket ....");
+            webSocketClient.disconnect();
+
+            while (webSocketClient.isAlive()) {
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+            logger.info("connecting websocket ...");
+            webSocketClient.connect(productSubscriptionBuilder.build()).blockingAwait();
+        }
+        lastInstrumentListSubscribed = instrumentList;
+    }
 
 }

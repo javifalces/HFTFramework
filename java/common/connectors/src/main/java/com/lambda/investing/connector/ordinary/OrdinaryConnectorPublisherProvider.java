@@ -1,10 +1,7 @@
 package com.lambda.investing.connector.ordinary;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.lambda.investing.connector.ConnectorConfiguration;
-import com.lambda.investing.connector.ConnectorListener;
-import com.lambda.investing.connector.ConnectorProvider;
-import com.lambda.investing.connector.ConnectorPublisher;
+import com.lambda.investing.connector.*;
 import com.lambda.investing.model.messaging.TypeMessage;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.logging.log4j.LogManager;
@@ -13,10 +10,7 @@ import org.apache.logging.log4j.Logger;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class OrdinaryConnectorPublisherProvider implements ConnectorPublisher, ConnectorProvider {

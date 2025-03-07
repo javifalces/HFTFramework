@@ -10,9 +10,12 @@ import com.lambda.investing.model.candle.CandleType;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import org.apache.commons.lang3.ArrayUtils;
+import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
+import org.apache.curator.shaded.com.google.common.collect.Queues;
 
 import java.time.ZoneId;
 import java.util.*;
+
 
 import static com.lambda.investing.algorithmic_trading.reinforcement_learning.MatrixRoundUtils.*;
 

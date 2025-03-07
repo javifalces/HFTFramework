@@ -7,7 +7,9 @@ import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ConnectorPublisher;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
+import com.lambda.investing.connector.zero_mq.ZeroMqProvider;
 import com.lambda.investing.market_data_connector.AbstractMarketDataConnectorPublisher;
+import com.lambda.investing.market_data_connector.Statistics;
 import com.lambda.investing.metatrader.MetatraderZeroBrokerConnector;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
@@ -17,10 +19,11 @@ import org.apache.commons.lang3.ArrayUtils;
 
 import java.lang.reflect.Modifier;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 
 public class MetatraderMarketDataPublisher extends AbstractMarketDataConnectorPublisher implements ConnectorListener {
-
+	private static final double DEFAULT_TICK_QTY = 100E6;
 	MetatraderZeroBrokerConnector metatraderZeroBrokerConnector;
 	public static Gson GSON_STRING = new GsonBuilder()
 			.excludeFieldsWithModifiers(Modifier.STATIC, Modifier.TRANSIENT, Modifier.VOLATILE, Modifier.FINAL)
@@ -28,6 +31,7 @@ public class MetatraderMarketDataPublisher extends AbstractMarketDataConnectorPu
 
 	private String broker;
 	private boolean depthReceived = false;//if broker doesnt have it
+
 
 	public MetatraderMarketDataPublisher(ConnectorConfiguration connectorConfiguration,
 			ConnectorPublisher connectorPublisher, MetatraderZeroBrokerConnector metatraderZeroBrokerConnector) {
@@ -37,6 +41,7 @@ public class MetatraderMarketDataPublisher extends AbstractMarketDataConnectorPu
 
 		ZeroMqConfiguration configuration = new ZeroMqConfiguration();
 		configuration.setPort(this.metatraderZeroBrokerConnector.getPortPublisher());
+		statistics = new Statistics("MetatraderMarketDataPublisher", 60000);//useful to see if we are receiving data
 
 	}
 
@@ -146,43 +151,31 @@ public class MetatraderMarketDataPublisher extends AbstractMarketDataConnectorPu
 			notifyDepth(instrument.getPrimaryKey(), depth);
 
 		} else if (type.equalsIgnoreCase("TICK")) {
-			//{type:TICK,symbol:EURJPY, Time:1613418097,timestamp:1613425297514,last:0.000,last_volume:0.000}
-			Trade trade = new Trade();
-			trade.setInstrument(instrument.getPrimaryKey());
-			trade.setTimestamp(timestamp);
-			double price = (double) jsonReceived.get("last");
-			double quantity = (double) jsonReceived.get("last_volume");
-			if (price != 0 && quantity != 0) {
-				trade.setQuantity(quantity);
-				trade.setPrice(price);
-				notifyTrade(instrument.getPrimaryKey(), trade);
+			//create depth from tick data , best bid and best ask
+			depthReceived = true;
+			Depth depth = new Depth();
+			double bestBid = (double) jsonReceived.get("best_bid");
+			double bestAsk = (double) jsonReceived.get("best_ask");
+			if (bestAsk != 0 && bestBid != 0) {
+				double bestQty = DEFAULT_TICK_QTY;//not coming from darwinex
+				Double[] bids = new Double[]{bestBid};
+				Double[] asks = new Double[]{bestAsk};
+				Double[] quantities = new Double[]{bestQty};
+				depth.setBids(bids);
+				depth.setAsks(asks);
+
+				///review this volume_real what it its and darwinex data has 2 values
+				depth.setBidsQuantities(quantities);
+				depth.setAsksQuantities(quantities);
+				//
+
+				depth.setTimestamp(timestamp);
+				depth.setInstrument(instrument.getPrimaryKey());
+				depth.setLevelsFromData();
+
+				notifyDepth(instrument.getPrimaryKey(), depth);
 			}
 
-			//get tick
-			if (!depthReceived) {
-				Depth depth = new Depth();
-				double bestBid = (double) jsonReceived.get("best_bid");
-				double bestAsk = (double) jsonReceived.get("best_ask");
-				if (bestAsk != 0 && bestBid != 0) {
-					double bestQty = 0.0;//not coming from darwinex
-					Double[] bids = new Double[] { bestBid };
-					Double[] asks = new Double[] { bestAsk };
-					Double[] quantities = new Double[] { bestQty };
-					depth.setBids(bids);
-					depth.setAsks(asks);
-
-					///review this volume_real what it its and darwinex data has 2 values
-					depth.setBidsQuantities(quantities);
-					depth.setAsksQuantities(quantities);
-					//
-
-					depth.setTimestamp(timestamp);
-					depth.setInstrument(instrument.getPrimaryKey());
-					depth.setLevelsFromData();
-
-					notifyDepth(instrument.getPrimaryKey(), depth);
-				}
-			}
 
 		}
 

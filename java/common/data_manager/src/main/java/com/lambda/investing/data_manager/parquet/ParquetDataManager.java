@@ -1,19 +1,22 @@
 package com.lambda.investing.data_manager.parquet;
 
 import com.lambda.investing.data_manager.DataManager;
-import com.lambda.investing.model.market_data.CSVable;
+import com.lambda.investing.model.asset.Instrument;
+import com.lambda.investing.model.market_data.*;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.reflect.ReflectData;
+
 import org.apache.commons.lang.SystemUtils;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroParquetWriter;
-import org.apache.parquet.hadoop.ParquetWriter;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
-import tech.tablesaw.api.Table;
+import org.apache.parquet.hadoop.ParquetReader;
+
+import static com.lambda.investing.data_manager.FileDataUtils.TIMESTAMP_COL;
+import static org.apache.parquet.hadoop.ParquetFileWriter.Mode.OVERWRITE;
 
 import java.io.File;
 import java.io.IOException;
@@ -23,7 +26,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.parquet.hadoop.ParquetFileWriter.Mode.OVERWRITE;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.parquet.hadoop.ParquetWriter;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import tech.tablesaw.api.Row;
+import tech.tablesaw.api.Table;
 
 public abstract class ParquetDataManager implements DataManager {
 
@@ -68,6 +75,8 @@ public abstract class ParquetDataManager implements DataManager {
         if (SystemUtils.IS_OS_WINDOWS && System.getenv("HADOOP_HOME") == null) {
             ClassLoader loader = ParquetDataManager.class.getClassLoader();
             File file = new File(loader.getResource("apache-hadoop-3.1.0-winutils/bin/winutils.exe").getFile());
+            logger.warn("HADOOP winutils.exe in {} , exist {}", file.getAbsolutePath(), file.exists());
+
             String resourcesHadoop = file.getParentFile().getParentFile().getAbsolutePath();
 
             logger.warn("Setting HADOOP_HOME to resources path {}", resourcesHadoop);
@@ -80,10 +89,10 @@ public abstract class ParquetDataManager implements DataManager {
                 logger.error("Error setEnv {} with {} ", "HADOOP_HOME", resourcesHadoop, e);
             }
             logger.info("WIN System detected with HADOOP_HOME on {}", System.getenv("HADOOP_HOME"));
-
+        } else if (SystemUtils.IS_OS_WINDOWS && System.getenv("HADOOP_HOME") != null) {
+            logger.info("WIN System detected with HADOOP_HOME on {}", System.getenv("HADOOP_HOME"));
         } else {
             //Install
-
             if (System.getenv("HADOOP_HOME") == null) {
                 logger.warn("HADOOP_HOME not detected in unix!");
                 logger.warn("wget https://www-eu.apache.org/dist/hadoop/common/hadoop-3.3.0/hadoop-3.3.0.tar.gz");

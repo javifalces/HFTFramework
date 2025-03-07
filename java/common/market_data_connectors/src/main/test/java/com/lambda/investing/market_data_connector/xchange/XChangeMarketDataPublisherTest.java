@@ -13,7 +13,6 @@ import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.messaging.Command;
 import com.lambda.investing.model.trading.ExecutionReport;
-import io.reactivex.disposables.Disposable;
 import junit.framework.TestCase;
 import org.junit.Assert;
 import org.junit.Ignore;
@@ -143,17 +142,17 @@ import java.util.Locale;
 	}
 
 	@Test public void testBinance() {
-		MarketDataConfiguration marketDataConfiguration = new BinanceXchangeMarketDataConfiguration("", "");
+		MarketDataConfiguration marketDataConfiguration = new BinanceXchangeMarketDataConfiguration("aa", "aa");
 		testMD("binance", marketDataConfiguration);
 	}
 
 	@Test public void testCoinbase() {
-		MarketDataConfiguration marketDataConfiguration = new CoinbaseMarketDataConfiguration("", "");
+		MarketDataConfiguration marketDataConfiguration = new CoinbaseMarketDataConfiguration("aa", "aa");
 		testMD("coinbase", marketDataConfiguration);
 	}
 
 	@Test public void testKraken() {
-		MarketDataConfiguration marketDataConfiguration = new KrakenMarketDataConfiguration("", "");
+		MarketDataConfiguration marketDataConfiguration = new KrakenMarketDataConfiguration("aa", "aa");
 		testMD("kraken", marketDataConfiguration);
 	}
 }

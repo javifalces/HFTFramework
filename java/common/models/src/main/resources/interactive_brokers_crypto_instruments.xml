@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:util="http://www.springframework.org/schema/util"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+    <!--    https://www.paxos.com/en/fee/schedule-->
+    <bean id="btcusd_paxos" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="btc"></property>
+        <property name="market" value="paxos"></property>
+        <property name="currency" value="USD"></property>
+        <property name="priceTick" value="0.01"></property>
+        <property name="quantityTick" value="0.00001"></property>
+    </bean>
+    <bean id="ethusd_paxos" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="eth"></property>
+        <property name="market" value="paxos"></property>
+        <property name="currency" value="USD"></property>
+        <property name="priceTick" value="0.01"></property>
+        <property name="quantityTick" value="0.00001"></property>
+    </bean>
+
+    <util:list id="paxos_instruments" value-type="com.lambda.investing.model.asset.Instrument">
+        <ref bean="btcusd_paxos"/>
+        <ref bean="ethusd_paxos"/>
+
+    </util:list>
+
+</beans>

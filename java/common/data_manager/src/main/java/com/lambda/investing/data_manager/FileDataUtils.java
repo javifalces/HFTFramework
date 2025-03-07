@@ -40,6 +40,8 @@ public class FileDataUtils {
 
     public static final String DATE_COL_FILE = "C0";//"Timestamp";
     public static final String TIMESTAMP_COL = "timestamp";//"Timestamp";
+    public static final String MS_TO_NEXT_UPDATE_COL = "ms_to_next_update";//"Timestamp";
+
     //	public static final String MARKET_COL = "Market";//orderbook or last_close
     //	public static final String ISIN_COL = "Isin";
     private static final long MAX_TIME_WAIT_MILLIS = 3000;
@@ -55,28 +57,17 @@ public class FileDataUtils {
         for (String column : row.columnNames()) {
             Object value = row.getObject(column);
 
-            if (value != null) {
-
-                try {
-                    String valueStr = ((String) value).trim();
-                    if (valueStr.isEmpty()) {
-                        continue;
-                    }
-                } catch (Exception e) {
-                    ;
+            if (value instanceof String) {
+                String valueStr = ((String) value).trim();
+                if (!valueStr.isBlank()) {
+                    output.put(column, valueStr);
                 }
-                try {
-                    int valueint = ((int) value);
-                    double valueDouble = (double) valueint;
-                    output.put(column, valueDouble);
-                    continue;
-                } catch (Exception e) {
-                    ;
-                }
-
+            } else if (value instanceof Integer) {
+                output.put(column, ((Integer) value).doubleValue());
+            } else if (value != null) {
                 output.put(column, value);
-
             }
+
             if (column.equalsIgnoreCase(TIMESTAMP_COL)) {
                 Long valueL = (Long) row.getObject(column);
                 if (String.valueOf(valueL).length() == 10) {
@@ -189,13 +180,17 @@ public class FileDataUtils {
 
             return null;
         }
+        int rowsBefore = output.rowCount();
         output = output.setName("merged");
         output = output.sortAscendingOn(TIMESTAMP_COL);
         output = output.where(output.longColumn(TIMESTAMP_COL).isBetweenInclusive(startTime.getTime(), endTime.getTime()));
-
+        if (output.rowCount() == 0) {
+            System.err.println(Configuration.formatLog("createTableMerged: no data between {} and {} before had {} rows ", startTime.toString(), endTime.toString(), rowsBefore));
+            return null;
+        }
         long end = new Date().getTime();
         long elapsedSeconds = (end - start) / 1000;
-        System.out.println(Configuration.formatLog("Merged {} tables from {} to {}  in {} seconds", tablesInput.size(), startTime.toString(), endTime.toString(), elapsedSeconds));
+        System.out.println(Configuration.formatLog("Merged {} tables from {} to {} with {} rows  in {} seconds", tablesInput.size(), startTime.toString(), endTime.toString(), output.rowCount(), elapsedSeconds));
         return output;
 
     }
@@ -415,14 +410,32 @@ public class FileDataUtils {
 
 
             try {
-                double ask = (double) mapToUpdate.get("ask" + String.valueOf(level));
-                double bid = (double) mapToUpdate.get("bid" + String.valueOf(level));
-                double askQty = (double) mapToUpdate.get("ask_quantity" + String.valueOf(level));
-                double bidQty = (double) mapToUpdate.get("bid_quantity" + String.valueOf(level));
-                asks[level] = ask;
-                bids[level] = bid;
-                asksQty[level] = askQty;
-                bidsQty[level] = bidQty;
+                boolean isAsk = mapToUpdate.containsKey("ask" + String.valueOf(level));
+                boolean isBid = mapToUpdate.containsKey("bid" + String.valueOf(level));
+                if (isAsk) {
+                    double ask = (double) mapToUpdate.get("ask" + String.valueOf(level));
+                    double askQty = (double) mapToUpdate.get("ask_quantity" + String.valueOf(level));
+                    asks[level] = ask;
+                    asksQty[level] = askQty;
+                } else {
+                    if (level == 0) {
+                        asks[level] = Double.MAX_VALUE;
+                        asksQty[level] = 0.0;
+                    }
+                }
+
+                if (isBid) {
+                    double bid = (double) mapToUpdate.get("bid" + String.valueOf(level));
+                    double bidQty = (double) mapToUpdate.get("bid_quantity" + String.valueOf(level));
+                    bids[level] = bid;
+                    bidsQty[level] = bidQty;
+                } else {
+                    if (level == 0) {
+                        bids[level] = Double.MIN_VALUE;
+                        bidsQty[level] = 0.0;
+                    }
+                }
+
                 algorithmInfo[level].add(algorithmInfoDepth);
 
             } catch (Exception e) {

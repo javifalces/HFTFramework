@@ -3,22 +3,22 @@ package com.lambda.investing.market_data_connector.csv_file_reader;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorPublisher;
 import com.lambda.investing.data_manager.DataManager;
-import com.lambda.investing.data_manager.FileDataUtils;
 import com.lambda.investing.data_manager.csv.CSVDataManager;
+import com.lambda.investing.data_manager.FileDataUtils;
 import com.lambda.investing.market_data_connector.AbstractMarketDataConnectorPublisher;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.messaging.Command;
-import me.tongfei.progressbar.ProgressBar;
+import me.tongfei.progressbar.*;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import tech.tablesaw.api.Row;
 import tech.tablesaw.api.Table;
+import me.tongfei.progressbar.*;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
 
 import static com.lambda.investing.data_manager.FileDataUtils.*;
 

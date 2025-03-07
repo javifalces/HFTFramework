@@ -1,15 +1,17 @@
 package com.lambda.investing.model.market_data;
 
+import com.alibaba.fastjson2.annotation.JSONField;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.Verb;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.ToString;
 
+import java.util.Date;
 import java.util.UUID;
 
-import static com.lambda.investing.model.Util.GSON_STRING;
-import static com.lambda.investing.model.Util.getDatePythonUTC;
+import static com.lambda.investing.model.Util.*;
 
 @Getter @Setter public class Trade extends CSVable {
 
@@ -66,7 +68,7 @@ import static com.lambda.investing.model.Util.getDatePythonUTC;
 	}
 
 	@Override public String toString() {
-		return GSON_STRING.toJson(this);
+		return toJsonString(this);
 	}
 
 	public static StringBuilder headerCSV() {
@@ -93,6 +95,7 @@ import static com.lambda.investing.model.Util.getDatePythonUTC;
 		return stringBuffer.toString();
 	}
 
+	@JSONField(serialize = false, deserialize = false)
 	@Override public Object getParquetObject() {
 		return new TradeParquet(this);
 	}

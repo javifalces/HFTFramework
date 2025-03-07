@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:util="http://www.springframework.org/schema/util"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
+
+    <import resource="classpath:bybit_instruments.xml"></import>
+    <bean id="bybit_ConnectorConfiguration" class="com.lambda.investing.connector.zero_mq.ZeroMqConfiguration">
+        <property name="port" value="${bybit.marketdata.port}"/>
+        <property name="host" value="localhost"/>
+    </bean>
+
+    <bean id="isServerPublisher" class="java.lang.Boolean">
+        <constructor-arg value="true"/>
+    </bean>
+    <bean id="bybit_connectorPublisher" class="com.lambda.investing.connector.zero_mq.ZeroMqPublisher">
+        <constructor-arg index="0" value="bybitConnectorPublisher"/>
+        <constructor-arg index="1" value="${publisher.threads}"/>
+        <property name="server" ref="isServerPublisher"/>
+    </bean>
+
+
+    <bean id="bybit_MarketDataConfiguration"
+          class="com.lambda.investing.market_data_connector.xchange.BybitMarketDataConfiguration">
+        <constructor-arg index="0" value="${bybit.apikey}"/>
+        <constructor-arg index="1" value="${bybit.secretkey}"/>
+    </bean>
+
+    <bean id="bybit_MarketDataPublisher"
+          class="com.lambda.investing.market_data_connector.xchange.XChangeMarketDataPublisher" init-method="start">
+        <constructor-arg index="0" ref="bybit_ConnectorConfiguration"/>
+        <constructor-arg index="1" ref="bybit_connectorPublisher"/>
+        <constructor-arg index="2" ref="bybit_MarketDataConfiguration"/>
+        <constructor-arg index="3" ref="bybit_instruments"/>
+    </bean>
+
+
+    <!--persistance listener-->
+    <bean id="isServerProvider" class="java.lang.Boolean">
+        <constructor-arg value="false"/>
+    </bean>
+
+    <bean id="bybit_connectorProvider" class="com.lambda.investing.connector.zero_mq.ZeroMqProvider"
+          factory-method="getInstance" init-method="start">
+        <constructor-arg index="0" ref="bybit_ConnectorConfiguration"/>
+        <constructor-arg index="1" value="${provider.threads}"/>
+        <constructor-arg index="2" ref="isServerProvider"/>
+    </bean>
+
+
+    <bean id="bybit_persistMarketDataConnectorPublisher"
+          class="com.lambda.investing.market_data_connector.persist.PersistorMarketDataConnector" init-method="init">
+        <constructor-arg index="0" value="${csv.datapath}"/>
+        <constructor-arg index="1" value="${parquet.datapath}"/>
+        <constructor-arg index="2" ref="bybit_connectorProvider"/>
+        <constructor-arg index="3" ref="bybit_ConnectorConfiguration"/>
+
+        <property name="periodCheck" value="${persist.temp_cache.ms}"/>
+        <property name="persistParquet" value="${persist.parquet}"/>
+    </bean>
+
+    <!--trading engine-->
+    <bean id="bybit_executionReportConfigurationPublisher"
+          class="com.lambda.investing.connector.zero_mq.ZeroMqConfiguration">
+        <property name="port" value="${bybit.tradeengine.port}"/>
+        <property name="host" value="localhost"/>
+    </bean>
+
+    <bean id="bybit_executionReportConnectorPublisher" class="com.lambda.investing.connector.zero_mq.ZeroMqPublisher">
+        <constructor-arg index="0" value="bybit_ExecutionReportPublisher"/>
+        <constructor-arg index="1" value="${publisher.threads}"/>
+    </bean>
+
+
+    <bean id="bybit_TradingEngineConfiguration"
+          class="com.lambda.investing.trading_engine_connector.xchange.BybitTradingEngineConfiguration">
+        <constructor-arg index="0" value="${bybit.apikey}"/>
+        <constructor-arg index="1" value="${bybit.secretkey}"/>
+    </bean>
+
+
+    <bean id="bybit_TradingEngine"
+          class="com.lambda.investing.trading_engine_connector.xchange.XChangeTradingEngine" init-method="start">
+        <constructor-arg index="0" ref="bybit_ConnectorConfiguration"/>
+        <constructor-arg index="1" ref="bybit_connectorProvider"/>
+        <constructor-arg index="2" ref="bybit_executionReportConfigurationPublisher"/>
+        <constructor-arg index="3" ref="bybit_executionReportConnectorPublisher"/>
+        <constructor-arg index="4" ref="bybit_TradingEngineConfiguration"/>
+        <constructor-arg index="5" ref="bybit_instruments"/>
+    </bean>
+
+
+</beans>

@@ -1,14 +1,18 @@
 package com.lambda.investing.algo_trading;
 
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
+
 import com.lambda.investing.algorithmic_trading.AlgorithmCreationUtils;
 import com.lambda.investing.algorithmic_trading.AlgorithmUtils;
 import lombok.Getter;
+
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import lombok.ToString;
 
 import java.util.Map;
 
-@Getter @ToString
+
 /***
  * EXAMPLE
  *{
@@ -35,7 +39,13 @@ import java.util.Map;
  * }
  *
  *
- */ public class AlgorithmConfiguration {
+ */
+
+@Getter
+@Setter
+@NoArgsConstructor
+@ToString
+public class AlgorithmConfiguration {
 
 	private static int COUNTER_ALGORITHMS = -1;
 
@@ -52,6 +62,7 @@ import java.util.Map;
 		Map<String, Object> parametersAsString = AlgorithmUtils.getParameters(parameters);
 		return AlgorithmCreationUtils.getAlgorithm(algorithmConnectorConfiguration, algorithmName, parametersAsString);
 	}
+
 
 }
 

@@ -21,7 +21,7 @@ public class AlgorithmNotifier {
     private Algorithm algorithm;
 
     private Map<String, Object> lastParams = new HashMap<>();
-
+    private boolean firstParams = true;
     public AlgorithmNotifier(Algorithm algorithm, int threadsNotifier) {
         this.threadsNotifier = threadsNotifier;
         this.algorithmInfo = algorithm.algorithmInfo;
@@ -110,9 +110,10 @@ public class AlgorithmNotifier {
     }
 
     public void notifyObserversOnUpdateParams(Map<String, Object> params) {
-        if (lastParams.equals(params)) {
+        if (!firstParams && lastParams.equals(params)) {
             return;
         }
+        firstParams = false;
 
         if (algorithm.getAlgorithmObservers().size() > 0) {
             if (isMultithreaded()) {
@@ -127,8 +128,27 @@ public class AlgorithmNotifier {
 
     }
 
+    private void _notifyObserversCustomColumns(long timestamp, String instrumentPk, String key, Double value) {
+        for (AlgorithmObserver algorithmObserver : algorithm.getAlgorithmObservers()) {
+            algorithmObserver.onCustomColumns(timestamp, this.algorithmInfo, instrumentPk, key, value);
+        }
+    }
+
+    public void notifyObserversCustomColumns(long timestamp, String instrumentPk, String key, Double value) {
+        if (algorithm.getAlgorithmObservers().size() > 0) {
+            if (isMultithreaded()) {
+                notifierPool.submit(() -> {
+                    _notifyObserversCustomColumns(timestamp, instrumentPk, key, value);
+                });
+            } else {
+                _notifyObserversCustomColumns(timestamp, instrumentPk, key, value);
+            }
+        }
+    }
+
     public void notifyLastParams() {
         if (lastParams.size() > 0) {
+            firstParams = true;
             notifyObserversOnUpdateParams(lastParams);
         }
     }

@@ -44,7 +44,7 @@ import java.util.Map;
 			String hedgePath = Configuration.OUTPUT_PATH + File.separator + String
 					.format("hedge_%s.json", getInstrument().getPrimaryKey());
 			try {
-				LinearRegressionHedgeManager hedgeManager = new LinearRegressionHedgeManager(hedgePath);
+				LinearRegressionHedgeManager hedgeManager = new LinearRegressionHedgeManager(this.instrument, hedgePath);
 				setHedgeManager(hedgeManager);
 			} catch (FileNotFoundException e) {
 				System.err.println(

@@ -2,14 +2,18 @@ package com.lambda.investing.algorithmic_trading.reinforcement_learning.state;
 
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
+import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.PnlSnapshot;
+import com.lambda.investing.algorithmic_trading.reinforcement_learning.action.AvellanedaAction;
 import com.lambda.investing.data_manager.csv.CSVDataManager;
 import com.lambda.investing.model.candle.Candle;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.trading.Verb;
 import lombok.Getter;
+import lombok.Setter;
 import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.math3.exception.NumberIsTooLargeException;
 import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.curator.shaded.com.google.common.collect.Queues;
 import org.apache.logging.log4j.LogManager;
@@ -17,10 +21,13 @@ import org.apache.logging.log4j.Logger;
 import org.paukov.combinatorics3.Generator;
 
 import java.io.*;
+import java.math.BigDecimal;
+import java.math.MathContext;
 import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.lambda.investing.data_manager.csv.CSVDataManager.removeEmptyLines;
+import static org.apache.commons.math3.util.CombinatoricsUtils.binomialCoefficientDouble;
 
 /**
  * https://softwareengineering.stackexchange.com/questions/286822/fast-indexing-of-k-combinations

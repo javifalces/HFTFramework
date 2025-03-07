@@ -26,8 +26,8 @@ public class ZeroMqPublisher implements ConnectorPublisher {
     Logger logger = LogManager.getLogger(ZeroMqPublisher.class);
     private int OKReceived = 0;
 
-    Map<com.lambda.investing.connector.zero_mq.ZeroMqConfiguration, AtomicInteger> counterMessagesSent = new HashMap<>();
-    Map<com.lambda.investing.connector.zero_mq.ZeroMqConfiguration, AtomicInteger> counterMessagesNotSent = new HashMap<>();
+    Map<ZeroMqConfiguration, AtomicInteger> counterMessagesSent = new HashMap<>();
+    Map<ZeroMqConfiguration, AtomicInteger> counterMessagesNotSent = new HashMap<>();
 
     private ExecutorService poolExecutor;
     private String name;
@@ -36,6 +36,9 @@ public class ZeroMqPublisher implements ConnectorPublisher {
     private final Object lock = new Object();
 
     ZContext context;
+
+    private static boolean DEFAULT_SERVER = true;
+    private boolean isServer = DEFAULT_SERVER;
 
     public ZeroMqPublisher(String name, int threads) {
 
@@ -49,15 +52,19 @@ public class ZeroMqPublisher implements ConnectorPublisher {
         if (this.threads > 0) {
             poolExecutor = Executors.newFixedThreadPool(this.threads, namedThreadFactory);
         }
-        context = com.lambda.investing.connector.zero_mq.ZeroMqConfiguration.GetZContext();//create here to avoid remove by GC
+        context = ZeroMqConfiguration.GetZContext();//create here to avoid remove by GC
 
+    }
+
+    public void setServer(boolean server) {
+        isServer = server;
     }
 
     public int getOKReceived() {
         return OKReceived;
     }
 
-    private ZMQ.Socket getPublishSocket(com.lambda.investing.connector.zero_mq.ZeroMqConfiguration configuration) {
+    private ZMQ.Socket getPublishSocket(ZeroMqConfiguration configuration) {
         //		http://zguide.zeromq.org/java:hwserver
         ZMQ.Socket publishSocket = null;
         ZMQ.Socket reqSocket = null;
@@ -65,20 +72,35 @@ public class ZeroMqPublisher implements ConnectorPublisher {
             publishSocket = context.createSocket(ZMQ.PUB);
             publishSocket.setHWM(1);
             publishSocket.setLinger(0);
+            if (isServer) {
+                String url = configuration.getBindUrl();
+                logger.info("Creating PUB server socket {} : {}", url, configuration);
+                PORTS_TAKEN_PUB.put(configuration.getPort(), publishSocket);
+                publishSocket.bind(url);
+            } else {
+                String url = configuration.getUrl();
+                logger.info("Connecting PUB socket {} : {}", url, configuration);
+                PORTS_TAKEN_PUB.put(configuration.getPort(), publishSocket);
+                publishSocket.connect(url);
+            }
 
-            String url = configuration.getBindUrl();
-            logger.info("Creating Publisher socket {} : {}", url, configuration);
-            PORTS_TAKEN_PUB.put(configuration.getPort(), publishSocket);
-            publishSocket.bind(url);
-
-            ZContext contextAck = com.lambda.investing.connector.zero_mq.ZeroMqConfiguration.GetZContext();
+            ZContext contextAck = ZeroMqConfiguration.GetZContext();
             reqSocket = contextAck.createSocket(ZMQ.REP);
             reqSocket.setHWM(1);
             reqSocket.setLinger(0);
-            String urlAck = String.format("%s://*:%d", configuration.getProtocol(), configuration.getPort() + 1);
-            logger.info("Creating Req socket {} ", urlAck);
-            PORTS_TAKEN_REQ_ACK.put(configuration.getPort() + 1, publishSocket);
-            reqSocket.bind(urlAck);
+            if (isServer) {
+                String urlAck = String.format("%s://*:%d", configuration.getProtocol(), configuration.getPort() + 1);
+                logger.info("Creating REQ server socket {} ", urlAck);
+                PORTS_TAKEN_REQ_ACK.put(configuration.getPort() + 1, publishSocket);
+                reqSocket.bind(urlAck);
+            } else {
+                String urlAck = String.format("%s://%s:%d", configuration.getProtocol(), configuration.getHost(), configuration.getPort() + 1);
+                logger.info("Connecting REQ socket {} ", urlAck);
+                PORTS_TAKEN_REQ_ACK.put(configuration.getPort() + 1, publishSocket);
+                reqSocket.connect(urlAck);
+            }
+
+
             new Thread(new ZeroMqAckReqProvider(reqSocket), "listen_req_" + configuration.getPort() + 1).start();
 
 
@@ -91,7 +113,7 @@ public class ZeroMqPublisher implements ConnectorPublisher {
     }
 
     @Override public int getMessagesSent(ConnectorConfiguration configuration) {
-        com.lambda.investing.connector.zero_mq.ZeroMqConfiguration zeroMqConfiguration = (com.lambda.investing.connector.zero_mq.ZeroMqConfiguration) configuration;
+        ZeroMqConfiguration zeroMqConfiguration = (ZeroMqConfiguration) configuration;
         if (counterMessagesSent.containsKey(zeroMqConfiguration)) {
             return counterMessagesSent.get(zeroMqConfiguration).get();
         } else {
@@ -100,7 +122,7 @@ public class ZeroMqPublisher implements ConnectorPublisher {
     }
 
     @Override public int getMessagesFailed(ConnectorConfiguration configuration) {
-        com.lambda.investing.connector.zero_mq.ZeroMqConfiguration zeroMqConfiguration = (com.lambda.investing.connector.zero_mq.ZeroMqConfiguration) configuration;
+        ZeroMqConfiguration zeroMqConfiguration = (ZeroMqConfiguration) configuration;
         if (counterMessagesNotSent.containsKey(zeroMqConfiguration)) {
             return counterMessagesNotSent.get(zeroMqConfiguration).get();
         } else {
@@ -110,7 +132,7 @@ public class ZeroMqPublisher implements ConnectorPublisher {
 
     @Override public boolean publish(ConnectorConfiguration connectorConfiguration, TypeMessage typeMessage,
                                      String topic, String message) {
-        if (!(connectorConfiguration instanceof com.lambda.investing.connector.zero_mq.ZeroMqConfiguration)) {
+        if (!(connectorConfiguration instanceof ZeroMqConfiguration)) {
             logger.error("configuration is not ZeroMqConfiguration");
             return false;
         }
@@ -119,7 +141,7 @@ public class ZeroMqPublisher implements ConnectorPublisher {
             retries = COMMAND_RETRIES_PUBLISH;
         }
 
-        com.lambda.investing.connector.zero_mq.ZeroMqConfiguration zeroMqConfiguration = (com.lambda.investing.connector.zero_mq.ZeroMqConfiguration) connectorConfiguration;
+        ZeroMqConfiguration zeroMqConfiguration = (ZeroMqConfiguration) connectorConfiguration;
         ZMQ.Socket socket = getPublishSocket(zeroMqConfiguration);
         synchronized (socket) {
             for (int counter = 0; counter < retries; counter++) {

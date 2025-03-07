@@ -6,5 +6,8 @@
     <import resource="classpath:binance_instruments.xml"></import>
     <import resource="classpath:coinbase_instruments.xml"></import>
     <import resource="classpath:kraken_instruments.xml"></import>
+    <import resource="classpath:bybit_instruments.xml"></import>
     <import resource="classpath:darwinex_instruments.xml"></import>
+    <import resource="classpath:interactive_brokers_instruments.xml"></import>
+
 </beans>

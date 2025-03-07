@@ -1,12 +1,14 @@
 package com.lambda.investing.algorithmic_trading.reinforcement_learning;
 
 import com.google.common.primitives.Doubles;
-import com.lambda.investing.ArrayUtils;
 import com.lambda.investing.Configuration;
+
+import com.lambda.investing.ArrayUtils;
 import lombok.Getter;
 import lombok.Setter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
 import org.deeplearning4j.core.storage.StatsStorage;
 import org.deeplearning4j.earlystopping.EarlyStoppingConfiguration;
 import org.deeplearning4j.earlystopping.EarlyStoppingResult;
@@ -19,6 +21,7 @@ import org.deeplearning4j.nn.api.OptimizationAlgorithm;
 import org.deeplearning4j.nn.conf.BackpropType;
 import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
 import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
+
 import org.deeplearning4j.nn.conf.layers.DenseLayer;
 import org.deeplearning4j.nn.conf.layers.OutputLayer;
 import org.deeplearning4j.nn.gradient.Gradient;
@@ -55,10 +58,7 @@ import org.nd4j.linalg.lossfunctions.impl.LossMSE;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Collection;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 import static org.deeplearning4j.util.ModelSerializer.restoreMultiLayerNetworkAndNormalizer;

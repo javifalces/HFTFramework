@@ -1,7 +1,6 @@
 package com.lambda.investing.trading_engine_connector.paper;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ConnectorProvider;
@@ -12,11 +11,9 @@ import org.apache.logging.log4j.Logger;
 
 import java.lang.reflect.Modifier;
 
-public class PaperConnectorOrderRequestListener implements ConnectorListener {
+import static com.lambda.investing.model.Util.fromJsonString;
 
-	public static Gson GSON = new GsonBuilder()
-			.excludeFieldsWithModifiers(Modifier.STATIC, Modifier.TRANSIENT, Modifier.VOLATILE, Modifier.FINAL)
-			.serializeSpecialFloatingPointValues().disableHtmlEscaping().create();
+public class PaperConnectorOrderRequestListener implements ConnectorListener {
 
 	private Logger logger = LogManager.getLogger(PaperConnectorOrderRequestListener.class);
 
@@ -41,7 +38,7 @@ public class PaperConnectorOrderRequestListener implements ConnectorListener {
 			TypeMessage typeMessage, String content) {
 		if (typeMessage.equals(TypeMessage.order_request)) {
 			try {
-				OrderRequest orderRequestParsed = GSON.fromJson(content, OrderRequest.class);
+                OrderRequest orderRequestParsed = fromJsonString(content, OrderRequest.class);
 				this.paperTradingEngineConnector.orderRequest(orderRequestParsed);
 			} catch (Exception ex) {
 				logger.error(

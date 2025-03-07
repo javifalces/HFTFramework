@@ -1,11 +1,10 @@
 package com.lambda.investing.algo_trading;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.lambda.investing.ArrayUtils;
+
 import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.Algorithm;
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
+import com.lambda.investing.ArrayUtils;
 import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
 import com.lambda.investing.live_trading_engine.LiveTrading;
@@ -31,13 +30,13 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 
+import static com.lambda.investing.model.Util.fromJsonString;
+import static com.lambda.investing.model.Util.toJsonString;
+
 public class App {
     private static boolean DISABLED_WARNING = false;
     protected final ApplicationContext ac;
     protected final Logger logger;
-    public static Gson GSON = new GsonBuilder().setPrettyPrinting()
-            .excludeFieldsWithModifiers(Modifier.STATIC, Modifier.TRANSIENT, Modifier.VOLATILE, Modifier.FINAL)
-            .serializeSpecialFloatingPointValues().disableHtmlEscaping().create();
     private static Algorithm ALGORITHM;
 
     static {
@@ -294,8 +293,7 @@ public class App {
     }
 
     private static ZeroMqTradingConfiguration loadJson(String[] args) {
-        ZeroMqTradingConfiguration zeroMqTradingConfiguration = GSON
-                .fromJson(args[0], ZeroMqTradingConfiguration.class);
+        ZeroMqTradingConfiguration zeroMqTradingConfiguration = fromJsonString(args[0], ZeroMqTradingConfiguration.class);
         System.out.println("-----");
         System.out.println(args[0]);
         System.out.println("-----");
@@ -354,7 +352,7 @@ public class App {
         }
         logger = LogManager.getLogger();//load logger properties
         logger.info("----");
-        logger.info("{}", GSON.toJson(zeroMqTradingConfiguration));
+        logger.info("{}", toJsonString(zeroMqTradingConfiguration));
         logger.info("----");
 
         try {

@@ -5,11 +5,9 @@ import com.lambda.investing.market_data_connector.MarketDataProvider;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.messaging.Command;
+import com.lambda.investing.model.trading.ExecutionReport;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 
 public class MockFactorProvider extends AbstractFactorProvider implements MarketDataListener {
 

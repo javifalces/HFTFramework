@@ -1,11 +1,14 @@
 package com.lambda.investing.algorithmic_trading;
 
+import com.google.common.primitives.Doubles;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.ExecutionReportStatus;
 import com.lambda.investing.model.trading.Verb;
 import lombok.Getter;
+import lombok.Setter;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -14,7 +17,9 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.*;
+import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetStd;
+import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscore;
+import static com.lambda.investing.algorithmic_trading.TimeseriesUtils.GetZscorePositive;
 
 
 /****

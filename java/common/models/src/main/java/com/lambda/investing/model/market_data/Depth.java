@@ -1,5 +1,7 @@
 package com.lambda.investing.model.market_data;
 
+import com.alibaba.fastjson2.annotation.JSONField;
+import com.google.common.primitives.Doubles;
 import com.lambda.investing.ArrayUtils;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.trading.Verb;
@@ -8,13 +10,12 @@ import lombok.Setter;
 
 import java.util.*;
 
+import static com.lambda.investing.ArrayUtils.ArrayReverse;
 import static com.lambda.investing.ArrayUtils.RemoveLevelAndShiftToLeft;
-import static com.lambda.investing.model.Util.GSON_STRING;
-import static com.lambda.investing.model.Util.getDatePythonUTC;
+import static com.lambda.investing.model.Util.*;
 
 @Getter
 @Setter
-
 public class Depth extends CSVable implements Cloneable {
 
     public static String ALGORITHM_INFO_MM = "MarketMaker_Parquet";
@@ -24,13 +25,20 @@ public class Depth extends CSVable implements Cloneable {
     public static int MAX_DEPTH_CSV = 5;
 
     //	private transient Instrument instrument;
+
     private String instrument;
+
     private long timestamp;
+
+
     private Double[] bidsQuantities, asksQuantities, bids, asks;//TODO change to Bigdecimal
 
     private List<String>[] bidsAlgorithmInfo, asksAlgorithmInfo;//just for backtesting
 
+
     private int levels, askLevels, bidLevels;
+
+
     private long timeToNextUpdateMs = Long.MIN_VALUE;
 
     public void setAllQuantitiesZero() {
@@ -74,12 +82,17 @@ public class Depth extends CSVable implements Cloneable {
         return levels;
     }
 
+    @JSONField(serialize = false, deserialize = false)
     public double getMidPrice() {
         return (getBestBid() + getBestAsk()) / 2;
     }
 
+    @JSONField(serialize = false, deserialize = false)
     public double getSpread() {
-        return Math.abs(bids[0] - asks[0]);
+        double bestBid = getBestBid();
+        double bestAsk = getBestAsk();
+
+        return Math.abs(bestBid - bestAsk);
     }
 
     public boolean isDepthFilled() {
@@ -98,14 +111,87 @@ public class Depth extends CSVable implements Cloneable {
         return isFilledAtLeastOneLevel && isRightPrice;
     }
 
+    @JSONField(serialize = false, deserialize = false)
     public double getBestBid() {
+        if (bids == null || bids.length == 0) {
+            return Double.MIN_VALUE;
+        }
         return bids[0];
     }
 
+    public double getBidPriceLevel(int level, double qty) {
+        if (qty <= 1E-9 && level == 0) {
+            return getBestBid();
+        }
+        if (bids == null || bids.length == 0 || bidsQuantities == null || bidsQuantities.length == 0) {
+            return Double.MIN_VALUE;
+        }
+        double cumQty = 0;
+        int levelIt = 0;
+        for (int i = 0; i < bids.length; i++) {
+            cumQty += bidsQuantities[i];
+            if (cumQty >= qty) {
+                if (levelIt == level) {
+                    return bids[i];
+                }
+                levelIt++;
+            }
+        }
+        return Double.MIN_VALUE;
+    }
+
+    public double getAskPriceLevel(int level, double qty) {
+        if (qty <= 1E-9 && level == 0) {
+            return getBestAsk();
+        }
+
+        if (asks == null || asks.length == 0 || asksQuantities == null || asksQuantities.length == 0) {
+            return Double.MIN_VALUE;
+        }
+        double cumQty = 0;
+        int levelIt = 0;
+        for (int i = 0; i < asks.length; i++) {
+            cumQty += asksQuantities[i];
+            if (cumQty >= qty) {
+                if (levelIt == level) {
+                    return asks[i];
+                }
+                levelIt++;
+            }
+        }
+        return Double.MIN_VALUE;
+    }
+
+    public double getMidPriceLevel(int level, double qty) {
+        if (qty <= 1E-9 && level == 0) {
+            return getMidPrice();
+        }
+
+        double bestBid = getBidPriceLevel(level, qty);
+        double bestAsk = getAskPriceLevel(level, qty);
+        return (bestBid + bestAsk) / 2;
+    }
+
+    public double getSpreadLevel(int level, double qty) {
+        if (qty <= 1E-9 && level == 0) {
+            return getSpread();
+        }
+
+        double bestBid = getBidPriceLevel(level, qty);
+        double bestAsk = getAskPriceLevel(level, qty);
+        return bestAsk - bestBid;
+    }
+
+
+    @JSONField(serialize = false, deserialize = false)
     public double getBestAsk() {
+        if (asks == null || asks.length == 0) {
+            return Double.MAX_VALUE;
+        }
         return asks[0];
     }
 
+    @JSONField(serialize = false, deserialize = false)
     public double getWorstAsk() {
         double output = -1;
         int levelCounter = asks.length - 1;
@@ -119,6 +205,7 @@ public class Depth extends CSVable implements Cloneable {
         return output;
     }
 
+    @JSONField(serialize = false, deserialize = false)
     public double getWorstBid() {
         double output = -1;
         int levelCounter = bids.length - 1;
@@ -133,11 +220,19 @@ public class Depth extends CSVable implements Cloneable {
 
     }
 
+    @JSONField(serialize = false, deserialize = false)
     public double getBestBidQty() {
+        if (bidsQuantities == null || bidsQuantities.length == 0) {
+            return 0;
+        }
         return bidsQuantities[0];
     }
 
+    @JSONField(serialize = false, deserialize = false)
     public double getBestAskQty() {
+        if (asksQuantities == null || asksQuantities.length == 0) {
+            return 0;
+        }
         return asksQuantities[0];
     }
 
@@ -192,7 +287,7 @@ public class Depth extends CSVable implements Cloneable {
                         //level disappear
                         levelsToRemove.add(level);
                     } else {
-                        if (algorithmInfo != null) {
+                        if (algorithmInfo != null && algorithmInfos != null && algorithmInfos[level] != null) {
                             algorithmInfos[level].remove(algorithmInfo);
                         }
                     }
@@ -216,7 +311,7 @@ public class Depth extends CSVable implements Cloneable {
 
     @Override
     public String toString() {
-        return GSON_STRING.toJson(this);
+        return toJsonString(this);
     }
 
     public String prettyPrint() {
@@ -350,11 +445,14 @@ public class Depth extends CSVable implements Cloneable {
         return stringBuffer.toString();
     }
 
+
+    @JSONField(serialize = false, deserialize = false)
     @Override
     public Object getParquetObject() {
         return getDepthParquet();
     }
 
+    @JSONField(serialize = false, deserialize = false)
     public DepthParquet getDepthParquet() {
         return new DepthParquet(this);
     }
@@ -455,6 +553,7 @@ public class Depth extends CSVable implements Cloneable {
         //		}
     }
 
+    @JSONField(serialize = false, deserialize = false)
     public double getVPIN() {
         //is the same?
         return getImbalance();
@@ -470,6 +569,7 @@ public class Depth extends CSVable implements Cloneable {
      *
      * @return
      */
+    @JSONField(serialize = false, deserialize = false)
     public double getMicroPrice() {
         //only on the first level
         double sumQty = getBestAskQty() + getBestBidQty();
@@ -483,6 +583,7 @@ public class Depth extends CSVable implements Cloneable {
      *
      * @return
      */
+    @JSONField(serialize = false, deserialize = false)
     public double getImbalance() {
         double bidVolTotal = 0.;
         double askVolTotal = 0.;
@@ -506,6 +607,7 @@ public class Depth extends CSVable implements Cloneable {
         return (bidVolTotal - askVolTotal) / (bidVolTotal + askVolTotal);
     }
 
+    @JSONField(serialize = false, deserialize = false)
     public double getTotalVolume() {
         double bidVolTotal = 0.;
         double askVolTotal = 0.;
@@ -531,7 +633,7 @@ public class Depth extends CSVable implements Cloneable {
         return bidVolTotal + askVolTotal;
     }
 
-
+    @JSONField(serialize = false, deserialize = false)
     public int getLevelBidPrice(double price) {
         int lastLevel = getBidLevels();
         if (bids != null) {
@@ -548,6 +650,7 @@ public class Depth extends CSVable implements Cloneable {
         return lastLevel;
     }
 
+    @JSONField(serialize = false, deserialize = false)
     public int getLevelAskPrice(double price) {
         int lastLevel = getAskLevels();
         if (asks != null) {
@@ -564,6 +667,7 @@ public class Depth extends CSVable implements Cloneable {
         return lastLevel;
     }
 
+    @JSONField(serialize = false, deserialize = false)
     public double getBidVolume(double price) {
         double bidVolPrice = 0.;
         for (int level = 0; level < getBidLevels(); level++) {
@@ -578,6 +682,7 @@ public class Depth extends CSVable implements Cloneable {
         return bidVolPrice;
     }
 
+    @JSONField(serialize = false, deserialize = false)
     public double getAskVolume(double price) {
         double askVolPrice = 0.;
         for (int level = 0; level < getAskLevels(); level++) {
@@ -592,7 +697,7 @@ public class Depth extends CSVable implements Cloneable {
         return askVolPrice;
     }
 
-
+    @JSONField(serialize = false, deserialize = false)
     public double getBidVolume() {
         double bidVolTotal = 0.;
         for (int level = 0; level < getBidLevels(); level++) {
@@ -605,6 +710,7 @@ public class Depth extends CSVable implements Cloneable {
         return bidVolTotal;
     }
 
+    @JSONField(serialize = false, deserialize = false)
     public double getAskVolume() {
         double askVolTotal = 0.;
         for (int level = 0; level < getAskLevels(); level++) {

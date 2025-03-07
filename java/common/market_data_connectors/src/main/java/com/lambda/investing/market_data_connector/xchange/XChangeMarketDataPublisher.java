@@ -1,28 +1,27 @@
 package com.lambda.investing.market_data_connector.xchange;
 
+import com.binance.api.client.domain.event.DepthEvent;
+import com.binance.api.client.domain.market.OrderBookEntry;
+import com.lambda.investing.binance.BinanceBrokerConnector;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorPublisher;
 import com.lambda.investing.market_data_connector.AbstractMarketDataConnectorPublisher;
 import com.lambda.investing.market_data_connector.MarketDataConfiguration;
+import com.lambda.investing.market_data_connector.Statistics;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
-import com.lambda.investing.xchange.BinanceXchangeBrokerConnector;
-import com.lambda.investing.xchange.CoinbaseBrokerConnector;
-import com.lambda.investing.xchange.KrakenBrokerConnector;
-import com.lambda.investing.xchange.XChangeBrokerConnector;
+import com.lambda.investing.xchange.*;
+import info.bitrich.xchangestream.core.ProductSubscription;
 import info.bitrich.xchangestream.core.StreamingExchange;
-import io.reactivex.disposables.Disposable;
+import io.reactivex.rxjava3.disposables.Disposable;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.knowm.xchange.currency.CurrencyPair;
 import org.knowm.xchange.dto.trade.LimitOrder;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -72,6 +71,7 @@ public class XChangeMarketDataPublisher extends AbstractMarketDataConnectorPubli
 		symbolToInstrument = new ConcurrentHashMap<>();
 		lastDepthSent = new ConcurrentHashMap<>();
 		lastTradeSent = new ConcurrentHashMap<>();
+		statistics = new Statistics("XChangeMarketDataPublisher", 60000);//useful to see if we are receiving data
 		setBrokerConnector();
 
 
@@ -93,6 +93,11 @@ public class XChangeMarketDataPublisher extends AbstractMarketDataConnectorPubli
 			BinanceXchangeMarketDataConfiguration binanceMarketDataConfiguration = (BinanceXchangeMarketDataConfiguration) marketDataConfiguration;
 			this.brokerConnector = BinanceXchangeBrokerConnector.getInstance(binanceMarketDataConfiguration.getApiKey(),
 					binanceMarketDataConfiguration.getSecretKey());
+
+		} else if (marketDataConfiguration instanceof BybitMarketDataConfiguration) {
+			BybitMarketDataConfiguration bybitMarketDataConfiguration = (BybitMarketDataConfiguration) marketDataConfiguration;
+			this.brokerConnector = BybitBrokerConnector.getInstance(bybitMarketDataConfiguration.getApiKey(),
+					bybitMarketDataConfiguration.getSecretKey());
 
 		} else {
 			logger.error("trying to construct setBrokerConnector with a not recognized marketDataConfiguration {}",
@@ -252,6 +257,7 @@ public class XChangeMarketDataPublisher extends AbstractMarketDataConnectorPubli
 				Disposable subscriptionDepth = webSocketClient.getStreamingMarketDataService()
 						.getOrderBook(currencyPair).subscribe(orderBook -> onDepthResponse(instrument, orderBook),
 								throwable -> logger.error("Error in depth subscription", throwable));
+
 				subscriptionDepths.add(subscriptionDepth);
 			} catch (Exception e) {
 				logger.error("error subscribing to depth on {} ", instrument, e);

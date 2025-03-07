@@ -4,6 +4,8 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
 
+import static com.lambda.investing.model.Util.toJsonString;
+
 @Getter @Setter @ToString public class Command {
 
 	public enum ClassMessage {
@@ -16,5 +18,9 @@ import lombok.ToString;
 
 	private String message;
 	private Long timestamp;
+
+	public String ToString() {
+		return toJsonString(this);
+	}
 
 }

@@ -4,18 +4,22 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ConnectorPublisher;
+import com.lambda.investing.model.messaging.TopicUtils;
 import com.lambda.investing.model.messaging.TypeMessage;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.zeromq.ZContext;
 import org.zeromq.ZMQ;
+import org.zeromq.ZMsg;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class ZeroMqPusher implements ConnectorPublisher {
@@ -24,14 +28,14 @@ public class ZeroMqPusher implements ConnectorPublisher {
     private static final Map<Integer, ZMQ.Socket> PORTS_TAKEN_PUSH = new ConcurrentHashMap<>();
     Logger logger = LogManager.getLogger(ZeroMqPusher.class);
 
-    Map<com.lambda.investing.connector.zero_mq.ZeroMqConfiguration, AtomicInteger> counterMessagesSent = new HashMap<>();
-    Map<com.lambda.investing.connector.zero_mq.ZeroMqConfiguration, AtomicInteger> counterMessagesNotSent = new HashMap<>();
+    Map<ZeroMqConfiguration, AtomicInteger> counterMessagesSent = new HashMap<>();
+    Map<ZeroMqConfiguration, AtomicInteger> counterMessagesNotSent = new HashMap<>();
 
     private ExecutorService poolExecutor;
     private String name;
     private int threads;
 
-    private Map<com.lambda.investing.connector.zero_mq.ZeroMqConfiguration, ZeroMqPuller> zeroMqPullerMap;
+    private Map<ZeroMqConfiguration, ZeroMqPuller> zeroMqPullerMap;
     private ZeroMqPusherListener zeroMqPusherListener = new ZeroMqPusherListener();
     private final Object lock = new Object();
 
@@ -54,7 +58,7 @@ public class ZeroMqPusher implements ConnectorPublisher {
 
     @Override
     public int getMessagesSent(ConnectorConfiguration configuration) {
-        com.lambda.investing.connector.zero_mq.ZeroMqConfiguration zeroMqConfiguration = (com.lambda.investing.connector.zero_mq.ZeroMqConfiguration) configuration;
+        ZeroMqConfiguration zeroMqConfiguration = (ZeroMqConfiguration) configuration;
         if (counterMessagesSent.containsKey(zeroMqConfiguration)) {
             return counterMessagesSent.get(zeroMqConfiguration).get();
         } else {
@@ -64,7 +68,7 @@ public class ZeroMqPusher implements ConnectorPublisher {
 
     @Override
     public int getMessagesFailed(ConnectorConfiguration configuration) {
-        com.lambda.investing.connector.zero_mq.ZeroMqConfiguration zeroMqConfiguration = (com.lambda.investing.connector.zero_mq.ZeroMqConfiguration) configuration;
+        ZeroMqConfiguration zeroMqConfiguration = (ZeroMqConfiguration) configuration;
         if (counterMessagesNotSent.containsKey(zeroMqConfiguration)) {
             return counterMessagesNotSent.get(zeroMqConfiguration).get();
         } else {
@@ -72,7 +76,7 @@ public class ZeroMqPusher implements ConnectorPublisher {
         }
     }
 
-    private ZMQ.Socket getPushSocket(com.lambda.investing.connector.zero_mq.ZeroMqConfiguration configuration) {
+    private ZMQ.Socket getPushSocket(ZeroMqConfiguration configuration) {
         //		http://zguide.zeromq.org/java:hwserver
         //		ZMQ.Socket publishSocket = null;
         //		ZMQ.Socket reqSocket = null;
@@ -92,7 +96,7 @@ public class ZeroMqPusher implements ConnectorPublisher {
         //		http://zguide.zeromq.org/java:psenvsub
         ZMQ.Socket pushSocket = null;
         if (!PORTS_TAKEN_PUSH.containsKey(configuration.getPort())) {
-            ZContext context = com.lambda.investing.connector.zero_mq.ZeroMqConfiguration.GetZContext();
+            ZContext context = ZeroMqConfiguration.GetZContext();
             pushSocket = context.createSocket(ZMQ.PUSH);
             pushSocket.setHWM(1);
             pushSocket.setLinger(0);
@@ -118,13 +122,13 @@ public class ZeroMqPusher implements ConnectorPublisher {
     @Override
     public boolean publish(ConnectorConfiguration connectorConfiguration, TypeMessage typeMessage,
                            String topic, String message) {
-        if (!(connectorConfiguration instanceof com.lambda.investing.connector.zero_mq.ZeroMqConfiguration)) {
+        if (!(connectorConfiguration instanceof ZeroMqConfiguration)) {
             logger.error("configuration is not ZeroMqConfiguration");
             return false;
         }
         int retries = 1;
 
-        com.lambda.investing.connector.zero_mq.ZeroMqConfiguration zeroMqConfiguration = (ZeroMqConfiguration) connectorConfiguration;
+        ZeroMqConfiguration zeroMqConfiguration = (ZeroMqConfiguration) connectorConfiguration;
         ZMQ.Socket socket = getPushSocket(zeroMqConfiguration);
         synchronized (socket) {
             for (int counter = 0; counter < retries; counter++) {

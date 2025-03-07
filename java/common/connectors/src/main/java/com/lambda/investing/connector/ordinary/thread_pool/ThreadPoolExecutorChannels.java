@@ -1,10 +1,10 @@
 package com.lambda.investing.connector.ordinary.thread_pool;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 
 public class ThreadPoolExecutorChannels extends ThreadPoolExecutor {

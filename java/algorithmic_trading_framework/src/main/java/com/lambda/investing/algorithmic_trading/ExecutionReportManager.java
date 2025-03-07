@@ -2,9 +2,11 @@ package com.lambda.investing.algorithmic_trading;
 
 import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.ExecutionReportStatus;
+import com.lambda.investing.model.trading.OrderRequest;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ExecutionReportManager {
 

@@ -2,6 +2,7 @@ package com.lambda.investing.algorithmic_trading.reinforcement_learning.action;
 
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.MatrixRoundUtils;
 import lombok.Getter;
+import lombok.Setter;
 
 @Getter public class ActionColumn extends AbstractAction {
 

@@ -8,9 +8,8 @@ import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.Date;
-import java.util.Map;
-import java.util.Queue;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static com.lambda.investing.algorithmic_trading.Algorithm.EXECUTION_REPORT_LOCK;
 import static com.lambda.investing.algorithmic_trading.QuoteSideManager.MAX_SIZE_LAST_CLORDID_SENT;
@@ -170,10 +169,10 @@ public class QuoteManager implements ExecutionReportListener, Runnable {
             Double previousAskPrice = askQuoteSideManager.getLastPrice();
             Double previousAskQty = askQuoteSideManager.getLastQuantity();
             double newBidPrice = this.lastQuoteRequest.getBidPrice();
+            double newBidQty = this.lastQuoteRequest.getBidQuantity();
             if (previousAskPrice != null && previousAskQty != null && previousAskQty > 0) {
-                newBidCrossSpread = newBidPrice >= previousAskPrice;
+                newBidCrossSpread = newBidPrice >= previousAskPrice && newBidQty > 0;
             }
-
         }
 
         if (newBidCrossSpread) {

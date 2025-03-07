@@ -14,7 +14,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static com.lambda.investing.trading_engine_connector.ZeroMqTradingEngineConnector.GSON;
+import static com.lambda.investing.model.Util.GSON;
+
 
 @Getter public class SyntheticInstrument extends Instrument {
 

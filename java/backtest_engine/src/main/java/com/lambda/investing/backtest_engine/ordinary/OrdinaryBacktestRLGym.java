@@ -25,7 +25,9 @@ import java.util.Map;
 
 import static com.lambda.investing.Configuration.DELTA_REWARD_REINFORCEMENT_LEARNING;
 import static com.lambda.investing.algorithmic_trading.reinforcement_learning.SingleInstrumentRLReplier.GetStateColumnsAlgorithm;
-import static com.lambda.investing.model.portfolio.Portfolio.GSON_STRING;
+import static com.lambda.investing.model.Util.fromJsonString;
+import static com.lambda.investing.model.Util.toJsonString;
+
 
 public class OrdinaryBacktestRLGym implements MarketDataConnectorPublisherListener, ConnectorReplier {
 
@@ -221,9 +223,9 @@ public class OrdinaryBacktestRLGym implements MarketDataConnectorPublisherListen
         //map json content into InputGymMessage object
         InputGymMessage inputGymMessage = null;
         try {
-            inputGymMessage = GSON_STRING.fromJson(content, InputGymMessage.class);
+            inputGymMessage = fromJsonString(content, InputGymMessage.class);
         } catch (Exception e) {
-            InputGymMessageValue inputGymMessageValue = GSON_STRING.fromJson(content, InputGymMessageValue.class);
+            InputGymMessageValue inputGymMessageValue = fromJsonString(content, InputGymMessageValue.class);
             inputGymMessage = new InputGymMessage(inputGymMessageValue);
         }
 
@@ -234,12 +236,12 @@ public class OrdinaryBacktestRLGym implements MarketDataConnectorPublisherListen
             logger.info("OrdinaryBacktestRLGym reset received");
             System.out.println("JAVA: reset received");
             reset();
-            output = GSON_STRING.toJson(getDefaultOutputGymState());
+            output = toJsonString(getDefaultOutputGymState());
         } else if (inputGymMessage.getType().equals("start")) {
             logger.info("OrdinaryBacktestRLGym start received");
             System.out.println("JAVA: start received");
             this.startReceived = new Date();
-            output = GSON_STRING.toJson(getDefaultOutputGymState());
+            output = toJsonString(getDefaultOutputGymState());
         } else if (inputGymMessage.getType().equals("action")) {
             this.lastActionReceived = new Date();
             double[] action = inputGymMessage.getValue();
@@ -260,7 +262,7 @@ public class OrdinaryBacktestRLGym implements MarketDataConnectorPublisherListen
                 }
             }
 
-            output = GSON_STRING.toJson(outputGymMessage);
+            output = toJsonString(outputGymMessage);
 
         } else if (inputGymMessage.getType().equals("backtest_is_ready")) {
             backtestIsReadyReceived = new Date();
@@ -274,7 +276,7 @@ public class OrdinaryBacktestRLGym implements MarketDataConnectorPublisherListen
             long elapsed = new Date().getTime() - startTime.getTime();
             System.out.println("JAVA:  backtest_is_ready finished");
             logger.info("backtest_is_ready answer after {} ms ", elapsed);
-            output = GSON_STRING.toJson(getDefaultOutputGymState());
+            output = toJsonString(getDefaultOutputGymState());
 
         } else {
             logger.error("unknown message type {} {}", inputGymMessage.getType(), content);

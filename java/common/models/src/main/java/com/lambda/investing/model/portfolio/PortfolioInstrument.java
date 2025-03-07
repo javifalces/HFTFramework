@@ -1,5 +1,6 @@
 package com.lambda.investing.model.portfolio;
 
+import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.ExecutionReportStatus;
 import com.lambda.investing.model.trading.Verb;

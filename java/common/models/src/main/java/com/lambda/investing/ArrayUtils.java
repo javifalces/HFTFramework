@@ -1,7 +1,8 @@
 package com.lambda.investing;
 
-import java.util.Arrays;
-import java.util.List;
+import com.google.common.collect.Queues;
+
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class ArrayUtils {
@@ -23,6 +24,22 @@ public class ArrayUtils {
 //        double lastElement = input.toArray(new Double[input.size()])[input.size() - 1];
 //        return lastElement;
 //    }
+
+    public static double[] GetPrimitiveArrayDouble(Double[] input) {
+        double[] seriePrimitive = new double[input.length];
+        for (int i = 0; i < input.length; i++) {
+            seriePrimitive[i] = input[i];
+        }
+        return seriePrimitive;
+    }
+
+    public static int[] GetPrimitiveArrayInteger(Integer[] input) {
+        int[] seriePrimitive = new int[input.length];
+        for (int i = 0; i < input.length; i++) {
+            seriePrimitive[i] = input[i];
+        }
+        return seriePrimitive;
+    }
 
     public static double sum(double[] array1) {
         double sum = 0; // initialize sum
@@ -53,6 +70,7 @@ public class ArrayUtils {
                 ++count;
         return count;
     }
+
     public static <T> String PrintArrayListString(List<T> input, String delimiter) {
         return input.stream().map(String::valueOf)
                 .collect(Collectors.joining(delimiter));
@@ -60,7 +78,7 @@ public class ArrayUtils {
 
     public static String PrintListDoubleArrayString(List<double[]> input, String delimiterIn, String delimiterOut) {
         StringBuffer bufferAction = new StringBuffer();
-        for( double[] action :input){
+        for (double[] action : input) {
             bufferAction.append("[");
             bufferAction.append(PrintDoubleArrayString(action, delimiterIn));
             bufferAction.append("]");
@@ -184,4 +202,56 @@ public class ArrayUtils {
     }
 
 
+    public static boolean equals(Object[] array, Object[] array1) {
+        return Arrays.equals(array, array1);
+    }
+
+    public static <T> List<T> unique(List<T> list) {
+        List<T> output = new ArrayList<>(new HashSet<>(list));
+        return output;
+    }
+
+    public static <T extends Comparable> List<T> sort(List<T> list) {
+        List<T> output = new ArrayList<>(list);
+        Collections.sort(output);
+        return output;
+    }
+
+    public static <T extends Comparable> List<T> uniqueSorted(List<T> list) {
+        List<T> output = unique(list);
+        Collections.sort(output);
+        return output;
+    }
+
+    public static List<Date> uniqueDate(List<Date> list, long deltaDiffMs, boolean getLast) {
+        List<Date> input = new ArrayList<>(list);
+        if (getLast) {
+            Collections.reverse(input);
+        }
+
+
+        List<Date> output = new ArrayList<>();
+        for (Date date : input) {
+            boolean found = false;
+            for (Date date1 : output) {
+                if (Math.abs(date.getTime() - date1.getTime()) < deltaDiffMs) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                output.add(date);
+            }
+        }
+        if (getLast) {
+            Collections.reverse(output);
+        }
+        return output;
+    }
+
+    public static List<Date> uniqueSortedDate(List<Date> list, long deltaDiffMs, boolean getLast) {
+        Collections.sort(list);
+        List<Date> output = uniqueDate(list, deltaDiffMs, getLast);
+        return output;
+    }
 }

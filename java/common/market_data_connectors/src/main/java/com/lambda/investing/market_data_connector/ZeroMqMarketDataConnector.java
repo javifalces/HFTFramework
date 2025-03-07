@@ -1,5 +1,6 @@
 package com.lambda.investing.market_data_connector;
 
+
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
@@ -15,9 +16,12 @@ import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
+
+import static com.lambda.investing.model.Util.fromJsonString;
 
 @Getter
 public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implements ConnectorListener {
@@ -113,7 +117,7 @@ public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implem
 
 		if (typeMessage == TypeMessage.depth) {
 			//DEPTH received
-			Depth depth = GSON.fromJson(content, Depth.class);
+			Depth depth = fromJsonString(content, Depth.class);
 			if (instrumentPksList != null) {
 				//filtering
 				if (!instrumentPksList.contains(depth.getInstrument())) {
@@ -127,7 +131,7 @@ public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implem
 
 		if (typeMessage == TypeMessage.trade) {
 			//TRADE received
-			Trade trade = GSON.fromJson(content, Trade.class);
+			Trade trade = fromJsonString(content, Trade.class);
 			if (instrumentPksList != null) {
 				//filtering
 				if (!instrumentPksList.contains(trade.getInstrument())) {
@@ -139,7 +143,7 @@ public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implem
 
 		if (typeMessage == TypeMessage.command) {
 			//Command received
-			Command command = GSON.fromJson(content, Command.class);
+			Command command = fromJsonString(content, Command.class);
 			notifyCommand(command);
 		}
 
@@ -147,7 +151,7 @@ public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implem
 		//		when trading is coming here
 //		if (typeMessage == TypeMessage.execution_report && listenER) {
 //			//ExecutionReport received
-//			ExecutionReport executionReport = GSON.fromJson(content, ExecutionReport.class);
+//			ExecutionReport executionReport = fromJsonString(content, ExecutionReport.class);
 //			logger.warn("ER received on ZeroMqMarketDataConnector -> please do another thing!! {}",executionReport.getClientOrderId());
 //
 //			notifyExecutionReport(executionReport);

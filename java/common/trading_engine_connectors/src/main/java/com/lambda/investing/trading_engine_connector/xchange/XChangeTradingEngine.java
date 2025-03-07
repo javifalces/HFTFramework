@@ -1,34 +1,39 @@
 package com.lambda.investing.trading_engine_connector.xchange;
 
+import com.lambda.investing.binance.BinanceBrokerConnector;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorProvider;
 import com.lambda.investing.connector.ConnectorPublisher;
+import com.lambda.investing.market_data_connector.xchange.BybitMarketDataConfiguration;
+import com.lambda.investing.market_data_connector.xchange.CoinbaseMarketDataConfiguration;
+import com.lambda.investing.model.asset.Currency;
+import com.lambda.investing.model.Market;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.trading.*;
 import com.lambda.investing.trading_engine_connector.AbstractBrokerTradingEngine;
 import com.lambda.investing.trading_engine_connector.ExecutionReportListener;
 import com.lambda.investing.trading_engine_connector.TradingEngineConfiguration;
-import com.lambda.investing.xchange.BinanceXchangeBrokerConnector;
-import com.lambda.investing.xchange.CoinbaseBrokerConnector;
-import com.lambda.investing.xchange.KrakenBrokerConnector;
-import com.lambda.investing.xchange.XChangeBrokerConnector;
+import com.lambda.investing.trading_engine_connector.binance.BinanceBrokerTradingEngine;
+import com.lambda.investing.trading_engine_connector.binance.BinanceTradingEngineConfiguration;
+import com.lambda.investing.xchange.*;
+import info.bitrich.xchangestream.core.ProductSubscription;
 import info.bitrich.xchangestream.core.StreamingExchange;
-import io.reactivex.disposables.Disposable;
+import info.bitrich.xchangestream.core.StreamingMarketDataService;
+import io.reactivex.rxjava3.disposables.Disposable;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.knowm.xchange.currency.CurrencyPair;
 import org.knowm.xchange.dto.Order;
 import org.knowm.xchange.dto.trade.LimitOrder;
 import org.knowm.xchange.dto.trade.MarketOrder;
+
 import org.knowm.xchange.dto.trade.UserTrade;
+import org.knowm.xchange.service.marketdata.MarketDataService;
 import org.knowm.xchange.service.trade.TradeService;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 //https://github.com/knowm/XChange/blob/9198c3fb06151e680a3e93cade5aacbcb17d1742/xchange-examples/src/main/java/org/knowm/xchange/examples/bitstamp/trade/BitstampTradeDemo.java
@@ -195,8 +200,15 @@ public class XChangeTradingEngine extends AbstractBrokerTradingEngine {
 			this.brokerConnector = BinanceXchangeBrokerConnector
 					.getInstance(binanceTradingEngineConfiguration.getApiKey(), binanceTradingEngineConfiguration.getSecretKey());
 			tradeService = brokerConnector.getStreamingExchange().getTradeService();
+		} else if (tradingEngineConfiguration instanceof BybitTradingEngineConfiguration) {
+			BybitTradingEngineConfiguration bybitTradingEngineConfiguration = (BybitTradingEngineConfiguration) tradingEngineConfiguration;
+			this.brokerConnector = BybitBrokerConnector
+					.getInstance(bybitTradingEngineConfiguration.getApiKey(), bybitTradingEngineConfiguration.getSecretKey());
+			tradeService = brokerConnector.getStreamingExchange().getTradeService();
 
 		} else {
+			System.err.println("trying to construct setBrokerConnector with a not recognized marketDataConfiguration {}" +
+					tradingEngineConfiguration);
 			logger.error("trying to construct setBrokerConnector with a not recognized marketDataConfiguration {}",
 					tradingEngineConfiguration);
 		}

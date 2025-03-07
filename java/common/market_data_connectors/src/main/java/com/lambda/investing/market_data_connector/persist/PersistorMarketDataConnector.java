@@ -1,17 +1,16 @@
 package com.lambda.investing.market_data_connector.persist;
 
+
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ConnectorProvider;
 import com.lambda.investing.data_manager.DataManager;
-import com.lambda.investing.data_manager.FileDataUtils;
 import com.lambda.investing.data_manager.csv.CSVDataManager;
+import com.lambda.investing.data_manager.FileDataUtils;
 import com.lambda.investing.data_manager.parquet.TableSawParquetDataManager;
 import com.lambda.investing.market_data_connector.Statistics;
 import com.lambda.investing.model.asset.Instrument;
-import com.lambda.investing.model.market_data.CSVable;
-import com.lambda.investing.model.market_data.Depth;
-import com.lambda.investing.model.market_data.Trade;
+import com.lambda.investing.model.market_data.*;
 import com.lambda.investing.model.messaging.TypeMessage;
 import com.lambda.investing.model.time.Period;
 import org.apache.logging.log4j.LogManager;
@@ -19,11 +18,8 @@ import org.apache.logging.log4j.Logger;
 import tech.tablesaw.api.Row;
 import tech.tablesaw.api.Table;
 
-import java.io.File;
-import java.io.FilenameFilter;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.io.*;
+import java.nio.file.*;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -32,7 +28,7 @@ import java.util.zip.ZipOutputStream;
 
 import static com.lambda.investing.Configuration.FILE_CSV_DATE_FORMAT;
 import static com.lambda.investing.data_manager.FileDataUtils.TIMESTAMP_COL;
-import static com.lambda.investing.market_data_connector.AbstractMarketDataProvider.GSON;
+import static com.lambda.investing.model.Util.fromJsonString;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
 /***
@@ -332,6 +328,7 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
                 logger.error("Exception running persistor ", e);
             }
 
+            logTradesSyncRatio();
 
             try {
                 Thread.sleep(this.periodCheck);
@@ -342,17 +339,27 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
 
     }
 
+    private void logTradesSyncRatio() {
+        for (Map.Entry<Instrument, InstrumentCache> entrySet : instrumentCacheMap.entrySet()) {
+            InstrumentCache caches = entrySet.getValue();
+            Instrument instrument = entrySet.getKey();
+            double ratio = Math.round(caches.getTradesSyncRatio() * 100.0) / 100.0;
+            logger.info("{} TradesSyncRatio: {} ", instrument.getPrimaryKey(), ratio);
+            caches.clearSyncRatio();
+        }
+    }
+
     @Override
     public void onUpdate(ConnectorConfiguration configuration, long timestampReceived,
                          TypeMessage typeMessage, String content) {
 
         if (typeMessage.equals(TypeMessage.depth)) {
-            Depth depth = GSON.fromJson(content, Depth.class);
+            Depth depth = fromJsonString(content, Depth.class);
             saveDepth(depth);
             statistics.addStatistics(depth.getInstrument() + "" + ".depth");
 
         } else if (typeMessage.equals(TypeMessage.trade)) {
-            Trade trade = GSON.fromJson(content, Trade.class);
+            Trade trade = fromJsonString(content, Trade.class);
             saveTrade(trade);
             statistics.addStatistics(trade.getInstrument() + "" + ".trade");
         }

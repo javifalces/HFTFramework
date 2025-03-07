@@ -1,7 +1,6 @@
 package com.lambda.investing.backtest;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+
 import com.lambda.investing.algorithmic_trading.Algorithm;
 import com.lambda.investing.backtest_engine.BacktestConfiguration;
 import com.lambda.investing.backtest_engine.ordinary.OrdinaryBacktest;
@@ -20,6 +19,9 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+
+import static com.lambda.investing.model.Util.fromJsonString;
+import static com.lambda.investing.model.Util.toJsonString;
 
 public class UtilsTest {
 
@@ -63,19 +65,16 @@ public class UtilsTest {
         setEnv(env);
     }
 
-    public static Gson GSON = new GsonBuilder().setPrettyPrinting()
-            .excludeFieldsWithModifiers(Modifier.STATIC, Modifier.TRANSIENT, Modifier.VOLATILE, Modifier.FINAL)
-            .serializeSpecialFloatingPointValues().disableHtmlEscaping().create();
 
     private static InputConfiguration loadJson(String jsonString, Logger logger) {
 
-        InputConfiguration inputConfiguration = GSON.fromJson(jsonString, InputConfiguration.class);
+        InputConfiguration inputConfiguration = fromJsonString(jsonString, InputConfiguration.class);
 
         System.out.println("-----");
         System.out.println(jsonString);
         System.out.println("-----");
         logger.info("----");
-        logger.info("{}", GSON.toJson(inputConfiguration));
+        logger.info("{}", toJsonString(inputConfiguration));
         logger.info("----");
         return inputConfiguration;
     }

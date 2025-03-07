@@ -1,16 +1,35 @@
 package com.lambda.investing.data_manager.parquet;
 
+import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.CSVable;
+import com.lambda.investing.model.market_data.DepthParquet;
+import com.lambda.investing.model.market_data.TradeParquet;
 import net.tlabs.tablesaw.parquet.TablesawParquetReadOptions;
 import net.tlabs.tablesaw.parquet.TablesawParquetReader;
+import net.tlabs.tablesaw.parquet.TablesawParquetWriteOptions;
+import net.tlabs.tablesaw.parquet.TablesawParquetWriter;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.reflect.ReflectData;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.parquet.avro.AvroParquetReader;
+import org.apache.parquet.avro.AvroParquetWriter;
+import org.apache.parquet.hadoop.ParquetReader;
+import org.apache.parquet.hadoop.ParquetWriter;
+import tech.tablesaw.api.DateColumn;
 import tech.tablesaw.api.Table;
 import tech.tablesaw.columns.Column;
 
 import java.io.File;
+import java.io.IOException;
+import java.util.Date;
+import java.util.List;
 
 import static com.lambda.investing.data_manager.FileDataUtils.TIMESTAMP_COL;
+import static org.apache.parquet.hadoop.ParquetFileWriter.Mode.OVERWRITE;
 
 public class TableSawParquetDataManager extends ParquetDataManager {
 

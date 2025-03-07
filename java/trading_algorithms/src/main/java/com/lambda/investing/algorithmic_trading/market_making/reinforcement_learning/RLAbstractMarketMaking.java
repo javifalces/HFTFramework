@@ -1,13 +1,11 @@
 package com.lambda.investing.algorithmic_trading.market_making.reinforcement_learning;
 
 import com.lambda.investing.ArrayUtils;
-import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
+import com.lambda.investing.algorithmic_trading.*;
 import com.lambda.investing.algorithmic_trading.market_making.MarketMakingAlgorithm;
-import com.lambda.investing.algorithmic_trading.reinforcement_learning.ScoreEnum;
-import com.lambda.investing.algorithmic_trading.reinforcement_learning.SingleInstrumentRLAlgorithm;
-import com.lambda.investing.algorithmic_trading.reinforcement_learning.state.MarketState;
-import com.lambda.investing.algorithmic_trading.reinforcement_learning.state.MultiMarketState;
-import com.lambda.investing.algorithmic_trading.reinforcement_learning.state.StateManager;
+import com.lambda.investing.algorithmic_trading.reinforcement_learning.*;
+
+import com.lambda.investing.algorithmic_trading.reinforcement_learning.state.*;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.candle.Candle;
 import com.lambda.investing.model.candle.CandleType;
@@ -177,6 +175,9 @@ public abstract class RLAbstractMarketMaking extends SingleInstrumentRLAlgorithm
         algorithm.setInstrument(instrument);
         super.setInstrument(instrument);
         setState();
+        if (this.state instanceof DiscreteTAState) {
+            ((DiscreteTAState) this.state).setInstrument(instrument);
+        }
         this.state.setNumberOfDecimals(instrument.getNumberDecimalsPrice());
     }
 
@@ -267,9 +268,9 @@ public abstract class RLAbstractMarketMaking extends SingleInstrumentRLAlgorithm
 
     //LISTENERS
     @Override
-    public void onUpdateCandle(Candle candle) {
-        super.onUpdateCandle(candle);
-        algorithm.onUpdateCandle(candle);//first underlying algo
+    public void onCandleUpdate(Candle candle) {
+        super.onCandleUpdate(candle);
+        algorithm.onCandleUpdate(candle);//first underlying algo
 
     }
 

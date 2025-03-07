@@ -14,7 +14,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
-import static com.lambda.investing.market_data_connector.AbstractMarketDataProvider.GSON;
 
 public abstract class AbstractMarketDataConnectorPublisher implements MarketDataConnectorPublisher {
 
@@ -187,7 +186,7 @@ public abstract class AbstractMarketDataConnectorPublisher implements MarketData
 
     @Override
     public void notifyDepth(String topic, Depth depth) {
-        String depthJson = GSON.toJson(depth);
+        String depthJson = depth.toString();
         topic = topic + "." + TypeMessage.depth.name();
         //		logger.debug("notify DEPTH {}",depth.toString());
         connectorPublisher.publish(connectorConfiguration, TypeMessage.depth, topic, depthJson);
@@ -197,7 +196,7 @@ public abstract class AbstractMarketDataConnectorPublisher implements MarketData
 
     @Override
     public void notifyTrade(String topic, Trade trade) {
-        String tradeJson = GSON.toJson(trade);
+        String tradeJson = trade.toString();
         topic = topic + "." + TypeMessage.trade.name();
         //		logger.debug("notify TRADE {}",trade.toString());
         connectorPublisher.publish(connectorConfiguration, TypeMessage.trade, topic, tradeJson);
@@ -206,7 +205,7 @@ public abstract class AbstractMarketDataConnectorPublisher implements MarketData
     }
 
     public synchronized void notifyCommand(String topic, Command command) {
-        String commandJson = GSON.toJson(command);
+        String commandJson = command.ToString();
 
         if (isZeroMq) {
             ZeroMqPublisher zeroMqPublisher = (ZeroMqPublisher) connectorPublisher;

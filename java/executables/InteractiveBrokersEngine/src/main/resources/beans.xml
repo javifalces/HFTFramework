@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:util="http://www.springframework.org/schema/util"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
+    <import resource="classpath:interactive_brokers_instruments.xml"></import>
+
+    <bean
+            class="org.springframework.context.support.PropertySourcesPlaceholderConfigurer">
+        <property name="ignoreResourceNotFound" value="true"/>
+        <property name="locations">
+            <list>
+                <value>file:application.properties</value>
+                <value>classpath:application.properties</value>
+            </list>
+        </property>
+    </bean>
+
+    <bean id="interactive_broker_connector"
+          class="com.lambda.investing.interactive_brokers.InteractiveBrokersBrokerConnector"
+          factory-method="getInstance" init-method="init">
+        <constructor-arg index="0" type="java.lang.String" value="${interactive_brokers.host}"/>
+        <constructor-arg index="1" type="int" value="${interactive_brokers.port}"/>
+        <constructor-arg index="2" type="int" value="${interactive_brokers.clientid}"/>
+    </bean>
+
+    <bean id="marketdata_ConnectorConfiguration" class="com.lambda.investing.connector.zero_mq.ZeroMqConfiguration">
+        <property name="port" value="${marketdata.port}"/>
+        <property name="host" value="localhost"/>
+    </bean>
+
+    <bean id="marketdata_ConnectorPublisher" class="com.lambda.investing.connector.zero_mq.ZeroMqPublisher">
+        <constructor-arg index="0" value="marketDataConnectorPublisher"/>
+        <constructor-arg index="1" value="${publisher.threads}"/>
+    </bean>
+
+    <!--Instruments that should be in interactive_brokers_instruments.xml before   -->
+    <util:list id="marketdata_instruments" value-type="com.lambda.investing.model.asset.Instrument">
+        <ref bean="eurusd_idealpro"/>
+        <ref bean="gbpusd_idealpro"/>
+        <ref bean="aapl_smart"/>
+    </util:list>
+
+    <bean id="marketDataPublisher"
+          class="com.lambda.investing.market_data_connector.interactive_brokers.InteractiveBrokersMarketDataPublisher"
+          init-method="init">
+        <constructor-arg index="0" ref="marketdata_ConnectorConfiguration"/>
+        <constructor-arg index="1" ref="marketdata_ConnectorPublisher"/>
+        <constructor-arg index="2" ref="interactive_broker_connector"/>
+        <constructor-arg index="3" ref="idealpro_instruments"/>
+    </bean>
+
+
+    <!--persistance listener-->
+    <bean id="marketData_ConnectorProvider" class="com.lambda.investing.connector.zero_mq.ZeroMqProvider"
+          factory-method="getInstance" init-method="start">
+        <constructor-arg index="0" ref="marketdata_ConnectorConfiguration"/>
+        <constructor-arg index="1" value="${provider.threads}"/>
+    </bean>
+
+    <!--We dont want persist in IB-->
+    <!--    <bean id="ib_persistMarketDataConnectorPublisher"-->
+    <!--          class="com.lambda.investing.market_data_connector.persist.PersistorMarketDataConnector" init-method="init">-->
+    <!--        <constructor-arg index="0" value="${csv.datapath}"/>-->
+    <!--        <constructor-arg index="1" value="${parquet.datapath}"/>-->
+    <!--        <constructor-arg index="2" ref="marketData_ConnectorProvider"/>-->
+    <!--        <constructor-arg index="3" ref="marketdata_ConnectorConfiguration"/>-->
+
+    <!--        <property name="periodCheck" value="${persist.temp_cache.ms}"/>-->
+    <!--        <property name="persistParquet" value="${persist.parquet}"/>-->
+    <!--    </bean>-->
+
+    <!--trading engine-->
+    <bean id="ib_executionReportConfigurationPublisher"
+          class="com.lambda.investing.connector.zero_mq.ZeroMqConfiguration">
+        <property name="port" value="${tradeengine.port}"/>
+        <property name="host" value="localhost"/>
+    </bean>
+
+    <bean id="ib_executionReportConnectorPublisher"
+          class="com.lambda.investing.connector.zero_mq.ZeroMqPublisher">
+        <constructor-arg index="0" value="ib_ExecutionReportPublisher"/>
+        <constructor-arg index="1" value="${publisher.threads}"/>
+    </bean>
+
+
+    <bean id="orderRequest_ConnectorConfiguration" class="com.lambda.investing.connector.zero_mq.ZeroMqConfiguration">
+        <property name="port" value="${tradeengine.port}"/>
+        <property name="host" value="localhost"/>
+    </bean>
+
+    <bean id="orderRequest_ConnectorProvider" class="com.lambda.investing.connector.zero_mq.ZeroMqProvider"
+          factory-method="getInstance" init-method="start">
+        <constructor-arg index="0" ref="orderRequest_ConnectorConfiguration"/>
+        <constructor-arg index="1" value="1"/>
+        <constructor-arg index="2" value="true"/>
+    </bean>
+
+    <bean id="ib_TradingEngine"
+          class="com.lambda.investing.trading_engine_connector.interactive_brokers.InteractiveBrokersTradingEngine"
+          init-method="start">
+        <constructor-arg index="0" ref="orderRequest_ConnectorConfiguration"/>
+        <constructor-arg index="1" ref="orderRequest_ConnectorProvider"/>
+        <!-- Execution Reports published from market data publisher -->
+        <constructor-arg index="2" ref="marketdata_ConnectorConfiguration"/>
+        <constructor-arg index="3" ref="marketdata_ConnectorPublisher"/>
+        <constructor-arg index="4" ref="interactive_broker_connector"/>
+    </bean>
+
+
+</beans>

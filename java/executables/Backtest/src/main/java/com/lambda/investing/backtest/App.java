@@ -1,11 +1,13 @@
 package com.lambda.investing.backtest;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.lambda.investing.Configuration;
+import com.lambda.investing.algorithmic_trading.Algorithm;
+import com.lambda.investing.algorithmic_trading.InstrumentManager;
+import com.lambda.investing.algorithmic_trading.reinforcement_learning.TrainType;
 import com.lambda.investing.backtest_engine.BacktestConfiguration;
 import com.lambda.investing.backtest_engine.ordinary.OrdinaryBacktest;
 import com.lambda.investing.gym.DummyRlAgent;
+import com.lambda.investing.market_data_connector.MarketDataConnectorPublisherListener;
 import org.apache.hadoop.fs.Path;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -23,10 +25,11 @@ import java.lang.management.ManagementFactory;
 import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.text.ParseException;
+import java.util.*;
+
+import static com.lambda.investing.algorithmic_trading.reinforcement_learning.TrainNNUtils.*;
+import static com.lambda.investing.model.Util.*;
 
 public class App {
 
@@ -34,9 +37,6 @@ public class App {
     private static final String TRAIN_MODE = "train";
     protected final ApplicationContext ac;
     protected final Logger logger;
-    public static Gson GSON = new GsonBuilder().setPrettyPrinting()
-            .excludeFieldsWithModifiers(Modifier.STATIC, Modifier.TRANSIENT, Modifier.VOLATILE, Modifier.FINAL)
-            .serializeSpecialFloatingPointValues().disableHtmlEscaping().create();
 
     static {
         //		Asyn logs all
@@ -90,14 +90,14 @@ public class App {
 
     private static InputConfiguration loadJson(String[] args, Logger logger) {
         String jsonString = args[0];
-        InputConfiguration inputConfiguration = GSON.fromJson(args[0], InputConfiguration.class);
+        InputConfiguration inputConfiguration = fromJsonStringGSON(args[0], InputConfiguration.class);
         setInputConfigurationDefaultValues(jsonString, inputConfiguration, logger);
 
         System.out.println("-----");
         System.out.println(args[0]);
         System.out.println("-----");
         logger.info("----");
-        logger.info("{}", GSON.toJson(inputConfiguration));
+        logger.info("{}", toJsonStringGSON(inputConfiguration));
         logger.info("----");
         return inputConfiguration;
     }

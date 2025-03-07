@@ -19,6 +19,8 @@ public class MTMessageER {
 	private String _qty_total;
 	private String _close_price;
 	private String _close_lots;
+//	private String _positions;
+//	private String _setup_time;
 
 	private String _comment;
 
@@ -37,6 +39,8 @@ public class MTMessageER {
 				", _close_price='" + _close_price + '\'' +
 				", _close_lots='" + _close_lots + '\'' +
 				", _comment='" + _comment + '\'' +
+//				", _positions='" + _positions + '\'' +
+//				", _setup_time='" + _setup_time + '\'' +
 				'}';
 	}
 

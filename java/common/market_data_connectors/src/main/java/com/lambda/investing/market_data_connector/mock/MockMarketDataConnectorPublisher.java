@@ -3,18 +3,21 @@ package com.lambda.investing.market_data_connector.mock;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorPublisher;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
-import com.lambda.investing.market_data_connector.AbstractMarketDataConnectorPublisher;
+import com.lambda.investing.market_data_connector.*;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
+import com.lambda.investing.model.messaging.TypeMessage;
 import com.lambda.investing.model.trading.Verb;
 import org.apache.commons.math3.util.Precision;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.text.DecimalFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
+
 
 public class MockMarketDataConnectorPublisher extends AbstractMarketDataConnectorPublisher implements Runnable{
 

@@ -18,6 +18,7 @@
         <module>MetatraderEngine</module>
         <module>AlgoTradingZeroMq</module>
         <module>XChangeEngine</module>
+        <module>InteractiveBrokersEngine</module>
     </modules>
 
 

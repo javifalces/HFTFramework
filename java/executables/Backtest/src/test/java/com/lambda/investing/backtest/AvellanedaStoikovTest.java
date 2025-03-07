@@ -22,7 +22,8 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.runners.MockitoJUnitRunner;
 
-import static com.lambda.investing.backtest.UtilsTest.GSON;
+
+import static com.lambda.investing.model.Util.fromJsonString;
 
 @RunWith(MockitoJUnitRunner.class)
 public class AvellanedaStoikovTest {
@@ -37,7 +38,7 @@ public class AvellanedaStoikovTest {
     public AvellanedaStoikovTest() throws Exception {
         InputStream inputStream = Configuration.class.getClassLoader().getResourceAsStream(jsonPath);
         backtestConfigurationJson = new String(inputStream.readAllBytes());
-        inputConfiguration = GSON.fromJson(backtestConfigurationJson, InputConfiguration.class);
+        inputConfiguration = fromJsonString(backtestConfigurationJson, InputConfiguration.class);
 
         String lambdaDataPathCompletePath = Configuration.class.getClassLoader().getResource(lambdaDataPath).getPath();
         String tempPathCompletePath = Configuration.class.getClassLoader().getResource(tempDataPath).getPath();
