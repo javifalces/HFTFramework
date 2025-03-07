@@ -1,3 +1,4 @@
+[![CodeFactor](https://www.codefactor.io/repository/github/javifalces/hftframework/badge)](https://www.codefactor.io/repository/github/javifalces/hftframework)<br>
 [![Java Unit Tests Workflow](https://github.com/javifalces/HFTFramework/actions/workflows/java_test.yml/badge.svg)](https://github.com/javifalces/HFTFramework/actions/workflows/java_test.yml)<br>
 [![Python Unit Tests Workflow](https://github.com/javifalces/HFTFramework/actions/workflows/python_test.yml/badge.svg)](https://github.com/javifalces/HFTFramework/actions/workflows/python_test.yml)
 
