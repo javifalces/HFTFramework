@@ -22,6 +22,26 @@ public enum Verb {
 		}
 		return output;
 	}
+
+	public static Verb fromString(String verbString) {
+		if (verbString == null) {
+			return null;
+		}
+		switch (verbString.toLowerCase()) {
+			case "buy":
+			case "bid":
+				return Verb.Buy;
+			case "sell":
+			case "ask":
+				return Verb.Sell;
+			case "notset":
+			case "not_set":
+			case "not set":
+				return Verb.NotSet;
+			default:
+				return null;
+		}
+	}
 }
 
 
