@@ -4,6 +4,7 @@ import com.lambda.investing.model.Market;
 import com.lambda.investing.model.exception.ModelException;
 import com.lambda.investing.model.trading.Verb;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import org.apache.commons.lang3.ArrayUtils;
@@ -22,6 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Getter
 @Setter
+@NoArgsConstructor
 public class Instrument {
 
     private static List<String> FX_MARKETS_LIST = Arrays.asList(new String[]{Market.Darwinex.name().toLowerCase(), Market.Idealpro.name().toLowerCase()});
