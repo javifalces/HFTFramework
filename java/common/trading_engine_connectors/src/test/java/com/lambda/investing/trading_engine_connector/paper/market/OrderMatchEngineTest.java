@@ -8,24 +8,15 @@ import com.lambda.investing.trading_engine_connector.paper.PaperTradingEngine;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mockito;
-import org.mockito.runners.MockitoJUnitRunner;
-
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
-import static org.mockito.Matchers.any;
-import static org.mockito.Mockito.doAnswer;
+public class OrderMatchEngineTest {
 
-@RunWith(MockitoJUnitRunner.class) public class OrderMatchEngineTest {
-
-	private PaperTradingEngine paperTradingEngine;
+	private TestPaperTradingEngine paperTradingEngine;
 
 
 	private String instrumentPk = "btcusd_binance";
@@ -35,49 +26,42 @@ import static org.mockito.Mockito.doAnswer;
 	private Depth lastDepthListen;
 	private List<ExecutionReport> lastExecutionReportListenList;
 	private ExecutionReport lastExecutionReportListen;
-	private String algoId = "junitAlgo";
+	private final String algoId = "junitAlgo";
 
-	@Before public void setUp() throws Exception {
+	// Test implementation of PaperTradingEngine
+	private class TestPaperTradingEngine extends PaperTradingEngine {
+		public TestPaperTradingEngine() {
+			super(null, null, null, null);
+		}
+
+		@Override
+		public void notifyTrade(Trade trade) {
+			lastTradeListen = trade;
+		}
+
+		@Override
+		public void notifyDepth(Depth depth) {
+			lastDepthListen = depth;
+		}
+
+		@Override
+		public void notifyExecutionReport(ExecutionReport executionReport) {
+			lastExecutionReportListenList.add(executionReport);
+			lastExecutionReportListen = executionReport;
+		}
+	}
+
+	@Before
+	public void setUp() {
 		Configuration.BACKTEST_REFRESH_DEPTH_ORDER_REQUEST = true;
 		Configuration.BACKTEST_REFRESH_DEPTH_TRADES = true;
 		Configuration.REFRESH_DEPTH_ORDER_REQUEST_MS = 0;
 
 		lastExecutionReportListenList = new ArrayList<>();
 		Orderbook orderbook = new Orderbook(0.00001);
-		paperTradingEngine = Mockito.mock(PaperTradingEngine.class);
+		paperTradingEngine = new TestPaperTradingEngine();
 		lastTradeListen = null;
 		lastDepthListen = null;
-		//trade listener
-		doAnswer(new Answer<Void>() {
-
-			public Void answer(InvocationOnMock invocation) {
-				//				Object[] args = invocation.getArguments();
-				Trade trade = invocation.getArgumentAt(0, Trade.class);
-				lastTradeListen = trade;
-				return null;
-			}
-		}).when(paperTradingEngine).notifyTrade(any(Trade.class));
-
-		doAnswer(new Answer<Void>() {
-
-			public Void answer(InvocationOnMock invocation) {
-				//				Object[] args = invocation.getArguments();
-				Depth depth = invocation.getArgumentAt(0, Depth.class);
-				lastDepthListen = depth;
-				return null;
-			}
-		}).when(paperTradingEngine).notifyDepth(any(Depth.class));
-
-		doAnswer(new Answer<Void>() {
-
-			public Void answer(InvocationOnMock invocation) {
-				//				Object[] args = invocation.getArguments();
-				ExecutionReport executionReport = invocation.getArgumentAt(0, ExecutionReport.class);
-				lastExecutionReportListenList.add(executionReport);
-				lastExecutionReportListen = executionReport;
-				return null;
-			}
-		}).when(paperTradingEngine).notifyExecutionReport(any(ExecutionReport.class));
 
 		orderMatchEngine = new OrderMatchEngine(orderbook, paperTradingEngine, instrumentPk);
 	}
