@@ -6,21 +6,17 @@ import com.lambda.investing.model.asset.Currency;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.DepthParquet;
 import com.lambda.investing.model.market_data.Trade;
-
 import com.lambda.investing.model.market_data.TradeParquet;
 import org.junit.Assert;
-
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.runners.MockitoJUnitRunner;
 import tech.tablesaw.api.Table;
 
 import java.io.File;
-import java.lang.reflect.Field;
 import java.util.*;
 
+import static com.github.stefanbirkner.systemlambda.SystemLambda.withEnvironmentVariable;
 
-@RunWith(MockitoJUnitRunner.class)
+
 public class AvroParquetDataManagerTest {
 
     String lambdaDataPath = "lambda_data";
@@ -31,33 +27,6 @@ public class AvroParquetDataManagerTest {
                 + File.separator + "date=" + date + File.separator + "data.parquet";
     }
 
-    private static void setEnv(Map<String, String> newenv) throws Exception {
-        try {
-            Class<?> processEnvironmentClass = Class.forName("java.lang.ProcessEnvironment");
-            Field theEnvironmentField = processEnvironmentClass.getDeclaredField("theEnvironment");
-            theEnvironmentField.setAccessible(true);
-            Map<String, String> env = (Map<String, String>) theEnvironmentField.get(null);
-            env.putAll(newenv);
-            Field theCaseInsensitiveEnvironmentField = processEnvironmentClass
-                    .getDeclaredField("theCaseInsensitiveEnvironment");
-            theCaseInsensitiveEnvironmentField.setAccessible(true);
-            Map<String, String> cienv = (Map<String, String>) theCaseInsensitiveEnvironmentField.get(null);
-            cienv.putAll(newenv);
-        } catch (NoSuchFieldException e) {
-            Class[] classes = Collections.class.getDeclaredClasses();
-            Map<String, String> env = System.getenv();
-            for (Class cl : classes) {
-                if ("java.util.Collections$UnmodifiableMap".equals(cl.getName())) {
-                    Field field = cl.getDeclaredField("m");
-                    field.setAccessible(true);
-                    Object obj = field.get(env);
-                    Map<String, String> map = (Map<String, String>) obj;
-                    map.clear();
-                    map.putAll(newenv);
-                }
-            }
-        }
-    }
 
     public static void AddTestInstruments() {
         Instrument instrument = new Instrument();
@@ -84,35 +53,55 @@ public class AvroParquetDataManagerTest {
     }
 
     public AvroParquetDataManagerTest() throws Exception {
-        Map<String, String> env = new HashMap<>();
-        String lambdaDataPathRsrs = AvroParquetDataManager.class.getClassLoader().getResource(lambdaDataPath).getPath();
-        env.put("LAMBDA_DATA_PATH", lambdaDataPathRsrs);
-        setEnv(env);
+        java.net.URL lambdaDataPathRsrs = AvroParquetDataManager.class.getClassLoader().getResource(lambdaDataPath);
+        if (lambdaDataPathRsrs != null) {
+            // Set environment variable using system-lambda (Java 17 compatible)
+            // Note: This sets it for the current test execution context
+            System.setProperty("LAMBDA_DATA_PATH", lambdaDataPathRsrs.getPath());
+        }
         AddTestInstruments();
         avroParquetDataManager = new AvroParquetDataManager();
     }
 
     @Test
     public void testReadDepth() throws Exception {
-        String depthFile = getPath("depth", "20220115", "btcusdt_binance");
-        Table depthParquet = avroParquetDataManager.getData(depthFile, DepthParquet.class);
-        Assert.assertNotNull(depthParquet);
-        System.out.println("Columns: " + ArrayUtils.PrintArrayListString(depthParquet.columnNames(), ","));
-        Assert.assertTrue(depthParquet.rowCount() > 0);
+        java.net.URL lambdaDataPathRsrs = AvroParquetDataManager.class.getClassLoader().getResource(lambdaDataPath);
+        if (lambdaDataPathRsrs == null) {
+            Assert.fail("Lambda data path resource not found");
+            return;
+        }
 
-        Assert.assertEquals(87275, depthParquet.rowCount());
-        Assert.assertEquals(22, depthParquet.columnCount());
+        withEnvironmentVariable("LAMBDA_DATA_PATH", lambdaDataPathRsrs.getPath())
+                .execute(() -> {
+                    String depthFile = getPath("depth", "20220115", "btcusdt_binance");
+                    Table depthParquet = avroParquetDataManager.getData(depthFile, DepthParquet.class);
+                    Assert.assertNotNull(depthParquet);
+                    System.out.println("Columns: " + ArrayUtils.PrintArrayListString(depthParquet.columnNames(), ","));
+                    Assert.assertTrue(depthParquet.rowCount() > 0);
+
+                    Assert.assertEquals(87275, depthParquet.rowCount());
+                    Assert.assertEquals(22, depthParquet.columnCount());
+                });
     }
 
     @Test
     public void testReadTrade() throws Exception {
-        String tradeFile = getPath("trade", "20220115", "btcusdt_binance");
-        Table tradeParquet = avroParquetDataManager.getData(tradeFile, TradeParquet.class);
-        Assert.assertNotNull(tradeParquet);
-        System.out.println("Columns: " + ArrayUtils.PrintArrayListString(tradeParquet.columnNames(), ","));
-        Assert.assertTrue(tradeParquet.rowCount() > 0);
-        Assert.assertEquals(451466, tradeParquet.rowCount());
-        Assert.assertEquals(4, tradeParquet.columnCount());
+        java.net.URL lambdaDataPathRsrs = AvroParquetDataManager.class.getClassLoader().getResource(lambdaDataPath);
+        if (lambdaDataPathRsrs == null) {
+            Assert.fail("Lambda data path resource not found");
+            return;
+        }
+
+        withEnvironmentVariable("LAMBDA_DATA_PATH", lambdaDataPathRsrs.getPath())
+                .execute(() -> {
+                    String tradeFile = getPath("trade", "20220115", "btcusdt_binance");
+                    Table tradeParquet = avroParquetDataManager.getData(tradeFile, TradeParquet.class);
+                    Assert.assertNotNull(tradeParquet);
+                    System.out.println("Columns: " + ArrayUtils.PrintArrayListString(tradeParquet.columnNames(), ","));
+                    Assert.assertTrue(tradeParquet.rowCount() > 0);
+                    Assert.assertEquals(451466, tradeParquet.rowCount());
+                    Assert.assertEquals(4, tradeParquet.columnCount());
+                });
     }
 
     @Test
@@ -120,7 +109,8 @@ public class AvroParquetDataManagerTest {
         String filepathTest = "test_avro.parquet";
         File file = new File(filepathTest);
         if (file.exists()) {
-            file.delete();
+            boolean deleted = file.delete();
+            Assert.assertTrue("Failed to delete existing test file", deleted);
         }
 
 
@@ -133,8 +123,9 @@ public class AvroParquetDataManagerTest {
         avroParquetDataManager.saveData(listToPersist, Trade.class, filepathTest);
 
         Assert.assertTrue(file.exists());
-        file.delete();
-
+        boolean deleted = file.delete();
+        Assert.assertTrue("Failed to delete test file", deleted);
     }
 
 }
+

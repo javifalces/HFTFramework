@@ -95,6 +95,13 @@
             <artifactId>commons-lang</artifactId>
         </dependency>
 
+        <!-- For setting environment variables in tests (Java 17 compatible) -->
+        <dependency>
+            <groupId>com.github.stefanbirkner</groupId>
+            <artifactId>system-lambda</artifactId>
+            <version>1.2.1</version>
+            <scope>test</scope>
+        </dependency>
 
     </dependencies>
 
