@@ -29,7 +29,10 @@ public class AlgorithmCreationUtils {
 
 
     public void addProvider(AlgorithmProvider provider) {
-        providers.add(provider);
+        synchronized (providers) {
+            providers.add(provider);
+            System.out.println("AlgorithmCreationUtils: Provider added: " + provider.getClass().getSimpleName() + " (total: " + providers.size() + ")");
+        }
     }
 
     private AlgorithmCreationUtils(List<AlgorithmProvider> providers) {
@@ -45,8 +48,12 @@ public class AlgorithmCreationUtils {
             String algorithmName,
             Map<String, Object> parameters) {
 
+        System.out.println("AlgorithmCreationUtils.getAlgorithm: Looking for algorithm '" + algorithmName + "' in " + providers.size() + " providers");
+
         for (AlgorithmProvider provider : providers) {
+            System.out.println("  - Checking provider: " + provider.getClass().getSimpleName() + " supports='" + algorithmName + "'? " + provider.supports(algorithmName));
             if (provider.supports(algorithmName)) {
+                System.out.println("  - Provider " + provider.getClass().getSimpleName() + " supports algorithm '" + algorithmName + "', creating...");
                 return provider.createAlgorithm(algorithmConnectorConfiguration, algorithmName, parameters);
             }
         }
