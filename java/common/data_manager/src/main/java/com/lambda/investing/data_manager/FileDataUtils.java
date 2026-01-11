@@ -422,6 +422,8 @@ public class FileDataUtils {
             }
         } catch (InterruptedException e) {
             logger.error("cant wait next row ", e);
+        } catch (Exception e) {
+            logger.error("sleepDifference error ", e);
         }
     }
 
