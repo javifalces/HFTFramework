@@ -124,7 +124,9 @@ public class TickTimeSeries extends ApplicationFrame {
 //        if (MARKET_DATA_SERIES.contains(name)) {
 //            timePeriod = new Minute(new Date(timestamp));
 //        }
-        timeSeries.addOrUpdate(timePeriod, value);
+        synchronized (timeSeries) {
+            timeSeries.addOrUpdate(timePeriod, value);
+        }
 
     }
 
