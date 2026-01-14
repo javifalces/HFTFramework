@@ -181,6 +181,10 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
 
         calendar.setTimeInMillis(depth.getTimestamp());
         Instrument instrument = Instrument.getInstrument(depth.getInstrument());
+        if (instrument == null) {
+            logger.warn("saveDepth: cant find instrument for depth {} ", depth.getInstrument());
+            return;
+        }
         InstrumentCache instrumentCache = instrumentCacheMap.getOrDefault(instrument, new InstrumentCache(instrument));
         instrumentCache.updateDepth(depth);
         synchronized (lockSynchCache) {
@@ -193,6 +197,10 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
         //add to persistor map
         calendar.setTimeInMillis(trade.getTimestamp());
         Instrument instrument = Instrument.getInstrument(trade.getInstrument());
+        if (instrument == null) {
+            logger.warn("saveTrade: cant find instrument for trade {} ", trade.getInstrument());
+            return;
+        }
         InstrumentCache instrumentCache = instrumentCacheMap.getOrDefault(instrument, new InstrumentCache(instrument));
         instrumentCache.updateTrade(trade);
         synchronized (lockSynchCache) {
