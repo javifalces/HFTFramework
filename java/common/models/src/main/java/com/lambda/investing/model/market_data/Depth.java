@@ -69,6 +69,24 @@ public class Depth extends CSVable implements Cloneable {
     }
 
 
+    public static Depth copyFromWithoutPool(Depth depth) {
+        Depth newDepth = getInstance();
+        newDepth.setInstrument(depth.getInstrument());
+        newDepth.setTimestamp(depth.getTimestamp());
+        newDepth.setBidsQuantities(depth.getBidsQuantities());
+        newDepth.setAsksQuantities(depth.getAsksQuantities());
+        newDepth.setBids(depth.getBids());
+        newDepth.setAsks(depth.getAsks());
+        newDepth.setBidsAlgorithmInfo(depth.getBidsAlgorithmInfo());
+        newDepth.setAsksAlgorithmInfo(depth.getAsksAlgorithmInfo());
+        newDepth.setLevels(depth.getLevels());
+        newDepth.setAskLevels(depth.getAskLevels());
+        newDepth.setBidLevels(depth.getBidLevels());
+        newDepth.setTimeToNextUpdateMs(depth.getTimeToNextUpdateMs());
+        newDepth.setLevelsFromData();
+        return newDepth;
+    }
+
     public static Depth copyFrom(Depth depth) {
         Depth newDepth = getInstancePool();
         newDepth.setInstrument(depth.getInstrument());
