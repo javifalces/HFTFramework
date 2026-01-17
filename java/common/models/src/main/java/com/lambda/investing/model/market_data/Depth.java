@@ -345,8 +345,11 @@ public class Depth extends CSVable implements Cloneable {
 
     @JSONField(serialize = false, deserialize = false)
     public double getWorstAsk() {
+        if (asks == null || asks.length == 0) {
+            return Double.MAX_VALUE;
+        }
         double output = -1;
-        int levelCounter = asks.length - 1;
+        int levelCounter = Math.max(asks.length - 1, 0);
         while (output == -1) {
             if (!Depth.isDefaultValue(asks[levelCounter])) {
                 output = asks[levelCounter];
@@ -359,8 +362,11 @@ public class Depth extends CSVable implements Cloneable {
 
     @JSONField(serialize = false, deserialize = false)
     public double getWorstBid() {
+        if (bids == null || bids.length == 0) {
+            return Double.MIN_VALUE;
+        }
         double output = -1;
-        int levelCounter = bids.length - 1;
+        int levelCounter = Math.max(bids.length - 1, 0);
         while (output == -1) {
             if (!Depth.isDefaultValue(bids[levelCounter])) {
                 output = bids[levelCounter];
