@@ -68,6 +68,101 @@ public class Depth extends CSVable implements Cloneable {
         }
     }
 
+    public static Depth removeLevel(Depth depth, double price, Verb verb, double deltaDiffThreshold) {
+        if (verb == Verb.Buy) {
+            //find index to remove depth.getBids()
+            double[] bids = depth.getBids();
+            int indexToRemove = java.util.stream.IntStream.range(0, bids.length)
+                    .filter(i -> Math.abs(bids[i] - price) < deltaDiffThreshold)
+                    .findFirst()
+                    .orElse(-1);
+
+            if (indexToRemove == -1) {
+                //not found
+                return depth;
+            }
+            //copy arrays without that index
+            int bidLevels = Math.max(depth.getBidLevels() - 1, 0);
+            double[] newBids = new double[bidLevels];
+            double[] newBidQty = new double[bidLevels];
+            System.arraycopy(depth.getBids(), 0, newBids, 0, indexToRemove);
+            System.arraycopy(depth.getBidsQuantities(), 0, newBidQty, 0, indexToRemove);
+            System.arraycopy(depth.getBids(), indexToRemove + 1, newBids, indexToRemove, depth.getBidLevels() - indexToRemove - 1);
+            System.arraycopy(depth.getBidsQuantities(), indexToRemove + 1, newBidQty, indexToRemove, depth.getBidLevels() - indexToRemove - 1);
+            depth.setBids(newBids);
+            depth.setBidsQuantities(newBidQty);
+            depth.setBidLevels(newBids.length);
+            return depth;
+        } else {
+            double[] asks = depth.getAsks();
+            int indexToRemove = java.util.stream.IntStream.range(0, asks.length)
+                    .filter(i -> Math.abs(asks[i] - price) < deltaDiffThreshold)
+                    .findFirst()
+                    .orElse(-1);
+
+            if (indexToRemove == -1) {
+                //not found
+                return depth;
+            }
+            //copy arrays without that index
+            int askLevels = Math.max(depth.getAskLevels() - 1, 0);
+            double[] newAsks = new double[askLevels];
+            double[] newAskQty = new double[askLevels];
+            System.arraycopy(depth.getAsks(), 0, newAsks, 0, indexToRemove);
+            System.arraycopy(depth.getAsksQuantities(), 0, newAskQty, 0, indexToRemove);
+            System.arraycopy(depth.getAsks(), indexToRemove + 1, newAsks, indexToRemove, depth.getAskLevels() - indexToRemove - 1);
+            System.arraycopy(depth.getAsksQuantities(), indexToRemove + 1, newAskQty, indexToRemove, depth.getAskLevels() - indexToRemove - 1);
+            depth.setAsks(newAsks);
+            depth.setAsksQuantities(newAskQty);
+            depth.setAskLevels(newAsks.length);
+            return depth;
+        }
+    }
+
+    private static double[] limitArray(double[] array, int maxLength) {
+        double[] limited = new double[maxLength];
+        System.arraycopy(array, 0, limited, 0, maxLength);
+        return limited;
+    }
+
+    public static Depth insertNewLevel(Depth depth, double price, double size, Verb verb) {
+        if (verb == Verb.Buy) {
+            double[] newBids = new double[depth.getBidLevels() + 1];
+            double[] newBidQty = new double[depth.getBidLevels() + 1];
+            newBids[0] = price;
+            newBidQty[0] = size;
+            System.arraycopy(depth.getBids(), 0, newBids, 1, depth.getBidLevels());
+            System.arraycopy(depth.getBidsQuantities(), 0, newBidQty, 1, depth.getBidLevels());
+
+            if (newBids.length > Depth.MAX_DEPTH) {
+                newBids = limitArray(newBids, Depth.MAX_DEPTH);
+                newBidQty = limitArray(newBidQty, Depth.MAX_DEPTH);
+            }
+
+            depth.setBids(newBids);
+            depth.setBidsQuantities(newBidQty);
+            depth.setBidLevels(newBids.length);
+            return depth;
+        } else {
+            double[] newAsks = new double[depth.getAskLevels() + 1];
+            double[] newAskQty = new double[depth.getAskLevels() + 1];
+            newAsks[0] = price;
+            newAskQty[0] = size;
+            System.arraycopy(depth.getAsks(), 0, newAsks, 1, depth.getAskLevels());
+            System.arraycopy(depth.getAsksQuantities(), 0, newAskQty, 1, depth.getAskLevels());
+
+            if (newAsks.length > Depth.MAX_DEPTH) {
+                newAsks = limitArray(newAsks, Depth.MAX_DEPTH);
+                newAskQty = limitArray(newAskQty, Depth.MAX_DEPTH);
+            }
+
+            depth.setAsks(newAsks);
+            depth.setAsksQuantities(newAskQty);
+            depth.setAskLevels(newAsks.length);
+            return depth;
+        }
+    }
+
 
     public static Depth copyFromWithoutPool(Depth depth) {
         Depth newDepth = getInstance();
