@@ -112,8 +112,8 @@ public class LinearConstantSpreadAlgorithm extends SingleInstrumentAlgorithm {
             }
 
             //Check not crossing the mid price!
-            askPrice = Math.max(askPrice, depth.getMidPrice() + instrument.getPriceTick());
-            bidPrice = Math.min(bidPrice, depth.getMidPrice() - instrument.getPriceTick());
+            askPrice = Math.max(askPrice, depth.getMidPrice());
+            bidPrice = Math.min(bidPrice, depth.getMidPrice());
 
             //			Check worst price
             //			double maxAskPrice = depth.getMidPrice() + MAX_TICKS_MIDPRICE_PRICE_DEV * instrument.getPriceTick();

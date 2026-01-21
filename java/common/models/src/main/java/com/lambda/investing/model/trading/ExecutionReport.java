@@ -5,6 +5,7 @@ import com.lambda.investing.model.Util;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.io.Serializable;
 import java.util.Date;
 import java.util.List;
 
@@ -13,7 +14,7 @@ import static com.lambda.investing.PrintUtils.PrintDate;
 @Getter
 @Setter
 //@ToString
-public class ExecutionReport {
+public class ExecutionReport implements Serializable {
 
     public static List<ExecutionReportStatus> tradeStatus = ArrayUtils.ArrayToList(new ExecutionReportStatus[]{ExecutionReportStatus.CompletelyFilled, ExecutionReportStatus.PartialFilled});
     public static List<ExecutionReportStatus> liveStatus = ArrayUtils.ArrayToList(new ExecutionReportStatus[]{ExecutionReportStatus.Active, ExecutionReportStatus.PartialFilled});
