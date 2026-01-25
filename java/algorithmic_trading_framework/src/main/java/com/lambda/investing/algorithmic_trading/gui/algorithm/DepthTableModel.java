@@ -57,6 +57,9 @@ public class DepthTableModel extends AbstractTableModel {
     private void roundPrices(double[] prices) {
         if (instrument != null) {
             for (int i = 0; i < prices.length; i++) {
+                if (Double.isNaN(prices[i])) {
+                    continue;
+                }
                 prices[i] = instrument.roundPrice(prices[i]);
             }
         }
@@ -65,6 +68,9 @@ public class DepthTableModel extends AbstractTableModel {
     private void roundQuantities(double[] quantities) {
         if (instrument != null) {
             for (int i = 0; i < quantities.length; i++) {
+                if (Double.isNaN(quantities[i])) {
+                    continue;
+                }
                 quantities[i] = instrument.roundQty(quantities[i]);
             }
         }
