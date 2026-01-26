@@ -237,7 +237,12 @@ public class DefaultAlgorithmGui implements AlgorithmGui {
                 Runnable runnable = new Runnable() {
                     public void run() {
                         //update table
-                        DepthTableModel depthTable = depthTables.get(executionReport.getInstrument()).depthTableModel;
+                        DepthModel depthModel = depthTables.get(executionReport.getInstrument());
+                        if (depthModel == null) {
+                            //wait initialization
+                            return;
+                        }
+                        DepthTableModel depthTable = depthModel.depthTableModel;
                         depthTable.updateExecutionReport(executionReport);
 
                         //TODO something faster
