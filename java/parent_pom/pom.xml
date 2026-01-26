@@ -108,7 +108,7 @@
         <pmd.configuration.version>1.1.0</pmd.configuration.version>
         <apache.commons.csv.version>1.5</apache.commons.csv.version>
         <sqlite-jdbc.version>3.15.1</sqlite-jdbc.version>
-        <disruptor.version>3.4.2</disruptor.version>
+        <disruptor.version>4.0.0</disruptor.version>
         <springboot-maven-build.version>2.7.18</springboot-maven-build.version>
         <table-saw.version>0.43.1</table-saw.version>
         <table-saw-parquet.version>0.11.0</table-saw-parquet.version>
