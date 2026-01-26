@@ -386,10 +386,12 @@ public class DefaultAlgorithmGui implements AlgorithmGui {
             return null;
         }
         try {
+
             String output = Configuration.formatLog("" +
                     "[{}] {} {} {}@{}", new Date(trade.getTimestamp()), trade.getVerb(), trade.getInstrument(), trade.getQuantity(), trade.getPrice());
-            if (!trade.getAlgorithmInfo().equals(MARKET_MAKER_ALGORITHM_INFO)) {
-                output += " [algo]";
+
+            if (trade.getAlgorithmInfo() != null && !trade.getAlgorithmInfo().equals(MARKET_MAKER_ALGORITHM_INFO)) {
+                output += " [algo]";//only in backtest we will have algo info
             }
 
             return output;
