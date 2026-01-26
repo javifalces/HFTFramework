@@ -40,31 +40,41 @@ public abstract class ParquetDataManager implements DataManager {
         System.setErr(System.out);
     }
 
+    //    protected static void setEnv(Map<String, String> newenv) throws Exception {
+//        try {
+//            Class<?> processEnvironmentClass = Class.forName("java.lang.ProcessEnvironment");
+//            Field theEnvironmentField = processEnvironmentClass.getDeclaredField("theEnvironment");
+//            theEnvironmentField.setAccessible(true);
+//            Map<String, String> env = (Map<String, String>) theEnvironmentField.get(null);
+//            env.putAll(newenv);
+//            Field theCaseInsensitiveEnvironmentField = processEnvironmentClass
+//                    .getDeclaredField("theCaseInsensitiveEnvironment");
+//            theCaseInsensitiveEnvironmentField.setAccessible(true);
+//            Map<String, String> cienv = (Map<String, String>) theCaseInsensitiveEnvironmentField.get(null);
+//            cienv.putAll(newenv);
+//        } catch (NoSuchFieldException e) {
+//            Class[] classes = Collections.class.getDeclaredClasses();
+//            Map<String, String> env = System.getenv();
+//            for (Class cl : classes) {
+//                if ("java.util.Collections$UnmodifiableMap".equals(cl.getName())) {
+//                    Field field = cl.getDeclaredField("m");
+//                    field.setAccessible(true);
+//                    Object obj = field.get(env);
+//                    Map<String, String> map = (Map<String, String>) obj;
+//                    map.clear();
+//                    map.putAll(newenv);
+//                }
+//            }
+//        }
+//    }
     protected static void setEnv(Map<String, String> newenv) throws Exception {
-        try {
-            Class<?> processEnvironmentClass = Class.forName("java.lang.ProcessEnvironment");
-            Field theEnvironmentField = processEnvironmentClass.getDeclaredField("theEnvironment");
-            theEnvironmentField.setAccessible(true);
-            Map<String, String> env = (Map<String, String>) theEnvironmentField.get(null);
-            env.putAll(newenv);
-            Field theCaseInsensitiveEnvironmentField = processEnvironmentClass
-                    .getDeclaredField("theCaseInsensitiveEnvironment");
-            theCaseInsensitiveEnvironmentField.setAccessible(true);
-            Map<String, String> cienv = (Map<String, String>) theCaseInsensitiveEnvironmentField.get(null);
-            cienv.putAll(newenv);
-        } catch (NoSuchFieldException e) {
-            Class[] classes = Collections.class.getDeclaredClasses();
-            Map<String, String> env = System.getenv();
-            for (Class cl : classes) {
-                if ("java.util.Collections$UnmodifiableMap".equals(cl.getName())) {
-                    Field field = cl.getDeclaredField("m");
-                    field.setAccessible(true);
-                    Object obj = field.get(env);
-                    Map<String, String> map = (Map<String, String>) obj;
-                    map.clear();
-                    map.putAll(newenv);
-                }
-            }
+        // For Java 9+, direct environment variable modification is blocked by the module system
+        // We use System properties as the primary mechanism since Spring and most frameworks read from there
+
+
+        // Java 9+: Set System properties directly (Spring beans will read from System.getProperty)
+        for (Map.Entry<String, String> entry : newenv.entrySet()) {
+            System.setProperty(entry.getKey(), entry.getValue());
         }
     }
 
