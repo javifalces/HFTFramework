@@ -78,9 +78,29 @@ public abstract class ParquetDataManager implements DataManager {
         }
     }
 
+    protected static Configuration hadoopConfig;
+    static Logger logger = LogManager.getLogger(ParquetDataManager.class);
+
+    protected static Configuration getHadoopConfiguration() {
+        if (hadoopConfig == null) {
+            hadoopConfig = new Configuration();
+            // Disable security for Java 17 compatibility (Subject.getSubject() unsupported)
+            hadoopConfig.set("hadoop.security.authentication", "simple");
+            hadoopConfig.set("hadoop.security.authorization", "false");
+            // Use local file system
+            hadoopConfig.set("fs.defaultFS", "file:///");
+            hadoopConfig.set("fs.file.impl", "org.apache.hadoop.fs.LocalFileSystem");
+        }
+        return hadoopConfig;
+    }
+
     public ParquetDataManager() {
         //	D:\javif\Coding\cryptotradingdesk\java\common\data_manager\src\main\resources\apache-hadoop-3.1.0-winutils
         //	HADOOP_HOME or hadoop.home.dir
+
+        // Initialize Hadoop configuration for Java 17 compatibility
+        getHadoopConfiguration();
+
         if (SystemUtils.IS_OS_WINDOWS && System.getenv("HADOOP_HOME") == null) {
             ClassLoader loader = ParquetDataManager.class.getClassLoader();
             File file = new File(loader.getResource("apache-hadoop-3.1.0-winutils/bin/winutils.exe").getFile());
@@ -130,8 +150,6 @@ public abstract class ParquetDataManager implements DataManager {
         return completePath.substring(indexInstrument, indexEndInstrument);
     }
 
-    static Logger logger = LogManager.getLogger(ParquetDataManager.class);
-
 
     /***
      *
@@ -171,7 +189,7 @@ public abstract class ParquetDataManager implements DataManager {
         Path dataFilePath = new Path(filepath);
 
         try (ParquetWriter<Object> writer = AvroParquetWriter.<Object>builder(dataFilePath).withSchema(schema)
-                .withDataModel(ReflectData.get()).withConf(new Configuration())
+                .withDataModel(ReflectData.get()).withConf(getHadoopConfiguration())
                 .withCompressionCodec(PARQUET_COMPRESSION).withWriteMode(OVERWRITE).build()) {
             logger.debug("writing parquet of {} rows with compression {} into {}", objectList.size(),
                     PARQUET_COMPRESSION.name(), filepath);

@@ -101,7 +101,7 @@ public class AvroParquetDataManager extends ParquetDataManager {
         Instrument instrument = Instrument.getInstrument(instrumentPK);
 
         GenericData genericData = getGenericData(objectType);
-        Configuration conf = new Configuration();
+        Configuration conf = getHadoopConfiguration();
         Table output = null;
 
         try (ParquetReader<Object> reader = AvroParquetReader.<Object>builder(dataFile).withDataModel(genericData)

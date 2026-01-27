@@ -61,6 +61,12 @@ public class BacktestFactorProvider extends AbstractFactorProvider implements Ma
     private SortedMap<Long, Map<String, Double>> readFactorParquet(String dataPath) {
         SortedMap<Long, Map<String, Double>> output = new TreeMap<>();
         org.apache.hadoop.conf.Configuration conf = new org.apache.hadoop.conf.Configuration();
+        // Disable security for Java 17 compatibility (Subject.getSubject() unsupported)
+        conf.set("hadoop.security.authentication", "simple");
+        conf.set("hadoop.security.authorization", "false");
+        // Use local file system
+        conf.set("fs.defaultFS", "file:///");
+        conf.set("fs.file.impl", "org.apache.hadoop.fs.LocalFileSystem");
 
         GenericData genericData = new ReflectData(Map.class.getClass().getClassLoader());
 //        Schema schema = ReflectData.AllowNull.get().getSchema(type);

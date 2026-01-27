@@ -42,6 +42,17 @@ public class CacheManager implements Serializable {
 
     Logger logger = LogManager.getLogger(CacheManager.class);
 
+    // Initialize Hadoop configuration for Java 17 compatibility
+    static {
+        org.apache.hadoop.conf.Configuration hadoopConfig = new org.apache.hadoop.conf.Configuration();
+        // Disable security for Java 17 compatibility (Subject.getSubject() unsupported)
+        hadoopConfig.set("hadoop.security.authentication", "simple");
+        hadoopConfig.set("hadoop.security.authorization", "false");
+        // Use local file system
+        hadoopConfig.set("fs.defaultFS", "file:///");
+        hadoopConfig.set("fs.file.impl", "org.apache.hadoop.fs.LocalFileSystem");
+    }
+
     private String dateString;
     private String startDateString;
     private String endDateString;
