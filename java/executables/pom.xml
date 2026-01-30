@@ -16,7 +16,6 @@
 
 
     <modules>
-        <module>BacktestBrokerEngine</module>
         <module>Backtest</module>
         <module>MetatraderEngine</module>
         <module>AlgoTradingZeroMq</module>
