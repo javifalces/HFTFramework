@@ -65,6 +65,12 @@ public class InstrumentCache {
             }
 
             //copied logic from OrderMatchEngine.inferVerbFromTrade
+            // Check if bids and asks arrays are not empty
+            if (depth.getBids() == null || depth.getBids().length == 0 ||
+                    depth.getAsks() == null || depth.getAsks().length == 0) {
+                continue;
+            }
+
             double bestBid = depth.getBids()[0];
             double bestAsk = depth.getAsks()[0];
 
