@@ -117,8 +117,8 @@
         <intellij.version>232.9921.82</intellij.version>
         <flatlaf.version>3.2.5</flatlaf.version>
         <maven.profiler.version>3.13</maven.profiler.version>
-        <openhft.affinity.version>3.27ea1</openhft.affinity.version>
-        <openhft.chroniclequeue.version>5.27ea11</openhft.chroniclequeue.version>
+        <openhft.affinity.version>2026.2</openhft.affinity.version>
+        <openhft.chroniclequeue.version>2026.1</openhft.chroniclequeue.version>
         <maven.artifact.checksumPolicy>warn</maven.artifact.checksumPolicy>
 
         <!-- default off locally; CI/release enables with -Dgpg.skip=false -->
@@ -425,6 +425,34 @@
                     <exclusion>
                         <groupId>log4j</groupId>
                         <artifactId>log4j</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+
+            <!-- Force newer versions to avoid POM warnings from old transitive dependencies -->
+            <dependency>
+                <groupId>org.apache.yetus</groupId>
+                <artifactId>audience-annotations</artifactId>
+                <version>0.13.0</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.zookeeper</groupId>
+                <artifactId>zookeeper</artifactId>
+                <version>3.6.3</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>org.slf4j</groupId>
+                        <artifactId>*</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>log4j</groupId>
+                        <artifactId>log4j</artifactId>
+                    </exclusion>
+                    <!-- Exclude old audience-annotations to force using the newer one -->
+                    <exclusion>
+                        <groupId>org.apache.yetus</groupId>
+                        <artifactId>audience-annotations</artifactId>
                     </exclusion>
                 </exclusions>
             </dependency>
@@ -784,7 +812,11 @@
                 <version>3.0.3</version>
             </dependency>
 
-
+            <dependency>
+                <groupId>org.javassist</groupId>
+                <artifactId>javassist</artifactId>
+                <version>3.30.2-GA</version>
+            </dependency>
         </dependencies>
 
     </dependencyManagement>
