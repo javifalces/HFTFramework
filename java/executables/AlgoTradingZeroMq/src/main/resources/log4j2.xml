@@ -55,7 +55,7 @@
         </AsyncLogger>
 
         <!--Configure LatencyStatistics logs and Statistics logs into fileStatistics info level-->
-        <AsyncLogger name="com.lambda.investing.LatencyStatistics" level="info">
+        <AsyncLogger name="com.lambda.investing.LatencyStatistics" level="info" additivity="false">
             <AppenderRef ref="fileStatistics"/>
         </AsyncLogger>
         <AsyncLogger name="com.lambda.investing.trading_engine_connector.SlippageStatistics" level="info">

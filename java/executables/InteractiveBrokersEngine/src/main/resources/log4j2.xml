@@ -26,20 +26,36 @@
 
         </RollingFile>
 
+        <RollingFile name="fileStatistics"
+                     fileName="${sys:log.path}/${sys:log.appName:-XChange}_${timestamp}_statistics.log"
+                     filePattern="${sys:log.path}/${sys:log.appName:-XChange}_${timestamp}_statistics.log.%d{yyMMdd_HHmmss}">
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} %-5p [%t] %c{1} - %m%n"/>
+
+            <Policies>
+                <SizeBasedTriggeringPolicy size="${sys:log.fileSize}"/>
+            </Policies>
+            <DefaultRolloverStrategy max="${numFiles}"/>
+        </RollingFile>
+
+
     </appenders>
 
     <loggers>
 
 
-        <Logger name="com.lambda.investing.data_manager" level="debug">
+        <AsyncLogger name="com.lambda.investing.data_manager" level="debug" additivity="false">
             <AppenderRef ref="file"/>
-        </Logger>
-        <!--        <Logger name="com.lambda.investing.trading_engine_connector" level="debug">-->
+        </AsyncLogger>
+        <!--        <AsyncLogger name="com.lambda.investing.trading_engine_connector" level="debug" additivity="false">-->
         <!--            <AppenderRef ref="file"/>-->
-        <!--        </Logger>-->
-        <Logger name="com.lambda.investing.market_data_connector" level="debug">
+        <!--        </AsyncLogger>-->
+        <AsyncLogger name="com.lambda.investing.market_data_connector" level="debug" additivity="false">
             <AppenderRef ref="file"/>
-        </Logger>
+        </AsyncLogger>
+
+        <AsyncLogger name="com.lambda.investing.LatencyStatistics" level="info" additivity="false">
+            <AppenderRef ref="fileStatistics"/>
+        </AsyncLogger>
 
         <!--Console info output-->
         <root level="ERROR">
