@@ -1059,6 +1059,10 @@ public class Depth extends CSVable implements Cloneable {
 
     }
 
+    public String getLatenciesTable() {
+        return getLatenciesTable(getTimestamp(), getTimestampBrokerConnector(), getTimestampAlgoConnector(), getTimestampStrategy());
+    }
+
     @Override
     public Object clone() throws CloneNotSupportedException {
         return super.clone();

@@ -1,6 +1,7 @@
 package com.lambda.investing.model.trading;
 
 import com.lambda.investing.ArrayUtils;
+import com.lambda.investing.model.CSVable;
 import com.lambda.investing.model.Util;
 import lombok.Getter;
 import lombok.Setter;
@@ -70,6 +71,10 @@ public class ExecutionReport implements Serializable {
 
     public void updateTimestampCreation(long timestampCreation) {
         this.timestampCreation = Math.max(timestampCreation, this.timestampCreation);
+    }
+
+    public String getLatenciesTable() {
+        return CSVable.getLatenciesTable(getTimestampCreation(), getTimestampBrokerConnector(), getTimestampAlgoConnector(), getTimestampStrategy());
     }
 
     public String toJsonString() {

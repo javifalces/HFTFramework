@@ -1023,7 +1023,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             }
 
             if (latencyMs > WARN_LATENCY_ORDER_REQUEST_MS) {
-                String table = getLatenciesTable(orderRequest);
+                String table = orderRequest.getLatenciesTable();
                 logger.warn("OrderRequest {} with latency {} ms > {} from depth reference from {} to {}\n{}", orderRequest, latencyMs, WARN_LATENCY_ORDER_REQUEST_MS, PrintDate(new Date(orderRequest.getReferenceTimestamp())), PrintDate(getCurrentTime()), table);
                 if (!isBacktest) {
                     System.err.println(Configuration.formatLog("WARNING: OrderRequest {} with latency {} ms > {} from depth reference from {} to {}", orderRequest, latencyMs, WARN_LATENCY_ORDER_REQUEST_MS, PrintDate(new Date(orderRequest.getReferenceTimestamp())), PrintDate(getCurrentTime())));
@@ -1223,7 +1223,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             }
 
             if (latencyMs > WARN_LATENCY_MARKET_DATA_MS) {
-                String tableLatencies = getLatenciesTable(depth.getTimestamp(), depth.getTimestampBrokerConnector(), depth.getTimestampAlgoConnector(), depth.getTimestampStrategy());
+                String tableLatencies = depth.getLatenciesTable();
                 logger.warn("Depth {} with latency {} ms > {} from current time from {} to {}\n{}",
                         depth.getInstrument(), latencyMs, WARN_LATENCY_MARKET_DATA_MS,
                         PrintDate(new Date(depthTimestamp)), PrintDate(new Date(currentTime)), tableLatencies);
@@ -1261,38 +1261,6 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
         hedgeManager.onDepthUpdate(depth);
         return true;
-    }
-
-    private static String getLatenciesTable(long timestamp, long timestampBrokerConnector, long timestampAlgoConnector, long timestampStrategy) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(String.format("%-30s %-30s %-20s\n", "Event", "Timestamp", "Latency (ms)"));
-        sb.append("--------------------------------------------------------------------------------\n");
-        sb.append(String.format("%-30s %-30s %-20d\n", "timestamp", PrintDate(new Date(timestamp)), 0));
-        sb.append(String.format("%-30s %-30s %-20d\n", "timestampBrokerConnector", PrintDate(new Date(timestampBrokerConnector)), timestampBrokerConnector - timestamp));
-        sb.append(String.format("%-30s %-30s %-20d\n", "timestampAlgoConnector", PrintDate(new Date(timestampAlgoConnector)), timestampAlgoConnector - timestampBrokerConnector));
-        sb.append(String.format("%-30s %-30s %-20d\n", "timestampStrategy", PrintDate(new Date(timestampStrategy)), timestampStrategy - timestampAlgoConnector));
-        sb.append(String.format("%-30s %-30s %-20d\n", "now", PrintDate(new Date()), System.currentTimeMillis() - timestampStrategy));
-        sb.append("--------------------------------------------------------------------------------\n");
-        sb.append(String.format("%-30s %-30s %-20d\n", "Total", "", System.currentTimeMillis() - timestamp));
-
-
-        return sb.toString();
-    }
-
-    private static String getLatenciesTable(OrderRequest orderRequest) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(String.format("%-30s %-30s %-20s\n", "Event", "Timestamp", "Latency (ms)"));
-        sb.append("--------------------------------------------------------------------------------\n");
-        sb.append(String.format("%-30s %-30s %-20d\n", "referenceTimestamp", PrintDate(new Date(orderRequest.getReferenceTimestamp())), 0));
-        sb.append(String.format("%-30s %-30s %-20d\n", "creationTimestamp", PrintDate(new Date(orderRequest.getTimestampCreation())), orderRequest.getTimestampCreation() - orderRequest.getReferenceTimestamp()));
-//        sb.append(String.format("%-30s %-30s %-20d\n", "timestampAlgoConnector", PrintDate(new Date(timestampAlgoConnector)), timestampAlgoConnector - timestampBrokerConnector));
-//        sb.append(String.format("%-30s %-30s %-20d\n", "timestampBrokerConnector", PrintDate(new Date(timestampStrategy)), timestampStrategy - timestampAlgoConnector));
-        sb.append(String.format("%-30s %-30s %-20d\n", "now", PrintDate(new Date()), System.currentTimeMillis() - orderRequest.getTimestampCreation()));
-        sb.append("--------------------------------------------------------------------------------\n");
-        sb.append(String.format("%-30s %-30s %-20d\n", "Total", "", System.currentTimeMillis() - orderRequest.getReferenceTimestamp()));
-
-
-        return sb.toString();
     }
 
 
@@ -1352,7 +1320,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         long currentTime = getCurrentTimestamp();
         long latencyMs = currentTime - trade.getTimestamp();
         if (latencyMs > WARN_LATENCY_MARKET_DATA_MS) {
-            String tableLatencies = getLatenciesTable(trade.getTimestamp(), trade.getTimestampBrokerConnector(), trade.getTimestampAlgoConnector(), trade.getTimestampStrategy());
+            String tableLatencies = trade.getLatenciesTable();
             logger.warn("Trade {} with latency {} ms > {} from current time from {} to {}\n{}",
                     trade.getInstrument(), latencyMs, WARN_LATENCY_MARKET_DATA_MS,
                     PrintDate(new Date(trade.getTimestamp())), PrintDate(new Date(currentTime)), tableLatencies);
@@ -1536,7 +1504,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             long currentTime = getCurrentTimestamp();
             long latencyMs = currentTime - executionReport.getTimestampCreation();
             if (latencyMs > WARN_LATENCY_EXECUTION_REPORT_MS) {
-                String tableLatencies = getLatenciesTable(executionReport.getTimestampCreation(), executionReport.getTimestampBrokerConnector(), executionReport.getTimestampAlgoConnector(), executionReport.getTimestampStrategy());
+                String tableLatencies = executionReport.getLatenciesTable();
                 logger.warn("ExecutionReport {} with latency {} ms > {} from current time from {} to {}\n{}",
                         executionReport.getInstrument(), latencyMs, WARN_LATENCY_EXECUTION_REPORT_MS,
                         PrintDate(new Date(executionReport.getTimestampCreation())), PrintDate(new Date(currentTime)), tableLatencies);
