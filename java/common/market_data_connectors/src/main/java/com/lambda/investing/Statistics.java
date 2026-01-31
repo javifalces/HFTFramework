@@ -49,13 +49,13 @@ public class Statistics implements Runnable {
             for (Map.Entry<String, Long> entry : topicToCounter.entrySet()) {
                 long totalCounter = topicToTotalCounter.getOrDefault(entry.getKey(), 0L);
                 String topic = entry.getKey();
-                if (topic.length() > 50) {
+                if (topic.length() > 40) {
                     String suffixAfterDash = "";
                     int lastDashIndex = topic.lastIndexOf("-");
                     if (lastDashIndex != -1 && lastDashIndex + 1 < topic.length()) {
                         suffixAfterDash = topic.substring(lastDashIndex);
                     }
-                    topic = topic.substring(0, 50) + "...-" + suffixAfterDash;
+                    topic = topic.substring(0, 35) + "...-" + suffixAfterDash;
                 }
 
                 logger.info("\t{}:\t{}\ttotal:{}", topic, entry.getValue(), totalCounter);

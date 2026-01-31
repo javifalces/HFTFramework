@@ -81,13 +81,13 @@ public class LatencyStatistics implements Runnable {
                 String topic = entry.getKey();
                 // if length.topic>50 reduce it after poing to 50 chars and add last characters after -
 
-                if (topic.length() > 50) {
+                if (topic.length() > 40) {
                     String suffixAfterDash = "";
                     int lastDashIndex = topic.lastIndexOf("-");
                     if (lastDashIndex != -1 && lastDashIndex + 1 < topic.length()) {
                         suffixAfterDash = topic.substring(lastDashIndex);
                     }
-                    topic = topic.substring(0, 50) + "...-" + suffixAfterDash;
+                    topic = topic.substring(0, 35) + "...-" + suffixAfterDash;
                 }
                 List<Long> latency = new ArrayList<>(entry.getValue());//copy to avoud concurrent modification
                 int counter = latency.size();
