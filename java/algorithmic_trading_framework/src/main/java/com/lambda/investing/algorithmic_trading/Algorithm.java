@@ -1013,7 +1013,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         //check latency statistics
 
         if (orderRequest.getReferenceTimestamp() != 0) {
-            long latencyMs = getCurrentTime().getTime() - orderRequest.getReferenceTimestamp();
+            long latencyMs = getCurrentTime().getTime() - orderRequest.getTimestampCreation();
             if (latencyStatistics != null) {
                 try {
                     latencyStatistics.addLatencyStatistics("orderRequest." + algorithmInfo, latencyMs);
