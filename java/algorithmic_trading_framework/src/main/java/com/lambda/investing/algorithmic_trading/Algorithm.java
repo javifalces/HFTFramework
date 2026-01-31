@@ -1023,9 +1023,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             }
 
             if (latencyMs > WARN_LATENCY_ORDER_REQUEST_MS) {
-
-                String fromStrMs = new Date(orderRequest.getReferenceTimestamp()).toString();
-                logger.warn("OrderRequest {} with latency {} ms > {} from depth reference from {} to {}", orderRequest, latencyMs, WARN_LATENCY_ORDER_REQUEST_MS, PrintDate(new Date(orderRequest.getReferenceTimestamp())), PrintDate(getCurrentTime()));
+                String table = getLatenciesTable(orderRequest);
+                logger.warn("OrderRequest {} with latency {} ms > {} from depth reference from {} to {}\n{}", orderRequest, latencyMs, WARN_LATENCY_ORDER_REQUEST_MS, PrintDate(new Date(orderRequest.getReferenceTimestamp())), PrintDate(getCurrentTime()), table);
                 if (!isBacktest) {
                     System.err.println(Configuration.formatLog("WARNING: OrderRequest {} with latency {} ms > {} from depth reference from {} to {}", orderRequest, latencyMs, WARN_LATENCY_ORDER_REQUEST_MS, PrintDate(new Date(orderRequest.getReferenceTimestamp())), PrintDate(getCurrentTime())));
                 }
@@ -1269,7 +1268,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         sb.append(String.format("%-30s %-30s %-20s\n", "Event", "Timestamp", "Latency (ms)"));
         sb.append("--------------------------------------------------------------------------------\n");
         sb.append(String.format("%-30s %-30s %-20d\n", "timestamp", PrintDate(new Date(timestamp)), 0));
-        sb.append(String.format("%-30s %-30s %-20d\n", "timestampBrokerConnector", PrintDate(new Date(timestamp)), timestampBrokerConnector - timestamp));
+        sb.append(String.format("%-30s %-30s %-20d\n", "timestampBrokerConnector", PrintDate(new Date(timestampBrokerConnector)), timestampBrokerConnector - timestamp));
         sb.append(String.format("%-30s %-30s %-20d\n", "timestampAlgoConnector", PrintDate(new Date(timestampAlgoConnector)), timestampAlgoConnector - timestampBrokerConnector));
         sb.append(String.format("%-30s %-30s %-20d\n", "timestampStrategy", PrintDate(new Date(timestampStrategy)), timestampStrategy - timestampAlgoConnector));
         sb.append(String.format("%-30s %-30s %-20d\n", "now", PrintDate(new Date()), System.currentTimeMillis() - timestampStrategy));
@@ -1279,6 +1278,23 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
         return sb.toString();
     }
+
+    private static String getLatenciesTable(OrderRequest orderRequest) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("%-30s %-30s %-20s\n", "Event", "Timestamp", "Latency (ms)"));
+        sb.append("--------------------------------------------------------------------------------\n");
+        sb.append(String.format("%-30s %-30s %-20d\n", "referenceTimestamp", PrintDate(new Date(orderRequest.getReferenceTimestamp())), 0));
+        sb.append(String.format("%-30s %-30s %-20d\n", "creationTimestamp", PrintDate(new Date(orderRequest.getTimestampCreation())), orderRequest.getTimestampCreation() - orderRequest.getReferenceTimestamp()));
+//        sb.append(String.format("%-30s %-30s %-20d\n", "timestampAlgoConnector", PrintDate(new Date(timestampAlgoConnector)), timestampAlgoConnector - timestampBrokerConnector));
+//        sb.append(String.format("%-30s %-30s %-20d\n", "timestampBrokerConnector", PrintDate(new Date(timestampStrategy)), timestampStrategy - timestampAlgoConnector));
+        sb.append(String.format("%-30s %-30s %-20d\n", "now", PrintDate(new Date()), System.currentTimeMillis() - orderRequest.getTimestampCreation()));
+        sb.append("--------------------------------------------------------------------------------\n");
+        sb.append(String.format("%-30s %-30s %-20d\n", "Total", "", System.currentTimeMillis() - orderRequest.getReferenceTimestamp()));
+
+
+        return sb.toString();
+    }
+
 
     private Depth removeMe(Depth depth) {
 
