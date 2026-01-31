@@ -111,6 +111,7 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
         }
 
         logger.info("notifyExecutionReportById {} : {} ", id, executionReport);
+        executionReport.setTimestampBrokerConnector(System.currentTimeMillis());//when broker notify
         this.executionReportConnectorPublisher
                 .publish(executionReportConnectorConfiguration, TypeMessage.execution_report, id, executionReport);
 
@@ -124,6 +125,7 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
         if (typeMessage.equals(TypeMessage.order_request)) {
 //			OrderRequest orderRequest = fromJsonString(content, OrderRequest.class);
             OrderRequest orderRequest = fromObject(content, OrderRequest.class);
+            orderRequest.setTimestampBrokerConnector(System.currentTimeMillis());
 
             if (lastOrderRequestClOrdId.contains(orderRequest.getClientOrderId())) {
                 //

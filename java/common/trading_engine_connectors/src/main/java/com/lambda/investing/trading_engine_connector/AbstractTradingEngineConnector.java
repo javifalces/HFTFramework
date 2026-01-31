@@ -94,6 +94,8 @@ public abstract class AbstractTradingEngineConnector implements TradingEngineCon
     }
 
     public void notifyExecutionReport(ExecutionReport executionReport, long timestampReceived) {
+        executionReport.setTimestampAlgoConnector(System.currentTimeMillis());
+
         boolean isCfTrade = executionReport.getExecutionReportStatus().name()
                 .equalsIgnoreCase(ExecutionReportStatus.CompletelyFilled.name());
         if (isCfTrade) {

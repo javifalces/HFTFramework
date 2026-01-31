@@ -65,6 +65,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     protected static int DEFAULT_QUEUE_HISTORICAL_TRADES = 5;
     protected static long WARN_LATENCY_ORDER_REQUEST_MS = 500;
     protected static long WARN_LATENCY_MARKET_DATA_MS = 500;
+    protected static long WARN_LATENCY_EXECUTION_REPORT_MS = 500;
 
     protected Queue<String> cfTradesProcessed;
 
@@ -178,6 +179,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     protected AlgorithmState algorithmState = AlgorithmState.NOT_INITIALIZED;
     protected String summaryResultsAppend = null;
     private CandleData candleData;
+
     public boolean isReady() {
         return getAlgorithmState().equals(AlgorithmState.STARTED);
     }
@@ -1198,6 +1200,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                 return false;
             }
 
+            depth.setTimestampStrategy(System.currentTimeMillis());
             try {
                 portfolioManager.updateDepth(depth);//update before remove me
                 candleFromTickUpdater.onDepthUpdate(depth);//can be some logic , better to update portfolio first -> taker logic
@@ -1221,14 +1224,14 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             }
 
             if (latencyMs > WARN_LATENCY_MARKET_DATA_MS) {
-                logger.warn("Depth {} with latency {} ms > {} from current time from {} to {}", depth.getInstrument(), latencyMs, WARN_LATENCY_MARKET_DATA_MS, PrintDate(new Date(depthTimestamp)), PrintDate(new Date(currentTime)));
+                String tableLatencies = getLatenciesTable(depth.getTimestamp(), depth.getTimestampBrokerConnector(), depth.getTimestampAlgoConnector(), depth.getTimestampStrategy());
+                logger.warn("Depth {} with latency {} ms > {} from current time from {} to {}\n{}",
+                        depth.getInstrument(), latencyMs, WARN_LATENCY_MARKET_DATA_MS,
+                        PrintDate(new Date(depthTimestamp)), PrintDate(new Date(currentTime)), tableLatencies);
                 if (!isBacktest) {
                     System.err.println(Configuration.formatLog("WARNING: Depth {} with latency {} ms > {} from current time from {} to {}", depth.getInstrument(), latencyMs, WARN_LATENCY_MARKET_DATA_MS, PrintDate(new Date(depthTimestamp)), PrintDate(new Date(currentTime))));
                 }
             }
-
-
-
 
 
             //check depth
@@ -1259,6 +1262,22 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
         hedgeManager.onDepthUpdate(depth);
         return true;
+    }
+
+    private static String getLatenciesTable(long timestamp, long timestampBrokerConnector, long timestampAlgoConnector, long timestampStrategy) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("%-30s %-30s %-20s\n", "Event", "Timestamp", "Latency (ms)"));
+        sb.append("--------------------------------------------------------------------------------\n");
+        sb.append(String.format("%-30s %-30s %-20d\n", "timestamp", PrintDate(new Date(timestamp)), 0));
+        sb.append(String.format("%-30s %-30s %-20d\n", "timestampBrokerConnector", PrintDate(new Date(timestamp)), timestampBrokerConnector - timestamp));
+        sb.append(String.format("%-30s %-30s %-20d\n", "timestampAlgoConnector", PrintDate(new Date(timestampAlgoConnector)), timestampAlgoConnector - timestampBrokerConnector));
+        sb.append(String.format("%-30s %-30s %-20d\n", "timestampStrategy", PrintDate(new Date(timestampStrategy)), timestampStrategy - timestampAlgoConnector));
+        sb.append(String.format("%-30s %-30s %-20d\n", "now", PrintDate(new Date()), System.currentTimeMillis() - timestampStrategy));
+        sb.append("--------------------------------------------------------------------------------\n");
+        sb.append(String.format("%-30s %-30s %-20d\n", "Total", "", System.currentTimeMillis() - timestamp));
+
+
+        return sb.toString();
     }
 
     private Depth removeMe(Depth depth) {
@@ -1297,6 +1316,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     @Override
     public boolean onTradeUpdate(Trade trade) {
         long timestamp = trade.getTimestamp();
+        trade.setTimestampStrategy(System.currentTimeMillis());
+
         candleFromTickUpdater.onTradeUpdate(trade);
         if (timestamp != 0 && isBacktest) {
             timeService.setCurrentTimestamp(timestamp);
@@ -1312,9 +1333,22 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             return false;
         }
 
+        long currentTime = getCurrentTimestamp();
+        long latencyMs = currentTime - trade.getTimestamp();
+        if (latencyMs > WARN_LATENCY_MARKET_DATA_MS) {
+            String tableLatencies = getLatenciesTable(trade.getTimestamp(), trade.getTimestampBrokerConnector(), trade.getTimestampAlgoConnector(), trade.getTimestampStrategy());
+            logger.warn("Trade {} with latency {} ms > {} from current time from {} to {}\n{}",
+                    trade.getInstrument(), latencyMs, WARN_LATENCY_MARKET_DATA_MS,
+                    PrintDate(new Date(trade.getTimestamp())), PrintDate(new Date(currentTime)), tableLatencies);
+            if (!isBacktest) {
+                System.err.println(Configuration.formatLog("WARNING: Trade {} with latency {} ms > {} from current time from {} to {}", trade.getInstrument(), latencyMs, WARN_LATENCY_MARKET_DATA_MS, PrintDate(new Date(trade.getTimestamp())), PrintDate(new Date(currentTime))));
+            }
+        }
+
         //update cache
         InstrumentManager instrumentManager = getInstrumentManager(trade.getInstrument());
         instrumentManager.setLastTrade(trade);
+
 
         addStatistics(RECEIVE_STATS + " trade." + trade.getInstrument());
         tradeReceived.incrementAndGet();
@@ -1482,6 +1516,20 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                 return false;
             }
 
+            executionReport.setTimestampStrategy(System.currentTimeMillis());
+            long currentTime = getCurrentTimestamp();
+            long latencyMs = currentTime - executionReport.getTimestampCreation();
+            if (latencyMs > WARN_LATENCY_EXECUTION_REPORT_MS) {
+                String tableLatencies = getLatenciesTable(executionReport.getTimestampCreation(), executionReport.getTimestampBrokerConnector(), executionReport.getTimestampAlgoConnector(), executionReport.getTimestampStrategy());
+                logger.warn("ExecutionReport {} with latency {} ms > {} from current time from {} to {}\n{}",
+                        executionReport.getInstrument(), latencyMs, WARN_LATENCY_EXECUTION_REPORT_MS,
+                        PrintDate(new Date(executionReport.getTimestampCreation())), PrintDate(new Date(currentTime)), tableLatencies);
+                if (!isBacktest) {
+                    System.err.println(Configuration.formatLog("WARNING: ExecutionReport {} with latency {} ms > {} from current time from {} to {}", executionReport.getInstrument(), latencyMs, WARN_LATENCY_EXECUTION_REPORT_MS, PrintDate(new Date(executionReport.getTimestampCreation())), PrintDate(new Date(currentTime))));
+                }
+            }
+
+
             if (latencyStatistics != null) {
                 latencyStatistics.stopKeyStatistics(executionReport.getClientOrderId(), executionReport.getTimestampCreation());
                 latencyStatistics.addLatencyStatistics("executionReport." + executionReport.getInstrument() + "." + algorithmInfo, getCurrentTimestamp() - executionReport.getTimestampCreation());
@@ -1489,8 +1537,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
             updateAllActiveOrders(executionReport);
 
-            boolean isTrade = executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletelyFilled)
-                    || executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.PartialFilled);
+            boolean isTrade = ExecutionReport.isTradeStatus(executionReport);
             if (isTrade) {
 
                 if (slippageStatistics != null) {

@@ -102,6 +102,7 @@ public class MockMarketDataConnectorPublisher extends AbstractMarketDataConnecto
 		depth.setAsksQuantities(askQuantity);
 		depth.setBidsQuantities(bidQuantity);
 		depth.setTimestamp(System.currentTimeMillis());
+        depth.setTimestampBrokerConnector(System.currentTimeMillis());
 
 		return depth;
 
@@ -173,6 +174,7 @@ public class MockMarketDataConnectorPublisher extends AbstractMarketDataConnecto
 
 		}
 		lastDepth.setTimestamp(System.currentTimeMillis());
+        lastDepth.setTimestampBrokerConnector(System.currentTimeMillis());
 		return lastDepth;
 	}
 

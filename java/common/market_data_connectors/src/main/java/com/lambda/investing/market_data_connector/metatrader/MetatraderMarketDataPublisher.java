@@ -147,6 +147,7 @@ public class MetatraderMarketDataPublisher extends AbstractMarketDataConnectorPu
 			depth.setAsks(ArrayUtils.subarray(askPrice, 0, maxLevel + 1));
 			depth.setBids(ArrayUtils.subarray(bidPrice, 0, maxLevel + 1));
 			depth.setTimestamp(timestamp);
+            depth.setTimestampBrokerConnector(System.currentTimeMillis());
 			depth.setInstrument(instrument.getPrimaryKey());
 			depth.setLevelsFromData();
 
@@ -174,6 +175,7 @@ public class MetatraderMarketDataPublisher extends AbstractMarketDataConnectorPu
 				//
 
 				depth.setTimestamp(timestamp);
+                depth.setTimestampBrokerConnector(System.currentTimeMillis());
 				depth.setInstrument(instrument.getPrimaryKey());
 				depth.setLevelsFromData();
 

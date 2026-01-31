@@ -61,6 +61,7 @@ public abstract class AbstractMarketDataProvider implements MarketDataProvider {
             return;
         }
 
+
         Set<MarketDataListener> listeners = listenersManager.keySet();
         if (!listeners.isEmpty()) {
             try {

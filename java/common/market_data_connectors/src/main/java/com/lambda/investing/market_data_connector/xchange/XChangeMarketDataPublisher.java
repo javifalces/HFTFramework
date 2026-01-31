@@ -165,6 +165,7 @@ public class XChangeMarketDataPublisher extends AbstractMarketDataConnectorPubli
 			Depth depth = Depth.getInstancePool();
 			depth.setInstrument(instrument.getPrimaryKey());
 			depth.setTimestamp(currentDate.getTime());
+			depth.setTimestampBrokerConnector(System.currentTimeMillis());
 			//			depth.setTimestamp(System.currentTimeMillis());
 			boolean anyError = false;
 			int askDepth = Math.min(orderbook.getAsks().size(), MAX_DEPTH);

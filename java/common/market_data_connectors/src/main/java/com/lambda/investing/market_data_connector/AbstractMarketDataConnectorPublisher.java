@@ -191,6 +191,7 @@ public abstract class AbstractMarketDataConnectorPublisher implements MarketData
     public void notifyDepth(String topic, Depth depth) {
 //        String depthJson = depth.toString();
         topic = topic + "." + TypeMessage.depth.name();
+        depth.setTimestampBrokerConnector(System.currentTimeMillis());
         //		logger.debug("notify DEPTH {}",depth.toString());
         connectorPublisher.publish(connectorConfiguration, TypeMessage.depth, topic, depth);
         if (statistics != null) {
@@ -203,6 +204,7 @@ public abstract class AbstractMarketDataConnectorPublisher implements MarketData
     public void notifyTrade(String topic, Trade trade) {
 //        String tradeJson = trade.toString();
         topic = topic + "." + TypeMessage.trade.name();
+        trade.setTimestampBrokerConnector(System.currentTimeMillis());
         //		logger.debug("notify TRADE {}",trade.toString());
         connectorPublisher.publish(connectorConfiguration, TypeMessage.trade, topic, trade);
         if (statistics != null) {

@@ -24,13 +24,17 @@ public class OrderRequest implements Cloneable, Serializable {
 	private MarketOrderType marketOrderType;
 	private String clientOrderId, origClientOrderId;
 
-	private long timestampCreation;
+
 
 	private String algorithmInfo;
 	private String freeText;
 	public static Random RANDOM_GENERATOR = new Random();
 
-	private long referenceTimestamp;
+    private long referenceTimestamp;//strategy reference time , last depth received
+    private long timestampCreation;//strategy create the object
+    private long timestampAlgoConnector;//Ordinary Trading Engine receive the order request from strategy
+    private long timestampBrokerConnector; //Abstract BrokerConnector receive the order request and send to each broker implementation
+
 
 	public Object clone() {
 		OrderRequest orderRequest;

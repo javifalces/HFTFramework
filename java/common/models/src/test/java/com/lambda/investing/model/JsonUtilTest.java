@@ -19,6 +19,7 @@ class JsonUtilTest {
     private Depth createDepth(double bestBid, double bestAsk, double bestBidQty, double bestAskQty) {
         Depth depth = Depth.getInstance();
         depth.setTimestamp(System.currentTimeMillis());
+        depth.setTimestampBrokerConnector(System.currentTimeMillis());
         depth.setInstrument(instrumentPk);
         depth.setLevels(1);
         double[] asks = new double[]{bestAsk, bestAsk + 0.01};

@@ -29,7 +29,10 @@ public class Depth extends CSVable implements Cloneable {
     //	private transient Instrument instrument;
     private String instrument;
 
-    private long timestamp;
+    private long timestamp;//set from exchange if possible
+    private long timestampBrokerConnector;// set in AbstractMarketDataConnectorPublisher
+    private long timestampAlgoConnector;//set in ZeroMqMarketDataConnector // OrdinaryMarketDataProvider onUpdate
+    private long timestampStrategy;//set in Algorithm when received
 
 
     private double[] bidsQuantities, asksQuantities, bids, asks;
@@ -168,6 +171,10 @@ public class Depth extends CSVable implements Cloneable {
         Depth newDepth = getInstance();
         newDepth.setInstrument(depth.getInstrument());
         newDepth.setTimestamp(depth.getTimestamp());
+        newDepth.setTimestampStrategy(depth.getTimestampStrategy());
+        newDepth.setTimestampBrokerConnector(depth.getTimestampBrokerConnector());
+        newDepth.setTimestampAlgoConnector(depth.getTimestampAlgoConnector());
+
         newDepth.setBidsQuantities(depth.getBidsQuantities());
         newDepth.setAsksQuantities(depth.getAsksQuantities());
         newDepth.setBids(depth.getBids());
@@ -186,6 +193,9 @@ public class Depth extends CSVable implements Cloneable {
         Depth newDepth = getInstancePool();
         newDepth.setInstrument(depth.getInstrument());
         newDepth.setTimestamp(depth.getTimestamp());
+        newDepth.setTimestampStrategy(depth.getTimestampStrategy());
+        newDepth.setTimestampBrokerConnector(depth.getTimestampBrokerConnector());
+        newDepth.setTimestampAlgoConnector(depth.getTimestampAlgoConnector());
         newDepth.setBidsQuantities(depth.getBidsQuantities());
         newDepth.setAsksQuantities(depth.getAsksQuantities());
         newDepth.setBids(depth.getBids());
@@ -242,6 +252,9 @@ public class Depth extends CSVable implements Cloneable {
         asksAlgorithmInfo = null;
         timeToNextUpdateMs = Long.MIN_VALUE;
         timestamp = 0;
+        timestampStrategy = 0;
+        timestampBrokerConnector = 0;
+        timestampAlgoConnector = 0;
     }
 
     private Depth() {

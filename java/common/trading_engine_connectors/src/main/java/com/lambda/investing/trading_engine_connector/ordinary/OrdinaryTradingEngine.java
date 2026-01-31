@@ -104,6 +104,7 @@ public class OrdinaryTradingEngine implements TradingEngineConnector, ConnectorL
 
     @Override
     public boolean orderRequest(OrderRequest orderRequest) {
+        orderRequest.setTimestampAlgoConnector(System.currentTimeMillis());
         if (this.threadsSendOrderRequest == 0) {
             return paperTradingEngineConnector.orderRequest(orderRequest);
         } else {
@@ -197,6 +198,7 @@ public class OrdinaryTradingEngine implements TradingEngineConnector, ConnectorL
 
         if (typeMessage.equals(TypeMessage.execution_report)) {
             ExecutionReport executionReport = fromObject(content, ExecutionReport.class);
+            executionReport.setTimestampAlgoConnector(System.currentTimeMillis());
             notifyExecutionReport(executionReport);
             //			if (allAlgorithmsExecutionReportListener != null) {
             //				allAlgorithmsExecutionReportListener.onExecutionReportUpdate(executionReport);

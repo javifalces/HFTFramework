@@ -18,7 +18,12 @@ public class Trade extends CSVable implements Cloneable {
 	public static double DEFAULT_VALUE = Double.NaN;
 	private String id;
 	private String instrument;
-	private long timestamp;
+
+	private long timestamp;//from exchange if possible
+	private long timestampBrokerConnector;// set AbstractMarketDataConnectorPublisher
+	private long timestampAlgoConnector;//set in ZeroMqMarketDataConnector // OrdinaryMarketDataProvider onUpdate
+	private long timestampStrategy;//set in Algorithm when received
+
 	private double quantity, price = DEFAULT_VALUE;
 	private String algorithmInfo;//just for backtesting
 	private Verb verb;
@@ -46,12 +51,16 @@ public class Trade extends CSVable implements Cloneable {
 		Trade newTrade = getInstancePool();
 		newTrade.id = trade.id;
 		newTrade.instrument = trade.instrument;
-		newTrade.timestamp = trade.timestamp;
 		newTrade.quantity = trade.quantity;
 		newTrade.price = trade.price;
 		newTrade.algorithmInfo = trade.algorithmInfo;
 		newTrade.verb = trade.verb;
 		newTrade.timeToNextUpdateMs = trade.timeToNextUpdateMs;
+
+		newTrade.timestamp = trade.timestamp;
+		newTrade.timestampStrategy = trade.timestampStrategy;
+		newTrade.timestampBrokerConnector = trade.timestampBrokerConnector;
+		newTrade.timestampAlgoConnector = trade.timestampAlgoConnector;
 		return newTrade;
 	}
 
@@ -74,12 +83,15 @@ public class Trade extends CSVable implements Cloneable {
 	private void reset() {
 		id = null;
 		instrument = null;
-		timestamp = 0;
 		quantity = DEFAULT_VALUE;
 		price = DEFAULT_VALUE;
 		algorithmInfo = null;
 		verb = null;
 		timeToNextUpdateMs = Long.MIN_VALUE;
+		timestamp = 0;
+		timestampStrategy = 0;
+		timestampBrokerConnector = 0;
+		timestampAlgoConnector = 0;
 	}
 
 	private Trade() {
