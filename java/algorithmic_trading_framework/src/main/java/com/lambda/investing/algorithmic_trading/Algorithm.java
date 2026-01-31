@@ -1024,10 +1024,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
             if (latencyMs > WARN_LATENCY_ORDER_REQUEST_MS) {
                 String table = orderRequest.getLatenciesTable();
-                logger.warn("OrderRequest {} with latency {} ms > {} from depth reference from {} to {}\n{}", orderRequest, latencyMs, WARN_LATENCY_ORDER_REQUEST_MS, PrintDate(new Date(orderRequest.getReferenceTimestamp())), PrintDate(getCurrentTime()), table);
-                if (!isBacktest) {
-                    System.err.println(Configuration.formatLog("WARNING: OrderRequest {} with latency {} ms > {} from depth reference from {} to {}", orderRequest, latencyMs, WARN_LATENCY_ORDER_REQUEST_MS, PrintDate(new Date(orderRequest.getReferenceTimestamp())), PrintDate(getCurrentTime())));
-                }
+                logger.warn("OrderRequest {} with latency {} ms > {} from creation from {} to {}\n{}", orderRequest, latencyMs, WARN_LATENCY_ORDER_REQUEST_MS, PrintDate(new Date(orderRequest.getTimestampCreation())), PrintDate(getCurrentTime()), table);
             }
         }
 
@@ -1227,9 +1224,6 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                 logger.warn("Depth {} with latency {} ms > {} from current time from {} to {}\n{}",
                         depth.getInstrument(), latencyMs, WARN_LATENCY_MARKET_DATA_MS,
                         PrintDate(new Date(depthTimestamp)), PrintDate(new Date(currentTime)), tableLatencies);
-                if (!isBacktest) {
-                    System.err.println(Configuration.formatLog("WARNING: Depth {} with latency {} ms > {} from current time from {} to {}", depth.getInstrument(), latencyMs, WARN_LATENCY_MARKET_DATA_MS, PrintDate(new Date(depthTimestamp)), PrintDate(new Date(currentTime))));
-                }
             }
 
 
@@ -1324,9 +1318,6 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             logger.warn("Trade {} with latency {} ms > {} from current time from {} to {}\n{}",
                     trade.getInstrument(), latencyMs, WARN_LATENCY_MARKET_DATA_MS,
                     PrintDate(new Date(trade.getTimestamp())), PrintDate(new Date(currentTime)), tableLatencies);
-            if (!isBacktest) {
-                System.err.println(Configuration.formatLog("WARNING: Trade {} with latency {} ms > {} from current time from {} to {}", trade.getInstrument(), latencyMs, WARN_LATENCY_MARKET_DATA_MS, PrintDate(new Date(trade.getTimestamp())), PrintDate(new Date(currentTime))));
-            }
         }
 
         //update cache
@@ -1508,9 +1499,6 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                 logger.warn("ExecutionReport {} with latency {} ms > {} from current time from {} to {}\n{}",
                         executionReport.getInstrument(), latencyMs, WARN_LATENCY_EXECUTION_REPORT_MS,
                         PrintDate(new Date(executionReport.getTimestampCreation())), PrintDate(new Date(currentTime)), tableLatencies);
-                if (!isBacktest) {
-                    System.err.println(Configuration.formatLog("WARNING: ExecutionReport {} with latency {} ms > {} from current time from {} to {}", executionReport.getInstrument(), latencyMs, WARN_LATENCY_EXECUTION_REPORT_MS, PrintDate(new Date(executionReport.getTimestampCreation())), PrintDate(new Date(currentTime))));
-                }
             }
 
 

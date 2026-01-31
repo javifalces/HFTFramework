@@ -15,16 +15,18 @@ import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.Date;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static com.lambda.investing.PrintUtils.PrintDate;
 import static com.lambda.investing.model.Util.*;
 import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_PORTFOLIO_INFO;
 
 
 public abstract class AbstractBrokerTradingEngine implements TradingEngineConnector, ConnectorListener {
-
+    protected static long WARN_LATENCY_ORDER_REQUEST_MS = 500;
     protected static int QUEUE_SIZE = 300;
     protected static String REJECT_ORIG_NOT_FOUND_FORMAT = "origClientOrderId %s not found for %s in %s";//origClientOrderId , action,instrument
     protected Logger logger = LogManager.getLogger(AbstractBrokerTradingEngine.class);
@@ -137,6 +139,13 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
 
             System.out.println(Configuration.formatLog("onUpdate.orderRequest : {}", orderRequest));
             logger.info("onUpdate.orderRequest : {}", orderRequest);
+            orderRequest.setTimestampBrokerConnector(System.currentTimeMillis());
+            long latencyMs = System.currentTimeMillis() - orderRequest.getTimestampCreation();
+            if (latencyMs > WARN_LATENCY_ORDER_REQUEST_MS) {
+                String table = orderRequest.getLatenciesTable();
+                logger.warn("OrderRequest {} with latency {} ms > {} from orderRequest from {} to {}\n{}", orderRequest, latencyMs, WARN_LATENCY_ORDER_REQUEST_MS, PrintDate(new Date(orderRequest.getTimestampCreation())), PrintDate(new Date()), table);
+            }
+
             orderRequest(orderRequest);
         }
 
