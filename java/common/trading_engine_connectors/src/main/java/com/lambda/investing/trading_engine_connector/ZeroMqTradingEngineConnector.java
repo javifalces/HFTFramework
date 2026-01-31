@@ -104,9 +104,9 @@ public class ZeroMqTradingEngineConnector extends AbstractTradingEngineConnector
 			return this.paperTradingEngine.orderRequest(orderRequest);
 		} else {
 			String topic = TopicUtils.getTopic(orderRequest.getInstrument(), TypeMessage.order_request);
-			String message = toJsonString(orderRequest);
+//			String message = toJsonString(orderRequest);
 			this.zeroMqPublisher
-					.publish(this.zeroMqConfigurationOrderRequest, TypeMessage.order_request, topic, message);
+					.publish(this.zeroMqConfigurationOrderRequest, TypeMessage.order_request, topic, orderRequest);
 			logger.info("ZeroMQ order request -> {}", orderRequest);
 			return true;
 		}

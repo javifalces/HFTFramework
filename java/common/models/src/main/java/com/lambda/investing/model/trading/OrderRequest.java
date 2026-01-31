@@ -6,10 +6,13 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
 
+import java.io.Serializable;
 import java.util.Random;
 import java.util.UUID;
 
-@Getter @Setter public class OrderRequest implements Cloneable {
+@Getter
+@Setter
+public class OrderRequest implements Cloneable, Serializable {
 
 	public static double NOT_SET_PRICE_VALUE = Double.MIN_VALUE;
 	private String instrument;
