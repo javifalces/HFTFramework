@@ -43,10 +43,20 @@ public abstract class CSVable implements Serializable {
         sb.append(String.format("%-30s %-30s %-20s\n", "Event", "Timestamp", "Latency (ms)"));
         sb.append("--------------------------------------------------------------------------------\n");
         sb.append(String.format("%-30s %-30s %-20d\n", "timestamp", PrintDate(new Date(timestamp)), 0));
-        sb.append(String.format("%-30s %-30s %-20d\n", "timestampBrokerConnector", PrintDate(new Date(timestampBrokerConnector)), timestampBrokerConnector - timestamp));
-        sb.append(String.format("%-30s %-30s %-20d\n", "timestampAlgoConnector", PrintDate(new Date(timestampAlgoConnector)), timestampAlgoConnector - timestampBrokerConnector));
-        sb.append(String.format("%-30s %-30s %-20d\n", "timestampStrategy", PrintDate(new Date(timestampStrategy)), timestampStrategy - timestampAlgoConnector));
-        sb.append(String.format("%-30s %-30s %-20d\n", "now", PrintDate(new Date()), System.currentTimeMillis() - timestampStrategy));
+        long lastReference = timestamp;
+        if (timestampBrokerConnector > 0) {
+            sb.append(String.format("%-30s %-30s %-20d\n", "timestampBrokerConnector", PrintDate(new Date(timestampBrokerConnector)), timestampBrokerConnector - lastReference));
+            lastReference = timestampBrokerConnector;
+        }
+        if (timestampAlgoConnector > 0) {
+            sb.append(String.format("%-30s %-30s %-20d\n", "timestampAlgoConnector", PrintDate(new Date(timestampAlgoConnector)), timestampAlgoConnector - lastReference));
+            lastReference = timestampAlgoConnector;
+        }
+        if (timestampStrategy > 0) {
+            sb.append(String.format("%-30s %-30s %-20d\n", "timestampAlgoConnector", PrintDate(new Date(timestampAlgoConnector)), timestampAlgoConnector - lastReference));
+            lastReference = timestampStrategy;
+        }
+        sb.append(String.format("%-30s %-30s %-20d\n", "now", PrintDate(new Date()), System.currentTimeMillis() - lastReference));
         sb.append("--------------------------------------------------------------------------------\n");
         sb.append(String.format("%-30s %-30s %-20d\n", "Total", "", System.currentTimeMillis() - timestamp));
 
