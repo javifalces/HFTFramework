@@ -190,6 +190,10 @@ public class Instrument {
         return (int) Math.round(Math.abs(Math.log10(1.0 / priceTick)));
     }
 
+    public double roundMidPrice(double price) {
+        int places = getNumberDecimalsPrice();
+        return round(price, places + 1);
+    }
     public double roundPrice(double price) {
         //		return Math.round(price / getPriceTick()) * getPriceTick();
 //		double scale = Math.pow(10, ((double) (getNumberDecimalsPrice())));
