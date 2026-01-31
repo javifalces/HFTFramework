@@ -59,7 +59,7 @@
 
 
         <!--Console info output-->
-        <root level="ERROR">
+        <root level="WARN">
 <!--            <appender-ref ref="file"/>-->
             <appender-ref ref="console"/>
         </root>
