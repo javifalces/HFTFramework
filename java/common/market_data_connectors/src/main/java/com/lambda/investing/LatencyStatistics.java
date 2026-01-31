@@ -4,6 +4,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -78,6 +79,16 @@ public class LatencyStatistics implements Runnable {
 
             for (Map.Entry<String, List<Long>> entry : snapshot.entrySet()) {
                 String topic = entry.getKey();
+                // if length.topic>50 reduce it after poing to 50 chars and add last characters after -
+
+                if (topic.length() > 50) {
+                    String suffixAfterDash = "";
+                    int lastDashIndex = topic.lastIndexOf("-");
+                    if (lastDashIndex != -1 && lastDashIndex + 1 < topic.length()) {
+                        suffixAfterDash = topic.substring(lastDashIndex);
+                    }
+                    topic = topic.substring(0, 50) + "...-" + suffixAfterDash;
+                }
                 List<Long> latency = new ArrayList<>(entry.getValue());//copy to avoud concurrent modification
                 int counter = latency.size();
                 if (counter > 0) {
