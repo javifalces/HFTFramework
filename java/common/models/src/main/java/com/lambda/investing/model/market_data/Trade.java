@@ -20,9 +20,9 @@ public class Trade extends CSVable implements Cloneable {
     private String instrument;
 
     private long timestamp;//from exchange if possible
-    private long timestampBrokerConnector;// set AbstractMarketDataConnectorPublisher
-    private long timestampAlgoConnector;//set in ZeroMqMarketDataConnector // OrdinaryMarketDataProvider onUpdate
-    private long timestampStrategy;//set in Algorithm when received
+    private long timestampBrokerConnector;// set AbstractMarketDataConnectorPublisher.notifyTrade just before publish
+    private long timestampAlgoConnector;//set in ZeroMqMarketDataConnector.onUpdate // OrdinaryMarketDataProvider.onUpdate
+    private long timestampStrategy;//set in Algorithm.OnTradeUpdate when received
 
     private double quantity, price = DEFAULT_VALUE;
     private String algorithmInfo;//just for backtesting

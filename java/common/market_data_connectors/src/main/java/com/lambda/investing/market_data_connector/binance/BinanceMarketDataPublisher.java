@@ -178,7 +178,6 @@ public class BinanceMarketDataPublisher extends AbstractMarketDataConnectorPubli
 			Depth depth = Depth.getInstancePool();
 			depth.setInstrument(instrument.getPrimaryKey());
 			depth.setTimestamp(depthEvent.getEventTime());
-            depth.setTimestampBrokerConnector(System.currentTimeMillis());
 			//			depth.setTimestamp(System.currentTimeMillis());
 			boolean anyError = false;
 			int askDepth = Math.min(depthEvent.getAsks().size(), MAX_DEPTH);

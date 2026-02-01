@@ -75,7 +75,7 @@ public class InteractiveBrokersMarketDataPublisher extends AbstractMarketDataCon
         depth.setAsksQuantities(new double[]{askSize.value().doubleValue()});
         depth.setBidsQuantities(new double[]{bidSize.value().doubleValue()});
         depth.setTimestamp(time * 1000);
-        depth.setTimestampBrokerConnector(System.currentTimeMillis());
+
 
         String instrumentPK = interactiveBrokersBrokerConnector.getInstrumentPk(reqId);
         depth.setInstrument(instrumentPK);

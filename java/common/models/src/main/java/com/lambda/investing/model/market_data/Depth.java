@@ -30,9 +30,9 @@ public class Depth extends CSVable implements Cloneable {
     private String instrument;
 
     private long timestamp;//set from exchange if possible
-    private long timestampBrokerConnector;// set in AbstractMarketDataConnectorPublisher
-    private long timestampAlgoConnector;//set in ZeroMqMarketDataConnector // OrdinaryMarketDataProvider onUpdate
-    private long timestampStrategy;//set in Algorithm when received
+    private long timestampBrokerConnector;// set in AbstractMarketDataConnectorPublisher.notifyDepth just before publish
+    private long timestampAlgoConnector;//set in ZeroMqMarketDataConnector.onUpdate // OrdinaryMarketDataProvider.onUpdate
+    private long timestampStrategy;//set in Algorithm.OnDepthUpdate when received
 
 
     private double[] bidsQuantities, asksQuantities, bids, asks;
