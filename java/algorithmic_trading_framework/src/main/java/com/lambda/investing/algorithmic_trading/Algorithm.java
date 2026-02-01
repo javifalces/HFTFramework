@@ -50,7 +50,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.lambda.investing.Configuration.*;
-import static com.lambda.investing.PrintUtils.PrintDate;
 import static com.lambda.investing.model.Util.fromJsonString;
 import static com.lambda.investing.model.Util.fromObject;
 import static com.lambda.investing.model.portfolio.Portfolio.*;
@@ -284,7 +283,6 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         if (algorithmConnectorConfiguration != null) {
             isBacktest = false;
             this.algorithmConnectorConfiguration = algorithmConnectorConfiguration;
-            register(new LiveCSVObserver());// always register live csv observer
         } else {
             if (isVerbose()) {
                 logger.info("BACKTEST detected in {} -> Backtest TimeService", algorithmInfo);
@@ -317,6 +315,11 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                     }
                 });
         algorithmNotifier = new AlgorithmNotifier(this, Configuration.THREADS_NOTIFY_ALGORITHM_OBSERVERS);
+
+
+        if (!isBacktest) {
+            register(new LiveTradeReport());// always register live csv observer
+        }
 
     }
 

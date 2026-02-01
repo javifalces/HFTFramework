@@ -67,16 +67,16 @@ import java.util.Map;
  * @see AlgorithmObserver
  * @see ExecutionReport
  */
-public class LiveCSVObserver implements AlgorithmObserver {
+public class LiveTradeReport implements AlgorithmObserver {
 
-    private static final Logger tradeLogger = LogManager.getLogger("com.lambda.investing.TradeReport");
+    private static final Logger tradeLogger = LogManager.getLogger(LiveTradeReport.class);
 
     private boolean headerWritten = false;
 
     /**
      * Constructor that initializes the CSV observer.
      */
-    public LiveCSVObserver() {
+    public LiveTradeReport() {
     }
 
     /**
