@@ -194,7 +194,9 @@ public class OrderMatchEngine extends OrderbookManager {
 
         writeLock.lock();
         try {
-            lastTimestamp = depth.getTimestamp();
+            lastTimestamp = Math.max(depth.getTimestamp(), lastTimestamp);//take market time
+            lastTimestamp = Math.max(depth.getTimestampBrokerConnector(), lastTimestamp);//take broker connector time
+
             if (depth.getTimeToNextUpdateMs() != Long.MIN_VALUE) {
                 timeToNextUpdateMs = depth.getTimeToNextUpdateMs();
             }
@@ -281,7 +283,7 @@ public class OrderMatchEngine extends OrderbookManager {
         try {
             ExecutionReport executionReportOut = executionReportMap
                     .getOrDefault(orderSent.getClientOrderId(), new ExecutionReport(orderSent));
-            long timestamp = Math.max(lastTimestamp, orderSent.getTimestampCreation());
+            long timestamp = Math.max(lastTimestamp, orderSent.getTimestampBrokerConnector());
             executionReportOut.setTimestampCreation(timestamp);//add more time
             return executionReportOut;
         } finally {
@@ -332,12 +334,15 @@ public class OrderMatchEngine extends OrderbookManager {
 
         writeLock.lock();
         try {
-            if (trade.getTimestamp() >= lastTimestamp) {
-                lastTimestamp = trade.getTimestamp();
+            if (trade.getTimestamp() >= lastTimestamp || trade.getTimestampBrokerConnector() >= lastTimestamp) {
+                lastTimestamp = Math.max(trade.getTimestamp(), lastTimestamp);//take market time
+                lastTimestamp = Math.max(trade.getTimestampBrokerConnector(), lastTimestamp);//take broker connector time
+
             } else {
                 //warning?!
                 logger.warn("refreshFillMarketTrade. Trade timestamp is lower than currentTimestamp {} < {}", trade.getTimestamp(), lastTimestamp);
                 trade.setTimestamp(lastTimestamp);
+                trade.setTimestampBrokerConnector(lastTimestamp);
             }
 
             if (trade.getTimeToNextUpdateMs() != Long.MIN_VALUE) {
@@ -406,6 +411,7 @@ public class OrderMatchEngine extends OrderbookManager {
                                 executionReport.setExecutionReportStatus(ExecutionReportStatus.CompletelyFilled);
                             }
                             executionReport.setTimestampCreation(lastTimestamp);
+                            executionReport.setTimestampBrokerConnector(lastTimestamp);
 
                             executionReportMap.put(executionReport.getClientOrderId(), executionReport);
                             tradeNotified = true;
@@ -578,6 +584,7 @@ public class OrderMatchEngine extends OrderbookManager {
             ExecutionReport executionReport = new ExecutionReport(orderRequest);
             long time = Math.max(orderRequest.getTimestampCreation(), lastTimestamp);
             executionReport.setTimestampCreation(time);
+            executionReport.setTimestampBrokerConnector(time);
             executionReport.setExecutionReportStatus(ExecutionReportStatus.Rejected);
             executionReport.setRejectReason(reason);
             return executionReport;
@@ -829,6 +836,7 @@ public class OrderMatchEngine extends OrderbookManager {
             Depth depth = Depth.getInstancePool();//this is going to the algo directly
             depth.setTimestamp(lastTimestamp);
             depth.setTimeToNextUpdateMs(timeToNextUpdateMs);
+            depth.setTimestampBrokerConnector(lastTimestamp);
             depth.setInstrument(instrumentPk);
             //bid side
             double[] bidsQuantities = new double[bidSide.size()];

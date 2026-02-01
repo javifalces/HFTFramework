@@ -149,7 +149,9 @@ public class OrderbookManager {
             logger.error("cant clone depth ", e);
             //			e.printStackTrace();
         }
-        lastTimestamp = depth.getTimestamp();
+        lastTimestamp = Math.max(depth.getTimestamp(), lastTimestamp);//take market time
+        lastTimestamp = Math.max(depth.getTimestampBrokerConnector(), lastTimestamp);//take broker connector time
+
 
         int maxLevels = depth.getLevels();
         List<String> newBidClientOrderId = new ArrayList<>();
@@ -269,7 +271,9 @@ public class OrderbookManager {
         if (trade.getTimestamp() < lastTimestamp) {
             return true;
         }
-        lastTimestamp = trade.getTimestamp();
+        lastTimestamp = Math.max(trade.getTimestamp(), lastTimestamp);//take market time
+        lastTimestamp = Math.max(trade.getTimestampBrokerConnector(), lastTimestamp);//take broker connector time
+
 
         Verb verbDetection = inferVerbFromTrade(trade);
         if (verbDetection != null) {
@@ -487,6 +491,7 @@ public class OrderbookManager {
     protected void notifyExecutionReport(ExecutionReport executionReport) {
         if (!executionReport.getAlgorithmInfo().equalsIgnoreCase(MARKET_MAKER_ALGORITHM_INFO)) {
             executionReport.updateTimestampCreation(lastTimestamp);//set executionReport time of last time
+            executionReport.setTimestampBrokerConnector(lastTimestamp);
             paperTradingEngineConnector.notifyExecutionReport(executionReport);
         }
 
