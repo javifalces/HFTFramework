@@ -284,6 +284,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         if (algorithmConnectorConfiguration != null) {
             isBacktest = false;
             this.algorithmConnectorConfiguration = algorithmConnectorConfiguration;
+            register(new LiveCSVObserver());// always register live csv observer
         } else {
             if (isVerbose()) {
                 logger.info("BACKTEST detected in {} -> Backtest TimeService", algorithmInfo);

@@ -3,6 +3,7 @@
     <properties>
         <!-- time-stamp unique to execution instance -->
         <property name="timestamp">${date:yyMMdd_HHmmss}</property>
+        <property name="timestampDay">${date:yyMMdd}</property>
 
         <property name="log.path">$${env:LAMBDA_LOGS_PATH}/${date:yyMMdd}</property>
         <!-- max number of files -->
@@ -36,6 +37,13 @@
             <DefaultRolloverStrategy max="${numFiles}"/>
         </RollingFile>
 
+        <RollingFile name="tradeReport"
+                     fileName="${sys:log.path}/trades_${sys:log.appName:-AlgoTradingZeroMQ}_${timestampDay}.csv"
+                     filePattern="${sys:log.path}/trades_${sys:log.appName:-AlgoTradingZeroMQ}_${timestampDay}.csv.%i"
+                     append="true">
+            <PatternLayout pattern="%m%n"/>
+        </RollingFile>
+
 
     </appenders>
 
@@ -63,6 +71,11 @@
         </AsyncLogger>
         <AsyncLogger name="com.lambda.investing.Statistics" level="info">
             <AppenderRef ref="fileStatistics"/>
+        </AsyncLogger>
+
+        <!--Configure TradeReport logs into tradeReport CSV file-->
+        <AsyncLogger name="com.lambda.investing.TradeReport" level="info" additivity="false">
+            <AppenderRef ref="tradeReport"/>
         </AsyncLogger>
 
 
