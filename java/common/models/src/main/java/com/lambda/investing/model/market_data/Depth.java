@@ -1059,6 +1059,7 @@ public class Depth extends CSVable implements Cloneable {
 
     }
 
+    @JSONField(serialize = false, deserialize = false)
     public String getLatenciesTable() {
         return getLatenciesTable(getTimestamp(), getTimestampBrokerConnector(), getTimestampAlgoConnector(), getTimestampStrategy());
     }

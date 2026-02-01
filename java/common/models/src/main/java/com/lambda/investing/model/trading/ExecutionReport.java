@@ -1,5 +1,6 @@
 package com.lambda.investing.model.trading;
 
+import com.alibaba.fastjson2.annotation.JSONField;
 import com.lambda.investing.ArrayUtils;
 import com.lambda.investing.model.CSVable;
 import com.lambda.investing.model.Util;
@@ -73,6 +74,7 @@ public class ExecutionReport implements Serializable {
         this.timestampCreation = Math.max(timestampCreation, this.timestampCreation);
     }
 
+    @JSONField(serialize = false, deserialize = false)
     public String getLatenciesTable() {
         return CSVable.getLatenciesTable(getTimestampCreation(), getTimestampBrokerConnector(), getTimestampAlgoConnector(), getTimestampStrategy());
     }

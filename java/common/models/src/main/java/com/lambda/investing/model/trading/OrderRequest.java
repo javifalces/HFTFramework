@@ -1,5 +1,6 @@
 package com.lambda.investing.model.trading;
 
+import com.alibaba.fastjson2.annotation.JSONField;
 import com.lambda.investing.model.Util;
 import com.lambda.investing.model.asset.Instrument;
 import lombok.Getter;
@@ -157,7 +158,7 @@ public class OrderRequest implements Cloneable, Serializable {
         return modifyOrderRequest;
     }
 
-
+    @JSONField(serialize = false, deserialize = false)
     public String getLatenciesTable() {
         StringBuilder sb = new StringBuilder();
         sb.append(String.format("%-30s %-30s %-20s\n", "Event", "Timestamp", "Latency (ms)"));

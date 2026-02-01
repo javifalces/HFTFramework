@@ -30,7 +30,7 @@ public class Trade extends CSVable implements Cloneable {
     private long timeToNextUpdateMs = Long.MIN_VALUE;
     private static TradePool TRADE_POOL = new TradePool();
 
-
+    @JSONField(serialize = false, deserialize = false)
     public String getLatenciesTable() {
         return getLatenciesTable(getTimestamp(), getTimestampBrokerConnector(), getTimestampAlgoConnector(), getTimestampStrategy());
     }
