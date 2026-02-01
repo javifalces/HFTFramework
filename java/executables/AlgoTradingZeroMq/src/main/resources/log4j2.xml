@@ -4,7 +4,6 @@
         <!-- time-stamp unique to execution instance -->
         <property name="timestamp">${date:yyMMdd_HHmmss}</property>
         <property name="timestampDay">${date:yyMMdd}</property>
-
         <property name="log.path">$${env:LAMBDA_LOGS_PATH}/${date:yyMMdd}</property>
         <!-- max number of files -->
         <property name="numFiles">100</property>
@@ -38,10 +37,15 @@
         </RollingFile>
 
         <RollingFile name="tradeReport"
-                     fileName="${sys:log.path}/trades_${sys:log.appName:-AlgoTradingZeroMQ}_${timestampDay}.csv"
-                     filePattern="${sys:log.path}/trades_${sys:log.appName:-AlgoTradingZeroMQ}_${timestampDay}.csv.%i"
+                     fileName="${sys:log.path}/${sys:log.appName:-AlgoTradingZeroMQ}_trades__${timestampDay}.csv"
+                     filePattern="${sys:log.path}/${sys:log.appName:-AlgoTradingZeroMQ}_trades_${timestampDay}.csv.%i"
                      append="true">
             <PatternLayout pattern="%m%n"/>
+            <Policies>
+                <SizeBasedTriggeringPolicy size="5 GB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="${numFiles}"/>
+
         </RollingFile>
 
 
@@ -55,9 +59,10 @@
         </AsyncLogger>
 
         <!--Console info output-->
-        <!--        <root level="INFO">-->
-        <!--            <appender-ref ref="file"/>-->
-        <!--        </root>-->
+        <root level="WARN">
+            <appender-ref ref="console"/>
+        </root>
+
         <AsyncLogger name="com.lambda" level="INFO" additivity="false">
             <appender-ref ref="file"/>
         </AsyncLogger>
@@ -66,10 +71,11 @@
         <AsyncLogger name="com.lambda.investing.LatencyStatistics" level="info" additivity="false">
             <AppenderRef ref="fileStatistics"/>
         </AsyncLogger>
-        <AsyncLogger name="com.lambda.investing.trading_engine_connector.SlippageStatistics" level="info">
+        <AsyncLogger name="com.lambda.investing.trading_engine_connector.SlippageStatistics" level="info"
+                     additivity="false">
             <AppenderRef ref="fileStatistics"/>
         </AsyncLogger>
-        <AsyncLogger name="com.lambda.investing.Statistics" level="info">
+        <AsyncLogger name="com.lambda.investing.Statistics" level="info" additivity="false">
             <AppenderRef ref="fileStatistics"/>
         </AsyncLogger>
 
