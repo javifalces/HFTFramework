@@ -1457,10 +1457,9 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             }
 
             executionReport.setTimestampStrategy(System.currentTimeMillis());
-            long currentTime = getCurrentTimestamp();
 
             if (latencyStatistics != null) {
-                latencyStatistics.addExecutionReportLatencyStatistics(algorithmInfo, currentTime, executionReport);
+                latencyStatistics.addExecutionReportLatencyStatistics(algorithmInfo, getCurrentTimestamp(), executionReport);
             }
 
             updateAllActiveOrders(executionReport);
