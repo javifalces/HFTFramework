@@ -111,7 +111,7 @@ public class LiveTradeReport implements AlgorithmObserver {
     private String getTradeLogFileName() {
         try {
             LoggerContext context = (LoggerContext) LogManager.getContext(false);
-            org.apache.logging.log4j.core.Logger coreLogger = context.getLogger("com.lambda.investing.TradeReport");
+            org.apache.logging.log4j.core.Logger coreLogger = context.getLogger("com.lambda.investing.algorithmic_trading.LiveTradeReport");
 
             // Try to find the RollingFileAppender
             var appenders = coreLogger.getAppenders();

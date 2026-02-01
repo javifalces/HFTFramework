@@ -43,6 +43,7 @@ public class OrderbookManager {
     protected String instrumentPk;
     protected Instrument instrument;
     protected volatile long lastTimestamp = 0L;
+    protected volatile long lastTimestampBroker = 0L;
 
     private Object lockOrderRequest = new Object();
 
@@ -151,7 +152,7 @@ public class OrderbookManager {
         }
         lastTimestamp = Math.max(depth.getTimestamp(), lastTimestamp);//take market time
         lastTimestamp = Math.max(depth.getTimestampBrokerConnector(), lastTimestamp);//take broker connector time
-
+        lastTimestampBroker = System.currentTimeMillis();
 
         int maxLevels = depth.getLevels();
         List<String> newBidClientOrderId = new ArrayList<>();
@@ -273,7 +274,7 @@ public class OrderbookManager {
         }
         lastTimestamp = Math.max(trade.getTimestamp(), lastTimestamp);//take market time
         lastTimestamp = Math.max(trade.getTimestampBrokerConnector(), lastTimestamp);//take broker connector time
-
+        lastTimestampBroker = System.currentTimeMillis();
 
         Verb verbDetection = inferVerbFromTrade(trade);
         if (verbDetection != null) {
