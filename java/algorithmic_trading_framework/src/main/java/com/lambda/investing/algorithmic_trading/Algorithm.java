@@ -63,9 +63,6 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     protected static int DEFAULT_QUEUE_CF_TRADE = 20;
     protected static int DEFAULT_QUEUE_HISTORICAL_ORDER_REQUEST = 20;
     protected static int DEFAULT_QUEUE_HISTORICAL_TRADES = 5;
-    protected static long WARN_LATENCY_ORDER_REQUEST_MS = 500;
-    protected static long WARN_LATENCY_MARKET_DATA_MS = 500;
-    protected static long WARN_LATENCY_EXECUTION_REPORT_MS = 500;
 
     protected Queue<String> cfTradesProcessed;
 
@@ -1010,22 +1007,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
         }
 
-        //check latency statistics
-
-        if (orderRequest.getReferenceTimestamp() != 0) {
-            long latencyMs = getCurrentTime().getTime() - orderRequest.getTimestampCreation();
-            if (latencyStatistics != null) {
-                try {
-                    latencyStatistics.addLatencyStatistics("orderRequest." + algorithmInfo, latencyMs);
-                } catch (Exception e) {
-                    logger.error("error starting latency statistics", e);
-                }
-            }
-
-            if (latencyMs > WARN_LATENCY_ORDER_REQUEST_MS) {
-                String table = orderRequest.getLatenciesTable();
-                logger.warn("OrderRequest {} with latency {} ms > {} from creation from {} to {}\n{}", orderRequest, latencyMs, WARN_LATENCY_ORDER_REQUEST_MS, PrintDate(new Date(orderRequest.getTimestampCreation())), PrintDate(getCurrentTime()), table);
-            }
+        if (latencyStatistics != null) {
+            latencyStatistics.addOrderRequestLatencyStatistics(algorithmInfo, getCurrentTimestamp(), orderRequest);
         }
 
         return orderRequest;
@@ -1209,23 +1192,10 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             if (!isBacktest) {
                 timeService.setCurrentTimestamp(new Date().getTime());
             }
-            long currentTime = getCurrentTimestamp();
-            long latencyMs = currentTime - depthTimestamp;
+
             if (latencyStatistics != null) {
-                try {
-                    latencyStatistics.addLatencyStatistics("depth." + depth.getInstrument() + "." + algorithmInfo, latencyMs);
-                } catch (Exception e) {
-                    logger.error("error starting latency statistics", e);
-                }
+                latencyStatistics.addDepthLatencyStatistics(algorithmInfo, getCurrentTimestamp(), depth);
             }
-
-            if (latencyMs > WARN_LATENCY_MARKET_DATA_MS) {
-                String tableLatencies = depth.getLatenciesTable();
-                logger.warn("Depth {} with latency {} ms > {} from current time from {} to {}\n{}",
-                        depth.getInstrument(), latencyMs, WARN_LATENCY_MARKET_DATA_MS,
-                        PrintDate(new Date(depthTimestamp)), PrintDate(new Date(currentTime)), tableLatencies);
-            }
-
 
             //check depth
         } catch (Exception e) {
@@ -1311,13 +1281,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             return false;
         }
 
-        long currentTime = getCurrentTimestamp();
-        long latencyMs = currentTime - trade.getTimestamp();
-        if (latencyMs > WARN_LATENCY_MARKET_DATA_MS) {
-            String tableLatencies = trade.getLatenciesTable();
-            logger.warn("Trade {} with latency {} ms > {} from current time from {} to {}\n{}",
-                    trade.getInstrument(), latencyMs, WARN_LATENCY_MARKET_DATA_MS,
-                    PrintDate(new Date(trade.getTimestamp())), PrintDate(new Date(currentTime)), tableLatencies);
+        if (latencyStatistics != null) {
+            latencyStatistics.addTradeLatencyStatistics(algorithmInfo, getCurrentTimestamp(), trade);
         }
 
         //update cache
@@ -1493,18 +1458,9 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
             executionReport.setTimestampStrategy(System.currentTimeMillis());
             long currentTime = getCurrentTimestamp();
-            long latencyMs = currentTime - executionReport.getTimestampCreation();
-            if (latencyMs > WARN_LATENCY_EXECUTION_REPORT_MS) {
-                String tableLatencies = executionReport.getLatenciesTable();
-                logger.warn("ExecutionReport {} with latency {} ms > {} from current time from {} to {}\n{}",
-                        executionReport.getInstrument(), latencyMs, WARN_LATENCY_EXECUTION_REPORT_MS,
-                        PrintDate(new Date(executionReport.getTimestampCreation())), PrintDate(new Date(currentTime)), tableLatencies);
-            }
-
 
             if (latencyStatistics != null) {
-                latencyStatistics.stopKeyStatistics(executionReport.getClientOrderId(), executionReport.getTimestampCreation());
-                latencyStatistics.addLatencyStatistics("executionReport." + executionReport.getInstrument() + "." + algorithmInfo, getCurrentTimestamp() - executionReport.getTimestampCreation());
+                latencyStatistics.addExecutionReportLatencyStatistics(algorithmInfo, currentTime, executionReport);
             }
 
             updateAllActiveOrders(executionReport);

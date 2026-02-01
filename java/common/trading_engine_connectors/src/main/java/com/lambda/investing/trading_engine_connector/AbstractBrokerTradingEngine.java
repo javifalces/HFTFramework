@@ -1,6 +1,7 @@
 package com.lambda.investing.trading_engine_connector;
 
 import com.lambda.investing.Configuration;
+import com.lambda.investing.LatencyStatistics;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ConnectorProvider;
@@ -26,7 +27,6 @@ import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_PORTFOLIO
 
 
 public abstract class AbstractBrokerTradingEngine implements TradingEngineConnector, ConnectorListener {
-    protected static long WARN_LATENCY_ORDER_REQUEST_MS = 500;
     protected static int QUEUE_SIZE = 300;
     protected static String REJECT_ORIG_NOT_FOUND_FORMAT = "origClientOrderId %s not found for %s in %s";//origClientOrderId , action,instrument
     protected Logger logger = LogManager.getLogger(AbstractBrokerTradingEngine.class);
@@ -42,6 +42,9 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
     protected Queue<String> lastOrderRequestClOrdId;
     protected Queue<String> CfERNotified;
 
+    LatencyStatistics latencyStatistics;
+
+
     public AbstractBrokerTradingEngine(ConnectorConfiguration orderRequestConnectorConfiguration,
                                        ConnectorProvider orderRequestConnectorProvider,
                                        ConnectorConfiguration executionReportConnectorConfiguration,
@@ -54,6 +57,7 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
         listenersManager = new ConcurrentHashMap<>();
         lastOrderRequestClOrdId = EvictingQueue.create(QUEUE_SIZE);
         CfERNotified = EvictingQueue.create(QUEUE_SIZE);
+        latencyStatistics = new LatencyStatistics("AbstractBrokerTradingEngine", 60 * 1000);//to check latencies in orderRequests
     }
 
     @Override
@@ -140,10 +144,9 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
             System.out.println(Configuration.formatLog("onUpdate.orderRequest : {}", orderRequest));
             logger.info("onUpdate.orderRequest : {}", orderRequest);
             orderRequest.setTimestampBrokerConnector(System.currentTimeMillis());
-            long latencyMs = System.currentTimeMillis() - orderRequest.getTimestampCreation();
-            if (latencyMs > WARN_LATENCY_ORDER_REQUEST_MS) {
-                String table = orderRequest.getLatenciesTable();
-                logger.warn("OrderRequest {} with latency {} ms > {} from orderRequest from {} to {}\n{}", orderRequest, latencyMs, WARN_LATENCY_ORDER_REQUEST_MS, PrintDate(new Date(orderRequest.getTimestampCreation())), PrintDate(new Date()), table);
+
+            if (latencyStatistics != null) {
+                latencyStatistics.addOrderRequestLatencyStatistics(orderRequest.getAlgorithmInfo(), System.currentTimeMillis(), orderRequest);
             }
 
             orderRequest(orderRequest);

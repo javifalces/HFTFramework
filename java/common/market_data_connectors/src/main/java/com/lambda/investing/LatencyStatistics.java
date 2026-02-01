@@ -1,15 +1,21 @@
 package com.lambda.investing;
 
+import com.lambda.investing.model.market_data.Depth;
+import com.lambda.investing.model.market_data.Trade;
+import com.lambda.investing.model.trading.ExecutionReport;
+import com.lambda.investing.model.trading.OrderRequest;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static com.lambda.investing.PrintUtils.PrintDate;
+
 public class LatencyStatistics implements Runnable {
+    protected static long WARN_LATENCY_ORDER_REQUEST_MS = 500;
+    protected static long WARN_LATENCY_MARKET_DATA_MS = 500;
+    protected static long WARN_LATENCY_EXECUTION_REPORT_MS = 500;
 
     private static boolean RESET_STATISTICS_PER_UPDATE = true;
     private long sleepMs;
@@ -40,6 +46,74 @@ public class LatencyStatistics implements Runnable {
         slippages.add(latency);
         topicToLatency.put(key, slippages);
     }
+
+    public void addDepthLatencyStatistics(String algorithmInfo, long currentTime, Depth depth) {
+        long depthTimestamp = depth.getTimestamp();
+        long latencyMs = currentTime - depthTimestamp;
+        try {
+            addLatencyStatistics("depth." + depth.getInstrument() + "." + algorithmInfo, latencyMs);
+            if (latencyMs > WARN_LATENCY_MARKET_DATA_MS) {
+                String tableLatencies = depth.getLatenciesTable();
+                logger.warn("Depth {} with latency {} ms > {} from current time from {} to {}\n{}",
+                        depth.getInstrument(), latencyMs, WARN_LATENCY_MARKET_DATA_MS,
+                        PrintDate(new Date(depthTimestamp)), PrintDate(new Date(currentTime)), tableLatencies);
+            }
+
+        } catch (Exception e) {
+            logger.error("error addDepthLatencyStatistics latency statistics", e);
+        }
+    }
+
+    public void addTradeLatencyStatistics(String algorithmInfo, long currentTime, Trade trade) {
+        long tradeTimestamp = trade.getTimestamp();
+        long latencyMs = currentTime - tradeTimestamp;
+        try {
+            addLatencyStatistics("trade." + trade.getInstrument() + "." + algorithmInfo, latencyMs);
+            if (latencyMs > WARN_LATENCY_MARKET_DATA_MS) {
+                String tableLatencies = trade.getLatenciesTable();
+                logger.warn("Trade {} with latency {} ms > {} from current time from {} to {}\n{}",
+                        trade.getInstrument(), latencyMs, WARN_LATENCY_MARKET_DATA_MS,
+                        PrintDate(new Date(trade.getTimestamp())), PrintDate(new Date(currentTime)), tableLatencies);
+            }
+
+        } catch (Exception e) {
+            logger.error("error addTradeLatencyStatistics latency statistics", e);
+        }
+    }
+
+    public void addExecutionReportLatencyStatistics(String algorithmInfo, long currentTime, ExecutionReport executionReport) {
+        long executionReportTimestampCreation = executionReport.getTimestampCreation();
+        long latencyMs = currentTime - executionReportTimestampCreation;
+        try {
+            addLatencyStatistics("executionReport." + executionReport.getInstrument() + "." + algorithmInfo, latencyMs);
+            if (latencyMs > WARN_LATENCY_EXECUTION_REPORT_MS) {
+                String tableLatencies = executionReport.getLatenciesTable();
+                logger.warn("ExecutionReport {} with latency {} ms > {} from current time from {} to {}\n{}",
+                        executionReport.getInstrument(), latencyMs, WARN_LATENCY_EXECUTION_REPORT_MS,
+                        PrintDate(new Date(executionReport.getTimestampCreation())), PrintDate(new Date(currentTime)), tableLatencies);
+            }
+        } catch (Exception e) {
+            logger.error("error addExecutionReportLatencyStatistics latency statistics", e);
+        }
+    }
+
+    public void addOrderRequestLatencyStatistics(String algorithmInfo, long currentTime, OrderRequest orderRequest) {
+        long orderRequestTimestampCreation = orderRequest.getTimestampCreation();
+        long latencyMs = currentTime - orderRequestTimestampCreation;
+        try {
+            addLatencyStatistics("orderRequest." + orderRequest.getInstrument() + "." + algorithmInfo, latencyMs);
+            if (latencyMs > WARN_LATENCY_ORDER_REQUEST_MS) {
+                String table = orderRequest.getLatenciesTable();
+                logger.warn("OrderRequest {} with latency {} ms > {} from creation from {} to {}\n{}", orderRequest, latencyMs, WARN_LATENCY_ORDER_REQUEST_MS, PrintDate(new Date(orderRequest.getTimestampCreation())), PrintDate(new Date(currentTime)), table);
+            }
+        } catch (Exception e) {
+            logger.error("error addOrderRequestLatencyStatistics latency statistics", e);
+        }
+    }
+
+
+
+
 
     public void startKeyStatistics(String topic, String key, long start) {
         keyToStartDate.put(key, start);

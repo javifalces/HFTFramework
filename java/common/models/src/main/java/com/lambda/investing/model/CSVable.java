@@ -53,7 +53,7 @@ public abstract class CSVable implements Serializable {
             lastReference = timestampAlgoConnector;
         }
         if (timestampStrategy > 0) {
-            sb.append(String.format("%-30s %-30s %-20d\n", "timestampAlgoConnector", PrintDate(new Date(timestampAlgoConnector)), timestampAlgoConnector - lastReference));
+            sb.append(String.format("%-30s %-30s %-20d\n", "timestampStrategy", PrintDate(new Date(timestampStrategy)), timestampStrategy - lastReference));
             lastReference = timestampStrategy;
         }
         sb.append(String.format("%-30s %-30s %-20d\n", "now", PrintDate(new Date()), System.currentTimeMillis() - lastReference));
