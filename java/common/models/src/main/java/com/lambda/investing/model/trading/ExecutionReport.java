@@ -42,9 +42,9 @@ public class ExecutionReport implements Serializable {
     private boolean isAggressor = false;//for backtesting purposes, to be used in the future
 
     private long timestampCreation;//when the order was created in exchange
-    private long timestampBrokerConnector;//when BrokerTradingEngine publish the ER
-    private long timestampAlgoConnector;//when AbstractTradingEngineConnector in Algo side receive the ER
-    private long timestampStrategy;//when strategy receive the ER
+    private long timestampBrokerConnector;//when AbstractBrokerTradingEngine.notifyExecutionReport publish the ER
+    private long timestampAlgoConnector;//when AbstractTradingEngineConnector.onUpdate receive the ER
+    private long timestampStrategy;//when Strategy.onExecutionReportUpdate receive the ER
 
     public ExecutionReport() {
         //for fastJson construction

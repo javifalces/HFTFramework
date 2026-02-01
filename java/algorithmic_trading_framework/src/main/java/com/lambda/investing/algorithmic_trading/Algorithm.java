@@ -1454,13 +1454,13 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                 //is not mine
                 return true;
             }
+            executionReport.setTimestampStrategy(System.currentTimeMillis());
+
             boolean hasPriority = executionReportManager.isNewStatus(executionReport);
             if (!hasPriority) {
                 //already processed
                 return false;
             }
-
-            executionReport.setTimestampStrategy(System.currentTimeMillis());
 
             if (latencyStatistics != null) {
                 latencyStatistics.addExecutionReportLatencyStatistics(algorithmInfo, getCurrentTimestamp(), executionReport);
