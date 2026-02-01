@@ -112,16 +112,14 @@ public class ZeroMqTradingEngineConnector extends AbstractTradingEngineConnector
 		}
 	}
 
+
 	@Override
 	public void requestInfo(String info) {
-//		if (isPaperTrading && paperTradingEngine != null) {
-//			this.paperTradingEngine.requestInfo(info);
-//		} else {
-//			this.zeroMqPublisher.publish(this.zeroMqConfigurationOrderRequest, TypeMessage.info, TypeMessage.info.toString(), info);
-//		}
-
-		//get real position from broker
-		this.zeroMqPublisher.publish(this.zeroMqConfigurationOrderRequest, TypeMessage.info, TypeMessage.info.toString(), info);
+		if (isPaperTrading && paperTradingEngine != null) {
+			this.paperTradingEngine.requestInfo(info);//simulate portfolio and position
+		} else {
+			this.zeroMqPublisher.publish(this.zeroMqConfigurationOrderRequest, TypeMessage.info, TypeMessage.info.toString(), info);
+		}
 	}
 
 	public void setPaperTrading(MarketDataProvider marketDataProvider) {
