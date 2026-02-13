@@ -202,6 +202,9 @@ public class ArrayUtils {
     }
 
     public static Object[] RemoveLevelAndShiftToLeft(Object[] input, int level) {
+        if (input == null) {
+            return null;
+        }
         for (int nextLevel = level; nextLevel < input.length - 1; nextLevel++) {
             input[nextLevel] = input[nextLevel + 1];
         }
