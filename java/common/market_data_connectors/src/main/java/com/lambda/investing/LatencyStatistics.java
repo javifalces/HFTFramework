@@ -46,7 +46,7 @@ public class LatencyStatistics implements Runnable {
     public void addDepthLatencyStatistics(String algorithmInfo, long currentTime, Depth depth) {
         try {
             // Add sub-statistics for internal latencies
-            String prefix = "depth." + depth.getInstrument() + "." + algorithmInfo;
+            String prefix = "depth." + algorithmInfo;
             addInternalLatencyStatistics(prefix, depth.getTimestamp(), depth.getTimestampBrokerConnector(),
                     depth.getTimestampAlgoConnector(), depth.getTimestampStrategy());
 
@@ -59,10 +59,9 @@ public class LatencyStatistics implements Runnable {
 
         try {
             // Add sub-statistics for internal latencies
-            String prefix = "trade." + trade.getInstrument() + "." + algorithmInfo;
+            String prefix = "trade." + algorithmInfo;
             addInternalLatencyStatistics(prefix, trade.getTimestamp(), trade.getTimestampBrokerConnector(),
                     trade.getTimestampAlgoConnector(), trade.getTimestampStrategy());
-
 
         } catch (Exception e) {
             logger.error("error addTradeLatencyStatistics latency statistics", e);
@@ -72,7 +71,7 @@ public class LatencyStatistics implements Runnable {
     public void addExecutionReportLatencyStatistics(String algorithmInfo, long currentTime, ExecutionReport executionReport) {
         try {
             // Add sub-statistics for internal latencies
-            String prefix = "executionReport." + executionReport.getInstrument() + "." + algorithmInfo;
+            String prefix = "executionReport." + algorithmInfo;
             addInternalLatencyStatistics(prefix, executionReport.getTimestampCreation(),
                     executionReport.getTimestampBrokerConnector(),
                     executionReport.getTimestampAlgoConnector(),
@@ -85,14 +84,34 @@ public class LatencyStatistics implements Runnable {
 
     public void addOrderRequestLatencyStatistics(String algorithmInfo, long currentTime, OrderRequest orderRequest) {
         try {
-            String prefix = "orderRequest." + orderRequest.getInstrument() + "." + algorithmInfo;
-            addInternalLatencyStatistics(prefix, orderRequest.getTimestampCreation(),
-                    orderRequest.getTimestampBrokerConnector(),
-                    orderRequest.getTimestampAlgoConnector(),
-                    currentTime);
+            String prefix = "orderRequest." + algorithmInfo;
+            addOrderRequestOutboundLatencyStatistics(prefix, currentTime, orderRequest);
 
         } catch (Exception e) {
             logger.error("error addOrderRequestLatencyStatistics latency statistics", e);
+        }
+    }
+
+    /**
+     * Adds latency statistics for order requests generated in the strategy going out to the market.
+     * Tracks the latency from strategy creation through algoConnector and brokerConnector to current time.
+     * This is the reverse direction compared to addOrderRequestLatencyStatistics (outbound vs inbound).
+     *
+     * @param prefix       The prefix for the statistics key (e.g., "depth.BTCUSD.algorithmInfo")
+     * @param currentTime  The current time (before sending to market)
+     * @param orderRequest The order request being sent
+     */
+    public void addOrderRequestOutboundLatencyStatistics(String prefix, long currentTime, OrderRequest orderRequest) {
+        try {
+
+            // Track latency from strategy -> algoConnector -> brokerConnector -> now (before market)
+            addInternalLatencyStatistics(prefix, orderRequest.getTimestampCreation(),
+                    orderRequest.getTimestampAlgoConnector(),
+                    orderRequest.getTimestampBrokerConnector(),
+                    currentTime);
+
+        } catch (Exception e) {
+            logger.error("error addOrderRequestOutboundLatencyStatistics latency statistics", e);
         }
     }
 
