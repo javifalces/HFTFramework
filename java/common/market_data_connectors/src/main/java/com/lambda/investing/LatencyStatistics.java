@@ -13,10 +13,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import static com.lambda.investing.PrintUtils.PrintDate;
 
 public class LatencyStatistics implements Runnable {
-    protected static long WARN_LATENCY_ORDER_REQUEST_MS = 500;
-    protected static long WARN_LATENCY_MARKET_DATA_MS = 500;
-    protected static long WARN_LATENCY_EXECUTION_REPORT_MS = 500;
-
     private static boolean RESET_STATISTICS_PER_UPDATE = true;
     private long sleepMs;
     private boolean enable;
@@ -48,16 +44,11 @@ public class LatencyStatistics implements Runnable {
     }
 
     public void addDepthLatencyStatistics(String algorithmInfo, long currentTime, Depth depth) {
-        long depthTimestamp = depth.getTimestamp();
-        long latencyMs = currentTime - depthTimestamp;
         try {
-            addLatencyStatistics("depth." + depth.getInstrument() + "." + algorithmInfo, latencyMs);
-            if (latencyMs > WARN_LATENCY_MARKET_DATA_MS) {
-                String tableLatencies = depth.getLatenciesTable();
-                logger.warn("Depth {} with latency {} ms > {} from current time from {} to {}\n{}",
-                        depth.getInstrument(), latencyMs, WARN_LATENCY_MARKET_DATA_MS,
-                        PrintDate(new Date(depthTimestamp)), PrintDate(new Date(currentTime)), tableLatencies);
-            }
+            // Add sub-statistics for internal latencies
+            String prefix = "depth." + depth.getInstrument() + "." + algorithmInfo;
+            addInternalLatencyStatistics(prefix, depth.getTimestamp(), depth.getTimestampBrokerConnector(),
+                    depth.getTimestampAlgoConnector(), depth.getTimestampStrategy());
 
         } catch (Exception e) {
             logger.error("error addDepthLatencyStatistics latency statistics", e);
@@ -65,16 +56,13 @@ public class LatencyStatistics implements Runnable {
     }
 
     public void addTradeLatencyStatistics(String algorithmInfo, long currentTime, Trade trade) {
-        long tradeTimestamp = trade.getTimestamp();
-        long latencyMs = currentTime - tradeTimestamp;
+
         try {
-            addLatencyStatistics("trade." + trade.getInstrument() + "." + algorithmInfo, latencyMs);
-            if (latencyMs > WARN_LATENCY_MARKET_DATA_MS) {
-                String tableLatencies = trade.getLatenciesTable();
-                logger.warn("Trade {} with latency {} ms > {} from current time from {} to {}\n{}",
-                        trade.getInstrument(), latencyMs, WARN_LATENCY_MARKET_DATA_MS,
-                        PrintDate(new Date(trade.getTimestamp())), PrintDate(new Date(currentTime)), tableLatencies);
-            }
+            // Add sub-statistics for internal latencies
+            String prefix = "trade." + trade.getInstrument() + "." + algorithmInfo;
+            addInternalLatencyStatistics(prefix, trade.getTimestamp(), trade.getTimestampBrokerConnector(),
+                    trade.getTimestampAlgoConnector(), trade.getTimestampStrategy());
+
 
         } catch (Exception e) {
             logger.error("error addTradeLatencyStatistics latency statistics", e);
@@ -82,33 +70,77 @@ public class LatencyStatistics implements Runnable {
     }
 
     public void addExecutionReportLatencyStatistics(String algorithmInfo, long currentTime, ExecutionReport executionReport) {
-        long executionReportTimestampCreation = executionReport.getTimestampCreation();
-        long latencyMs = currentTime - executionReportTimestampCreation;
         try {
-            addLatencyStatistics("executionReport." + executionReport.getInstrument() + "." + algorithmInfo, latencyMs);
-            if (latencyMs > WARN_LATENCY_EXECUTION_REPORT_MS) {
-                String tableLatencies = executionReport.getLatenciesTable();
-                logger.warn("ExecutionReport {} with latency {} ms > {} from current time from {} to {}\n{}",
-                        executionReport.getInstrument(), latencyMs, WARN_LATENCY_EXECUTION_REPORT_MS,
-                        PrintDate(new Date(executionReport.getTimestampCreation())), PrintDate(new Date(currentTime)), tableLatencies);
-            }
+            // Add sub-statistics for internal latencies
+            String prefix = "executionReport." + executionReport.getInstrument() + "." + algorithmInfo;
+            addInternalLatencyStatistics(prefix, executionReport.getTimestampCreation(),
+                    executionReport.getTimestampBrokerConnector(),
+                    executionReport.getTimestampAlgoConnector(),
+                    executionReport.getTimestampStrategy());
+
         } catch (Exception e) {
             logger.error("error addExecutionReportLatencyStatistics latency statistics", e);
         }
     }
 
     public void addOrderRequestLatencyStatistics(String algorithmInfo, long currentTime, OrderRequest orderRequest) {
-        long orderRequestTimestampCreation = orderRequest.getTimestampCreation();
-        long latencyMs = currentTime - orderRequestTimestampCreation;
         try {
-            addLatencyStatistics("orderRequest." + orderRequest.getInstrument() + "." + algorithmInfo, latencyMs);
-            if (latencyMs > WARN_LATENCY_ORDER_REQUEST_MS) {
-                String table = orderRequest.getLatenciesTable();
-                logger.warn("OrderRequest {} with latency {} ms > {} from creation from {} to {}\n{}", orderRequest, latencyMs, WARN_LATENCY_ORDER_REQUEST_MS, PrintDate(new Date(orderRequest.getTimestampCreation())), PrintDate(new Date(currentTime)), table);
-            }
+            String prefix = "orderRequest." + orderRequest.getInstrument() + "." + algorithmInfo;
+            addInternalLatencyStatistics(prefix, orderRequest.getTimestampCreation(),
+                    orderRequest.getTimestampBrokerConnector(),
+                    orderRequest.getTimestampAlgoConnector(),
+                    currentTime);
+
         } catch (Exception e) {
             logger.error("error addOrderRequestLatencyStatistics latency statistics", e);
         }
+    }
+
+    /**
+     * Adds sub-statistics for internal latency breakdown across different stages.
+     * This matches the structure of getLatenciesTable() to track latencies between:
+     * - timestamp to timestampBrokerConnector
+     * - timestampBrokerConnector to timestampAlgoConnector
+     * - timestampAlgoConnector to timestampStrategy
+     * - timestampStrategy to now
+     *
+     * @param prefix                   The prefix for the statistics key (e.g., "depth.BTCUSD.algorithmInfo")
+     * @param timestamp                The initial timestamp
+     * @param timestampBrokerConnector The broker connector timestamp
+     * @param timestampAlgoConnector   The algo connector timestamp
+     * @param timestampStrategy        The strategy timestamp
+     */
+    private void addInternalLatencyStatistics(String prefix, long timestamp,
+                                              long timestampBrokerConnector,
+                                              long timestampAlgoConnector,
+                                              long timestampStrategy) {
+        long lastReference = timestamp;
+
+        // Track latency from timestamp to timestampBrokerConnector
+        if (timestampBrokerConnector > 0) {
+            long latency = timestampBrokerConnector - lastReference;
+            addLatencyStatistics(prefix + ".toBrokerConnector", latency);
+            lastReference = timestampBrokerConnector;
+        }
+
+        // Track latency from timestampBrokerConnector to timestampAlgoConnector
+        if (timestampAlgoConnector > 0) {
+            long latency = timestampAlgoConnector - lastReference;
+            addLatencyStatistics(prefix + ".toAlgoConnector", latency);
+            lastReference = timestampAlgoConnector;
+        }
+
+        // Track latency from timestampAlgoConnector to timestampStrategy
+        if (timestampStrategy > 0) {
+            long latency = timestampStrategy - lastReference;
+            addLatencyStatistics(prefix + ".toStrategy", latency);
+            lastReference = timestampStrategy;
+        }
+
+        // Track latency from last timestamp to now
+        long currentTime = System.currentTimeMillis();
+        long latency = currentTime - lastReference;
+        addLatencyStatistics(prefix + ".toNow", latency);
     }
 
 
