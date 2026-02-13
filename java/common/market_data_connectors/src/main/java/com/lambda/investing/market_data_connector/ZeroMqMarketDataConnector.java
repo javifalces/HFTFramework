@@ -135,9 +135,6 @@ public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implem
 			}
 			depth.setLevelsFromData();
 			notifyDepth(depth);
-			if (latencyStatistics != null) {
-				latencyStatistics.addLatencyStatistics(typeMessage + ".ZeroMarketDataConnector", timestampReceived - depth.getTimestamp());
-			}
 		}
 
 		if (typeMessage == TypeMessage.trade) {
@@ -151,10 +148,6 @@ public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implem
 				}
 			}
 			notifyTrade(trade);
-
-			if (latencyStatistics != null) {
-				latencyStatistics.addLatencyStatistics(typeMessage + ".ZeroMarketDataConnector", timestampReceived - trade.getTimestamp());
-			}
 		}
 
 		if (typeMessage == TypeMessage.command) {
