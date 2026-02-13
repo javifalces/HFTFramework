@@ -134,11 +134,13 @@ public class LatencyStatistics implements Runnable {
                                               long timestampAlgoConnector,
                                               long timestampStrategy) {
         long lastReference = timestamp;
+        long totalLatency = 0;
 
         // Track latency from timestamp to timestampBrokerConnector
         if (timestampBrokerConnector > 0) {
             long latency = timestampBrokerConnector - lastReference;
             addLatencyStatistics(prefix + ".toBrokerConnector", latency);
+            totalLatency += latency;
             lastReference = timestampBrokerConnector;
         }
 
@@ -146,6 +148,7 @@ public class LatencyStatistics implements Runnable {
         if (timestampAlgoConnector > 0) {
             long latency = timestampAlgoConnector - lastReference;
             addLatencyStatistics(prefix + ".toAlgoConnector", latency);
+            totalLatency += latency;
             lastReference = timestampAlgoConnector;
         }
 
@@ -153,6 +156,7 @@ public class LatencyStatistics implements Runnable {
         if (timestampStrategy > 0) {
             long latency = timestampStrategy - lastReference;
             addLatencyStatistics(prefix + ".toStrategy", latency);
+            totalLatency += latency;
             lastReference = timestampStrategy;
         }
 
@@ -160,6 +164,10 @@ public class LatencyStatistics implements Runnable {
         long currentTime = System.currentTimeMillis();
         long latency = currentTime - lastReference;
         addLatencyStatistics(prefix + ".toNow", latency);
+        totalLatency += latency;
+
+        // Track total latency
+        addLatencyStatistics(prefix + ".TOTAL", totalLatency);
     }
 
 
@@ -202,49 +210,14 @@ public class LatencyStatistics implements Runnable {
         if (topicToLatency.size() > 0) {
             Map<String, List<Long>> snapshot = new ConcurrentHashMap<>(topicToLatency);
 
-            for (Map.Entry<String, List<Long>> entry : snapshot.entrySet()) {
-                String topic = entry.getKey();
-                // if length.topic>50 reduce it after poing to 50 chars and add last characters after -
+            // Group statistics by their base prefix
+            Map<String, Map<String, List<Long>>> groupedStats = groupStatisticsByPrefix(snapshot);
 
-                if (topic.length() > 40) {
-                    String suffixAfterDash = "";
-                    int lastDashIndex = topic.lastIndexOf("-");
-                    if (lastDashIndex != -1 && lastDashIndex + 1 < topic.length()) {
-                        suffixAfterDash = topic.substring(lastDashIndex);
-                    }
-                    topic = topic.substring(0, 35) + "...-" + suffixAfterDash;
-                }
-                List<Long> latency = new ArrayList<>(entry.getValue());//copy to avoud concurrent modification
-                int counter = latency.size();
-                if (counter > 0) {
-                    double mean = latency.stream().mapToLong(a -> a).average().orElse(0.0);
-                    double maxLatency = latency.stream().mapToLong(a -> a).max().orElse(0);
-                    //get percentile 50 75 90 95 99
-                    double percentile50 = 0;
-                    double percentile75 = 0;
-                    double percentile90 = 0;
-                    double percentile95 = 0;
-                    double percentile99 = 0;
-
-                    if (latency.size() > 0) {
-                        percentile50 = latency.stream().sorted().skip((long) (latency.size() * 0.5)).findFirst().orElse(0L);
-                        percentile75 = latency.stream().sorted().skip((long) (latency.size() * 0.75)).findFirst().orElse(0L);
-                        percentile90 = latency.stream().sorted().skip((long) (latency.size() * 0.9)).findFirst().orElse(0L);
-                        percentile95 = latency.stream().sorted().skip((long) (latency.size() * 0.95)).findFirst().orElse(0L);
-                        percentile99 = latency.stream().sorted().skip((long) (latency.size() * 0.99)).findFirst().orElse(0L);
-                    }
-                    //print average and percentiles
-                    String topicPadded = String.format("%-60s", topic);
-                    logger.info("\tLatency {}:\tsize:{}\tmean(ms):{}\t50pct:{}\t75pct:{}\t90pct:{}\t95pct:{}\t99pct:{}\tmax:{}",
-                            topicPadded, counter,
-                            String.format("%.2f", mean),
-                            String.format("%.2f", percentile50),
-                            String.format("%.2f", percentile75),
-                            String.format("%.2f", percentile90),
-                            String.format("%.2f", percentile95),
-                            String.format("%.2f", percentile99),
-                            String.format("%.2f", maxLatency));
-                }
+            // Print each group
+            for (Map.Entry<String, Map<String, List<Long>>> groupEntry : groupedStats.entrySet()) {
+                String basePrefix = groupEntry.getKey();
+                Map<String, List<Long>> subsections = groupEntry.getValue();
+                printGroupedStatistics(basePrefix, subsections);
             }
 
             if (RESET_STATISTICS_PER_UPDATE) {
@@ -252,9 +225,136 @@ public class LatencyStatistics implements Runnable {
                 keyToTopic.clear();
                 keyToStartDate.clear();
             }
-
         }
     }
+
+    /**
+     * Groups statistics by their base prefix, separating the subsection suffixes.
+     * For example, "depth.BTCUSD.toBrokerConnector" becomes base="depth.BTCUSD", subsection="toBrokerConnector"
+     */
+    private Map<String, Map<String, List<Long>>> groupStatisticsByPrefix(Map<String, List<Long>> snapshot) {
+        Map<String, Map<String, List<Long>>> groupedStats = new LinkedHashMap<>();
+
+        for (Map.Entry<String, List<Long>> entry : snapshot.entrySet()) {
+            String fullTopic = entry.getKey();
+            String basePrefix;
+            String subsection;
+
+            // Check if this is a subsection statistic
+            if (fullTopic.contains(".toBrokerConnector") || fullTopic.contains(".toAlgoConnector") ||
+                    fullTopic.contains(".toStrategy") || fullTopic.contains(".toNow") || fullTopic.contains(".TOTAL")) {
+
+                int lastDotIndex = fullTopic.lastIndexOf(".");
+                basePrefix = fullTopic.substring(0, lastDotIndex);
+                subsection = fullTopic.substring(lastDotIndex + 1);
+            } else {
+                basePrefix = fullTopic;
+                subsection = null;
+            }
+
+            groupedStats.computeIfAbsent(basePrefix, k -> new LinkedHashMap<>()).put(subsection, entry.getValue());
+        }
+
+        return groupedStats;
+    }
+
+    /**
+     * Prints a group of statistics with a header and subsections in the correct order.
+     * For outbound metrics (orderRequest), the order is reversed to reflect the outbound flow.
+     */
+    private void printGroupedStatistics(String basePrefix, Map<String, List<Long>> subsections) {
+        // If there are subsections, print the header first
+        if (subsections.size() > 1 && subsections.containsKey("TOTAL")) {
+            // Print header with base prefix
+            logger.info("═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════");
+            logger.info("  {}", basePrefix);
+            logger.info("───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────");
+
+            // Determine the order based on whether this is an outbound (orderRequest) metric
+            boolean isOutbound = basePrefix.startsWith("orderRequest");
+            String[] order = getSubsectionOrder(isOutbound);
+
+            // Print subsections in specific order: TOTAL first, then others
+            for (String subsectionName : order) {
+                if (subsections.containsKey(subsectionName)) {
+                    printLatencyLine(subsectionName, subsections.get(subsectionName), true);
+                }
+            }
+
+            // Print any other subsections not in the order list
+            for (Map.Entry<String, List<Long>> subsectionEntry : subsections.entrySet()) {
+                String subsectionName = subsectionEntry.getKey();
+                if (!Arrays.asList(order).contains(subsectionName)) {
+                    printLatencyLine(subsectionName, subsectionEntry.getValue(), true);
+                }
+            }
+        } else {
+            // Print standalone statistics (without subsections)
+            for (Map.Entry<String, List<Long>> subsectionEntry : subsections.entrySet()) {
+                String displayName = subsectionEntry.getKey() == null ? basePrefix : basePrefix + "." + subsectionEntry.getKey();
+                printLatencyLine(displayName, subsectionEntry.getValue(), false);
+            }
+        }
+    }
+
+    /**
+     * Returns the correct order of subsections based on whether the metric is inbound or outbound.
+     * Inbound (depth, trade, executionReport): market → broker → algo → strategy
+     * Outbound (orderRequest): strategy → algo → broker → market
+     */
+    private String[] getSubsectionOrder(boolean isOutbound) {
+        if (isOutbound) {
+            // For outbound: from strategy creation to market (reversed)
+            return new String[]{"TOTAL", "toAlgoConnector", "toBrokerConnector", "toNow"};
+        } else {
+            // For inbound: from market to strategy (normal)
+            return new String[]{"TOTAL", "toBrokerConnector", "toAlgoConnector", "toStrategy", "toNow"};
+        }
+    }
+
+    private void printLatencyLine(String topic, List<Long> latency, boolean isSubsection) {
+        int counter = latency.size();
+        if (counter > 0) {
+            double mean = latency.stream().mapToLong(a -> a).average().orElse(0.0);
+            double maxLatency = latency.stream().mapToLong(a -> a).max().orElse(0);
+
+            // Calculate percentiles
+            double percentile50 = latency.stream().sorted().skip((long) (latency.size() * 0.5)).findFirst().orElse(0L);
+            double percentile75 = latency.stream().sorted().skip((long) (latency.size() * 0.75)).findFirst().orElse(0L);
+            double percentile90 = latency.stream().sorted().skip((long) (latency.size() * 0.9)).findFirst().orElse(0L);
+            double percentile95 = latency.stream().sorted().skip((long) (latency.size() * 0.95)).findFirst().orElse(0L);
+            double percentile99 = latency.stream().sorted().skip((long) (latency.size() * 0.99)).findFirst().orElse(0L);
+
+            // Format with indentation for subsections
+            String indent = isSubsection ? "    " : "";
+            String displayTopic = topic;
+
+            // Truncate long topic names
+            if (displayTopic.length() > 50 && !isSubsection) {
+                String suffixAfterDash = "";
+                int lastDashIndex = displayTopic.lastIndexOf("-");
+                if (lastDashIndex != -1 && lastDashIndex + 1 < displayTopic.length()) {
+                    suffixAfterDash = displayTopic.substring(lastDashIndex);
+                }
+                displayTopic = displayTopic.substring(0, 35) + "...-" + suffixAfterDash;
+            }
+
+            // Highlight TOTAL with special formatting
+            String prefix = topic.equals("TOTAL") ? "  ► " : indent + "    ";
+            String topicPadded = String.format("%-40s", displayTopic);
+
+            logger.info("{}{}  size:{}\tmean(ms):{}\t50pct:{}\t75pct:{}\t90pct:{}\t95pct:{}\t99pct:{}\tmax:{}",
+                    prefix, topicPadded, counter,
+                    String.format("%.2f", mean),
+                    String.format("%.2f", percentile50),
+                    String.format("%.2f", percentile75),
+                    String.format("%.2f", percentile90),
+                    String.format("%.2f", percentile95),
+                    String.format("%.2f", percentile99),
+                    String.format("%.2f", maxLatency));
+        }
+    }
+
 
 
     @Override
