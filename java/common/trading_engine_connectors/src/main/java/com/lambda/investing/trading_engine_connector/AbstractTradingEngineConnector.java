@@ -124,10 +124,6 @@ public abstract class AbstractTradingEngineConnector implements TradingEngineCon
             cfTradesNotified.add(executionReport.getClientOrderId());
         }
 
-        if (latencyStatistics != null && timestampReceived > 0) {
-            latencyStatistics.addLatencyStatistics(executionReport.getExecutionReportStatus() + ".executionReport.AbstractTradingEngineConnector", timestampReceived - executionReport.getTimestampCreation());
-        }
-
     }
 
     public void notifyInfo(String header, Object message) {
