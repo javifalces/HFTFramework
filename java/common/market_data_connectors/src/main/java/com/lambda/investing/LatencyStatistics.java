@@ -208,7 +208,11 @@ public class LatencyStatistics implements Runnable {
 
     private synchronized void printCurrentStatistics() {
         if (topicToLatency.size() > 0) {
-            Map<String, List<Long>> snapshot = new ConcurrentHashMap<>(topicToLatency);
+            // Create a deep copy of the map with copied lists to avoid ConcurrentModificationException
+            Map<String, List<Long>> snapshot = new ConcurrentHashMap<>();
+            for (Map.Entry<String, List<Long>> entry : topicToLatency.entrySet()) {
+                snapshot.put(entry.getKey(), new ArrayList<>(entry.getValue()));
+            }
 
             // Group statistics by their base prefix
             Map<String, Map<String, List<Long>>> groupedStats = groupStatisticsByPrefix(snapshot);
