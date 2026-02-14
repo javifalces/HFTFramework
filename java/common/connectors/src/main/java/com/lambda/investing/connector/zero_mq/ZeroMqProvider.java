@@ -167,8 +167,7 @@ public class ZeroMqProvider implements ConnectorProvider {
         threadReceiver = new ZeroMqThreadReceiver(this.zeroMqConfiguration);
 
         this.thread = new Thread(threadReceiver,
-                "zeroMq receiver " + zeroMqConfiguration.getHost() + ":" + zeroMqConfiguration.getPort() + "("
-                        + zeroMqConfiguration.getTopic() + ")");
+                "ZeroMqProvider -> " + zeroMqConfiguration.getHost() + ":" + zeroMqConfiguration.getPort());
         this.thread.start();
 
     }

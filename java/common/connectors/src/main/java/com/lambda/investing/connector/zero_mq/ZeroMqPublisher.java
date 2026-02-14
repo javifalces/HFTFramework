@@ -104,7 +104,7 @@ public class ZeroMqPublisher implements ConnectorPublisher {
             }
 
 
-            new Thread(new ZeroMqAckReqProvider(reqSocket), "listen_req_" + configuration.getPort() + 1).start();
+            new Thread(new ZeroMqAckReqProvider(reqSocket), "ZeroMqAckReqProvider -> " + configuration.getPort() + 1).start();
 
 
         } else {
