@@ -47,6 +47,7 @@ public class ZeroMqProvider implements ConnectorProvider {
 
     protected boolean parsedObjects = true;
     ZContext context;
+    private final Map<String, Object> topicLocks = new ConcurrentHashMap<>();
     private static boolean DEFAULT_SERVER = false;
     private boolean isServer = DEFAULT_SERVER;
 
@@ -241,35 +242,40 @@ public class ZeroMqProvider implements ConnectorProvider {
             running.set(true);
         }
 
-        private synchronized void treatMessage(String topic, Object message) {
-            if (!parsedObjects) {
+        private void treatMessage(String topic, Object message) {
+            // Get or create a lock object for this specific topic
+            Object topicLock = topicLocks.computeIfAbsent(topic, k -> new Object());
+
+            synchronized (topicLock) {
+                if (!parsedObjects) {
+                    try {
+                        onUpdate(null, topic, topic, System.currentTimeMillis());
+                    } catch (Exception e) {
+                        logger.error("Error reading nonParseZeroMq ", e);
+                    }
+                    return;
+
+                }
+                boolean isInTopicListSubscribed = topicListSubscribed.contains(topic);
+                boolean subscribedToAll =
+                        topicListSubscribed.size() == 1 && (topicListSubscribed.get(0).equalsIgnoreCase(""));
+
+                if (!isInTopicListSubscribed && !subscribedToAll) {
+                    logger.warn("discard not on our topic list\ntopic: {}\nmessage:{}", topic, message);
+                    return;
+                }
+                logger.debug("receive from topic {}  message  {}", topic, message);
+
                 try {
-                    onUpdate(null, topic, topic, System.currentTimeMillis());
-                } catch (Exception e) {
-                    logger.error("Error reading nonParseZeroMq ", e);
+                    TypeMessage typeMessage = TopicUtils.getTypeMessage(topic);
+                    if (typeMessage == null) {
+                        logger.error("discarded no type found\ntopic:{}\nmessage:{}", topic, message);
+                    } else {
+                        onUpdate(typeMessage, message, topic, System.currentTimeMillis());
+                    }
+                } catch (IOException e) {
+                    logger.error("Error receiving topic {}  message {}", topic, message, e);
                 }
-                return;
-
-            }
-            boolean isInTopicListSubscribed = topicListSubscribed.contains(topic);
-            boolean subscribedToAll =
-                    topicListSubscribed.size() == 1 && (topicListSubscribed.get(0).equalsIgnoreCase(""));
-
-            if (!isInTopicListSubscribed && !subscribedToAll) {
-                logger.warn("discard not on our topic list\ntopic: {}\nmessage:{}", topic, message);
-                return;
-            }
-            logger.debug("receive from topic {}  message  {}", topic, message);
-
-            try {
-                TypeMessage typeMessage = TopicUtils.getTypeMessage(topic);
-                if (typeMessage == null) {
-                    logger.error("discarded no type found\ntopic:{}\nmessage:{}", topic, message);
-                } else {
-                    onUpdate(typeMessage, message, topic, System.currentTimeMillis());
-                }
-            } catch (IOException e) {
-                logger.error("Error receiving topic {}  message {}", topic, message, e);
             }
         }
 

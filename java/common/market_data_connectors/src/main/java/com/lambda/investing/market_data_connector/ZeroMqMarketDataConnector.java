@@ -114,10 +114,6 @@ public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implem
 		ZeroMqConfiguration zeroMqConfigurationReceived = (ZeroMqConfiguration) configuration;
 		String topicReceived = zeroMqConfigurationReceived.getTopic();
 
-		if (statisticsReceived != null)
-			statisticsReceived.addStatistics(topicReceived);
-
-
 		if (content instanceof byte[]) {
 			content = SerializationUtils.deserialize((byte[]) content);
 		}
@@ -165,6 +161,9 @@ public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implem
 //
 //			notifyExecutionReport(executionReport);
 //		}
+
+		if (statisticsReceived != null)
+			statisticsReceived.addStatistics(topicReceived);
 
 	}
 
