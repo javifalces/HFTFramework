@@ -1,5 +1,6 @@
-package com.lambda.investing.algorithmic_trading;
+package com.lambda.investing.algorithmic_trading.observer;
 
+import com.lambda.investing.algorithmic_trading.AlgorithmObserver;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshot;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioSnapshot;
 import com.lambda.investing.model.market_data.Depth;
@@ -111,7 +112,7 @@ public class LiveTradeReport implements AlgorithmObserver {
     private String getTradeLogFileName() {
         try {
             LoggerContext context = (LoggerContext) LogManager.getContext(false);
-            org.apache.logging.log4j.core.Logger coreLogger = context.getLogger("com.lambda.investing.algorithmic_trading.LiveTradeReport");
+            org.apache.logging.log4j.core.Logger coreLogger = context.getLogger("com.lambda.investing.algorithmic_trading.observer.LiveTradeReport");
 
             // Try to find the RollingFileAppender
             var appenders = coreLogger.getAppenders();

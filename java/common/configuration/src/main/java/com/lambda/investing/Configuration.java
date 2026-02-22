@@ -60,6 +60,7 @@ public class Configuration {
     public static boolean IS_LINUX = System.getProperty("os.name").toLowerCase().contains("linux");
     public static int NUMBER_OF_CORES = Runtime.getRuntime().availableProcessors();
     public static boolean USE_THREAD_AFFINITY = Boolean.parseBoolean(getEnvOrDefault("USE_THREAD_AFFINITY", "false"));//if true, the threads are going to be pinned to the cores
+    public static String PUSHBULLET_TOKEN = getEnvOrDefault("PUSHBULLET_TOKEN", "");
 
     public static int[] GET_AFFINITY_CPUS() throws LambdaConfigurationException {
         if (!USE_THREAD_AFFINITY) {

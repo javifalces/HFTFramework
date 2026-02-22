@@ -80,7 +80,8 @@
         </AsyncLogger>
 
         <!--Configure TradeReport logs into tradeReport CSV file-->
-        <AsyncLogger name="com.lambda.investing.algorithmic_trading.LiveTradeReport" level="info" additivity="false">
+        <AsyncLogger name="com.lambda.investing.algorithmic_trading.observer.LiveTradeReport" level="info"
+                     additivity="false">
             <AppenderRef ref="tradeReport"/>
         </AsyncLogger>
 

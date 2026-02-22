@@ -137,6 +137,19 @@
             <scope>compile</scope>
         </dependency>
 
+        <!-- Pushbullet notification       -->
+        <dependency>
+            <groupId>org.silentsoft</groupId>
+            <artifactId>pushbullet-api</artifactId>
+            <version>0.1.1</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-simple</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
 
     </dependencies>
 
