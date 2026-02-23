@@ -1715,7 +1715,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             if (isBacktest) {
                 return true;
             }
-            logger.info("received portfolio from broker -> set");
+            logger.info("received portfolio from broker");
             setPortfolio(portfolio);
             return true;
         }
