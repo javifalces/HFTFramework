@@ -1,6 +1,5 @@
-package com.lambda.investing.algorithmic_trading.observer;
+package com.lambda.investing.algorithmic_trading.observer.pushbullet;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.Algorithm;
 import com.lambda.investing.algorithmic_trading.AlgorithmObserver;
@@ -10,16 +9,13 @@ import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.OrderRequest;
-import org.apache.http.message.BasicHeader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.silentsoft.net.rest.RESTfulAPI;
 import org.silentsoft.pushbullet.api.Device;
 import org.silentsoft.pushbullet.api.Push;
 import org.silentsoft.pushbullet.api.PushbulletAPI;
 
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -40,10 +36,11 @@ import java.util.Map;
  * algorithm.register(telegramBot);
  * }</pre>
  */
-public class PushbulletAlgorithmObserver implements AlgorithmObserver {
+public class PushbulletAlgorithmObserver implements AlgorithmObserver, PushbulletMessageListener {
 
     protected Logger logger = LogManager.getLogger(PushbulletAlgorithmObserver.class);
     private final String pushbulletToken;
+    private PushbulletMessageReader messageReader;
 
     private final Algorithm algorithm;
 
@@ -61,6 +58,10 @@ public class PushbulletAlgorithmObserver implements AlgorithmObserver {
         } catch (Exception e) {
             logger.error("Error validating Pushbullet token: {}", e.getMessage());
         }
+
+        messageReader = new PushbulletMessageReader(algorithm, pushbulletToken, 5);
+        messageReader.registerListener(this);
+        messageReader.start();
     }
 
 
@@ -133,6 +134,17 @@ public class PushbulletAlgorithmObserver implements AlgorithmObserver {
                 title,
                 message
         );
+    }
+
+    @Override
+    public void onPushbulletMessage(String title, String body) {
+        boolean isKill = title.toLowerCase().startsWith("kill") || body.toLowerCase().startsWith("kill");
+        if (isKill) {
+            logger.warn("Received kill command via Pushbullet - stopping algorithm");
+            System.out.println(Configuration.formatLog("Received kill command via Pushbullet - stopping algorithm"));
+            algorithm.stop();
+            System.exit(0);
+        }
     }
 
 

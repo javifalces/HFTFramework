@@ -13,7 +13,7 @@ import com.lambda.investing.algorithmic_trading.gui.main.MainMenuGUI;
 import com.lambda.investing.algorithmic_trading.hedging.HedgeManager;
 import com.lambda.investing.algorithmic_trading.hedging.NoHedgeManager;
 import com.lambda.investing.algorithmic_trading.observer.LiveTradeReport;
-import com.lambda.investing.algorithmic_trading.observer.PushbulletAlgorithmObserver;
+import com.lambda.investing.algorithmic_trading.observer.pushbullet.PushbulletAlgorithmObserver;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshot;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioManager;
 import com.lambda.investing.algorithmic_trading.quoting.QuoteManager;
