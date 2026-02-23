@@ -138,13 +138,21 @@ public class PushbulletAlgorithmObserver implements AlgorithmObserver, Pushbulle
 
     @Override
     public void onPushbulletMessage(String title, String body) {
-        boolean isKill = title.toLowerCase().startsWith("kill") || body.toLowerCase().startsWith("kill");
-        if (isKill) {
-            logger.warn("Received kill command via Pushbullet - stopping algorithm");
-            System.out.println(Configuration.formatLog("Received kill command via Pushbullet - stopping algorithm"));
+        logger.info("Received Pushbullet message: {} - {}", title, body);
+        boolean isStop = title.toLowerCase().startsWith("stopalgo") || body.toLowerCase().startsWith("stopalgo");
+        if (isStop) {
+            logger.info("Received stop command via Pushbullet - stopping algorithm");
+            System.out.println(Configuration.formatLog("Received stop command via Pushbullet - stopping algorithm"));
             algorithm.stop();
-            System.exit(0);
         }
+
+        boolean isStart = title.toLowerCase().startsWith("startalgo") || body.toLowerCase().startsWith("startalgo");
+        if (isStart) {
+            logger.info("Received start command via Pushbullet - starting algorithm");
+            System.out.println(Configuration.formatLog("Received start command via Pushbullet - starting algorithm"));
+            algorithm.start();
+        }
+
     }
 
 
