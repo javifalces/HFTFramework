@@ -23,12 +23,37 @@ public class LatencyStatistics implements Runnable {
     private String header;
     protected Logger logger = LogManager.getLogger(LatencyStatistics.class);
 
+    // Track daily maximum statistics for each topic
+    private Map<String, DailyMaxStats> topicToDailyMaxStats;
+
+    // Inner class to hold daily maximum statistics
+    private static class DailyMaxStats {
+        double maxMean = 0.0;
+        double maxPercentile50 = 0.0;
+        double maxPercentile75 = 0.0;
+        double maxPercentile90 = 0.0;
+        double maxPercentile95 = 0.0;
+        double maxPercentile99 = 0.0;
+        double maxLatency = 0.0;
+
+        void updateIfGreater(double mean, double p50, double p75, double p90, double p95, double p99, double max) {
+            if (mean > maxMean) maxMean = mean;
+            if (p50 > maxPercentile50) maxPercentile50 = p50;
+            if (p75 > maxPercentile75) maxPercentile75 = p75;
+            if (p90 > maxPercentile90) maxPercentile90 = p90;
+            if (p95 > maxPercentile95) maxPercentile95 = p95;
+            if (p99 > maxPercentile99) maxPercentile99 = p99;
+            if (max > maxLatency) maxLatency = max;
+        }
+    }
+
     public LatencyStatistics(String header, long sleepMs) {
         this.header = header;
         this.sleepMs = sleepMs;
         keyToStartDate = new ConcurrentHashMap<>();
         keyToTopic = new ConcurrentHashMap<>();
         topicToLatency = new ConcurrentHashMap<>();
+        topicToDailyMaxStats = new ConcurrentHashMap<>();
         enable = true;
         if (sleepMs > 0) {
             Thread thread = new Thread(this, "LatencyStatistics");
@@ -329,6 +354,12 @@ public class LatencyStatistics implements Runnable {
             double percentile95 = latency.stream().sorted().skip((long) (latency.size() * 0.95)).findFirst().orElse(0L);
             double percentile99 = latency.stream().sorted().skip((long) (latency.size() * 0.99)).findFirst().orElse(0L);
 
+            // Get or create daily max stats for this topic
+            DailyMaxStats dailyMaxStats = topicToDailyMaxStats.computeIfAbsent(topic, k -> new DailyMaxStats());
+
+            // Update daily max stats with current values
+            dailyMaxStats.updateIfGreater(mean, percentile50, percentile75, percentile90, percentile95, percentile99, maxLatency);
+
             // Format with indentation for subsections
             String indent = isSubsection ? "    " : "";
             String displayTopic = topic;
@@ -347,15 +378,15 @@ public class LatencyStatistics implements Runnable {
             String prefix = topic.equals("TOTAL") ? "  ► " : indent + "    ";
             String topicPadded = String.format("%-40s", displayTopic);
 
-            logger.info("{}{}  size:{}\tmean(ms):{}\t50pct:{}\t75pct:{}\t90pct:{}\t95pct:{}\t99pct:{}\tmax:{}",
+            logger.info("{}{}  size:{}\tmean(ms):{}[{}]\t50pct:{}[{}]\t75pct:{}[{}]\t90pct:{}[{}]\t95pct:{}[{}]\t99pct:{}[{}]\tmax:{}[{}]",
                     prefix, topicPadded, counter,
-                    String.format("%.2f", mean),
-                    String.format("%.2f", percentile50),
-                    String.format("%.2f", percentile75),
-                    String.format("%.2f", percentile90),
-                    String.format("%.2f", percentile95),
-                    String.format("%.2f", percentile99),
-                    String.format("%.2f", maxLatency));
+                    String.format("%.2f", mean), String.format("%.2f", dailyMaxStats.maxMean),
+                    String.format("%.2f", percentile50), String.format("%.2f", dailyMaxStats.maxPercentile50),
+                    String.format("%.2f", percentile75), String.format("%.2f", dailyMaxStats.maxPercentile75),
+                    String.format("%.2f", percentile90), String.format("%.2f", dailyMaxStats.maxPercentile90),
+                    String.format("%.2f", percentile95), String.format("%.2f", dailyMaxStats.maxPercentile95),
+                    String.format("%.2f", percentile99), String.format("%.2f", dailyMaxStats.maxPercentile99),
+                    String.format("%.2f", maxLatency), String.format("%.2f", dailyMaxStats.maxLatency));
         }
     }
 
