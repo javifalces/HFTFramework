@@ -1,6 +1,7 @@
 package com.lambda.investing.backtest;
 
 import com.lambda.investing.Configuration;
+import com.lambda.investing.algorithmic_trading.MultiStrategy;
 import com.lambda.investing.algorithmic_trading.provider.AlgorithmCreationUtils;
 import com.lambda.investing.algorithmic_trading.utils.AlgorithmUtils;
 import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
@@ -90,16 +91,30 @@ public class InputConfiguration implements Cloneable {
 
         private List<Instrument> getInstrumentList(com.lambda.investing.algorithmic_trading.Algorithm algorithm) throws Exception {
 
-            Instrument instrumentObject = Instrument.getInstrument(instrument);
-            if (instrumentObject == null) {
-                throw new Exception("InstrumentPK " + instrument + " not found");
+            if (instrument == null || instrument.isEmpty()) {
+                throw new Exception("Instrument not found in backtestConfiguration");
             }
-            if (algorithm instanceof SingleInstrumentAlgorithm) {
-                ((SingleInstrumentAlgorithm) algorithm).setInstrument(instrumentObject);
+            List<Instrument> instrumentList = new ArrayList<>();
+            String[] instrumentPKs = instrument.split(",");
+            for (String instrumentPk : instrumentPKs) {
+                if (instrumentPk.trim().isEmpty()) {
+                    continue;
+                }
+                Instrument instrumentObject = Instrument.getInstrument(instrumentPk.trim());
+                if (instrumentObject == null) {
+                    throw new Exception("InstrumentPK " + instrumentPk + " not found");
+                }
+                instrumentList.add(instrumentObject);
+
+                if (algorithm instanceof SingleInstrumentAlgorithm) {
+                    ((SingleInstrumentAlgorithm) algorithm).setInstrument(instrumentObject);
+                }
             }
 
-            List<Instrument> instrumentList = new ArrayList<>();
-            instrumentList.add(instrumentObject);
+            if (algorithm instanceof MultiStrategy) {
+                String[] instrumentPKsFiltered = Arrays.stream(instrumentPKs).filter(pk -> !pk.trim().isEmpty()).toArray(String[]::new);
+                ((MultiStrategy) algorithm).setInstrumentPKs(instrumentPKsFiltered);
+            }
 
             //add the rest of instruments in case needed
             Set<Instrument> algoInstrumentSet = algorithm.getInstruments();

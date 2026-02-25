@@ -2,6 +2,7 @@ package com.lambda.investing.live_trading_engine;
 
 import com.lambda.investing.algorithmic_trading.Algorithm;
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
+import com.lambda.investing.algorithmic_trading.MultiStrategy;
 import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
 import com.lambda.investing.market_data_connector.MarketDataProvider;
 import com.lambda.investing.model.asset.Instrument;
@@ -89,17 +90,24 @@ public class LiveTrading {
 
 	public void setAlgorithm(Algorithm algorithm) {
 		this.algorithm = algorithm;
-		if (instrumentList != null && instrumentList.size() > 0
-				&& this.algorithm instanceof SingleInstrumentAlgorithm) {
-			Instrument single = ((SingleInstrumentAlgorithm) algorithm).getInstrument();
+		if (instrumentList != null && !instrumentList.isEmpty()
+				&& this.algorithm instanceof SingleInstrumentAlgorithm singleInstrumentAlgorithm) {
+			Instrument single = singleInstrumentAlgorithm.getInstrument();
 			if (!instrumentList.contains(single)) {
 				//just in case add one
 				logger.warn(
 						"{} {} not detected in instrument list for paper trading -> set the first one of the list {}",
 						algorithm.getAlgorithmInfo(), single.getPrimaryKey(), instrumentList.get(0).getPrimaryKey());
-				((SingleInstrumentAlgorithm) this.algorithm).setInstrument(instrumentList.get(0));
+				singleInstrumentAlgorithm.setInstrument(instrumentList.get(0));
 			}
 		}
+
+		if (instrumentList != null && !instrumentList.isEmpty()
+				&& this.algorithm instanceof MultiStrategy multiStrategy) {
+			String[] instrumentPKs = instrumentList.stream().map(Instrument::getPrimaryKey).toArray(String[]::new);
+			multiStrategy.setInstrumentPKs(instrumentPKs);
+		}
+
 
 		if (this.paperTrading) {
 			this.algorithmConnectorConfiguration.setTradingEngineConnector(this.tradingEngineConnector);

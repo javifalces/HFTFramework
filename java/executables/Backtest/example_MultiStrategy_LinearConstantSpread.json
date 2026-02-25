@@ -1,0 +1,23 @@
+{
+  "backtest": {
+    "startDate": "20250407 9:00:00",
+    "endDate": "20250407 12:00:00",
+    "instrument": "btceur_kraken,etheur_kraken,ltceur_kraken",
+    "delayOrderMs": 0,
+    "feesCommissionsIncluded": false,
+    "multithreadConfiguration": "single_thread"
+  },
+  "algorithm": {
+    "algorithmName": "MultiStrategy_LinearConstantSpread_example",
+    "parameters": {
+      "instrument": "btceur_kraken,etheur_kraken,ltceur_kraken",
+      "level": 0,
+      "quantity": 0.001,
+      "quantityLimit": 0.01,
+      "firstHour": 7.0,
+      "lastHour": 19.0,
+      "ui": 0
+    }
+  }
+}
+
