@@ -281,9 +281,13 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
 //                                .delete(fileContentDepth.lastIndexOf(System.lineSeparator()),
 //                                        fileContentDepth.length());//remove last line separator
 //                    }
+
+                    if (!enable) {
+                        return;
+                    }
                     String textToWriteDepth = fileContentDepth.toString().trim();
                     try {
-                        if (textToWriteDepth.length() > 0) {
+                        if (enable && textToWriteDepth.length() > 0) {
                             FileDataUtils.createFilePathIfNotExist(filename);
                             CSVDataManager.saveCSV(filename, textToWriteDepth);
                         }
@@ -331,9 +335,12 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
 //                                        fileContentTrade.length());//remove last line separator
 //                    }
 
+                    if (!enable) {
+                        return;
+                    }
                     String textToWriteTrade = fileContentTrade.toString().trim();
                     try {
-                        if (textToWriteTrade.length() > 0) {
+                        if (enable && textToWriteTrade.length() > 0) {
                             FileDataUtils.createFilePathIfNotExist(filename);
                             CSVDataManager.saveCSV(filenameTrade, textToWriteTrade);
                         }
@@ -349,7 +356,9 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
             }
 
             logTradesSyncRatio();
-
+            if (!enable) {
+                return;
+            }
             try {
                 Thread.sleep(this.periodCheck);
             } catch (InterruptedException e) {
@@ -360,6 +369,9 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
     }
 
     private void logTradesSyncRatio() {
+        if (!enable) {
+            return;
+        }
         for (Map.Entry<Instrument, InstrumentCache> entrySet : instrumentCacheMap.entrySet()) {
             InstrumentCache caches = entrySet.getValue();
             Instrument instrument = entrySet.getKey();
