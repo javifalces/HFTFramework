@@ -23,8 +23,8 @@ public class LatencyStatistics implements Runnable {
     private String header;
     protected Logger logger = LogManager.getLogger(LatencyStatistics.class);
 
-    // Track daily maximum statistics for each topic
-    private Map<String, DailyMaxStats> topicToDailyMaxStats;
+    // Track daily maximum statistics by basePrefix and topic
+    private Map<String, Map<String, DailyMaxStats>> basePrefixToTopicToDailyMaxStats;
 
     // Inner class to hold daily maximum statistics
     private static class DailyMaxStats {
@@ -53,7 +53,7 @@ public class LatencyStatistics implements Runnable {
         keyToStartDate = new ConcurrentHashMap<>();
         keyToTopic = new ConcurrentHashMap<>();
         topicToLatency = new ConcurrentHashMap<>();
-        topicToDailyMaxStats = new ConcurrentHashMap<>();
+        basePrefixToTopicToDailyMaxStats = new ConcurrentHashMap<>();
         enable = true;
         if (sleepMs > 0) {
             Thread thread = new Thread(this, "LatencyStatistics");
@@ -306,7 +306,7 @@ public class LatencyStatistics implements Runnable {
             // Print subsections in specific order: TOTAL first, then others
             for (String subsectionName : order) {
                 if (subsections.containsKey(subsectionName)) {
-                    printLatencyLine(subsectionName, subsections.get(subsectionName), true);
+                    printLatencyLine(basePrefix, subsectionName, subsections.get(subsectionName), true);
                 }
             }
 
@@ -314,14 +314,14 @@ public class LatencyStatistics implements Runnable {
             for (Map.Entry<String, List<Long>> subsectionEntry : subsections.entrySet()) {
                 String subsectionName = subsectionEntry.getKey();
                 if (!Arrays.asList(order).contains(subsectionName)) {
-                    printLatencyLine(subsectionName, subsectionEntry.getValue(), true);
+                    printLatencyLine(basePrefix, subsectionName, subsectionEntry.getValue(), true);
                 }
             }
         } else {
             // Print standalone statistics (without subsections)
             for (Map.Entry<String, List<Long>> subsectionEntry : subsections.entrySet()) {
                 String displayName = subsectionEntry.getKey() == null ? basePrefix : basePrefix + "." + subsectionEntry.getKey();
-                printLatencyLine(displayName, subsectionEntry.getValue(), false);
+                printLatencyLine(basePrefix, displayName, subsectionEntry.getValue(), false);
             }
         }
     }
@@ -341,7 +341,7 @@ public class LatencyStatistics implements Runnable {
         }
     }
 
-    private void printLatencyLine(String topic, List<Long> latency, boolean isSubsection) {
+    private void printLatencyLine(String basePrefix, String topic, List<Long> latency, boolean isSubsection) {
         int counter = latency.size();
         if (counter > 0) {
             double mean = latency.stream().mapToLong(a -> a).average().orElse(0.0);
@@ -354,7 +354,9 @@ public class LatencyStatistics implements Runnable {
             double percentile95 = latency.stream().sorted().skip((long) (latency.size() * 0.95)).findFirst().orElse(0L);
             double percentile99 = latency.stream().sorted().skip((long) (latency.size() * 0.99)).findFirst().orElse(0L);
 
-            // Get or create daily max stats for this topic
+            // Get or create daily max stats for this basePrefix and topic
+            Map<String, DailyMaxStats> topicToDailyMaxStats = basePrefixToTopicToDailyMaxStats.computeIfAbsent(
+                    basePrefix, k -> new ConcurrentHashMap<>());
             DailyMaxStats dailyMaxStats = topicToDailyMaxStats.computeIfAbsent(topic, k -> new DailyMaxStats());
 
             // Update daily max stats with current values
