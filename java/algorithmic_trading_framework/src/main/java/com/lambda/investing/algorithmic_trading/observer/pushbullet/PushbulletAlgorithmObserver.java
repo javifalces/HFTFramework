@@ -16,6 +16,7 @@ import org.silentsoft.pushbullet.api.Push;
 import org.silentsoft.pushbullet.api.PushbulletAPI;
 
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -38,11 +39,25 @@ import java.util.Map;
  */
 public class PushbulletAlgorithmObserver implements AlgorithmObserver, PushbulletMessageListener {
 
+    // Static command lists
+    private static final List<String> STOP_COMMANDS = Arrays.asList(
+            "stopalgo", "stop_algo", "stoptrading"
+    );
+
+    private static final List<String> START_COMMANDS = Arrays.asList(
+            "startalgo", "start_algo", "starttrading"
+    );
+
+    private static final List<String> PORTFOLIO_COMMANDS = Arrays.asList(
+            "portfolio", "positions", "pnl", "status"
+    );
+
     protected Logger logger = LogManager.getLogger(PushbulletAlgorithmObserver.class);
     private final String pushbulletToken;
     private PushbulletMessageReader messageReader;
 
     private final Algorithm algorithm;
+    private PortfolioSnapshot latestPortfolioSnapshot;
 
     /**
      * Constructor that accepts botToken and botUsername only. The chatId must be set later using setChatId() method.
@@ -77,7 +92,7 @@ public class PushbulletAlgorithmObserver implements AlgorithmObserver, Pushbulle
 
     @Override
     public void onUpdatePortfolioSnapshot(String algorithmInfo, PortfolioSnapshot portfolioSnapshot) {
-
+        this.latestPortfolioSnapshot = portfolioSnapshot;
     }
 
     @Override
@@ -139,7 +154,12 @@ public class PushbulletAlgorithmObserver implements AlgorithmObserver, Pushbulle
     @Override
     public void onPushbulletMessage(String title, String body) {
         logger.info("Received Pushbullet message: {} - {}", title, body);
-        boolean isStop = title.toLowerCase().startsWith("stopalgo") || body.toLowerCase().startsWith("stopalgo");
+
+        String combinedMessage = (title + " " + body).toLowerCase().trim();
+
+        // Check for stop commands
+        boolean isStop = STOP_COMMANDS.stream()
+                .anyMatch(cmd -> combinedMessage.contains(cmd));
         if (isStop) {
             logger.info("Received stop command via Pushbullet - stopping algorithm");
             System.out.println(Configuration.formatLog("Received stop command via Pushbullet - stopping algorithm"));
@@ -149,20 +169,42 @@ public class PushbulletAlgorithmObserver implements AlgorithmObserver, Pushbulle
             } catch (Exception e) {
                 logger.error("Error sending Pushbullet message: {}", e.getMessage());
             }
-
+            return;
         }
 
-        boolean isStart = title.toLowerCase().startsWith("startalgo") || body.toLowerCase().startsWith("startalgo");
+        // Check for start commands
+        boolean isStart = START_COMMANDS.stream()
+                .anyMatch(cmd -> combinedMessage.contains(cmd));
         if (isStart) {
             logger.info("Received start command via Pushbullet - starting algorithm");
             System.out.println(Configuration.formatLog("Received start command via Pushbullet - starting algorithm"));
             algorithm.start();
-
             try {
-                sendMessage(algorithm.getAlgorithmInfo() + " start", "Received start command via Pushbullet - starting algorithm");
+                sendMessage(algorithm.getAlgorithmInfo() + " started", "Received start command via Pushbullet - starting algorithm");
             } catch (Exception e) {
                 logger.error("Error sending Pushbullet message: {}", e.getMessage());
             }
+            return;
+        }
+
+        // Check for portfolio commands
+        boolean isPortfolio = PORTFOLIO_COMMANDS.stream()
+                .anyMatch(cmd -> combinedMessage.contains(cmd));
+        if (isPortfolio) {
+            logger.info("Received portfolio command via Pushbullet - sending portfolio snapshot");
+            System.out.println(Configuration.formatLog("Received portfolio command via Pushbullet - sending portfolio snapshot"));
+            try {
+                String portfolioMessage;
+                if (latestPortfolioSnapshot != null) {
+                    portfolioMessage = latestPortfolioSnapshot.toString();
+                } else {
+                    portfolioMessage = "No portfolio snapshot available yet";
+                }
+                sendMessage(algorithm.getAlgorithmInfo() + " Portfolio", portfolioMessage);
+            } catch (Exception e) {
+                logger.error("Error sending Pushbullet portfolio message: {}", e.getMessage());
+            }
+            return;
         }
 
     }
