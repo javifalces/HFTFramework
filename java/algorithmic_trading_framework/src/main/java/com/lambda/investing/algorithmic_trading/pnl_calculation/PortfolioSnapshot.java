@@ -79,4 +79,17 @@ public class PortfolioSnapshot {
         return output;
     }
 
+
+    @Override
+    public String toString() {
+        StringBuffer output = new StringBuffer();
+        for (Map.Entry<String, PnlSnapshot> entry : instrumentPnlSnapshotMap.entrySet()) {
+            output.append("----").append("\n");
+            output.append("Instrument: ").append(entry.getKey()).append("\n");
+            String pnlDump = entry.getValue().dumpString();
+            output.append(pnlDump).append("\n");
+            output.append("----").append("\n");
+        }
+        return output.toString();
+    }
 }

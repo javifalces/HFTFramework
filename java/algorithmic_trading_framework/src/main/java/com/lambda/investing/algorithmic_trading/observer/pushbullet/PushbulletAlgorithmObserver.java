@@ -159,7 +159,7 @@ public class PushbulletAlgorithmObserver implements AlgorithmObserver, Pushbulle
 
         // Check for stop commands
         boolean isStop = STOP_COMMANDS.stream()
-                .anyMatch(cmd -> combinedMessage.contains(cmd));
+                .anyMatch(cmd -> combinedMessage.equalsIgnoreCase(cmd));
         if (isStop) {
             logger.info("Received stop command via Pushbullet - stopping algorithm");
             System.out.println(Configuration.formatLog("Received stop command via Pushbullet - stopping algorithm"));
@@ -174,7 +174,7 @@ public class PushbulletAlgorithmObserver implements AlgorithmObserver, Pushbulle
 
         // Check for start commands
         boolean isStart = START_COMMANDS.stream()
-                .anyMatch(cmd -> combinedMessage.contains(cmd));
+                .anyMatch(cmd -> combinedMessage.equalsIgnoreCase(cmd));
         if (isStart) {
             logger.info("Received start command via Pushbullet - starting algorithm");
             System.out.println(Configuration.formatLog("Received start command via Pushbullet - starting algorithm"));
@@ -189,7 +189,7 @@ public class PushbulletAlgorithmObserver implements AlgorithmObserver, Pushbulle
 
         // Check for portfolio commands
         boolean isPortfolio = PORTFOLIO_COMMANDS.stream()
-                .anyMatch(cmd -> combinedMessage.contains(cmd));
+                .anyMatch(cmd -> combinedMessage.equalsIgnoreCase(cmd));
         if (isPortfolio) {
             logger.info("Received portfolio command via Pushbullet - sending portfolio snapshot");
             System.out.println(Configuration.formatLog("Received portfolio command via Pushbullet - sending portfolio snapshot"));

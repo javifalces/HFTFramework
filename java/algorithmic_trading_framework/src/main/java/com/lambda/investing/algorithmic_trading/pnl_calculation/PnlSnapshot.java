@@ -1,5 +1,6 @@
 package com.lambda.investing.algorithmic_trading.pnl_calculation;
 
+import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.CustomColumn;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
@@ -18,6 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static com.lambda.investing.algorithmic_trading.utils.TimeseriesUtils.GetStd;
 import static com.lambda.investing.algorithmic_trading.utils.TimeseriesUtils.GetZscore;
 import static com.lambda.investing.algorithmic_trading.utils.TimeseriesUtils.GetZscorePositive;
+import static com.lambda.investing.model.asset.Instrument.round;
 
 
 /****
@@ -466,6 +468,7 @@ public class PnlSnapshot {
     public void setLastDepth(Depth lastDepth) {
         this.lastDepth = lastDepth;
     }
+
     public synchronized void updateDepth(Depth depth) {
         if (depth == null || !depth.isDepthFilled()) {
             return;
@@ -602,6 +605,34 @@ public class PnlSnapshot {
         maxExecutionPriceValid = lastPrice + 10 * this.stdMidPrice;
 
     }
+
+    public String dumpString() {
+        String output = Configuration.formatLog("" +
+                        "{}\n" +
+                        "\tLastUpdate:{}\n" +
+                        "\tTrades: {} (agg: {})\n" +
+                        "\tUnrealized Pnl: {}\n" +
+                        "\tRealized Pnl: {}\n" +
+                        "\tFees: {}\n" +
+                        "\tPosition: {}\n" +
+                        "\tLast :{} {}@{}" +
+                        "",
+                getInstrumentPk(),
+                new Date(getLastTimestampUpdate()).toString(),
+                getNumberOfTrades(),
+                getNumberOfAggressorTrades(),
+                round(getTotalPnl(), 2),
+                round(getRealizedPnl(), 2),
+                round(getTotalFees(), 2),
+                round(getNetPosition(), 4),
+                getLastVerb(),
+                getLastQuantity(),
+                getLastPrice()
+        );
+        return output;
+    }
+
+
 
     @Override
     public String toString() {
