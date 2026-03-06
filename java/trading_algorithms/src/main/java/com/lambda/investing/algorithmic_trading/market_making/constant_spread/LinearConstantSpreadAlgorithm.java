@@ -172,7 +172,7 @@ public class LinearConstantSpreadAlgorithm extends SingleInstrumentAlgorithm {
         //				//				logger.info("unquoting because of trade in {} {}", executionReport.getVerb(),
         //				//						executionReport.getClientOrderId());
         //			} catch (LambdaTradingException e) {
-        //				logger.error("cant unquote {}", instrument.getPrimaryKey(), e);
+        //				logger.error("can't unquote {}", instrument.getPrimaryKey(), e);
         //			}
         //		}
         return true;

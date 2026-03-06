@@ -299,7 +299,7 @@ public class PnlSnapshot {
                 .isNaN(executionReport.getLastQuantity()) || Double.isInfinite(executionReport.getLastQuantity()));
 
         if (!validQuantity) {
-            logger.warn("cant update trade in portfolio manager with lastQuantity {}",
+            logger.warn("can't update trade in portfolio manager with lastQuantity {}",
                     executionReport.getLastQuantity());
             return;
         }
@@ -307,7 +307,7 @@ public class PnlSnapshot {
                 .isInfinite(executionReport.getPrice()));
 
         if (!validPrice) {
-            logger.warn("cant update trade in portfolio manager with not valid price {}", executionReport.getPrice());
+            logger.warn("can't update trade in portfolio manager with not valid price {}", executionReport.getPrice());
             return;
         }
 

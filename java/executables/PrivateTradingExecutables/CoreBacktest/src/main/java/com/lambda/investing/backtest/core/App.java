@@ -47,7 +47,7 @@ public class App {
 //            try {
 //                inputConfiguration.getBacktestConfiguration().setFeesCommissionsIncluded(true);
 //            } catch (Exception e) {
-//                logger.error("cant set default setFeesCommissionsIncluded to true");
+//                logger.error("can't set default setFeesCommissionsIncluded to true");
 //            }
 //        }
 

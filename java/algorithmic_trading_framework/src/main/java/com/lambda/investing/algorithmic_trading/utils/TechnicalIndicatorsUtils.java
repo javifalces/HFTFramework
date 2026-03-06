@@ -47,7 +47,7 @@ public class TechnicalIndicatorsUtils {
             }
             return outputVal;
         } else {
-            logger.error("cant calculate RSI -> {}", retCode);
+            logger.error("can't calculate RSI -> {}", retCode);
             return 50.0;
         }
     }
@@ -69,7 +69,7 @@ public class TechnicalIndicatorsUtils {
             }
             return outputVal;
         } else {
-            logger.error("cant calculate SMA -> {}", retCode);
+            logger.error("can't calculate SMA -> {}", retCode);
             return closePrices[closePrices.length - 1];
         }
     }

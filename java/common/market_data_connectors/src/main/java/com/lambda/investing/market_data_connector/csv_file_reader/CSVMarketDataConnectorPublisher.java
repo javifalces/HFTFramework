@@ -107,7 +107,7 @@ public class CSVMarketDataConnectorPublisher extends AbstractMarketDataConnector
             try {
                 Thread.sleep(500);
             } catch (InterruptedException e) {
-                logger.error("cant sleep waiting ", e);
+                logger.error("can't sleep waiting ", e);
             }
 
         }

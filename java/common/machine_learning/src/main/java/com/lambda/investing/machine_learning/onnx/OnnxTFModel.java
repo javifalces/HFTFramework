@@ -119,7 +119,7 @@ public class OnnxTFModel {
     public double[] predict(double[] input) {
 
         if (model == null) {
-            logger.error("cant predict with a model created!");
+            logger.error("can't predict with a model created!");
             return null;
         }
         Map<String, OnnxTensor> inputs = null;

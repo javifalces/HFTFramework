@@ -641,7 +641,7 @@ public class MetatraderTradingEngine extends AbstractBrokerTradingEngine {
         try {
             executionReportDeleted = new ExecutionReport(activeOrderRequest);
         } catch (Exception e) {
-            logger.error("cant created deleted ER on {} ", activeOrderRequest);
+            logger.error("can't created deleted ER on {} ", activeOrderRequest);
             return;
         }
         executionReportDeleted.setExecutionReportStatus(ExecutionReportStatus.Cancelled);

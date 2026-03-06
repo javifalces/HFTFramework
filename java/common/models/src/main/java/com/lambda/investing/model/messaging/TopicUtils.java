@@ -41,7 +41,7 @@ public class TopicUtils {
 		}
 
 
-		logger.error("topic {} cant found type! return null", topicReceived);
+		logger.error("topic {} can't found type! return null", topicReceived);
 		return null;
 
 	}

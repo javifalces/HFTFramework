@@ -182,7 +182,7 @@ public class PersistorMarketDataConnector implements Runnable, ConnectorListener
         calendar.setTimeInMillis(depth.getTimestamp());
         Instrument instrument = Instrument.getInstrument(depth.getInstrument());
         if (instrument == null) {
-            logger.warn("saveDepth: cant find instrument for depth {} ", depth.getInstrument());
+            logger.warn("saveDepth: can't find instrument for depth {} ", depth.getInstrument());
             return;
         }
         InstrumentCache instrumentCache = instrumentCacheMap.getOrDefault(instrument, new InstrumentCache(instrument));

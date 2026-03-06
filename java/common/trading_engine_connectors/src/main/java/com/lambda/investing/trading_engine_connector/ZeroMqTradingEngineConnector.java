@@ -157,7 +157,7 @@ public class ZeroMqTradingEngineConnector extends AbstractTradingEngineConnector
 
 		} else {
 			logger.error(
-					"cant be paper trading on other type of MarketDataProvider as ZeroMqMarketDataConnector or OrdinaryMarketDataProvider");
+					"can't be paper trading on other type of MarketDataProvider as ZeroMqMarketDataConnector or OrdinaryMarketDataProvider");
 		}
 		this.isPaperTrading = true;
 

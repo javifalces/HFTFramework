@@ -237,7 +237,7 @@ public class QuoteManager implements ExecutionReportListener, Runnable {
                     } else {
                         this.counterWithoutResponse++;
                     }
-                    throw new LambdaTradingException("cant quote with more than limitOrders request orders pending ER");
+                    throw new LambdaTradingException("can't quote with more than limitOrders request orders pending ER");
                 }
             }
             if (instrumentActiveOrders.size() > limitOrders) {

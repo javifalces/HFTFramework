@@ -70,7 +70,7 @@ public class MetatraderMarketDataPublisher extends AbstractMarketDataConnectorPu
 
 			}.getType());
 		} catch (Exception e) {
-			logger.error("cant parse message {}", content, e);
+			logger.error("can't parse message {}", content, e);
 			return;
 		}
 		String type = (String) jsonReceived.get("type");

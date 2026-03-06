@@ -237,7 +237,7 @@ import java.util.*;
 				try {
 					saveMemory(this.filename);
 				} catch (IOException e) {
-					logger.error("cant save qMatrix periodically ", e);
+					logger.error("can't save qMatrix periodically ", e);
 				}
 
 				try {

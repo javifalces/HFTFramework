@@ -253,7 +253,7 @@ import static com.lambda.investing.algorithmic_trading.reinforcement_learning.Tr
 
 			int actionColumns = columnsTotal - 2 * state.getNumberOfColumns();
 			if (actionColumns != action.getNumberActions()) {
-				System.err.println("cant load " + filepath + " action columns " + actionColumns
+				System.err.println("can't load " + filepath + " action columns " + actionColumns
 						+ " are not equal! to number actions " + action.getNumberActions()
 						+ " -> starting from empty memory");
 				logger.error("cant load " + filepath

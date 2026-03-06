@@ -271,7 +271,7 @@ public class BinanceBrokerTradingEngine extends AbstractBrokerTradingEngine
 				}
 
 			} catch (Exception e) {
-				logger.error("qtyFilled cant be parsed {} -> mark as partial filled");
+				logger.error("qtyFilled can't be parsed {} -> mark as partial filled");
 				executionReportStatus = ExecutionReportStatus.PartialFilled;
 			}
 

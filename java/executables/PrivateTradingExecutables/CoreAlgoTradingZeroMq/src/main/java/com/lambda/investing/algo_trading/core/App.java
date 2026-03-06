@@ -159,7 +159,7 @@ public class App {
                     }
                     instruments.add(instrument);
                 } catch (Exception e) {
-                    logger.error("cant add {} to instrument list paper trading", instrumentPk, e);
+                    logger.error("can't add {} to instrument list paper trading", instrumentPk, e);
                 }
 
             }
@@ -218,7 +218,7 @@ public class App {
                 Instrument instrument = Instrument.getInstrument(instrumentPk);
                 instruments.add(instrument.getPrimaryKey());
             } catch (Exception e) {
-                logger.error("cant add {} to instrument list filter", instrumentPk, e);
+                logger.error("can't add {} to instrument list filter", instrumentPk, e);
 
             }
 
@@ -244,7 +244,7 @@ public class App {
                 Instrument instrument = Instrument.getInstrument(instrumentPk);
                 instruments.add(instrument);
             } catch (Exception e) {
-                logger.error("cant add {} to instrument list paper trading", instrumentPk, e);
+                logger.error("can't add {} to instrument list paper trading", instrumentPk, e);
             }
 
         }

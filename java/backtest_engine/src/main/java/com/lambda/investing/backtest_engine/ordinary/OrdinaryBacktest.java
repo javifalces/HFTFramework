@@ -190,7 +190,7 @@ public class OrdinaryBacktest extends AbstractBacktest {
             parquetMarketDataConnectorPublisher.init();
         } else {
             logger.error(
-                    "cant read files : ordinaryMarketDataConnectorPublisher in CSVZeroMqBacktest is not CSVMarketDataConnectorPublisher");
+                    "can't read files : ordinaryMarketDataConnectorPublisher in CSVZeroMqBacktest is not CSVMarketDataConnectorPublisher");
         }
     }
 

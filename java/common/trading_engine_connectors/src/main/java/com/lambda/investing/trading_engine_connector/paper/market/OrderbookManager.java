@@ -147,7 +147,7 @@ public class OrderbookManager {
         try {
             depth = (Depth) depth.clone();
         } catch (CloneNotSupportedException e) {
-            logger.error("cant clone depth ", e);
+            logger.error("can't clone depth ", e);
             //			e.printStackTrace();
         }
         lastTimestamp = Math.max(depth.getTimestamp(), lastTimestamp);//take market time

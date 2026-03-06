@@ -74,7 +74,7 @@ public class CSVDataManager implements DataManager {
 			FileDataUtils.createFilePathIfNotExist(filepath);
 			saveCSV(filepath, stringBuffer.toString());
 		} catch (IOException e) {
-			logger.error("cant save into csv {} ", filepath, e);
+			logger.error("can't save into csv {} ", filepath, e);
 			return false;
 		}
 

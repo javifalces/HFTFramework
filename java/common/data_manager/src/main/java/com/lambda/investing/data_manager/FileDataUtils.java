@@ -125,7 +125,7 @@ public class FileDataUtils {
             Table output = Table.read().csv(completePath);
             return output;
         } catch (Exception e) {
-            logger.error("cant read csv {}", completePath, e);
+            logger.error("can't read csv {}", completePath, e);
             throw e;
         }
     }
@@ -141,7 +141,7 @@ public class FileDataUtils {
             output = output.sortAscendingOn(TIMESTAMP_COL);
             return output;
         } catch (Exception e) {
-            logger.error("cant read csv {}", completePath, e);
+            logger.error("can't read csv {}", completePath, e);
             throw e;
         }
     }

@@ -277,7 +277,7 @@ public class XChangeTradingEngine extends AbstractBrokerTradingEngine {
 			try {
 				orders = (List<Order>) tradeService.getOrder(String.valueOf(marketOrderId));
 			} catch (IOException e) {
-				logger.error("cant get order {} for {}", marketOrderId, orderRequest.getOrigClientOrderId(), e);
+				logger.error("can't get order {} for {}", marketOrderId, orderRequest.getOrigClientOrderId(), e);
 				ExecutionReport executionReportRej = createRejectionExecutionReport(orderRequest, e.getMessage());
 				notifyExecutionReport(executionReportRej);
 				return false;
