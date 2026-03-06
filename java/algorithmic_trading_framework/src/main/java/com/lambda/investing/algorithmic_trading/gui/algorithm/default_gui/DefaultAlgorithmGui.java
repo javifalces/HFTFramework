@@ -335,30 +335,7 @@ public class DefaultAlgorithmGui implements AlgorithmGui {
 
 
     private String formatPnlSnapshot(PnlSnapshot pnlSnapshot) {
-        String output = Configuration.formatLog("" +
-                        "{}\n" +
-                        "\tLastUpdate:{}\n" +
-                        "\tTrades: {} (agg: {})\n" +
-                        "\tUnrealized Pnl: {}\n" +
-                        "\tRealized Pnl: {}\n" +
-                        "\tFees: {}\n" +
-                        "\tPosition: {}\n" +
-                        "\tLast :{} {}@{}" +
-                        "",
-                pnlSnapshot.getInstrumentPk(),
-                new Date(pnlSnapshot.getLastTimestampUpdate()).toString(),
-                pnlSnapshot.getNumberOfTrades(),
-                pnlSnapshot.getNumberOfAggressorTrades(),
-                round(pnlSnapshot.getTotalPnl(), 2),
-                round(pnlSnapshot.getRealizedPnl(), 2),
-                round(pnlSnapshot.getTotalFees(), 2),
-                round(pnlSnapshot.getNetPosition(), 4),
-                pnlSnapshot.getLastVerb(),
-                pnlSnapshot.getLastQuantity(),
-                pnlSnapshot.getLastPrice()
-
-        );
-        return output;
+        return pnlSnapshot.dumpString();
     }
 
     public void updateTrade(Trade trade) {
