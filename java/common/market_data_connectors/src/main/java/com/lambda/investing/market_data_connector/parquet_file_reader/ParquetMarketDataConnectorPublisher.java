@@ -467,7 +467,7 @@ public class ParquetMarketDataConnectorPublisher extends AbstractMarketDataConne
                                 if (timeToNextUpdateMs != Long.MIN_VALUE) {
                                     depth.setTimeToNextUpdateMs(timeToNextUpdateMs);
                                 }
-
+                                depth.setTimestampBrokerConnector(depth.getTimestamp());
                                 String topic = getTopic(instrument);
 
                                 if (depth.isDepthValid()) {

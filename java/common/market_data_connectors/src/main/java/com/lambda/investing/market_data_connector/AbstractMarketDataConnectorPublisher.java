@@ -191,7 +191,10 @@ public abstract class AbstractMarketDataConnectorPublisher implements MarketData
     public void notifyDepth(String topic, Depth depth) {
 //        String depthJson = depth.toString();
         topic = topic + "." + TypeMessage.depth.name();
-        depth.setTimestampBrokerConnector(System.currentTimeMillis());
+        if (depth.getTimestampBrokerConnector() == 0) {
+            depth.setTimestampBrokerConnector(System.currentTimeMillis());
+        }
+
         //		logger.debug("notify DEPTH {}",depth.toString());
         connectorPublisher.publish(connectorConfiguration, TypeMessage.depth, topic, depth);
         if (statistics != null) {

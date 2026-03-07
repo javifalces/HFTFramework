@@ -163,7 +163,7 @@ public class PushbulletAlgorithmObserver implements AlgorithmObserver, Pushbulle
         if (isStop) {
             logger.info("Received stop command via Pushbullet - stopping algorithm");
             System.out.println(Configuration.formatLog("Received stop command via Pushbullet - stopping algorithm"));
-            algorithm.stop();
+            algorithm.manualStop();
             try {
                 sendMessage(algorithm.getAlgorithmInfo() + " stopped", "Received stop command via Pushbullet - stopping algorithm");
             } catch (Exception e) {
@@ -178,7 +178,7 @@ public class PushbulletAlgorithmObserver implements AlgorithmObserver, Pushbulle
         if (isStart) {
             logger.info("Received start command via Pushbullet - starting algorithm");
             System.out.println(Configuration.formatLog("Received start command via Pushbullet - starting algorithm"));
-            algorithm.start();
+            algorithm.manualStart();
             try {
                 sendMessage(algorithm.getAlgorithmInfo() + " started", "Received start command via Pushbullet - starting algorithm");
             } catch (Exception e) {

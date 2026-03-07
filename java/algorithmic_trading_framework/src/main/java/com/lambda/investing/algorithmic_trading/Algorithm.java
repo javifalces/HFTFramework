@@ -90,6 +90,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     private AtomicInteger tradeReceived = new AtomicInteger(0);
 
     protected Logger logger = LogManager.getLogger(Algorithm.class);
+    protected boolean manualStop = false;
 
     @Getter
     @Setter
@@ -488,6 +489,9 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
     //PostContruct and destroy resset
     public void start() {
+        if (manualStop) {
+            return;
+        }
         if (algorithmState.equals(AlgorithmState.INITIALIZED) || algorithmState.equals(AlgorithmState.STOPPED)) {
             algorithmState = AlgorithmState.STARTING;
             if (isVerbose()) {
@@ -532,6 +536,23 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         }
         theme = getChartTheme();
         ChartFactory.setChartTheme(theme);
+    }
+
+    public void manualStop() {
+        if (isVerbose()) {
+            logger.info("[{}] Manual stop received  {}", getCurrentTime(), algorithmInfo);
+        }
+        algorithmState = AlgorithmState.STOPPING;
+        manualStop = true;
+        stop();
+    }
+
+    public void manualStart() {
+        if (isVerbose()) {
+            logger.info("[{}] Manual start received  {}", getCurrentTime(), algorithmInfo);
+        }
+        manualStop = false;
+        start();
     }
 
     public void stop() {
@@ -745,6 +766,10 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
     protected boolean checkOperationalTime() {
         if (inOperationalTime()) {
+            if (manualStop) {
+                //not enable until start!
+                return true;
+            }
             if (getAlgorithmState().equals(AlgorithmState.STOPPED)) {
                 logger.info(
                         "[{}] inOperationalTime firstHourOperatingIncluded:{} lastHourOperatingIncluded:{} => start ",
