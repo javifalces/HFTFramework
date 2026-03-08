@@ -544,6 +544,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         }
         algorithmState = AlgorithmState.STOPPING;
         manualStop = true;
+        cancelAllInstruments();//force cancelling all orders to avoid to be stuck on waiting for orders fill to
+        logger.info(portfolioManager.getPortfolioSnapshot().toString());
         stop();
     }
 
