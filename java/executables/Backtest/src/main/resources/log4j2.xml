@@ -19,7 +19,7 @@
 
         <RollingFile name="file" fileName="${sys:log.path}/${sys:log.appName:-backtest}_${timestamp}.log"
                      filePattern="${sys:log.path}/${sys:log.appName:-backtest}_${timestamp}.log.%d{yyMMdd_HHmmss}">
-            <PatternLayout pattern="%d{HH:mm:ss.SSS} %-5p [%t] %c{1} - %m%n"/>
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} %-5p [%t] %c{1} - %m%n" charset="UTF-8"/>
 
             <Policies>
                 <SizeBasedTriggeringPolicy size="${sys:log.fileSize}"/>

@@ -17,7 +17,7 @@
 
         <RollingFile name="file" fileName="${sys:log.path}/${sys:log.appName:-AlgoTradingZeroMQ}_${timestamp}.log"
                      filePattern="${sys:log.path}/${sys:log.appName:-AlgoTradingZeroMQ}_${timestamp}.log.%d{yyMMdd_HHmmss}">
-            <PatternLayout pattern="%d{HH:mm:ss.SSS} %-5p [%t] %c{1} - %m%n"/>
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} %-5p [%t] %c{1} - %m%n" charset="UTF-8"/>
 
             <Policies>
                 <SizeBasedTriggeringPolicy size="${sys:log.fileSize}"/>
@@ -28,7 +28,7 @@
         <RollingFile name="fileStatistics"
                      fileName="${sys:log.path}/${sys:log.appName:-AlgoTradingZeroMQ}_${timestamp}_statistics.log"
                      filePattern="${sys:log.path}/${sys:log.appName:-AlgoTradingZeroMQ}_${timestamp}_statistics.log.%d{yyMMdd_HHmmss}">
-            <PatternLayout pattern="%d{HH:mm:ss.SSS} %-5p [%t] %c{1} - %m%n"/>
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} %-5p [%t] %c{1} - %m%n" charset="UTF-8"/>
 
             <Policies>
                 <SizeBasedTriggeringPolicy size="${sys:log.fileSize}"/>
@@ -40,7 +40,7 @@
                      fileName="${sys:log.path}/${sys:log.appName:-AlgoTradingZeroMQ}_trades_${timestampDay}.csv"
                      filePattern="${sys:log.path}/${sys:log.appName:-AlgoTradingZeroMQ}_trades_${timestampDay}.csv.%i"
                      append="true">
-            <PatternLayout pattern="%m%n"/>
+            <PatternLayout pattern="%m%n" charset="UTF-8"/>
             <Policies>
                 <SizeBasedTriggeringPolicy size="5 GB"/>
             </Policies>
