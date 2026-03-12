@@ -76,7 +76,7 @@ public class OrderRequest implements Cloneable, Serializable {
         return Util.toJsonString(this);
     }
 
-    protected static String generateClientOrderId() {
+    public static String generateClientOrderId() {
         // Fast generation: timestamp + random bytes, no dashes
         long timestamp = System.nanoTime();
         int random = RANDOM_GENERATOR.nextInt();

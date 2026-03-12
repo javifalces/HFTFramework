@@ -635,9 +635,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     //trading
 
     public String generateClientOrderId() {
-        byte[] dataInput = new byte[10];
-        RANDOM_GENERATOR.nextBytes(dataInput);
-        return UUID.nameUUIDFromBytes(dataInput).toString();
+        return OrderRequest.generateClientOrderId();
     }
 
     protected void requestInfo(String info) {
@@ -711,10 +709,24 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         if (instrumentActiveOrders.size() > 0 && LOG_LEVEL > LogLevels.DISABLE.ordinal()) {
             logger.info("cancelAll {} active orders {}", instrument, instrumentActiveOrders.size());
         }
+
+        List<String> notActiveClientOrderId = new ArrayList<>();
         for (String clientOrderId : instrumentActiveOrders.keySet()) {
-            OrderRequest cancelOrderRequest = createCancel(instrument, clientOrderId);
-            this.algorithmConnectorConfiguration.getTradingEngineConnector().orderRequest(cancelOrderRequest);
+            ExecutionReport executionReport = instrumentActiveOrders.get(clientOrderId);
+            if (ExecutionReport.isLiveStatus(executionReport)) {
+                OrderRequest cancelOrderRequest = createCancel(instrument, clientOrderId);
+                this.algorithmConnectorConfiguration.getTradingEngineConnector().orderRequest(cancelOrderRequest);
+            } else {
+                logger.info("not sending cancel for clientOrderId {} because executionReport status is {}",
+                        clientOrderId, executionReport.getExecutionReportStatus());
+                notActiveClientOrderId.add(clientOrderId);
+            }
         }
+        //remove all keys that are not active to avoid to try to cancel them again on active received
+        for (String clientOrderId : notActiveClientOrderId) {
+            instrumentActiveOrders.remove(clientOrderId);
+        }
+
 
         //save requested orders to cancel after active received
         Map<String, OrderRequest> requestOrders = instrumentManager.getAllRequestOrders();
