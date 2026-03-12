@@ -10,7 +10,6 @@ import lombok.ToString;
 import java.io.Serializable;
 import java.util.Date;
 import java.util.Random;
-import java.util.UUID;
 
 import static com.lambda.investing.PrintUtils.PrintDate;
 
@@ -78,9 +77,10 @@ public class OrderRequest implements Cloneable, Serializable {
     }
 
     protected static String generateClientOrderId() {
-        byte[] dataInput = new byte[10];
-        RANDOM_GENERATOR.nextBytes(dataInput);
-        return UUID.nameUUIDFromBytes(dataInput).toString();
+        // Fast generation: timestamp + random bytes, no dashes
+        long timestamp = System.nanoTime();
+        int random = RANDOM_GENERATOR.nextInt();
+        return Long.toHexString(timestamp) + Integer.toHexString(random);
     }
 
     public static OrderRequest createMarketOrderRequest(long timestamp, String algorithmInfo, Instrument instrument, Verb verb, double quantity) {
