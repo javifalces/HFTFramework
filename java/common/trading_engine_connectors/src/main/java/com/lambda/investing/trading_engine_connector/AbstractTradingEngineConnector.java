@@ -83,19 +83,9 @@ public abstract class AbstractTradingEngineConnector implements TradingEngineCon
         this.paperTradingEngine.reset();
     }
 
+
     @Override
     public void notifyExecutionReport(ExecutionReport executionReport) {
-        if (isPaperTrading) {
-            notifyExecutionReport(executionReport, System.currentTimeMillis());
-        } else {
-            notifyExecutionReport(executionReport, 0);//not using timestamp received latencyStatistics
-        }
-
-    }
-
-    public void notifyExecutionReport(ExecutionReport executionReport, long timestampReceived) {
-
-
         boolean isCfTrade = executionReport.getExecutionReportStatus().name()
                 .equalsIgnoreCase(ExecutionReportStatus.CompletelyFilled.name());
         if (isCfTrade) {
@@ -155,7 +145,7 @@ public abstract class AbstractTradingEngineConnector implements TradingEngineCon
         if (typeMessage.equals(TypeMessage.execution_report)) {
             ExecutionReport executionReport = fromObject(content, ExecutionReport.class);
             executionReport.setTimestampAlgoConnector(System.currentTimeMillis());
-            notifyExecutionReport(executionReport, timestampReceived);
+            notifyExecutionReport(executionReport);
         }
         if (typeMessage.equals(TypeMessage.info)) {
             String header = REQUESTED_POSITION_INFO;
