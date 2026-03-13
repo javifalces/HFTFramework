@@ -24,6 +24,7 @@ import com.lambda.investing.model.trading.OrderRequest;
 import com.lambda.investing.trading_engine_connector.paper.PaperConnectorPublisher;
 import com.lambda.investing.trading_engine_connector.paper.PaperTradingEngine;
 import com.lambda.investing.trading_engine_connector.paper.PaperTradingEngineConfiguration;
+import lombok.Getter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -40,6 +41,7 @@ import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_POSITION_
 public class ZeroMqTradingEngineConnector extends AbstractTradingEngineConnector {
 	public static String ALL_ALGORITHMS_SUBSCRIPTION = "*";
 
+	@Getter
 	private ZeroMqConfiguration zeroMqConfigurationExecutionReportListening, zeroMqConfigurationOrderRequest;
 	private ZeroMqProvider zeroMqExecutionReportProvider;
 	private ZeroMqPublisher zeroMqPublisher;

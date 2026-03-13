@@ -7,6 +7,7 @@ import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ConnectorProvider;
 import com.lambda.investing.model.messaging.TopicUtils;
 import com.lambda.investing.model.messaging.TypeMessage;
+import lombok.Getter;
 import org.apache.commons.lang3.SerializationUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -28,6 +29,7 @@ public class ZeroMqProvider implements ConnectorProvider {
 
     private static Integer THREADS_ON_UPDATE = 3;
 
+    @Getter
     private ZeroMqConfiguration zeroMqConfiguration;
     Logger logger = LogManager.getLogger(ZeroMqProvider.class);
     private Map<ConnectorListener, ConnectorConfiguration> listenerManager;
