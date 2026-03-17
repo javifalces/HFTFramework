@@ -121,6 +121,16 @@
         <openhft.chroniclequeue.version>2026.1</openhft.chroniclequeue.version>
         <maven.artifact.checksumPolicy>warn</maven.artifact.checksumPolicy>
 
+        <!-- ===== Monitoring: Prometheus / Micrometer / Loki ===== -->
+        <!-- Micrometer metrics facade + Prometheus registry -->
+        <micrometer.version>1.13.6</micrometer.version>
+        <!-- Prometheus Java client (used by micrometer-registry-prometheus) -->
+        <prometheus.client.version>0.16.0</prometheus.client.version>
+        <!-- JMX → Prometheus exporter (javaagent or embedded) -->
+        <prometheus.jmx.version>1.0.1</prometheus.jmx.version>
+        <!-- Loki appender for Log4j2 -->
+        <loki.log4j2.appender.version>0.9.29</loki.log4j2.appender.version>
+
         <!-- default off locally; CI/release enables with -Dgpg.skip=false -->
         <gpg.skip>true</gpg.skip>
     </properties>
@@ -817,6 +827,73 @@
                 <artifactId>javassist</artifactId>
                 <version>3.30.2-GA</version>
             </dependency>
+
+            <!-- ===== Monitoring: Micrometer (custom metrics abstraction) ===== -->
+            <!-- Core Micrometer library - define Counters, Gauges, Timers, etc. -->
+            <dependency>
+                <groupId>io.micrometer</groupId>
+                <artifactId>micrometer-core</artifactId>
+                <version>${micrometer.version}</version>
+            </dependency>
+
+            <!-- Prometheus registry: exposes Micrometer metrics in Prometheus format -->
+            <dependency>
+                <groupId>io.micrometer</groupId>
+                <artifactId>micrometer-registry-prometheus</artifactId>
+                <version>${micrometer.version}</version>
+            </dependency>
+
+            <!-- JMX registry: optionally expose Micrometer metrics over JMX -->
+            <dependency>
+                <groupId>io.micrometer</groupId>
+                <artifactId>micrometer-registry-jmx</artifactId>
+                <version>${micrometer.version}</version>
+            </dependency>
+
+            <!-- ===== Prometheus Java client (low-level, used by micrometer-registry-prometheus) ===== -->
+            <dependency>
+                <groupId>io.prometheus</groupId>
+                <artifactId>simpleclient</artifactId>
+                <version>${prometheus.client.version}</version>
+            </dependency>
+
+            <!-- JVM / HotSpot metrics: memory pools, GC, threads, file descriptors -->
+            <dependency>
+                <groupId>io.prometheus</groupId>
+                <artifactId>simpleclient_hotspot</artifactId>
+                <version>${prometheus.client.version}</version>
+            </dependency>
+
+            <!-- Embedded HTTP server to expose /metrics endpoint for Prometheus scraping -->
+            <dependency>
+                <groupId>io.prometheus</groupId>
+                <artifactId>simpleclient_httpserver</artifactId>
+                <version>${prometheus.client.version}</version>
+            </dependency>
+
+            <!-- ===== JMX → Prometheus exporter ===== -->
+            <!--
+                Scrapes JMX MBeans and exposes them as Prometheus metrics.
+                Typical usage: add -javaagent:jmx_prometheus_javaagent-<ver>.jar=<port>:<config>.yaml
+                on the JVM command line.  Can also be embedded programmatically.
+            -->
+            <dependency>
+                <groupId>io.prometheus.jmx</groupId>
+                <artifactId>jmx_prometheus_javaagent</artifactId>
+                <version>${prometheus.jmx.version}</version>
+            </dependency>
+
+            <!-- ===== Loki Log4j2 appender ===== -->
+            <!--
+                Native Log4j2 appender that pushes log events to Grafana Loki via HTTP.
+                Configure in log4j2.xml with <Loki name="loki" host="..." port="3100" .../>
+            -->
+            <dependency>
+                <groupId>pl.tkowalcz.tjahzi</groupId>
+                <artifactId>log4j2-appender</artifactId>
+                <version>${loki.log4j2.appender.version}</version>
+            </dependency>
+
         </dependencies>
 
     </dependencyManagement>
