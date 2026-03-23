@@ -7,6 +7,9 @@ import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.LoggerContext;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.apache.logging.log4j.core.config.Property;
+import org.apache.logging.log4j.core.config.plugins.Plugin;
+import org.apache.logging.log4j.core.config.plugins.PluginAttribute;
+import org.apache.logging.log4j.core.config.plugins.PluginFactory;
 import org.apache.logging.log4j.core.filter.ThresholdFilter;
 
 import java.io.IOException;
@@ -26,26 +29,41 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Log4j2 appender that ships log entries to a Loki push API endpoint in batches.
- * <p>
- * Activated by setting the {@code LOKI_URL} environment variable (or Java system property)
- * to the base URL of the Loki instance, e.g. {@code http://localhost:3100}.
- * The appender POSTs to {@code <LOKI_URL>/loki/api/v1/push} using Loki's native JSON format.
- * </p>
- * <p>
- * Activation is programmatic — no changes to existing {@code log4j2.xml} files are required.
- * Call {@link #initializeLoki()} once at application startup (it is idempotent).
- * </p>
- * <p>
- * Log events are enqueued and forwarded by a dedicated daemon thread every
- * {@value #FLUSH_INTERVAL_MS} ms or whenever {@value #BATCH_SIZE} events accumulate,
- * whichever comes first. This keeps the hot logging path allocation-free and non-blocking.
- * </p>
+ *
+ * <p><strong>Declarative (log4j2.xml) usage</strong> — recommended:<br>
+ * Add {@code packages="com.lambda.investing"} to the {@code <configuration>} element and declare
+ * the appender in the {@code <appenders>} section using the two separate env-var properties:
+ * <pre>{@code
+ * <LokiAppender name="loki"
+ *               host="${env:LOKI_HOST:-}"
+ *               port="${env:LOKI_PORT:-3100}"
+ *               appName="${sys:log.appName:-hft-framework}"/>
+ * }</pre>
+ * The appender is a no-op when {@code LOKI_HOST} is not set, so it is safe to include in the XML
+ * unconditionally; logging still works without Loki present.
+ *
+ * <p><strong>Programmatic fallback</strong>:<br>
+ * Call {@link #initializeLoki()} once at application startup. It reads {@code LOKI_HOST} +
+ * {@code LOKI_PORT} (or the legacy {@code LOKI_URL}) and registers itself on the root logger if
+ * Loki has not already been configured via XML. It is idempotent and safe to call multiple times.
+ *
+ * <p>Log events are enqueued and forwarded by a dedicated daemon thread every
+ * {@value #FLUSH_INTERVAL_MS} ms or whenever {@value #BATCH_SIZE} events accumulate, whichever
+ * comes first.
  */
+@Plugin(name = "LokiAppender", category = "Core", elementType = "appender", printObject = true)
 public class LokiLogAppender extends AbstractAppender {
 
+    // ── env-var names ────────────────────────────────────────────────────────
+    private static final String LOKI_HOST_ENV = "LOKI_HOST";
+    private static final String LOKI_PORT_ENV = "LOKI_PORT";
+    /** Legacy single-URL env var; used only when LOKI_HOST is not set. */
     private static final String LOKI_URL_ENV = "LOKI_URL";
     private static final String APP_NAME_ENV = "APP_NAME";
+    /** Default appender name used in both XML config and programmatic duplicate-detection. */
+    static final String DEFAULT_APPENDER_NAME = "loki";
 
+    static final int DEFAULT_LOKI_PORT = 3100;
     static final int BATCH_SIZE = 100;
     static final long FLUSH_INTERVAL_MS = 1_000L;
     static final int MAX_QUEUE_SIZE = 10_000;
@@ -54,42 +72,125 @@ public class LokiLogAppender extends AbstractAppender {
 
     private static volatile boolean initialized = false;
 
+    // ── instance fields ──────────────────────────────────────────────────────
     private final String lokiPushUrl;
     private final String appName;
-    private final BlockingQueue<LogEvent> queue = new LinkedBlockingQueue<>(MAX_QUEUE_SIZE);
-    private final AtomicBoolean running = new AtomicBoolean(true);
+    private final BlockingQueue<LogEvent> queue;
+    private final AtomicBoolean running;
     /** Guarantees strictly-increasing nanosecond timestamps required by Loki. */
     private final AtomicLong lastNanos = new AtomicLong(0);
-    private final Thread flushThread;
+    private Thread flushThread;
+    private final boolean enabled;
 
-    // ── construction ────────────────────────────────────────────────────────
+    // ── Log4j2 plugin factory (called from log4j2.xml) ───────────────────────
 
-    private LokiLogAppender(String lokiBaseUrl, String appName) {
+    /**
+     * Log4j2 plugin factory — called when the framework reads a {@code <LokiAppender>} element
+     * from {@code log4j2.xml}.  The {@code host} and {@code port} values are resolved by Log4j2
+     * from the environment before this method is called, so an empty {@code host} means
+     * {@code LOKI_HOST} was not set and the appender should be disabled (no-op).
+     */
+    @PluginFactory
+    public static LokiLogAppender createAppender(
+            @PluginAttribute("name") String name,
+            @PluginAttribute("host") String host,
+            @PluginAttribute(value = "port", defaultInt = DEFAULT_LOKI_PORT) int port,
+            @PluginAttribute("appName") String appName) {
+
+        if (name == null || name.isEmpty()) {
+            name = DEFAULT_APPENDER_NAME;
+        }
+
+        boolean active = host != null && !host.isEmpty();
+        String lokiUrl = active ? "http://" + host + ":" + port : null;
+        String resolvedAppName = (appName != null && !appName.isEmpty()) ? appName : "hft-framework";
+
+        LokiLogAppender appender = new LokiLogAppender(name, lokiUrl, resolvedAppName, active);
+        if (active) {
+            // Mark as initialized so initializeLoki() won't add a duplicate programmatic appender
+            initialized = true;
+            System.out.println("Loki log appender configured via log4j2.xml → "
+                    + appender.lokiPushUrl + " (app=" + resolvedAppName + ")");
+        }
+        return appender;
+    }
+
+    // ── construction ─────────────────────────────────────────────────────────
+
+    private LokiLogAppender(String name, String lokiUrl, String appName, boolean enabled) {
         super(
-                "LokiAppender",
-                ThresholdFilter.createFilter(Level.INFO, Filter.Result.ACCEPT, Filter.Result.DENY),
+                name,
+                enabled
+                        ? ThresholdFilter.createFilter(Level.INFO, Filter.Result.ACCEPT, Filter.Result.DENY)
+                        : ThresholdFilter.createFilter(Level.OFF, Filter.Result.DENY, Filter.Result.DENY),
                 null,
                 true,
                 Property.EMPTY_ARRAY
         );
-        this.lokiPushUrl = lokiBaseUrl.replaceAll("/+$", "") + "/loki/api/v1/push";
+        this.lokiPushUrl = (lokiUrl != null) ? lokiUrl.replaceAll("/+$", "") + "/loki/api/v1/push" : null;
         this.appName = (appName != null && !appName.isEmpty()) ? appName : "hft-framework";
-        this.flushThread = new Thread(this::flushLoop, "loki-log-flush");
-        this.flushThread.setDaemon(true);
+        this.enabled = enabled;
+
+        if (enabled) {
+            this.queue = new LinkedBlockingQueue<>(MAX_QUEUE_SIZE);
+            this.running = new AtomicBoolean(true);
+        } else {
+            this.queue = null;
+            this.running = null;
+        }
+    }
+
+    // ── AbstractAppender lifecycle ────────────────────────────────────────────
+
+    @Override
+    public void start() {
+        super.start();
+        if (enabled && flushThread == null) {
+            flushThread = new Thread(this::flushLoop, "loki-log-flush");
+            flushThread.setDaemon(true);
+            flushThread.start();
+        }
+    }
+
+    @Override
+    public void stop() {
+        if (running != null) {
+            running.set(false);
+        }
+        super.stop();
     }
 
     // ── public API ───────────────────────────────────────────────────────────
 
     /**
-     * Reads {@code LOKI_URL} (env var or system property) and, when set, registers this
-     * appender on the Log4j2 root logger at INFO level. Safe to call multiple times.
+     * Reads {@code LOKI_HOST} + {@code LOKI_PORT} (or the legacy {@code LOKI_URL}) and, when set,
+     * registers this appender programmatically on the Log4j2 root logger at INFO level.
+     *
+     * <p>If Loki was already configured via {@code log4j2.xml} (detected by checking for an
+     * existing appender named {@code "loki"}), this method is a no-op to prevent duplicate
+     * registration. Safe to call multiple times.
      */
     public static synchronized void initializeLoki() {
         if (initialized) {
             return;
         }
 
-        String lokiUrl = Configuration.getEnvOrDefault(LOKI_URL_ENV, "");
+        // Prefer separate LOKI_HOST / LOKI_PORT; fall back to legacy LOKI_URL
+        String host = Configuration.getEnvOrDefault(LOKI_HOST_ENV, "");
+        String lokiUrl;
+        if (host != null && !host.isEmpty()) {
+            String portStr = Configuration.getEnvOrDefault(LOKI_PORT_ENV, String.valueOf(DEFAULT_LOKI_PORT));
+            int port;
+            try {
+                port = Integer.parseInt(portStr.trim());
+            } catch (NumberFormatException e) {
+                port = DEFAULT_LOKI_PORT;
+            }
+            lokiUrl = "http://" + host + ":" + port;
+        } else {
+            lokiUrl = Configuration.getEnvOrDefault(LOKI_URL_ENV, "");
+        }
+
         if (lokiUrl == null || lokiUrl.isEmpty()) {
             return;
         }
@@ -97,34 +198,35 @@ public class LokiLogAppender extends AbstractAppender {
         String appName = Configuration.getEnvOrDefault(APP_NAME_ENV,
                 System.getProperty("log.appName", "hft-framework"));
 
-        LokiLogAppender appender = new LokiLogAppender(lokiUrl, appName);
-        appender.start();
-        appender.flushThread.start();
-
+        // If log4j2.xml already declared a LokiAppender, skip programmatic registration
         LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
         org.apache.logging.log4j.core.config.Configuration config = ctx.getConfiguration();
+        if (config.getAppenders().containsKey(DEFAULT_APPENDER_NAME)) {
+            initialized = true;
+            return;
+        }
+
+        // Programmatic registration on root logger
+        LokiLogAppender appender = new LokiLogAppender(DEFAULT_APPENDER_NAME, lokiUrl, appName, true);
+        appender.start();
         config.addAppender(appender);
         config.getRootLogger().addAppender(appender, Level.INFO, null);
         ctx.updateLoggers();
 
         initialized = true;
-        // Use stdout to avoid recursive logging through this very appender
-        System.out.println("Loki log appender configured → " + appender.lokiPushUrl
-                + " (app=" + appender.appName + ")");
+        System.out.println("Loki log appender configured (programmatic) → "
+                + appender.lokiPushUrl + " (app=" + appName + ")");
     }
 
     // ── AbstractAppender ─────────────────────────────────────────────────────
 
     @Override
     public void append(LogEvent event) {
+        if (!enabled || queue == null) {
+            return;
+        }
         // toImmutable() is required: Log4j2 reuses event objects after the call returns
         queue.offer(event.toImmutable());
-    }
-
-    @Override
-    public void stop() {
-        running.set(false);
-        super.stop();
     }
 
     // ── background flush thread ──────────────────────────────────────────────

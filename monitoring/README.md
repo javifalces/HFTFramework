@@ -11,18 +11,22 @@ Set the monitoring environment variables before running the Java application:
 | Variable | Required | Example | Purpose |
 |---|---|---|---|
 | `PROMETHEUS_PORT` | Optional | `8080` | Expose `/metrics` for Prometheus scraping |
-| `LOKI_URL` | Optional | `http://localhost:3100` | Ship application logs directly to Loki |
+| `LOKI_HOST` | Optional | `localhost` | Loki hostname — enables direct log shipping |
+| `LOKI_PORT` | Optional | `3100` | Loki port (default: `3100`, used with `LOKI_HOST`) |
+| `LOKI_URL` | Optional (legacy) | `http://localhost:3100` | Alternative single-URL form; `LOKI_HOST` takes precedence |
 | `APP_NAME` | Optional | `algo-trader-1` | Label attached to all logs and metrics |
 
 ```bash
 export PROMETHEUS_PORT=8080
-export LOKI_URL=http://localhost:3100
+export LOKI_HOST=localhost
+export LOKI_PORT=3100
 export APP_NAME=hft-framework
 java -jar your-hft-app.jar
 ```
 
 When `PROMETHEUS_PORT` is set the application exposes `http://localhost:8080/metrics`.  
-When `LOKI_URL` is set the application ships INFO+ log entries directly to Loki's push API — no file log scraping required.
+When `LOKI_HOST` is set the application ships INFO+ log entries directly to Loki's push API.  
+The Loki appender is declared in every `log4j2.xml` using Log4j2 property substitution — it becomes a no-op when `LOKI_HOST` is not set, so existing deployments need no changes.
 
 ### 2. Start the monitoring stack
 
@@ -134,9 +138,16 @@ All metrics carry a `topic` label.
 
 ## Loki Log Shipping Reference
 
-When `LOKI_URL` is set, the Java application ships INFO+ log entries directly to Loki using its native push API (`POST /loki/api/v1/push`). No file log scraping or Promtail config changes are required for application logs.
+When `LOKI_HOST` is set (recommended) or the legacy `LOKI_URL` is set, the Java application ships INFO+ log entries directly to Loki using its native push API (`POST /loki/api/v1/push`). The `LokiAppender` is declared in every `log4j2.xml` as a Log4j2 plugin using property substitution — it becomes a no-op when `LOKI_HOST` is not set; no file log scraping or config changes are needed for deployments without Loki.
 
-### Loki stream labels
+### Env vars
+
+| Variable | Default | Description |
+|---|---|---|
+| `LOKI_HOST` | — | Loki hostname (e.g. `localhost`). Enables log shipping when set. |
+| `LOKI_PORT` | `3100` | Loki port. Used together with `LOKI_HOST`. |
+| `LOKI_URL` | — | Legacy single-URL alternative (e.g. `http://localhost:3100`). Used only when `LOKI_HOST` is not set. |
+| `APP_NAME` | `hft-framework` | Value of the `app` label on every log line. |
 
 Each log line is labelled so Grafana/LogQL can filter efficiently:
 

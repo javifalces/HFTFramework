@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<configuration monitorInterval="60" status="OFF">
+<configuration monitorInterval="60" status="OFF" packages="com.lambda.investing">
     <properties>
         <!-- time-stamp unique to execution instance -->
         <property name="timestamp">${date:yyMMdd_HHmmss}</property>
@@ -48,6 +48,11 @@
 
         </RollingFile>
 
+        <!-- Optional Loki appender: active when LOKI_HOST env var is set; no-op otherwise -->
+        <LokiAppender name="loki"
+                      host="${env:LOKI_HOST:-}"
+                      port="${env:LOKI_PORT:-3100}"
+                      appName="${sys:log.appName:-hft-framework}"/>
 
     </appenders>
 
@@ -61,22 +66,27 @@
         <!--Console info output-->
         <root level="WARN">
             <appender-ref ref="console"/>
+            <appender-ref ref="loki"/>
         </root>
 
         <AsyncLogger name="com.lambda" level="INFO" additivity="false">
             <appender-ref ref="file"/>
+            <appender-ref ref="loki"/>
         </AsyncLogger>
 
         <!--Configure LatencyStatistics logs and Statistics logs into fileStatistics info level-->
         <AsyncLogger name="com.lambda.investing.LatencyStatistics" level="info" additivity="false">
             <AppenderRef ref="fileStatistics"/>
+            <AppenderRef ref="loki"/>
         </AsyncLogger>
         <AsyncLogger name="com.lambda.investing.trading_engine_connector.SlippageStatistics" level="info"
                      additivity="false">
             <AppenderRef ref="fileStatistics"/>
+            <AppenderRef ref="loki"/>
         </AsyncLogger>
         <AsyncLogger name="com.lambda.investing.Statistics" level="info" additivity="false">
             <AppenderRef ref="fileStatistics"/>
+            <AppenderRef ref="loki"/>
         </AsyncLogger>
 
         <!--Configure TradeReport logs into tradeReport CSV file-->
