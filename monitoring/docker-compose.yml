@@ -1,0 +1,99 @@
+version: "3.8"
+
+# HFTFramework Monitoring Stack
+# ──────────────────────────────────────────────────────────────────────────────
+# Services: Prometheus · Loki · Promtail · Grafana
+#
+# Usage:
+#   1. Start your HFT Java process with PROMETHEUS_PORT=8080
+#   2. Run: docker compose up -d
+#   3. Open Grafana at http://localhost:3000 (admin / admin)
+#
+# To point Prometheus at a different host/port, edit
+# prometheus/prometheus.yml and change the `targets` entry.
+# ──────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── Prometheus ──────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    container_name: hft_prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+    networks:
+      - monitoring
+
+  # ── Loki (log aggregation) ───────────────────────────────────────────────────
+  loki:
+    image: grafana/loki:2.9.7
+    container_name: hft_loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - monitoring
+
+  # ── Promtail (ships container logs → Loki) ──────────────────────────────────
+  promtail:
+    image: grafana/promtail:2.9.7
+    container_name: hft_promtail
+    restart: unless-stopped
+    volumes:
+      - ./promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    networks:
+      - monitoring
+
+  # ── Grafana ──────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: hft_grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_FEATURE_TOGGLES_ENABLE=traceToMetrics
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    name: hft_monitoring
+
+volumes:
+  prometheus_data:
+    name: hft_prometheus_data
+  loki_data:
+    name: hft_loki_data
+  grafana_data:
+    name: hft_grafana_data
