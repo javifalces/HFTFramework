@@ -4,11 +4,13 @@ import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.OrderRequest;
+import io.prometheus.client.Gauge;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 
 import static com.lambda.investing.PrintUtils.PrintDate;
 
@@ -25,6 +27,12 @@ public class LatencyStatistics implements Runnable {
 
     // Track daily maximum statistics by basePrefix and topic
     private Map<String, Map<String, DailyMaxStats>> basePrefixToTopicToDailyMaxStats;
+
+    // Prometheus gauges for latency percentiles (created lazily, keyed by metric name)
+    private Map<String, Gauge> prometheusGauges;
+    // Track metric names for which registration has already failed to avoid repeated log noise
+    private Set<String> prometheusGaugesFailed;
+    private boolean prometheusEnabled;
 
     // Inner class to hold daily maximum statistics
     private static class DailyMaxStats {
@@ -54,11 +62,49 @@ public class LatencyStatistics implements Runnable {
         keyToTopic = new ConcurrentHashMap<>();
         topicToLatency = new ConcurrentHashMap<>();
         basePrefixToTopicToDailyMaxStats = new ConcurrentHashMap<>();
+        prometheusGauges = new ConcurrentHashMap<>();
+        prometheusGaugesFailed = new ConcurrentSkipListSet<>();
+        prometheusEnabled = PrometheusMetricsExporter.getInstance().isEnabled();
         enable = true;
         if (sleepMs > 0) {
             Thread thread = new Thread(this, "LatencyStatistics");
             thread.setPriority(Thread.MIN_PRIORITY);
             thread.start();
+        }
+    }
+
+    /**
+     * Sanitises a string so it can be used as a Prometheus metric name.
+     */
+    private static String toPrometheusName(String raw) {
+        return raw.replaceAll("[^a-zA-Z0-9_:]", "_").toLowerCase();
+    }
+
+    /**
+     * Returns (creating if needed) a Prometheus Gauge with the given metric name and help text.
+     * The gauge uses a single label {@code topic} to distinguish different subsections.
+     * Failed registrations are tracked to avoid repeated log noise.
+     */
+    private Gauge getOrCreateGauge(String metricName, String help) {
+        Gauge existing = prometheusGauges.get(metricName);
+        if (existing != null) {
+            return existing;
+        }
+        if (prometheusGaugesFailed.contains(metricName)) {
+            return null;
+        }
+        try {
+            Gauge gauge = Gauge.build()
+                    .name(metricName)
+                    .help(help)
+                    .labelNames("topic")
+                    .register(PrometheusMetricsExporter.getInstance().getRegistry());
+            prometheusGauges.put(metricName, gauge);
+            return gauge;
+        } catch (Exception e) {
+            logger.warn("Could not register Prometheus gauge '{}': {}", metricName, e.getMessage());
+            prometheusGaugesFailed.add(metricName);
+            return null;
         }
     }
 
@@ -362,6 +408,12 @@ public class LatencyStatistics implements Runnable {
             // Update daily max stats with current values
             dailyMaxStats.updateIfGreater(mean, percentile50, percentile75, percentile90, percentile95, percentile99, maxLatency);
 
+            // Export to Prometheus when enabled
+            if (prometheusEnabled) {
+                publishLatencyToPrometheus(topic, counter, mean, percentile50, percentile75,
+                        percentile90, percentile95, percentile99, maxLatency);
+            }
+
             // Format with indentation for subsections
             String indent = isSubsection ? "    " : "";
             String displayTopic = topic;
@@ -389,6 +441,37 @@ public class LatencyStatistics implements Runnable {
                     String.format("%.2f", percentile95), String.format("%.2f", dailyMaxStats.maxPercentile95),
                     String.format("%.2f", percentile99), String.format("%.2f", dailyMaxStats.maxPercentile99),
                     String.format("%.2f", maxLatency), String.format("%.2f", dailyMaxStats.maxLatency));
+        }
+    }
+
+    /**
+     * Pushes latency statistics for a given topic to Prometheus gauges.
+     * Each metric is named {@code latency_<sanitised_topic>_<stat>_ms} and uses a {@code topic}
+     * label so all per-topic gauges share the same Prometheus metric family.
+     */
+    private void publishLatencyToPrometheus(String topic, int sampleCount,
+                                            double mean, double p50, double p75,
+                                            double p90, double p95, double p99, double max) {
+        try {
+            String labelValue = topic;
+
+            setGauge("latency_count", "Number of latency samples", labelValue, sampleCount);
+            setGauge("latency_mean_ms", "Mean latency in milliseconds", labelValue, mean);
+            setGauge("latency_p50_ms", "50th percentile latency in milliseconds", labelValue, p50);
+            setGauge("latency_p75_ms", "75th percentile latency in milliseconds", labelValue, p75);
+            setGauge("latency_p90_ms", "90th percentile latency in milliseconds", labelValue, p90);
+            setGauge("latency_p95_ms", "95th percentile latency in milliseconds", labelValue, p95);
+            setGauge("latency_p99_ms", "99th percentile latency in milliseconds", labelValue, p99);
+            setGauge("latency_max_ms", "Maximum latency in milliseconds", labelValue, max);
+        } catch (Exception e) {
+            logger.warn("Failed to publish latency metrics to Prometheus for topic '{}': {}", topic, e.getMessage());
+        }
+    }
+
+    private void setGauge(String metricName, String help, String labelValue, double value) {
+        Gauge gauge = getOrCreateGauge(metricName, help);
+        if (gauge != null) {
+            gauge.labels(labelValue).set(value);
         }
     }
 

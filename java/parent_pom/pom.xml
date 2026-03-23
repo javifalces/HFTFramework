@@ -817,6 +817,23 @@
                 <artifactId>javassist</artifactId>
                 <version>3.30.2-GA</version>
             </dependency>
+
+            <!-- Prometheus Java client -->
+            <dependency>
+                <groupId>io.prometheus</groupId>
+                <artifactId>simpleclient</artifactId>
+                <version>0.16.0</version>
+            </dependency>
+            <dependency>
+                <groupId>io.prometheus</groupId>
+                <artifactId>simpleclient_httpserver</artifactId>
+                <version>0.16.0</version>
+            </dependency>
+            <dependency>
+                <groupId>io.prometheus</groupId>
+                <artifactId>simpleclient_hotspot</artifactId>
+                <version>0.16.0</version>
+            </dependency>
         </dependencies>
 
     </dependencyManagement>
