@@ -34,6 +34,9 @@ public class PrometheusMetricsExporter {
     private PrometheusMetricsExporter() {
         this.registry = CollectorRegistry.defaultRegistry;
 
+        // Initialise Loki log shipping if LOKI_URL is configured
+        LokiLogAppender.initializeLoki();
+
         String portStr = Configuration.getEnvOrDefault(PROMETHEUS_PORT_ENV, "");
         if (portStr != null && !portStr.isEmpty()) {
             int port;
