@@ -62,6 +62,35 @@ public class Configuration {
     public static boolean USE_THREAD_AFFINITY = Boolean.parseBoolean(getEnvOrDefault("USE_THREAD_AFFINITY", "false"));//if true, the threads are going to be pinned to the cores
     public static String PUSHBULLET_TOKEN = getEnvOrDefault("PUSHBULLET_TOKEN", "");
 
+    // ── Loki log shipping ────────────────────────────────────────────────────
+    /**
+     * Loki server hostname/IP. Empty = Loki disabled.
+     */
+    public static String LOKI_HOST = getEnvOrDefault("LOKI_HOST", "");
+    /**
+     * Loki HTTP push port. Defaults to 3100.
+     */
+    public static int LOKI_PORT = parseIntOrDefault(getEnvOrDefault("LOKI_PORT", ""), 3100);
+    /**
+     * Legacy single-URL override (e.g. http://host:3100). Used only when LOKI_HOST is not set.
+     */
+    public static String LOKI_URL = getEnvOrDefault("LOKI_URL", "");
+    /**
+     * Application label sent with every log entry to Loki / Prometheus.
+     */
+    public static String LOG_APP_NAME = getEnvOrDefault("APP_NAME",
+            System.getProperty("log.appName", "hft-framework"));
+
+    // ── Prometheus metrics ────────────────────────────────────────────────────
+    /**
+     * Port for the Prometheus /metrics HTTP endpoint. Empty = Prometheus disabled.
+     */
+    public static String PROMETHEUS_PORT = getEnvOrDefault("PROMETHEUS_PORT", "");
+    /**
+     * Bind hostname for the Prometheus endpoint. Empty = bind to 0.0.0.0.
+     */
+    public static String PROMETHEUS_HOST = getEnvOrDefault("PROMETHEUS_HOST", "");
+
     public static int[] GET_AFFINITY_CPUS() throws LambdaConfigurationException {
         if (!USE_THREAD_AFFINITY) {
             throw new LambdaConfigurationException("USE_AFFINITY disabled.");
@@ -136,6 +165,17 @@ public class Configuration {
             output = System.getProperty(name, defaultValue);
         }
         return output;
+    }
+
+    public static int parseIntOrDefault(String value, int defaultValue) {
+        if (value == null || value.trim().isEmpty()) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
     }
 
     public static String formatLog(String string, Object... objects) {

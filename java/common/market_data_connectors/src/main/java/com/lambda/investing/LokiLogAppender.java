@@ -55,11 +55,6 @@ import java.util.concurrent.atomic.AtomicLong;
 public class LokiLogAppender extends AbstractAppender {
 
     // ── env-var names ────────────────────────────────────────────────────────
-    private static final String LOKI_HOST_ENV = "LOKI_HOST";
-    private static final String LOKI_PORT_ENV = "LOKI_PORT";
-    /** Legacy single-URL env var; used only when LOKI_HOST is not set. */
-    private static final String LOKI_URL_ENV = "LOKI_URL";
-    private static final String APP_NAME_ENV = "APP_NAME";
     /** Default appender name used in both XML config and programmatic duplicate-detection. */
     static final String DEFAULT_APPENDER_NAME = "loki";
 
@@ -175,28 +170,19 @@ public class LokiLogAppender extends AbstractAppender {
             return;
         }
 
-        // Prefer separate LOKI_HOST / LOKI_PORT; fall back to legacy LOKI_URL
-        String host = Configuration.getEnvOrDefault(LOKI_HOST_ENV, "");
+        // Prefer separate LOKI_HOST / LOKI_PORT from Configuration; fall back to legacy LOKI_URL
         String lokiUrl;
-        if (host != null && !host.isEmpty()) {
-            String portStr = Configuration.getEnvOrDefault(LOKI_PORT_ENV, String.valueOf(DEFAULT_LOKI_PORT));
-            int port;
-            try {
-                port = Integer.parseInt(portStr.trim());
-            } catch (NumberFormatException e) {
-                port = DEFAULT_LOKI_PORT;
-            }
-            lokiUrl = "http://" + host + ":" + port;
+        if (Configuration.LOKI_HOST != null && !Configuration.LOKI_HOST.isEmpty()) {
+            lokiUrl = "http://" + Configuration.LOKI_HOST + ":" + Configuration.LOKI_PORT;
         } else {
-            lokiUrl = Configuration.getEnvOrDefault(LOKI_URL_ENV, "");
+            lokiUrl = Configuration.LOKI_URL;
         }
 
         if (lokiUrl == null || lokiUrl.isEmpty()) {
             return;
         }
 
-        String appName = Configuration.getEnvOrDefault(APP_NAME_ENV,
-                System.getProperty("log.appName", "hft-framework"));
+        String appName = Configuration.LOG_APP_NAME;
 
         // If log4j2.xml already declared a LokiAppender, skip programmatic registration
         LoggerContext ctx = (LoggerContext) LogManager.getContext(false);

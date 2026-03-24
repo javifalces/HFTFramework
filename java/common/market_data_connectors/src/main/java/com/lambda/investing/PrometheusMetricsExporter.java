@@ -23,7 +23,6 @@ import java.io.IOException;
 public class PrometheusMetricsExporter {
 
     private static final Logger logger = LogManager.getLogger(PrometheusMetricsExporter.class);
-    private static final String PROMETHEUS_PORT_ENV = "PROMETHEUS_PORT";
 
     private static volatile PrometheusMetricsExporter INSTANCE;
 
@@ -37,7 +36,7 @@ public class PrometheusMetricsExporter {
         // Initialise Loki log shipping if LOKI_URL is configured
         LokiLogAppender.initializeLoki();
 
-        String portStr = Configuration.getEnvOrDefault(PROMETHEUS_PORT_ENV, "");
+        String portStr = Configuration.PROMETHEUS_PORT;
         if (portStr != null && !portStr.isEmpty()) {
             int port;
             try {
@@ -51,17 +50,24 @@ public class PrometheusMetricsExporter {
             // Register JVM / process metrics (memory, GC, threads, CPU, file descriptors)
             DefaultExports.initialize();
 
+            String hostStr = Configuration.PROMETHEUS_HOST;
+            boolean hasHost = hostStr != null && !hostStr.isEmpty();
+            String displayHost = hasHost ? hostStr : "0.0.0.0";
+
             boolean started = false;
             try {
-                this.httpServer = new HTTPServer.Builder()
+                HTTPServer.Builder builder = new HTTPServer.Builder()
                         .withPort(port)
-                        .withRegistry(registry)
-                        .build();
+                        .withRegistry(registry);
+                if (hasHost) {
+                    builder = builder.withHostname(hostStr);
+                }
+                this.httpServer = builder.build();
                 started = true;
-                logger.info("Prometheus metrics HTTP server started on port {}", port);
-                System.out.println("Prometheus metrics HTTP server started on port " + port);
+                logger.info("Prometheus metrics HTTP server started on {}:{}", displayHost, port);
+                System.out.println("Prometheus metrics HTTP server started on " + displayHost + ":" + port);
             } catch (IOException e) {
-                logger.error("Failed to start Prometheus metrics HTTP server on port {}", port, e);
+                logger.error("Failed to start Prometheus metrics HTTP server on {}:{}", displayHost, port, e);
             }
             this.enabled = started;
         } else {
