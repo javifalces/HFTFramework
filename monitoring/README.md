@@ -30,6 +30,31 @@ The Loki appender is declared in every `log4j2.xml` using Log4j2 property substi
 
 ### 2. Start the monitoring stack
 
+Convenience scripts are provided that check for Docker / Docker Compose, install them if missing, and bring the stack up:
+
+| Script | Shell |
+|---|---|
+| `start.ps1` | PowerShell (Windows) |
+| `start.cmd` | CMD / Command Prompt (Windows) |
+| `start.sh` | Bash (Linux / macOS) |
+
+```powershell
+# PowerShell
+.\start.ps1
+```
+
+```cmd
+:: CMD
+start.cmd
+```
+
+```bash
+# Bash
+chmod +x start.sh && ./start.sh
+```
+
+Or run Docker Compose directly:
+
 ```bash
 cd monitoring/
 docker compose up -d
@@ -189,6 +214,25 @@ The Promtail service ships Docker container stdout/stderr and host `/var/log/*.l
 ---
 
 ## Stopping the stack
+
+Convenience scripts are provided:
+
+```powershell
+# PowerShell
+.\stop.ps1
+```
+
+```cmd
+:: CMD
+stop.cmd
+```
+
+```bash
+# Bash
+./stop.sh
+```
+
+Or run Docker Compose directly:
 
 ```bash
 docker compose down
