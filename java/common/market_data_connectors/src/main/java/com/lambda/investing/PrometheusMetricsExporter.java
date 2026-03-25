@@ -49,21 +49,15 @@ public class PrometheusMetricsExporter {
 
             // Register JVM / process metrics (memory, GC, threads, CPU, file descriptors)
             DefaultExports.initialize();
-
-            String hostStr = Configuration.PROMETHEUS_HOST;
-            boolean hasHost = hostStr != null && !hostStr.isEmpty();
-            String displayHost = hasHost ? hostStr : "0.0.0.0";
-
+            String displayHost = "0.0.0.0"; // Listen on all interfaces
             boolean started = false;
             try {
                 HTTPServer.Builder builder = new HTTPServer.Builder()
                         .withPort(port)
                         .withRegistry(registry);
-                if (hasHost) {
-                    builder = builder.withHostname(hostStr);
-                }
                 this.httpServer = builder.build();
                 started = true;
+
                 logger.info("Prometheus metrics HTTP server started on {}:{}", displayHost, port);
                 System.out.println("Prometheus metrics HTTP server started on " + displayHost + ":" + port);
             } catch (IOException e) {

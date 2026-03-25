@@ -86,10 +86,6 @@ public class Configuration {
      * Port for the Prometheus /metrics HTTP endpoint. Empty = Prometheus disabled.
      */
     public static String PROMETHEUS_PORT = getEnvOrDefault("PROMETHEUS_PORT", "");
-    /**
-     * Bind hostname for the Prometheus endpoint. Empty = bind to 0.0.0.0.
-     */
-    public static String PROMETHEUS_HOST = getEnvOrDefault("PROMETHEUS_HOST", "");
 
     public static int[] GET_AFFINITY_CPUS() throws LambdaConfigurationException {
         if (!USE_THREAD_AFFINITY) {
