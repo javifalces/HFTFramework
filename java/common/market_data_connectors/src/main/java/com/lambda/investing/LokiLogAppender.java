@@ -170,17 +170,10 @@ public class LokiLogAppender extends AbstractAppender {
             return;
         }
 
-        // Prefer separate LOKI_HOST / LOKI_PORT from Configuration; fall back to legacy LOKI_URL
-        String lokiUrl;
-        if (Configuration.LOKI_HOST != null && !Configuration.LOKI_HOST.isEmpty()) {
-            lokiUrl = "http://" + Configuration.LOKI_HOST + ":" + Configuration.LOKI_PORT;
-        } else {
-            lokiUrl = Configuration.LOKI_URL;
-        }
-
-        if (lokiUrl == null || lokiUrl.isEmpty()) {
+        if (Configuration.LOKI_HOST == null || Configuration.LOKI_HOST.isEmpty()) {
             return;
         }
+        String lokiUrl = "http://" + Configuration.LOKI_HOST + ":" + Configuration.LOKI_PORT;
 
         String appName = Configuration.LOG_APP_NAME;
 

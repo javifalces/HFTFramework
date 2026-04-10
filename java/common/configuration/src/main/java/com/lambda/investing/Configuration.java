@@ -65,16 +65,14 @@ public class Configuration {
     // ── Loki log shipping ────────────────────────────────────────────────────
     /**
      * Loki server hostname/IP. Empty = Loki disabled.
+     * Resolution order: JVM system property {@code loki.host} → env var {@code LOKI_HOST}.
      */
-    public static String LOKI_HOST = getEnvOrDefault("LOKI_HOST", System.getProperty("loki.host", ""));
+    public static String LOKI_HOST = getSysPropOrEnvOrDefault("loki.host", "LOKI_HOST", "");
     /**
      * Loki HTTP push port. Defaults to 3100.
+     * Resolution order: JVM system property {@code loki.port} → env var {@code LOKI_PORT}.
      */
-    public static int LOKI_PORT = parseIntOrDefault(getEnvOrDefault("LOKI_PORT", System.getProperty("loki.port", "3100")), 3100);
-    /**
-     * Legacy single-URL override (e.g. http://host:3100). Used only when LOKI_HOST is not set.
-     */
-    public static String LOKI_URL = getEnvOrDefault("LOKI_URL", System.getProperty("loki.url", ""));
+    public static int LOKI_PORT = parseIntOrDefault(getSysPropOrEnvOrDefault("loki.port", "LOKI_PORT", "3100"), 3100);
     /**
      * Application label sent with every log entry to Loki / Prometheus.
      */
@@ -161,6 +159,22 @@ public class Configuration {
             output = System.getProperty(name, defaultValue);
         }
         return output;
+    }
+
+    /**
+     * Resolves a value by checking the JVM system property first, then the environment variable,
+     * and finally returning {@code defaultValue} if neither is set.
+     */
+    public static String getSysPropOrEnvOrDefault(String sysProp, String envVar, String defaultValue) {
+        String value = System.getProperty(sysProp);
+        if (value != null && !value.isEmpty()) {
+            return value;
+        }
+        value = System.getenv(envVar);
+        if (value != null && !value.isEmpty()) {
+            return value;
+        }
+        return defaultValue;
     }
 
     public static int parseIntOrDefault(String value, int defaultValue) {
