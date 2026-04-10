@@ -66,15 +66,15 @@ public class Configuration {
     /**
      * Loki server hostname/IP. Empty = Loki disabled.
      */
-    public static String LOKI_HOST = getEnvOrDefault("LOKI_HOST", "");
+    public static String LOKI_HOST = getEnvOrDefault("LOKI_HOST", System.getProperty("loki.host", ""));
     /**
      * Loki HTTP push port. Defaults to 3100.
      */
-    public static int LOKI_PORT = parseIntOrDefault(getEnvOrDefault("LOKI_PORT", ""), 3100);
+    public static int LOKI_PORT = parseIntOrDefault(getEnvOrDefault("LOKI_PORT", System.getProperty("loki.port", "3100")), 3100);
     /**
      * Legacy single-URL override (e.g. http://host:3100). Used only when LOKI_HOST is not set.
      */
-    public static String LOKI_URL = getEnvOrDefault("LOKI_URL", "");
+    public static String LOKI_URL = getEnvOrDefault("LOKI_URL", System.getProperty("loki.url", ""));
     /**
      * Application label sent with every log entry to Loki / Prometheus.
      */
@@ -85,7 +85,7 @@ public class Configuration {
     /**
      * Port for the Prometheus /metrics HTTP endpoint. Empty = Prometheus disabled.
      */
-    public static String PROMETHEUS_PORT = getEnvOrDefault("PROMETHEUS_PORT", "");
+    public static String PROMETHEUS_PORT = getEnvOrDefault("PROMETHEUS_PORT", System.getProperty("prometeus.port", ""));
 
     public static int[] GET_AFFINITY_CPUS() throws LambdaConfigurationException {
         if (!USE_THREAD_AFFINITY) {
