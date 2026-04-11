@@ -219,6 +219,7 @@ public class App {
                 instruments.add(instrument.getPrimaryKey());
             } catch (Exception e) {
                 logger.error("can't add {} to instrument list filter", instrumentPk, e);
+                System.err.println("can't add " + instrumentPk + " to instrument list filter" + e.getMessage());
 
             }
 
