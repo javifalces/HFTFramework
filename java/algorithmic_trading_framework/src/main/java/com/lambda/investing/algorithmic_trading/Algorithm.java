@@ -585,6 +585,19 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
     }
 
+    protected Verb inferVerb(Trade trade, Instrument instrument) {
+        try {
+            Depth lastDepth = getLastDepth(instrument);
+            if (lastDepth == null) {
+                return null;
+            }
+            return trade.inferVerb(lastDepth);
+        } catch (Exception e) {
+            logger.warn("[{}] Could not infer verb from trade {}: {}", getCurrentTime(), trade, e.getMessage());
+            return null;
+        }
+    }
+
 
     private void saveLiveOutputTrades() {
         String todayStr = getCurrentDayStr();

@@ -4,8 +4,10 @@ import com.lambda.investing.algorithmic_trading.gui.main.MainMenuGUI;
 import com.lambda.investing.algorithmic_trading.hedging.LinearRegressionHedgeManager;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
+import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.ExecutionReportStatus;
+import com.lambda.investing.model.trading.Verb;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -116,6 +118,10 @@ public abstract class SingleInstrumentAlgorithm extends Algorithm {
             return false;
         }
         return true;
+    }
+
+    protected Verb inferVerb(Trade trade) {
+        return inferVerb(trade, instrument);
     }
 
     @Override
