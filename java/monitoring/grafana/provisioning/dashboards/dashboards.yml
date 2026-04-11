@@ -1,0 +1,16 @@
+apiVersion: 1
+
+providers:
+  - name: HFT Framework Dashboards
+    orgId: 1
+    folder: HFT Framework
+    folderUid: hft_framework
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/dashboards
+      foldersFromFilesStructure: false
+

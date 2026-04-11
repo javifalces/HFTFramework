@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: "hft_framework"
+    static_configs:
+      - targets: [ "host.docker.internal:${PROMETHEUS_PORT:-9090}" ]
+    # Increase this if your algorithm has many metrics labels
+    sample_limit: 50000
+
