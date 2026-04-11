@@ -81,6 +81,22 @@ public class Trade extends CSVable implements Cloneable {
         }
     }
 
+    public Verb inferVerb(Depth depth) {
+        double bestBid = depth.getBestBid();
+        double bestAsk = depth.getBestAsk();
+        if (Double.isNaN(bestBid) || Double.isNaN(bestAsk) || bestBid <= 0 || bestAsk <= 0) {
+            return null;
+        }
+        double mid = (bestBid + bestAsk) / 2.0;
+        if (getPrice() < mid) {
+            return Verb.Sell; // trade crossed the spread on the sell side
+        } else if (getPrice() > mid) {
+            return Verb.Buy; // trade crossed the spread on the buy side
+        } else {
+            return null; // price exactly at mid — direction unknown
+        }
+    }
+
     public static String logPool() {
         return TRADE_POOL.toString();
     }
