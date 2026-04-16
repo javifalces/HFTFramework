@@ -84,7 +84,7 @@ public class Configuration {
      * Port for the Prometheus /metrics HTTP endpoint. Empty = Prometheus disabled.
      * Resolution order: JVM system property {@code prometeus.port} → env var {@code PROMETHEUS_PORT}.
      */
-    public static String PROMETHEUS_PORT = getSysPropOrEnvOrDefault("prometeus.port", "PROMETHEUS_PORT", "");
+    public static String PROMETHEUS_PORT = getSysPropOrEnvOrDefault("prometheus.port", "PROMETHEUS_PORT", "");
 
     public static int[] GET_AFFINITY_CPUS() throws LambdaConfigurationException {
         if (!USE_THREAD_AFFINITY) {

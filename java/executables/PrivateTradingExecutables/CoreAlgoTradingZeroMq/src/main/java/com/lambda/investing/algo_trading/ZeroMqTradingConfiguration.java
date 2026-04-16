@@ -21,6 +21,21 @@ public class ZeroMqTradingConfiguration {
     private boolean demoTrading;
     private String[] instrumentPks;
 
+    /**
+     * Optional: if set, overrides the {@code prometeus.port} system property.
+     */
+    private String prometheusPort;
+
+    /**
+     * Optional: if set, overrides the {@code loki.host} system property.
+     */
+    private String lokiHost;
+
+    /**
+     * Optional: if set, overrides the {@code loki.port} system property.
+     */
+    private Integer lokiPort;
+
     private AlgorithmConfiguration algorithm;
 
 }
