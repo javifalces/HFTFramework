@@ -58,8 +58,8 @@ public class PrometheusMetricsExporter {
                 this.httpServer = builder.build();
                 started = true;
 
-                logger.info("Prometheus metrics HTTP server started on {}:{}", displayHost, port);
-                System.out.println("Prometheus metrics HTTP server started on " + displayHost + ":" + port);
+                logger.info("Prometheus metrics HTTP server started on {}:{} ->  http://localhost:{}", displayHost, port, port);
+                System.out.println("Prometheus metrics HTTP server started on " + displayHost + ":" + port + " ->  http://localhost:" + port);
             } catch (IOException e) {
                 logger.error("Failed to start Prometheus metrics HTTP server on {}:{}", displayHost, port, e);
             }
