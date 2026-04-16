@@ -41,7 +41,7 @@
         <LokiAppender name="loki"
                       host="${env:LOKI_HOST:-}"
                       port="${env:LOKI_PORT:-3100}"
-                      appName="${sys:log.appName:-hft-framework}"/>
+                      appName="${sys:log.appName:xchangeEngine}"/>
 
     </appenders>
 
