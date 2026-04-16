@@ -290,12 +290,6 @@ public class App {
         if (zeroMqTradingConfiguration.getPrometheusPort() != null && !zeroMqTradingConfiguration.getPrometheusPort().isEmpty()) {
             System.setProperty("prometheus.port", zeroMqTradingConfiguration.getPrometheusPort());
         }
-        if (zeroMqTradingConfiguration.getLokiHost() != null && !zeroMqTradingConfiguration.getLokiHost().isEmpty()) {
-            System.setProperty("loki.host", zeroMqTradingConfiguration.getLokiHost());
-        }
-        if (zeroMqTradingConfiguration.getLokiPort() != null) {
-            System.setProperty("loki.port", String.valueOf(zeroMqTradingConfiguration.getLokiPort()));
-        }
     }
 
     private static ZeroMqTradingConfiguration loadJson(String[] args) {
