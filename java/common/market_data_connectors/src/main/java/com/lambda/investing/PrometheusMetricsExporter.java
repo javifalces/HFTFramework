@@ -82,15 +82,17 @@ public class PrometheusMetricsExporter {
             }
 
             String address = host.trim() + ":" + port;
+            String fullUrl = "http://" + address;
             this.pushGateway = new PushGateway(address);
 
             // Push once immediately to validate connectivity
             try {
                 pushGateway.pushAdd(registry, JOB_NAME);
-                logger.info("Prometheus metrics push to Pushgateway {}  (job='{}') — OK", address, JOB_NAME);
-                System.out.println("Prometheus metrics push to Pushgateway " + address + " (job='" + JOB_NAME + "') — OK");
+                String msg = "Prometheus metrics push to Pushgateway " + fullUrl + " (job='" + JOB_NAME + "') — OK";
+                logger.info(msg);
+                System.out.println(msg);
             } catch (IOException e) {
-                logger.warn("Initial push to Prometheus Pushgateway {} failed: {}", address, e.getMessage());
+                logger.warn("Initial push to Prometheus Pushgateway {} failed: {}", fullUrl, e.getMessage());
             }
 
             // Schedule periodic pushes
@@ -103,7 +105,7 @@ public class PrometheusMetricsExporter {
                 try {
                     pushGateway.pushAdd(registry, JOB_NAME);
                 } catch (IOException e) {
-                    logger.warn("Failed to push metrics to Prometheus Pushgateway {}: {}", address, e.getMessage());
+                    logger.warn("Failed to push metrics to Prometheus Pushgateway {}: {}", fullUrl, e.getMessage());
                 }
             }, PUSH_INTERVAL_SECONDS, PUSH_INTERVAL_SECONDS, TimeUnit.SECONDS);
 

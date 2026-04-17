@@ -2,6 +2,7 @@ package com.lambda.investing;
 
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.Filter;
 import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.LoggerContext;
@@ -59,6 +60,8 @@ public class LokiLogAppender extends AbstractAppender {
     /** Default appender name used in both XML config and programmatic duplicate-detection. */
     static final String DEFAULT_APPENDER_NAME = "loki";
 
+    private static final Logger logger = LogManager.getLogger(LokiLogAppender.class);
+
     static final int DEFAULT_LOKI_PORT = 3100;
     static final int BATCH_SIZE = 100;
     static final long FLUSH_INTERVAL_MS = 1_000L;
@@ -110,8 +113,10 @@ public class LokiLogAppender extends AbstractAppender {
         if (active) {
             // Mark as initialized so initializeLoki() won't add a duplicate programmatic appender
             initialized = true;
-            System.out.println("Loki log appender configured via log4j2.xml → "
-                    + appender.lokiPushUrl + " (app=" + resolvedAppName + ")");
+            String msg = "Loki log appender configured via log4j2.xml → "
+                    + appender.lokiPushUrl + " (app=" + resolvedAppName + ")";
+            System.out.println(msg);
+            logger.info(msg);
         }
         return appender;
     }
@@ -214,8 +219,10 @@ public class LokiLogAppender extends AbstractAppender {
         ctx.updateLoggers();
 
         initialized = true;
-        System.out.println("Loki log appender configured (programmatic) → "
-                + appender.lokiPushUrl + " (app=" + appName + ")");
+        String msg = "Loki log appender configured (programmatic) → "
+                + appender.lokiPushUrl + " (app=" + appName + ")";
+        System.out.println(msg);
+        logger.info(msg);
     }
 
     // ── AbstractAppender ─────────────────────────────────────────────────────
