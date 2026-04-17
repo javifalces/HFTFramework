@@ -1,19 +1,24 @@
 package com.lambda.investing;
 
 import io.prometheus.client.CollectorRegistry;
-import io.prometheus.client.exporter.HTTPServer;
+import io.prometheus.client.exporter.PushGateway;
 import io.prometheus.client.hotspot.DefaultExports;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
+import java.net.Socket;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
- * Singleton that manages the Prometheus HTTP metrics endpoint.
+ * Singleton that pushes Prometheus metrics to an existing Prometheus Pushgateway.
  * <p>
- * Enabled by setting the {@code PROMETHEUS_PORT} environment variable (or Java system property)
- * to a valid port number. When enabled, a lightweight HTTP server is started on that port so
- * that a Prometheus scraper (or a Grafana agent) can pull metrics from {@code /metrics}.
+ * Enabled by setting {@code PROMETHEUS_HOST} and {@code PROMETHEUS_PORT} (environment variables
+ * or JVM system properties). When enabled, metrics are pushed periodically to
+ * {@code http://<PROMETHEUS_HOST>:<PROMETHEUS_PORT>} so that a Prometheus server
+ * already running can scrape them from the Pushgateway.
  * </p>
  * <p>
  * JVM / process performance metrics (heap usage, GC, threads, CPU time, …) are exported
@@ -24,17 +29,36 @@ public class PrometheusMetricsExporter {
 
     private static final Logger logger = LogManager.getLogger(PrometheusMetricsExporter.class);
 
+    /**
+     * How often metrics are pushed to the Pushgateway (in seconds).
+     */
+    private static final long PUSH_INTERVAL_SECONDS = 15;
+
+    /**
+     * Job name used to identify this process in the Pushgateway.
+     */
+    private static final String JOB_NAME = Configuration.LOG_APP_NAME;
+
     private static volatile PrometheusMetricsExporter INSTANCE;
 
     private final CollectorRegistry registry;
-    private HTTPServer httpServer;
+    private PushGateway pushGateway;
+    private ScheduledExecutorService scheduler;
     private final boolean enabled;
 
     private PrometheusMetricsExporter() {
         this.registry = CollectorRegistry.defaultRegistry;
 
+
+        if (Configuration.PROMETHEUS_PORT == null || Configuration.PROMETHEUS_PORT.isEmpty()) {
+            this.enabled = false;
+            return;
+        }
+
+        String host = Configuration.PROMETHEUS_HOST;
         String portStr = Configuration.PROMETHEUS_PORT;
-        if (portStr != null && !portStr.isEmpty()) {
+
+        if (host != null && !host.isEmpty() && portStr != null && !portStr.isEmpty()) {
             int port;
             try {
                 port = Integer.parseInt(portStr.trim());
@@ -46,24 +70,47 @@ public class PrometheusMetricsExporter {
 
             // Register JVM / process metrics (memory, GC, threads, CPU, file descriptors)
             DefaultExports.initialize();
-            String displayHost = "0.0.0.0"; // Listen on all interfaces
-            boolean started = false;
-            try {
-                HTTPServer.Builder builder = new HTTPServer.Builder()
-                        .withPort(port)
-                        .withRegistry(registry);
-                this.httpServer = builder.build();
-                started = true;
 
-                logger.info("Prometheus metrics HTTP server started on {}:{} ->  http://localhost:{}", displayHost, port, port);
-                System.out.println("Prometheus metrics HTTP server started on " + displayHost + ":" + port + " ->  http://localhost:" + port);
-            } catch (IOException e) {
-                logger.error("Failed to start Prometheus metrics HTTP server on {}:{}", displayHost, port, e);
+            // Check connectivity before registering
+            if (!isReachable(host.trim(), port)) {
+                String warning = "[PrometheusMetricsExporter] WARNING: Prometheus Pushgateway "
+                        + host.trim() + ":" + port + " is not reachable — exporter disabled.";
+                System.err.println(warning);
+                logger.warn("Prometheus Pushgateway {}:{} is not reachable — exporter disabled.", host.trim(), port);
+                this.enabled = false;
+                return;
             }
-            this.enabled = started;
+
+            String address = host.trim() + ":" + port;
+            this.pushGateway = new PushGateway(address);
+
+            // Push once immediately to validate connectivity
+            try {
+                pushGateway.pushAdd(registry, JOB_NAME);
+                logger.info("Prometheus metrics push to Pushgateway {}  (job='{}') — OK", address, JOB_NAME);
+                System.out.println("Prometheus metrics push to Pushgateway " + address + " (job='" + JOB_NAME + "') — OK");
+            } catch (IOException e) {
+                logger.warn("Initial push to Prometheus Pushgateway {} failed: {}", address, e.getMessage());
+            }
+
+            // Schedule periodic pushes
+            this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "prometheus-push");
+                t.setDaemon(true);
+                return t;
+            });
+            this.scheduler.scheduleAtFixedRate(() -> {
+                try {
+                    pushGateway.pushAdd(registry, JOB_NAME);
+                } catch (IOException e) {
+                    logger.warn("Failed to push metrics to Prometheus Pushgateway {}: {}", address, e.getMessage());
+                }
+            }, PUSH_INTERVAL_SECONDS, PUSH_INTERVAL_SECONDS, TimeUnit.SECONDS);
+
+            this.enabled = true;
         } else {
             this.enabled = false;
-            logger.debug("PROMETHEUS_PORT not set; Prometheus exporter disabled.");
+            logger.debug("PROMETHEUS_HOST / PROMETHEUS_PORT not set; Prometheus exporter disabled.");
         }
     }
 
@@ -96,13 +143,34 @@ public class PrometheusMetricsExporter {
     }
 
     /**
-     * Stops the HTTP server (if running). Normally called only in tests.
+     * Returns {@code true} when a TCP connection to {@code host:port} can be established within 2 s.
+     */
+    private static boolean isReachable(String host, int port) {
+        try (Socket s = new Socket()) {
+            s.connect(new java.net.InetSocketAddress(host, port), 2_000);
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Stops the push scheduler and deletes the job from the Pushgateway (if running).
+     * Normally called only in tests or on application shutdown.
      */
     public void stop() {
         synchronized (PrometheusMetricsExporter.class) {
-            if (httpServer != null) {
-                httpServer.close();
-                httpServer = null;
+            if (scheduler != null) {
+                scheduler.shutdownNow();
+                scheduler = null;
+            }
+            if (pushGateway != null) {
+                try {
+                    pushGateway.delete(JOB_NAME);
+                } catch (IOException e) {
+                    logger.warn("Failed to delete Pushgateway job '{}': {}", JOB_NAME, e.getMessage());
+                }
+                pushGateway = null;
             }
             // Reset singleton so it can be re-created in tests
             INSTANCE = null;

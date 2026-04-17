@@ -15,6 +15,7 @@ import org.apache.logging.log4j.core.filter.ThresholdFilter;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.Socket;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -97,6 +98,11 @@ public class LokiLogAppender extends AbstractAppender {
         }
 
         boolean active = host != null && !host.isEmpty();
+        if (active && !isReachable(host, port)) {
+            System.err.println("[LokiLogAppender] WARNING: Loki host " + host + ":" + port
+                    + " is not reachable — appender disabled.");
+            active = false;
+        }
         String lokiUrl = active ? "http://" + host + ":" + port : null;
         String resolvedAppName = (appName != null && !appName.isEmpty()) ? appName : "hft-framework";
 
@@ -170,10 +176,25 @@ public class LokiLogAppender extends AbstractAppender {
             return;
         }
 
-        if (Configuration.LOKI_HOST == null || Configuration.LOKI_HOST.isEmpty()) {
+        if (Configuration.LOKI_PORT == null || Configuration.LOKI_PORT.isEmpty()) {
             return;
         }
         String lokiUrl = "http://" + Configuration.LOKI_HOST + ":" + Configuration.LOKI_PORT;
+
+        // Check connectivity before registering
+        try {
+            int port = Integer.parseInt(Configuration.LOKI_PORT.trim());
+            if (!isReachable(Configuration.LOKI_HOST, port)) {
+                System.err.println("[LokiLogAppender] WARNING: Loki host "
+                        + Configuration.LOKI_HOST + ":" + port
+                        + " is not reachable — skipping registration.");
+                return;
+            }
+        } catch (NumberFormatException e) {
+            System.err.println("[LokiLogAppender] WARNING: Invalid LOKI_PORT value '"
+                    + Configuration.LOKI_PORT + "' — skipping registration.");
+            return;
+        }
 
         String appName = Configuration.LOG_APP_NAME;
 
@@ -336,6 +357,18 @@ public class LokiLogAppender extends AbstractAppender {
             sb.append(" caused by ").append(t.getCause().toString());
         }
         return sb.toString();
+    }
+
+    /**
+     * Returns {@code true} when a TCP connection to {@code host:port} can be established within 2 s.
+     */
+    private static boolean isReachable(String host, int port) {
+        try (Socket s = new Socket()) {
+            s.connect(new java.net.InetSocketAddress(host, port), 2_000);
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     private static String escapeJson(String s) {

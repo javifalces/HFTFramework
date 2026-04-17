@@ -20,12 +20,6 @@ public class ZeroMqTradingConfiguration {
     private boolean paperTrading;
     private boolean demoTrading;
     private String[] instrumentPks;
-
-    /**
-     * Optional: if set, overrides the {@code prometeus.port} system property.
-     */
-    private String prometheusPort;
-
     private AlgorithmConfiguration algorithm;
 
 }

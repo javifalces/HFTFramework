@@ -287,9 +287,6 @@ public class App {
 
     protected void setLogProperty(ZeroMqTradingConfiguration zeroMqTradingConfiguration) {
         System.setProperty("log.appName", zeroMqTradingConfiguration.getAlgorithm().getAlgorithmName());
-        if (zeroMqTradingConfiguration.getPrometheusPort() != null && !zeroMqTradingConfiguration.getPrometheusPort().isEmpty()) {
-            System.setProperty("prometheus.port", zeroMqTradingConfiguration.getPrometheusPort());
-        }
     }
 
     private static ZeroMqTradingConfiguration loadJson(String[] args) {

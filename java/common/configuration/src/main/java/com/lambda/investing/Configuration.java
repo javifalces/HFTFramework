@@ -64,15 +64,15 @@ public class Configuration {
 
     // ── Loki log shipping ────────────────────────────────────────────────────
     /**
-     * Loki server hostname/IP. Empty = Loki disabled.
+     * Loki server hostname/IP.
      * Resolution order: JVM system property {@code loki.host} → env var {@code LOKI_HOST}.
      */
-    public static String LOKI_HOST = getSysPropOrEnvOrDefault("loki.host", "LOKI_HOST", "");
+    public static String LOKI_HOST = getSysPropOrEnvOrDefault("loki.host", "LOKI_HOST", "localhost");
     /**
-     * Loki HTTP push port. Defaults to 3100.
+     * Loki HTTP push port. Empty = Loki disabled.Normally to 3100.
      * Resolution order: JVM system property {@code loki.port} → env var {@code LOKI_PORT}.
      */
-    public static int LOKI_PORT = parseIntOrDefault(getSysPropOrEnvOrDefault("loki.port", "LOKI_PORT", "3100"), 3100);
+    public static String LOKI_PORT = getSysPropOrEnvOrDefault("loki.port", "LOKI_PORT", "");
     /**
      * Application label sent with every log entry to Loki / Prometheus.
      */
@@ -81,7 +81,14 @@ public class Configuration {
 
     // ── Prometheus metrics ────────────────────────────────────────────────────
     /**
-     * Port for the Prometheus /metrics HTTP endpoint. Empty = Prometheus disabled.
+     * HOST for the Prometheus /metrics HTTP endpoint. Empty = Prometheus disabled.
+     * Resolution order: JVM system property {@code prometeus.host} → env var {@code PROMETHEUS_HOST}.
+     */
+    public static String PROMETHEUS_HOST = getSysPropOrEnvOrDefault("prometheus.host", "PROMETHEUS_HOST", "localhost");
+
+
+    /**
+     * Port for the Prometheus /metrics HTTP endpoint. Empty = Prometheus disabled.Normally 9090
      * Resolution order: JVM system property {@code prometeus.port} → env var {@code PROMETHEUS_PORT}.
      */
     public static String PROMETHEUS_PORT = getSysPropOrEnvOrDefault("prometheus.port", "PROMETHEUS_PORT", "");

@@ -53,7 +53,7 @@
         </dependency>
         <dependency>
             <groupId>io.prometheus</groupId>
-            <artifactId>simpleclient_httpserver</artifactId>
+            <artifactId>simpleclient_pushgateway</artifactId>
         </dependency>
         <dependency>
             <groupId>io.prometheus</groupId>
