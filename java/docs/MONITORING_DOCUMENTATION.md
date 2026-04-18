@@ -212,7 +212,7 @@ Key panels:
 - **Error Log Details / Recent Warnings** — last N error and warning entries side by side
 - **Statistics & Latency Logs** — raw output of the statistics and latency loggers
 
-![HFT - Application Logs](../../fig/monitoring_application_logs.png)
+![HFT - Application Logs](../../fig/monitoring/monitoring_application_logs.png)
 
 ---
 
@@ -228,7 +228,7 @@ Key panels:
 - **Threads & CPU** — Thread Count, Daemon Threads, CPU Usage %, CPU Usage Over Time, Thread Count Over Time
 - **Process Info** — Process Uptime, JVM Loaded Classes
 
-![HFT - JVM Performance](../../fig/monitoring_jvm_performance.png)
+![HFT - JVM Performance](../../fig/monitoring/monitoring_jvm_performance.png)
 
 ---
 
@@ -245,7 +245,7 @@ Key panels:
 - **Latency by Stage** — Depth Latency by Stage (P90) and Order Request Latency by Stage (P90)
 - **Latency Summary Table** — all topics with full percentile columns per timestamp
 
-![HFT - Latency Statistics](../../fig/monitoring_latency_statistics.png)
+![HFT - Latency Statistics](../../fig/monitoring/monitoring_latency_statistics.png)
 
 ---
 
