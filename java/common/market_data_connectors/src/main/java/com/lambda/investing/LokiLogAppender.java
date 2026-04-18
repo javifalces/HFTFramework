@@ -92,22 +92,22 @@ public class LokiLogAppender extends AbstractAppender {
     @PluginFactory
     public static LokiLogAppender createAppender(
             @PluginAttribute("name") String name,
-            @PluginAttribute("host") String host,
-            @PluginAttribute(value = "port", defaultInt = DEFAULT_LOKI_PORT) int port,
+            @PluginAttribute(value = "host", defaultString = "localhost") String host,
+            @PluginAttribute(value = "port") int port,
             @PluginAttribute("appName") String appName) {
 
         if (name == null || name.isEmpty()) {
             name = DEFAULT_APPENDER_NAME;
         }
 
-        boolean active = host != null && !host.isEmpty();
+        boolean active = port != 0;
         if (active && !isReachable(host, port)) {
             System.err.println("[LokiLogAppender] WARNING: Loki host " + host + ":" + port
                     + " is not reachable — appender disabled.");
             active = false;
         }
         String lokiUrl = active ? "http://" + host + ":" + port : null;
-        String resolvedAppName = (appName != null && !appName.isEmpty()) ? appName : "hft-framework";
+        String resolvedAppName = (appName != null && !appName.isEmpty()) ? appName : "hft-framework:";
 
         LokiLogAppender appender = new LokiLogAppender(name, lokiUrl, resolvedAppName, active);
         if (active) {
