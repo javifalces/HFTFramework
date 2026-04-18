@@ -30,10 +30,15 @@
           "type": "loki",
           "uid": "loki"
         },
-        "query": "app",
+        "query": {
+          "label": "app",
+          "refId": "StandardVariableQuery",
+          "stream": "",
+          "type": 1
+        },
         "refresh": 2,
         "multi": false,
-        "includeAll": false,
+        "includeAll": true,
         "sort": 1,
         "hide": 0
       },
@@ -41,31 +46,36 @@
         "name": "level",
         "label": "Log Level",
         "type": "custom",
+        "query": "ERROR,WARN,INFO,DEBUG",
         "options": [
           {
-            "text": "All",
-            "value": ".*",
-            "selected": true
-          },
-          {
             "text": "ERROR",
-            "value": "ERROR"
+            "value": "ERROR",
+            "selected": false
           },
           {
             "text": "WARN",
-            "value": "WARN"
+            "value": "WARN",
+            "selected": false
           },
           {
             "text": "INFO",
-            "value": "INFO"
+            "value": "INFO",
+            "selected": false
           },
           {
             "text": "DEBUG",
-            "value": "DEBUG"
+            "value": "DEBUG",
+            "selected": false
           }
         ],
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
         "multi": false,
-        "includeAll": false,
+        "includeAll": true,
+        "allValue": ".*",
         "hide": 0
       },
       {

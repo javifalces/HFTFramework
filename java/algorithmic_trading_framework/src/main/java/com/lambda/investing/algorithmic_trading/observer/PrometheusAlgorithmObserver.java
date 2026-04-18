@@ -88,6 +88,8 @@ public class PrometheusAlgorithmObserver implements AlgorithmObserver {
             return;
         }
 
+        System.out.println("PrometheusAlgorithmObserver: Prometheus is enabled – registering metrics.");
+
         try {
             // Portfolio gauges
             portfolioRealizedPnl = Gauge.build()

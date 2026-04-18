@@ -37,16 +37,16 @@ import java.util.concurrent.atomic.AtomicLong;
  * the appender in the {@code <appenders>} section using the two separate env-var properties:
  * <pre>{@code
  * <LokiAppender name="loki"
- *               host="${env:LOKI_HOST:-}"
- *               port="${env:LOKI_PORT:-3100}"
+ *               host="${env:LOKI_HOST:-localhost}"
+ *               port="${env:LOKI_PORT:-}"
  *               appName="${sys:log.appName:-hft-framework}"/>
  * }</pre>
- * The appender is a no-op when {@code LOKI_HOST} is not set, so it is safe to include in the XML
+ * The appender is a no-op when {@code LOKI_PORT} is not set, so it is safe to include in the XML
  * unconditionally; logging still works without Loki present.
  *
  * <p><strong>Programmatic fallback</strong>:<br>
  * Call {@link #initializeLoki()} once at application startup. It reads {@code LOKI_HOST} +
- * {@code LOKI_PORT} (or the legacy {@code LOKI_URL}) and registers itself on the root logger if
+ * {@code LOKI_PORT} and registers itself on the root logger if
  * Loki has not already been configured via XML. It is idempotent and safe to call multiple times.
  *
  * <p>Log events are enqueued and forwarded by a dedicated daemon thread every
@@ -87,7 +87,7 @@ public class LokiLogAppender extends AbstractAppender {
      * Log4j2 plugin factory — called when the framework reads a {@code <LokiAppender>} element
      * from {@code log4j2.xml}.  The {@code host} and {@code port} values are resolved by Log4j2
      * from the environment before this method is called, so an empty {@code host} means
-     * {@code LOKI_HOST} was not set and the appender should be disabled (no-op).
+     * {@code LOKI_PORT} was not set and the appender should be disabled (no-op).
      */
     @PluginFactory
     public static LokiLogAppender createAppender(
@@ -184,14 +184,18 @@ public class LokiLogAppender extends AbstractAppender {
         if (Configuration.LOKI_PORT == null || Configuration.LOKI_PORT.isEmpty()) {
             return;
         }
-        String lokiUrl = "http://" + Configuration.LOKI_HOST + ":" + Configuration.LOKI_PORT;
+        String lokiHost = Configuration.LOKI_HOST;
+        if (lokiHost == null || lokiHost.trim().isEmpty()) {
+            lokiHost = "localhost";
+        }
+        String lokiUrl = "http://" + lokiHost + ":" + Configuration.LOKI_PORT;
 
         // Check connectivity before registering
         try {
             int port = Integer.parseInt(Configuration.LOKI_PORT.trim());
-            if (!isReachable(Configuration.LOKI_HOST, port)) {
+            if (!isReachable(lokiHost, port)) {
                 System.err.println("[LokiLogAppender] WARNING: Loki host "
-                        + Configuration.LOKI_HOST + ":" + port
+                        + lokiHost + ":" + port
                         + " is not reachable — skipping registration.");
                 return;
             }
@@ -232,8 +236,13 @@ public class LokiLogAppender extends AbstractAppender {
         if (!enabled || queue == null) {
             return;
         }
-        // toImmutable() is required: Log4j2 reuses event objects after the call returns
-        queue.offer(event.toImmutable());
+        try {
+            // toImmutable() is required: Log4j2 reuses event objects after the call returns
+            queue.offer(event.toImmutable());
+        } catch (Throwable e) {
+            // Swallow — a malformed log event must not recurse into logging or crash the appender
+            System.err.println("[LokiLogAppender] append error: " + e.getClass().getName() + ": " + e.getMessage());
+        }
     }
 
     // ── background flush thread ──────────────────────────────────────────────
@@ -254,8 +263,9 @@ public class LokiLogAppender extends AbstractAppender {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
-            } catch (Exception e) {
-                // Swallow to prevent log storms; print type for debugging without recursing into logging
+            } catch (Throwable e) {
+                // Swallow to prevent log storms; catches RuntimeException wrapping StringIndexOutOfBoundsException
+                // that can originate from Log4j2 internal message formatting
                 System.err.println("[LokiLogAppender] flush error: " + e.getClass().getName() + ": " + e.getMessage());
                 batch.clear();
             }
@@ -277,7 +287,15 @@ public class LokiLogAppender extends AbstractAppender {
             try (OutputStream os = conn.getOutputStream()) {
                 os.write(body);
             }
-            int code = conn.getResponseCode();
+            int code;
+            try {
+                code = conn.getResponseCode();
+            } catch (StringIndexOutOfBoundsException e) {
+                // JDK bug: malformed/empty HTTP status line causes StringIndexOutOfBoundsException
+                System.err.println("[LokiLogAppender] malformed HTTP response from " + lokiPushUrl + " — " + e.getMessage());
+                conn.disconnect();
+                return;
+            }
             if (code >= 400) {
                 System.err.println("[LokiLogAppender] push failed: HTTP " + code
                         + " — " + lokiPushUrl);
@@ -315,13 +333,20 @@ public class LokiLogAppender extends AbstractAppender {
 
             boolean first = true;
             for (LogEvent e : entry.getValue()) {
-                if (!first) {
-                    sb.append(",");
+                try {
+                    long nanos = uniqueNanos(e);
+                    String msg = formatMessage(e);
+                    if (!first) {
+                        sb.append(",");
+                    }
+                    first = false;
+                    sb.append("[\"").append(nanos).append("\",\"")
+                            .append(escapeJson(msg)).append("\"]");
+                } catch (Throwable ex) {
+                    // Skip the single malformed event rather than aborting the whole batch
+                    System.err.println("[LokiLogAppender] skipping event due to: "
+                            + ex.getClass().getName() + ": " + ex.getMessage());
                 }
-                first = false;
-                long nanos = uniqueNanos(e);
-                sb.append("[\"").append(nanos).append("\",\"")
-                  .append(escapeJson(formatMessage(e))).append("\"]");
             }
             sb.append("]}");
         }
@@ -353,7 +378,7 @@ public class LokiLogAppender extends AbstractAppender {
         try {
             org.apache.logging.log4j.message.Message msg = e.getMessage();
             text = (msg != null) ? msg.getFormattedMessage() : "";
-        } catch (Exception ex) {
+        } catch (Throwable ex) {
             // Malformed message patterns (e.g. unclosed '{') can throw inside Log4j2
             text = "<message formatting error: " + ex.getClass().getSimpleName() + ">";
         }
