@@ -30,10 +30,28 @@
       "id": "table",
       "name": "Table",
       "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "barchart",
+      "name": "Bar chart",
+      "version": ""
     }
   ],
   "annotations": {
-    "list": [
+    "list": [{
+        "name": "job",
+        "label": "Application",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(up, job)",
+        "refresh": 2,
+        "multi": false,
+        "includeAll": false,
+        "sort": 1,
+        "hide": 0,
+        "current": { "text": "hft-framework", "value": "hft-framework" }
+      },
       {
         "builtIn": 1,
         "datasource": {
@@ -48,7 +66,7 @@
       }
     ]
   },
-  "description": "Algorithm Portfolio PnL and Positions – powered by PrometheusAlgorithmObserver",
+  "description": "Algorithm trade execution metrics – powered by PrometheusAlgorithmObserver",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -64,7 +82,7 @@
         "y": 0
       },
       "id": 100,
-      "title": "Portfolio Overview",
+      "title": "Trade Summary",
       "type": "row"
     },
     {
@@ -77,39 +95,30 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "blue",
                 "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 0
-              },
-              {
-                "color": "green",
-                "value": 0.01
               }
             ]
           },
           "unit": "none",
-          "decimals": 4
+          "decimals": 0
         },
         "overrides": []
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
+        "w": 6,
         "x": 0,
         "y": 1
       },
       "id": 1,
       "options": {
         "colorMode": "background",
-        "graphMode": "none",
+        "graphMode": "area",
         "justifyMode": "center",
         "orientation": "auto",
         "reduceOptions": {
@@ -121,7 +130,7 @@
         },
         "textMode": "auto"
       },
-      "title": "Realized PnL",
+      "title": "Total Fills",
       "type": "stat",
       "targets": [
         {
@@ -129,8 +138,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_portfolio_realized_pnl{algorithm=~\"$algorithm\"}",
-          "legendFormat": "{{algorithm}}",
+          "expr": "sum(algo_trade_count_total{job=~"$job", algorithm=~\"$algorithm\", instrument=~\"$instrument\"})",
+          "legendFormat": "Total Fills",
           "refId": "A"
         }
       ]
@@ -145,39 +154,30 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 0
-              },
-              {
                 "color": "green",
-                "value": 0.01
+                "value": null
               }
             ]
           },
           "unit": "none",
-          "decimals": 4
+          "decimals": 0
         },
         "overrides": []
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 4,
+        "w": 6,
+        "x": 6,
         "y": 1
       },
       "id": 2,
       "options": {
         "colorMode": "background",
-        "graphMode": "none",
+        "graphMode": "area",
         "justifyMode": "center",
         "orientation": "auto",
         "reduceOptions": {
@@ -189,7 +189,7 @@
         },
         "textMode": "auto"
       },
-      "title": "Unrealized PnL",
+      "title": "Buy Fills",
       "type": "stat",
       "targets": [
         {
@@ -197,8 +197,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_portfolio_unrealized_pnl{algorithm=~\"$algorithm\"}",
-          "legendFormat": "{{algorithm}}",
+          "expr": "sum(algo_trade_count_total{job=~"$job", algorithm=~\"$algorithm\", instrument=~\"$instrument\", verb=\"Buy\"})",
+          "legendFormat": "Buy Fills",
           "refId": "A"
         }
       ]
@@ -213,39 +213,30 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "red",
                 "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 0
-              },
-              {
-                "color": "green",
-                "value": 0.01
               }
             ]
           },
           "unit": "none",
-          "decimals": 4
+          "decimals": 0
         },
         "overrides": []
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 8,
+        "w": 6,
+        "x": 12,
         "y": 1
       },
       "id": 3,
       "options": {
         "colorMode": "background",
-        "graphMode": "none",
+        "graphMode": "area",
         "justifyMode": "center",
         "orientation": "auto",
         "reduceOptions": {
@@ -257,7 +248,7 @@
         },
         "textMode": "auto"
       },
-      "title": "Total PnL",
+      "title": "Sell Fills",
       "type": "stat",
       "targets": [
         {
@@ -265,8 +256,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_portfolio_total_pnl{algorithm=~\"$algorithm\"}",
-          "legendFormat": "{{algorithm}}",
+          "expr": "sum(algo_trade_count_total{job=~"$job", algorithm=~\"$algorithm\", instrument=~\"$instrument\", verb=\"Sell\"})",
+          "legendFormat": "Sell Fills",
           "refId": "A"
         }
       ]
@@ -281,17 +272,12 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "purple",
                 "value": null
-              },
-              {
-                "color": "yellow",
-                "value": -0.01
               }
             ]
           },
@@ -302,14 +288,14 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 12,
+        "w": 6,
+        "x": 18,
         "y": 1
       },
       "id": 4,
       "options": {
         "colorMode": "background",
-        "graphMode": "none",
+        "graphMode": "area",
         "justifyMode": "center",
         "orientation": "auto",
         "reduceOptions": {
@@ -321,7 +307,7 @@
         },
         "textMode": "auto"
       },
-      "title": "Total Fees",
+      "title": "Total Volume Traded",
       "type": "stat",
       "targets": [
         {
@@ -329,128 +315,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_portfolio_total_fees{algorithm=~\"$algorithm\"}",
-          "legendFormat": "{{algorithm}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": null
-              }
-            ]
-          },
-          "unit": "none",
-          "decimals": 4
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 16,
-        "y": 1
-      },
-      "id": 5,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "title": "Net Position",
-      "type": "stat",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "algo_portfolio_net_position{algorithm=~\"$algorithm\"}",
-          "legendFormat": "{{algorithm}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": null
-              }
-            ]
-          },
-          "unit": "none",
-          "decimals": 4
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 20,
-        "y": 1
-      },
-      "id": 6,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "title": "Net Investment",
-      "type": "stat",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "algo_portfolio_net_investment{algorithm=~\"$algorithm\"}",
-          "legendFormat": "{{algorithm}}",
+          "expr": "sum(algo_trade_volume_total{job=~"$job", algorithm=~\"$algorithm\", instrument=~\"$instrument\"})",
+          "legendFormat": "Total Volume",
           "refId": "A"
         }
       ]
@@ -464,7 +330,7 @@
         "y": 5
       },
       "id": 101,
-      "title": "PnL Over Time",
+      "title": "Fill Rate Over Time",
       "type": "row"
     },
     {
@@ -478,47 +344,14 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "PnL",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "lineWidth": 1,
             "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
+            "spanNulls": false
           },
           "unit": "none",
-          "decimals": 4
+          "decimals": 0
         },
         "overrides": []
       },
@@ -532,7 +365,7 @@
       "options": {
         "legend": {
           "calcs": [
-            "last"
+            "sum"
           ],
           "displayMode": "table",
           "placement": "bottom",
@@ -543,7 +376,7 @@
           "sort": "none"
         }
       },
-      "title": "Portfolio PnL (Realized / Unrealized / Total)",
+      "title": "Trade Fill Rate (per minute)",
       "type": "timeseries",
       "targets": [
         {
@@ -551,27 +384,9 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_portfolio_realized_pnl{algorithm=~\"$algorithm\"}",
-          "legendFormat": "{{algorithm}} – Realized",
+          "expr": "sum by (algorithm, instrument, verb) (rate(algo_trade_count_total{job=~"$job", algorithm=~\"$algorithm\", instrument=~\"$instrument\"}[1m]) * 60)",
+          "legendFormat": "{{algorithm}} – {{instrument}} – {{verb}}",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "algo_portfolio_unrealized_pnl{algorithm=~\"$algorithm\"}",
-          "legendFormat": "{{algorithm}} – Unrealized",
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "algo_portfolio_total_pnl{algorithm=~\"$algorithm\"}",
-          "legendFormat": "{{algorithm}} – Total",
-          "refId": "C"
         }
       ]
     },
@@ -586,44 +401,11 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisCenteredZero": true,
-            "axisColorMode": "text",
-            "axisLabel": "Position",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "stepAfter",
             "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
             "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
+            "spanNulls": false
           },
           "unit": "none",
           "decimals": 4
@@ -651,7 +433,7 @@
           "sort": "none"
         }
       },
-      "title": "Net Position Over Time",
+      "title": "Cumulative Volume Traded",
       "type": "timeseries",
       "targets": [
         {
@@ -659,8 +441,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_portfolio_net_position{algorithm=~\"$algorithm\"}",
-          "legendFormat": "{{algorithm}} – Net Position",
+          "expr": "algo_trade_volume_total{job=~"$job", algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
+          "legendFormat": "{{algorithm}} – {{instrument}} – {{verb}}",
           "refId": "A"
         }
       ]
@@ -674,7 +456,7 @@
         "y": 14
       },
       "id": 102,
-      "title": "Per-Instrument Metrics",
+      "title": "Last Trade Price & Quantity",
       "type": "row"
     },
     {
@@ -689,13 +471,14 @@
           },
           "custom": {
             "drawStyle": "line",
-            "fillOpacity": 10,
+            "fillOpacity": 5,
             "lineWidth": 2,
-            "showPoints": "never",
+            "showPoints": "always",
+            "pointSize": 5,
             "spanNulls": false
           },
           "unit": "none",
-          "decimals": 4
+          "decimals": 6
         },
         "overrides": []
       },
@@ -720,7 +503,7 @@
           "sort": "none"
         }
       },
-      "title": "Per-Instrument Realized PnL",
+      "title": "Last Execution Price",
       "type": "timeseries",
       "targets": [
         {
@@ -728,8 +511,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_instrument_realized_pnl{algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
-          "legendFormat": "{{algorithm}} – {{instrument}}",
+          "expr": "algo_trade_last_price{job=~"$job", algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
+          "legendFormat": "{{algorithm}} – {{instrument}} – {{verb}}",
           "refId": "A"
         }
       ]
@@ -745,9 +528,9 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 2,
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "lineWidth": 1,
             "showPoints": "never",
             "spanNulls": false
           },
@@ -777,7 +560,7 @@
           "sort": "none"
         }
       },
-      "title": "Per-Instrument Net Position",
+      "title": "Last Fill Quantity",
       "type": "timeseries",
       "targets": [
         {
@@ -785,68 +568,23 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_instrument_net_position{algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
-          "legendFormat": "{{algorithm}} – {{instrument}}",
+          "expr": "algo_trade_last_quantity{job=~"$job", algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
+          "legendFormat": "{{algorithm}} – {{instrument}} – {{verb}}",
           "refId": "A"
         }
       ]
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "never",
-            "spanNulls": false
-          },
-          "unit": "none",
-          "decimals": 4
-        },
-        "overrides": []
-      },
+      "collapsed": false,
       "gridPos": {
-        "h": 8,
-        "w": 12,
+        "h": 1,
+        "w": 24,
         "x": 0,
         "y": 23
       },
-      "id": 22,
-      "options": {
-        "legend": {
-          "calcs": [
-            "last"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "title": "Per-Instrument Total PnL",
-      "type": "timeseries",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "algo_instrument_total_pnl{algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
-          "legendFormat": "{{algorithm}} – {{instrument}}",
-          "refId": "A"
-        }
-      ]
+      "id": 103,
+      "title": "Fill Breakdown Table",
+      "type": "row"
     },
     {
       "datasource": {
@@ -856,52 +594,82 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
+            "mode": "thresholds"
           },
-          "custom": {
-            "drawStyle": "bars",
-            "fillOpacity": 60,
-            "lineWidth": 1,
-            "showPoints": "never",
-            "spanNulls": false
-          },
-          "unit": "none",
-          "decimals": 0
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Total Fills"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 23
+        "w": 24,
+        "x": 0,
+        "y": 24
       },
-      "id": 23,
+      "id": 30,
       "options": {
-        "legend": {
-          "calcs": [
-            "last"
+        "footer": {
+          "enablePagination": false,
+          "fields": "",
+          "reducer": [
+            "sum"
           ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
+          "show": false
         },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Total Fills"
+          }
+        ]
       },
-      "title": "Number of Trades per Instrument",
-      "type": "timeseries",
+      "title": "Fills by Algorithm / Instrument / Verb / Status",
+      "type": "table",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_instrument_number_of_trades{algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
-          "legendFormat": "{{algorithm}} – {{instrument}}",
-          "refId": "A"
+          "expr": "algo_trade_count_total{job=~"$job", algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
+          "instant": true,
+          "legendFormat": "{{algorithm}} | {{instrument}} | {{verb}} | {{status}}",
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true
+            },
+            "renameByName": {}
+          }
         }
       ]
     }
@@ -912,11 +680,23 @@
   "tags": [
     "hft",
     "algorithm",
-    "portfolio",
-    "pnl"
+    "trades",
+    "execution"
   ],
   "templating": {
-    "list": [
+    "list": [{
+        "name": "job",
+        "label": "Application",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(up, job)",
+        "refresh": 2,
+        "multi": false,
+        "includeAll": false,
+        "sort": 1,
+        "hide": 0,
+        "current": { "text": "hft-framework", "value": "hft-framework" }
+      },
       {
         "current": {
           "selected": true,
@@ -927,14 +707,14 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(algo_portfolio_total_pnl, algorithm)",
+        "definition": "label_values(algo_trade_count_total, algorithm)",
         "hide": 0,
         "includeAll": true,
         "multi": true,
         "name": "algorithm",
         "options": [],
         "query": {
-          "query": "label_values(algo_portfolio_total_pnl, algorithm)",
+          "query": "label_values(algo_trade_count_total, algorithm)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,
@@ -953,14 +733,14 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(algo_instrument_total_pnl{algorithm=~\"$algorithm\"}, instrument)",
+        "definition": "label_values(algo_trade_count_total{job=~"$job", algorithm=~\"$algorithm\"}, instrument)",
         "hide": 0,
         "includeAll": true,
         "multi": true,
         "name": "instrument",
         "options": [],
         "query": {
-          "query": "label_values(algo_instrument_total_pnl{algorithm=~\"$algorithm\"}, instrument)",
+          "query": "label_values(algo_trade_count_total{job=~"$job", algorithm=~\"$algorithm\"}, instrument)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,
@@ -977,8 +757,8 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Algorithm Portfolio PnL",
-  "uid": "algo_portfolio_pnl",
+  "title": "Algorithm Trades & Execution",
+  "uid": "algo_trades_execution",
   "version": 1
 }
 
