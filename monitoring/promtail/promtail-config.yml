@@ -23,6 +23,17 @@ scrape_configs:
         target_label: logstream
       - source_labels: ["__meta_docker_container_label_com_docker_compose_service"]
         target_label: service
+      # app = docker-compose service name; used by Grafana hft-logs dashboard
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_service"]
+        target_label: app
+    pipeline_stages:
+      # Extract log level from common Java/logback log line formats, e.g.:
+      #   2024-01-01 00:00:00 INFO  c.j.hft... - message
+      #   [2024-01-01T00:00:00] [ERROR] thread - message
+      - regex:
+          expression: '(?i)(?P<level>TRACE|DEBUG|INFO|WARN(?:ING)?|ERROR|FATAL|SEVERE)'
+      - labels:
+          level:
 
   # ── Host system logs (optional) ──────────────────────────────────────────────
   - job_name: system

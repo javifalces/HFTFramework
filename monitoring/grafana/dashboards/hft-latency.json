@@ -29,13 +29,12 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "query": "label_values(up, job)",
+        "query": "label_values(jvm_memory_bytes_used, job)",
         "refresh": 2,
         "multi": false,
         "includeAll": false,
         "sort": 1,
-        "hide": 0,
-        "current": {}
+        "hide": 0
       },
       {
         "name": "topic",

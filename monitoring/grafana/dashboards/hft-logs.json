@@ -30,7 +30,7 @@
           "type": "loki",
           "uid": "loki"
         },
-        "query": "label_values(app)",
+        "query": "app",
         "refresh": 2,
         "multi": false,
         "includeAll": false,
