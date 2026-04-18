@@ -1,24 +1,51 @@
 {
   "uid": "hft-latency",
-  "title": "HFT Latency Statistics",
+  "title": "HFT - Latency Statistics",
   "description": "Latency percentiles for depth, trade, executionReport, and orderRequest paths tracked by LatencyStatistics",
-  "tags": ["hft", "latency"],
+  "tags": [
+    "hft",
+    "latency"
+  ],
   "timezone": "browser",
   "schemaVersion": 38,
   "version": 1,
   "refresh": "10s",
-  "time": { "from": "now-30m", "to": "now" },
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
   "timepicker": {},
   "links": [],
-  "annotations": { "list": [] },
+  "annotations": {
+    "list": []
+  },
   "templating": {
     "list": [
+      {
+        "name": "app",
+        "label": "Application",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": "label_values(up, job)",
+        "refresh": 2,
+        "multi": false,
+        "includeAll": false,
+        "sort": 1,
+        "hide": 0,
+        "current": {}
+      },
       {
         "name": "topic",
         "label": "Topic",
         "type": "query",
-        "datasource": { "type": "prometheus", "uid": "prometheus" },
-        "query": "label_values(latency_mean_ms, topic)",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": "label_values(latency_mean_ms{job=\"$app\"}, topic)",
         "refresh": 2,
         "multi": true,
         "includeAll": true,
@@ -34,17 +61,34 @@
       "type": "row",
       "title": "Current Latency Overview",
       "collapsed": false,
-      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 }
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      }
     },
     {
       "id": 2,
       "type": "stat",
       "title": "P50 Latency (ms)",
       "description": "Median latency across all topics",
-      "gridPos": { "x": 0, "y": 1, "w": 4, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "orientation": "auto",
         "textMode": "auto",
         "colorMode": "background",
@@ -57,16 +101,25 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 5 },
-              { "color": "red", "value": 50 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
             ]
           }
         }
       },
       "targets": [
         {
-          "expr": "avg(latency_p50_ms{topic=~\".*TOTAL.*\", job=\"hft-framework\"})",
+          "expr": "avg(latency_p50_ms{topic=~\".*TOTAL.*\", job=\"$app\"})",
           "legendFormat": "avg p50",
           "refId": "A"
         }
@@ -76,10 +129,22 @@
       "id": 3,
       "type": "stat",
       "title": "P90 Latency (ms)",
-      "gridPos": { "x": 4, "y": 1, "w": 4, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "x": 4,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "colorMode": "background",
         "graphMode": "area"
       },
@@ -89,16 +154,25 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 10 },
-              { "color": "red", "value": 100 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 100
+              }
             ]
           }
         }
       },
       "targets": [
         {
-          "expr": "avg(latency_p90_ms{topic=~\".*TOTAL.*\", job=\"hft-framework\"})",
+          "expr": "avg(latency_p90_ms{topic=~\".*TOTAL.*\", job=\"$app\"})",
           "legendFormat": "avg p90",
           "refId": "A"
         }
@@ -108,10 +182,22 @@
       "id": 4,
       "type": "stat",
       "title": "P99 Latency (ms)",
-      "gridPos": { "x": 8, "y": 1, "w": 4, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "colorMode": "background",
         "graphMode": "area"
       },
@@ -121,16 +207,25 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 50 },
-              { "color": "red", "value": 500 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 500
+              }
             ]
           }
         }
       },
       "targets": [
         {
-          "expr": "avg(latency_p99_ms{topic=~\".*TOTAL.*\", job=\"hft-framework\"})",
+          "expr": "avg(latency_p99_ms{topic=~\".*TOTAL.*\", job=\"$app\"})",
           "legendFormat": "avg p99",
           "refId": "A"
         }
@@ -140,10 +235,22 @@
       "id": 5,
       "type": "stat",
       "title": "Max Latency (ms)",
-      "gridPos": { "x": 12, "y": 1, "w": 4, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "colorMode": "background",
         "graphMode": "area"
       },
@@ -153,16 +260,25 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 100 },
-              { "color": "red", "value": 1000 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 100
+              },
+              {
+                "color": "red",
+                "value": 1000
+              }
             ]
           }
         }
       },
       "targets": [
         {
-          "expr": "max(latency_max_ms{topic=~\".*TOTAL.*\", job=\"hft-framework\"})",
+          "expr": "max(latency_max_ms{topic=~\".*TOTAL.*\", job=\"$app\"})",
           "legendFormat": "max",
           "refId": "A"
         }
@@ -172,19 +288,33 @@
       "id": 6,
       "type": "stat",
       "title": "Sample Count",
-      "gridPos": { "x": 16, "y": 1, "w": 4, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "x": 16,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "colorMode": "value",
         "graphMode": "area"
       },
       "fieldConfig": {
-        "defaults": { "unit": "short" }
+        "defaults": {
+          "unit": "short"
+        }
       },
       "targets": [
         {
-          "expr": "sum(latency_count{topic=~\".*TOTAL.*\", job=\"hft-framework\"})",
+          "expr": "sum(latency_count{topic=~\".*TOTAL.*\", job=\"$app\"})",
           "legendFormat": "samples",
           "refId": "A"
         }
@@ -195,44 +325,69 @@
       "type": "row",
       "title": "Latency Percentiles Over Time",
       "collapsed": false,
-      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 }
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 1
+      }
     },
     {
       "id": 11,
       "type": "timeseries",
-      "title": "Total Path Latency — Percentiles (ms)",
+      "title": "Total Path Latency \u2014 Percentiles (ms)",
       "description": "P50 / P90 / P95 / P99 latency for TOTAL topics over time",
-      "gridPos": { "x": 0, "y": 6, "w": 24, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "options": {
-        "tooltip": { "mode": "multi" },
-        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max", "mean"] }
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ]
+        }
       },
       "fieldConfig": {
         "defaults": {
           "unit": "ms",
-          "custom": { "lineWidth": 2 }
+          "custom": {
+            "lineWidth": 2
+          }
         }
       },
       "targets": [
         {
-          "expr": "latency_p50_ms{topic=~\"$topic\", job=\"hft-framework\"}",
-          "legendFormat": "p50 — {{topic}}",
+          "expr": "latency_p50_ms{topic=~\"$topic\", job=\"$app\"}",
+          "legendFormat": "p50 \u2014 {{topic}}",
           "refId": "A"
         },
         {
-          "expr": "latency_p90_ms{topic=~\"$topic\", job=\"hft-framework\"}",
-          "legendFormat": "p90 — {{topic}}",
+          "expr": "latency_p90_ms{topic=~\"$topic\", job=\"$app\"}",
+          "legendFormat": "p90 \u2014 {{topic}}",
           "refId": "B"
         },
         {
-          "expr": "latency_p95_ms{topic=~\"$topic\", job=\"hft-framework\"}",
-          "legendFormat": "p95 — {{topic}}",
+          "expr": "latency_p95_ms{topic=~\"$topic\", job=\"$app\"}",
+          "legendFormat": "p95 \u2014 {{topic}}",
           "refId": "C"
         },
         {
-          "expr": "latency_p99_ms{topic=~\"$topic\", job=\"hft-framework\"}",
-          "legendFormat": "p99 — {{topic}}",
+          "expr": "latency_p99_ms{topic=~\"$topic\", job=\"$app\"}",
+          "legendFormat": "p99 \u2014 {{topic}}",
           "refId": "D"
         }
       ]
@@ -241,19 +396,37 @@
       "id": 12,
       "type": "timeseries",
       "title": "Max Latency Over Time (ms)",
-      "gridPos": { "x": 0, "y": 14, "w": 12, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "options": {
-        "tooltip": { "mode": "multi" },
-        "legend": { "displayMode": "list", "placement": "bottom" }
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
       },
       "fieldConfig": {
-        "defaults": { "unit": "ms", "custom": { "lineWidth": 2 } }
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "lineWidth": 2
+          }
+        }
       },
       "targets": [
         {
-          "expr": "latency_max_ms{topic=~\"$topic\", job=\"hft-framework\"}",
-          "legendFormat": "max — {{topic}}",
+          "expr": "latency_max_ms{topic=~\"$topic\", job=\"$app\"}",
+          "legendFormat": "max \u2014 {{topic}}",
           "refId": "A"
         }
       ]
@@ -262,19 +435,37 @@
       "id": 13,
       "type": "timeseries",
       "title": "Mean Latency Over Time (ms)",
-      "gridPos": { "x": 12, "y": 14, "w": 12, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "x": 12,
+        "y": 14,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "options": {
-        "tooltip": { "mode": "multi" },
-        "legend": { "displayMode": "list", "placement": "bottom" }
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
       },
       "fieldConfig": {
-        "defaults": { "unit": "ms", "custom": { "lineWidth": 2 } }
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "lineWidth": 2
+          }
+        }
       },
       "targets": [
         {
-          "expr": "latency_mean_ms{topic=~\"$topic\", job=\"hft-framework\"}",
-          "legendFormat": "mean — {{topic}}",
+          "expr": "latency_mean_ms{topic=~\"$topic\", job=\"$app\"}",
+          "legendFormat": "mean \u2014 {{topic}}",
           "refId": "A"
         }
       ]
@@ -284,41 +475,61 @@
       "type": "row",
       "title": "Latency by Stage",
       "collapsed": false,
-      "gridPos": { "x": 0, "y": 21, "w": 24, "h": 1 }
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 24,
+        "h": 1
+      }
     },
     {
       "id": 21,
       "type": "timeseries",
-      "title": "Depth Latency by Stage (ms) — P90",
+      "title": "Depth Latency by Stage (ms) \u2014 P90",
       "description": "toBrokerConnector / toAlgoConnector / toStrategy / toNow latencies for depth updates",
-      "gridPos": { "x": 0, "y": 22, "w": 12, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "options": {
-        "tooltip": { "mode": "multi" },
-        "legend": { "displayMode": "list", "placement": "bottom" }
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
       },
       "fieldConfig": {
-        "defaults": { "unit": "ms" }
+        "defaults": {
+          "unit": "ms"
+        }
       },
       "targets": [
         {
-          "expr": "latency_p90_ms{topic=~\"depth\\..*\\.toBrokerConnector\", job=\"hft-framework\"}",
-          "legendFormat": "toBrokerConnector — {{topic}}",
+          "expr": "latency_p90_ms{topic=~\"depth\\..*\\.toBrokerConnector\", job=\"$app\"}",
+          "legendFormat": "toBrokerConnector \u2014 {{topic}}",
           "refId": "A"
         },
         {
-          "expr": "latency_p90_ms{topic=~\"depth\\..*\\.toAlgoConnector\", job=\"hft-framework\"}",
-          "legendFormat": "toAlgoConnector — {{topic}}",
+          "expr": "latency_p90_ms{topic=~\"depth\\..*\\.toAlgoConnector\", job=\"$app\"}",
+          "legendFormat": "toAlgoConnector \u2014 {{topic}}",
           "refId": "B"
         },
         {
-          "expr": "latency_p90_ms{topic=~\"depth\\..*\\.toStrategy\", job=\"hft-framework\"}",
-          "legendFormat": "toStrategy — {{topic}}",
+          "expr": "latency_p90_ms{topic=~\"depth\\..*\\.toStrategy\", job=\"$app\"}",
+          "legendFormat": "toStrategy \u2014 {{topic}}",
           "refId": "C"
         },
         {
-          "expr": "latency_p90_ms{topic=~\"depth\\..*\\.toNow\", job=\"hft-framework\"}",
-          "legendFormat": "toNow — {{topic}}",
+          "expr": "latency_p90_ms{topic=~\"depth\\..*\\.toNow\", job=\"$app\"}",
+          "legendFormat": "toNow \u2014 {{topic}}",
           "refId": "D"
         }
       ]
@@ -326,31 +537,46 @@
     {
       "id": 22,
       "type": "timeseries",
-      "title": "Order Request Latency by Stage (ms) — P90",
+      "title": "Order Request Latency by Stage (ms) \u2014 P90",
       "description": "Outbound: toAlgoConnector / toBrokerConnector / toNow for order requests",
-      "gridPos": { "x": 12, "y": 22, "w": 12, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "x": 12,
+        "y": 22,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "options": {
-        "tooltip": { "mode": "multi" },
-        "legend": { "displayMode": "list", "placement": "bottom" }
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
       },
       "fieldConfig": {
-        "defaults": { "unit": "ms" }
+        "defaults": {
+          "unit": "ms"
+        }
       },
       "targets": [
         {
-          "expr": "latency_p90_ms{topic=~\"orderRequest\\..*\\.toAlgoConnector\", job=\"hft-framework\"}",
-          "legendFormat": "toAlgoConnector — {{topic}}",
+          "expr": "latency_p90_ms{topic=~\"orderRequest\\..*\\.toAlgoConnector\", job=\"$app\"}",
+          "legendFormat": "toAlgoConnector \u2014 {{topic}}",
           "refId": "A"
         },
         {
-          "expr": "latency_p90_ms{topic=~\"orderRequest\\..*\\.toBrokerConnector\", job=\"hft-framework\"}",
-          "legendFormat": "toBrokerConnector — {{topic}}",
+          "expr": "latency_p90_ms{topic=~\"orderRequest\\..*\\.toBrokerConnector\", job=\"$app\"}",
+          "legendFormat": "toBrokerConnector \u2014 {{topic}}",
           "refId": "B"
         },
         {
-          "expr": "latency_p90_ms{topic=~\"orderRequest\\..*\\.toNow\", job=\"hft-framework\"}",
-          "legendFormat": "toNow — {{topic}}",
+          "expr": "latency_p90_ms{topic=~\"orderRequest\\..*\\.toNow\", job=\"$app\"}",
+          "legendFormat": "toNow \u2014 {{topic}}",
           "refId": "C"
         }
       ]
@@ -360,27 +586,63 @@
       "type": "row",
       "title": "Latency Table",
       "collapsed": false,
-      "gridPos": { "x": 0, "y": 29, "w": 24, "h": 1 }
+      "gridPos": {
+        "x": 0,
+        "y": 29,
+        "w": 24,
+        "h": 1
+      }
     },
     {
       "id": 31,
       "type": "table",
-      "title": "Latency Summary — All Topics",
+      "title": "Latency Summary \u2014 All Topics",
       "description": "Latest latency percentiles for every tracked topic",
-      "gridPos": { "x": 0, "y": 30, "w": 24, "h": 10 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "x": 0,
+        "y": 30,
+        "w": 24,
+        "h": 10
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "options": {
-        "sortBy": [{ "displayName": "p99 (ms)", "desc": true }],
-        "footer": { "show": false }
+        "sortBy": [
+          {
+            "displayName": "p99 (ms)",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": false
+        }
       },
       "fieldConfig": {
-        "defaults": { "unit": "ms" },
+        "defaults": {
+          "unit": "ms"
+        },
         "overrides": [
-          { "matcher": { "id": "byName", "options": "count" }, "properties": [{ "id": "unit", "value": "short" }] }
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "count"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          }
         ]
       },
       "transformations": [
-        { "id": "merge", "options": {} },
+        {
+          "id": "merge",
+          "options": {}
+        },
         {
           "id": "organize",
           "options": {
@@ -399,49 +661,49 @@
       ],
       "targets": [
         {
-          "expr": "latency_mean_ms{topic=~\"$topic\", job=\"hft-framework\"}",
+          "expr": "latency_mean_ms{topic=~\"$topic\", job=\"$app\"}",
           "instant": true,
           "legendFormat": "{{topic}}",
           "refId": "A"
         },
         {
-          "expr": "latency_p50_ms{topic=~\"$topic\", job=\"hft-framework\"}",
+          "expr": "latency_p50_ms{topic=~\"$topic\", job=\"$app\"}",
           "instant": true,
           "legendFormat": "{{topic}}",
           "refId": "B"
         },
         {
-          "expr": "latency_p75_ms{topic=~\"$topic\", job=\"hft-framework\"}",
+          "expr": "latency_p75_ms{topic=~\"$topic\", job=\"$app\"}",
           "instant": true,
           "legendFormat": "{{topic}}",
           "refId": "C"
         },
         {
-          "expr": "latency_p90_ms{topic=~\"$topic\", job=\"hft-framework\"}",
+          "expr": "latency_p90_ms{topic=~\"$topic\", job=\"$app\"}",
           "instant": true,
           "legendFormat": "{{topic}}",
           "refId": "D"
         },
         {
-          "expr": "latency_p95_ms{topic=~\"$topic\", job=\"hft-framework\"}",
+          "expr": "latency_p95_ms{topic=~\"$topic\", job=\"$app\"}",
           "instant": true,
           "legendFormat": "{{topic}}",
           "refId": "E"
         },
         {
-          "expr": "latency_p99_ms{topic=~\"$topic\", job=\"hft-framework\"}",
+          "expr": "latency_p99_ms{topic=~\"$topic\", job=\"$app\"}",
           "instant": true,
           "legendFormat": "{{topic}}",
           "refId": "F"
         },
         {
-          "expr": "latency_max_ms{topic=~\"$topic\", job=\"hft-framework\"}",
+          "expr": "latency_max_ms{topic=~\"$topic\", job=\"$app\"}",
           "instant": true,
           "legendFormat": "{{topic}}",
           "refId": "G"
         },
         {
-          "expr": "latency_count{topic=~\"$topic\", job=\"hft-framework\"}",
+          "expr": "latency_count{topic=~\"$topic\", job=\"$app\"}",
           "instant": true,
           "legendFormat": "{{topic}}",
           "refId": "H"
