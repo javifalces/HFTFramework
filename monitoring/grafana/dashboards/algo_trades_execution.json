@@ -39,19 +39,7 @@
     }
   ],
   "annotations": {
-    "list": [{
-        "name": "job",
-        "label": "Application",
-        "type": "query",
-        "datasource": { "type": "prometheus", "uid": "prometheus" },
-        "query": "label_values(up, job)",
-        "refresh": 2,
-        "multi": false,
-        "includeAll": false,
-        "sort": 1,
-        "hide": 0,
-        "current": { "text": "hft-framework", "value": "hft-framework" }
-      },
+    "list": [
       {
         "builtIn": 1,
         "datasource": {
@@ -66,7 +54,7 @@
       }
     ]
   },
-  "description": "Algorithm trade execution metrics – powered by PrometheusAlgorithmObserver",
+  "description": "Algorithm trade execution metrics \u2013 powered by PrometheusAlgorithmObserver",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -138,7 +126,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(algo_trade_count_total{job=~"$job", algorithm=~\"$algorithm\", instrument=~\"$instrument\"})",
+          "expr": "sum(algo_trade_count_total{job=~\"$app\", algorithm=~\"$algorithm\", instrument=~\"$instrument\"})",
           "legendFormat": "Total Fills",
           "refId": "A"
         }
@@ -197,7 +185,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(algo_trade_count_total{job=~"$job", algorithm=~\"$algorithm\", instrument=~\"$instrument\", verb=\"Buy\"})",
+          "expr": "sum(algo_trade_count_total{job=~\"$app\", algorithm=~\"$algorithm\", instrument=~\"$instrument\", verb=\"Buy\"})",
           "legendFormat": "Buy Fills",
           "refId": "A"
         }
@@ -256,7 +244,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(algo_trade_count_total{job=~"$job", algorithm=~\"$algorithm\", instrument=~\"$instrument\", verb=\"Sell\"})",
+          "expr": "sum(algo_trade_count_total{job=~\"$app\", algorithm=~\"$algorithm\", instrument=~\"$instrument\", verb=\"Sell\"})",
           "legendFormat": "Sell Fills",
           "refId": "A"
         }
@@ -315,7 +303,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(algo_trade_volume_total{job=~"$job", algorithm=~\"$algorithm\", instrument=~\"$instrument\"})",
+          "expr": "sum(algo_trade_volume_total{job=~\"$app\", algorithm=~\"$algorithm\", instrument=~\"$instrument\"})",
           "legendFormat": "Total Volume",
           "refId": "A"
         }
@@ -384,8 +372,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (algorithm, instrument, verb) (rate(algo_trade_count_total{job=~"$job", algorithm=~\"$algorithm\", instrument=~\"$instrument\"}[1m]) * 60)",
-          "legendFormat": "{{algorithm}} – {{instrument}} – {{verb}}",
+          "expr": "sum by (algorithm, instrument, verb) (rate(algo_trade_count_total{job=~\"$app\", algorithm=~\"$algorithm\", instrument=~\"$instrument\"}[1m]) * 60)",
+          "legendFormat": "{{algorithm}} \u2013 {{instrument}} \u2013 {{verb}}",
           "refId": "A"
         }
       ]
@@ -441,8 +429,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_trade_volume_total{job=~"$job", algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
-          "legendFormat": "{{algorithm}} – {{instrument}} – {{verb}}",
+          "expr": "algo_trade_volume_total{job=~\"$app\", algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
+          "legendFormat": "{{algorithm}} \u2013 {{instrument}} \u2013 {{verb}}",
           "refId": "A"
         }
       ]
@@ -511,8 +499,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_trade_last_price{job=~"$job", algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
-          "legendFormat": "{{algorithm}} – {{instrument}} – {{verb}}",
+          "expr": "algo_trade_last_price{job=~\"$app\", algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
+          "legendFormat": "{{algorithm}} \u2013 {{instrument}} \u2013 {{verb}}",
           "refId": "A"
         }
       ]
@@ -568,8 +556,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_trade_last_quantity{job=~"$job", algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
-          "legendFormat": "{{algorithm}} – {{instrument}} – {{verb}}",
+          "expr": "algo_trade_last_quantity{job=~\"$app\", algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
+          "legendFormat": "{{algorithm}} \u2013 {{instrument}} \u2013 {{verb}}",
           "refId": "A"
         }
       ]
@@ -653,7 +641,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_trade_count_total{job=~"$job", algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
+          "expr": "algo_trade_count_total{job=~\"$app\", algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
           "instant": true,
           "legendFormat": "{{algorithm}} | {{instrument}} | {{verb}} | {{status}}",
           "refId": "A",
@@ -684,18 +672,22 @@
     "execution"
   ],
   "templating": {
-    "list": [{
-        "name": "job",
+    "list": [
+      {
+        "name": "app",
         "label": "Application",
         "type": "query",
-        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
         "query": "label_values(up, job)",
         "refresh": 2,
         "multi": false,
         "includeAll": false,
         "sort": 1,
         "hide": 0,
-        "current": { "text": "hft-framework", "value": "hft-framework" }
+        "current": {}
       },
       {
         "current": {
@@ -733,14 +725,14 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(algo_trade_count_total{job=~"$job", algorithm=~\"$algorithm\"}, instrument)",
+        "definition": "label_values(algo_trade_count_total{job=~\"$app\", algorithm=~\"$algorithm\"}, instrument)",
         "hide": 0,
         "includeAll": true,
         "multi": true,
         "name": "instrument",
         "options": [],
         "query": {
-          "query": "label_values(algo_trade_count_total{job=~"$job", algorithm=~\"$algorithm\"}, instrument)",
+          "query": "label_values(algo_trade_count_total{job=~\"$app\", algorithm=~\"$algorithm\"}, instrument)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,
@@ -757,8 +749,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Algorithm Trades & Execution",
+  "title": "HFT - Algorithm Trades & Execution",
   "uid": "algo_trades_execution",
   "version": 1
 }
-

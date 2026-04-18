@@ -33,19 +33,7 @@
     }
   ],
   "annotations": {
-    "list": [{
-        "name": "job",
-        "label": "Application",
-        "type": "query",
-        "datasource": { "type": "prometheus", "uid": "prometheus" },
-        "query": "label_values(up, job)",
-        "refresh": 2,
-        "multi": false,
-        "includeAll": false,
-        "sort": 1,
-        "hide": 0,
-        "current": { "text": "hft-framework", "value": "hft-framework" }
-      },
+    "list": [
       {
         "builtIn": 1,
         "datasource": {
@@ -60,7 +48,7 @@
       }
     ]
   },
-  "description": "Algorithm Portfolio PnL and Positions – powered by PrometheusAlgorithmObserver",
+  "description": "Algorithm Portfolio PnL and Positions \u2013 powered by PrometheusAlgorithmObserver",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -141,7 +129,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_portfolio_realized_pnl{job=~"$job", job=~"$job", algorithm=~\"$algorithm\"}",
+          "expr": "algo_portfolio_realized_pnl{job=~\"$app\", algorithm=~\"$algorithm\"}",
           "legendFormat": "{{algorithm}}",
           "refId": "A"
         }
@@ -209,7 +197,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_portfolio_unrealized_pnl{job=~"$job", job=~"$job", algorithm=~\"$algorithm\"}",
+          "expr": "algo_portfolio_unrealized_pnl{job=~\"$app\", algorithm=~\"$algorithm\"}",
           "legendFormat": "{{algorithm}}",
           "refId": "A"
         }
@@ -277,7 +265,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_portfolio_total_pnl{job=~"$job", job=~"$job", algorithm=~\"$algorithm\"}",
+          "expr": "algo_portfolio_total_pnl{job=~\"$app\", algorithm=~\"$algorithm\"}",
           "legendFormat": "{{algorithm}}",
           "refId": "A"
         }
@@ -341,7 +329,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_portfolio_total_fees{job=~"$job", job=~"$job", algorithm=~\"$algorithm\"}",
+          "expr": "algo_portfolio_total_fees{job=~\"$app\", algorithm=~\"$algorithm\"}",
           "legendFormat": "{{algorithm}}",
           "refId": "A"
         }
@@ -401,7 +389,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_portfolio_net_position{job=~"$job", job=~"$job", algorithm=~\"$algorithm\"}",
+          "expr": "algo_portfolio_net_position{job=~\"$app\", algorithm=~\"$algorithm\"}",
           "legendFormat": "{{algorithm}}",
           "refId": "A"
         }
@@ -461,7 +449,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_portfolio_net_investment{job=~"$job", job=~"$job", algorithm=~\"$algorithm\"}",
+          "expr": "algo_portfolio_net_investment{job=~\"$app\", algorithm=~\"$algorithm\"}",
           "legendFormat": "{{algorithm}}",
           "refId": "A"
         }
@@ -563,8 +551,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_portfolio_realized_pnl{job=~"$job", job=~"$job", algorithm=~\"$algorithm\"}",
-          "legendFormat": "{{algorithm}} – Realized",
+          "expr": "algo_portfolio_realized_pnl{job=~\"$app\", algorithm=~\"$algorithm\"}",
+          "legendFormat": "{{algorithm}} \u2013 Realized",
           "refId": "A"
         },
         {
@@ -572,8 +560,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_portfolio_unrealized_pnl{job=~"$job", job=~"$job", algorithm=~\"$algorithm\"}",
-          "legendFormat": "{{algorithm}} – Unrealized",
+          "expr": "algo_portfolio_unrealized_pnl{job=~\"$app\", algorithm=~\"$algorithm\"}",
+          "legendFormat": "{{algorithm}} \u2013 Unrealized",
           "refId": "B"
         },
         {
@@ -581,8 +569,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_portfolio_total_pnl{job=~"$job", job=~"$job", algorithm=~\"$algorithm\"}",
-          "legendFormat": "{{algorithm}} – Total",
+          "expr": "algo_portfolio_total_pnl{job=~\"$app\", algorithm=~\"$algorithm\"}",
+          "legendFormat": "{{algorithm}} \u2013 Total",
           "refId": "C"
         }
       ]
@@ -671,8 +659,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_portfolio_net_position{job=~"$job", job=~"$job", algorithm=~\"$algorithm\"}",
-          "legendFormat": "{{algorithm}} – Net Position",
+          "expr": "algo_portfolio_net_position{job=~\"$app\", algorithm=~\"$algorithm\"}",
+          "legendFormat": "{{algorithm}} \u2013 Net Position",
           "refId": "A"
         }
       ]
@@ -740,8 +728,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_instrument_realized_pnl{job=~"$job", job=~"$job", algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
-          "legendFormat": "{{algorithm}} – {{instrument}}",
+          "expr": "algo_instrument_realized_pnl{job=~\"$app\", algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
+          "legendFormat": "{{algorithm}} \u2013 {{instrument}}",
           "refId": "A"
         }
       ]
@@ -797,8 +785,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_instrument_net_position{job=~"$job", job=~"$job", algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
-          "legendFormat": "{{algorithm}} – {{instrument}}",
+          "expr": "algo_instrument_net_position{job=~\"$app\", algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
+          "legendFormat": "{{algorithm}} \u2013 {{instrument}}",
           "refId": "A"
         }
       ]
@@ -854,8 +842,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_instrument_total_pnl{job=~"$job", job=~"$job", algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
-          "legendFormat": "{{algorithm}} – {{instrument}}",
+          "expr": "algo_instrument_total_pnl{job=~\"$app\", algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
+          "legendFormat": "{{algorithm}} \u2013 {{instrument}}",
           "refId": "A"
         }
       ]
@@ -911,8 +899,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "algo_instrument_number_of_trades{job=~"$job", job=~"$job", algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
-          "legendFormat": "{{algorithm}} – {{instrument}}",
+          "expr": "algo_instrument_number_of_trades{job=~\"$app\", algorithm=~\"$algorithm\", instrument=~\"$instrument\"}",
+          "legendFormat": "{{algorithm}} \u2013 {{instrument}}",
           "refId": "A"
         }
       ]
@@ -928,18 +916,22 @@
     "pnl"
   ],
   "templating": {
-    "list": [{
-        "name": "job",
+    "list": [
+      {
+        "name": "app",
         "label": "Application",
         "type": "query",
-        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
         "query": "label_values(up, job)",
         "refresh": 2,
         "multi": false,
         "includeAll": false,
         "sort": 1,
         "hide": 0,
-        "current": { "text": "hft-framework", "value": "hft-framework" }
+        "current": {}
       },
       {
         "current": {
@@ -977,14 +969,14 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(algo_instrument_total_pnl{job=~"$job", job=~"$job", algorithm=~\"$algorithm\"}, instrument)",
+        "definition": "label_values(algo_instrument_total_pnl{job=~\"$app\", algorithm=~\"$algorithm\"}, instrument)",
         "hide": 0,
         "includeAll": true,
         "multi": true,
         "name": "instrument",
         "options": [],
         "query": {
-          "query": "label_values(algo_instrument_total_pnl{job=~"$job", job=~"$job", algorithm=~\"$algorithm\"}, instrument)",
+          "query": "label_values(algo_instrument_total_pnl{job=~\"$app\", algorithm=~\"$algorithm\"}, instrument)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,
@@ -1001,8 +993,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Algorithm Portfolio PnL",
+  "title": "HFT - Algorithm Portfolio PnL",
   "uid": "algo_portfolio_pnl",
   "version": 1
 }
-
