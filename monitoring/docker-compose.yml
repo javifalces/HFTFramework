@@ -1,4 +1,3 @@
-version: "3.8"
 
 # HFTFramework Monitoring Stack
 # ──────────────────────────────────────────────────────────────────────────────
@@ -33,7 +32,7 @@ services:
       - "--web.console.libraries=/etc/prometheus/console_libraries"
       - "--web.console.templates=/etc/prometheus/consoles"
     networks:
-      - monitoring
+      - hft_monitoring
 
   # ── Loki (log aggregation) ───────────────────────────────────────────────────
   loki:
@@ -47,7 +46,7 @@ services:
       - loki_data:/loki
     command: -config.file=/etc/loki/local-config.yaml
     networks:
-      - monitoring
+      - hft_monitoring
 
   # ── Promtail (ships container logs → Loki) ──────────────────────────────────
   promtail:
@@ -62,7 +61,7 @@ services:
     depends_on:
       - loki
     networks:
-      - monitoring
+      - hft_monitoring
 
   # ── Grafana ──────────────────────────────────────────────────────────────────
   grafana:
@@ -85,7 +84,7 @@ services:
       - prometheus
       - loki
     networks:
-      - monitoring
+      - hft_monitoring
 
   # ── Prometheus Pushgateway ───────────────────────────────────────────────────
   pushgateway:
@@ -95,10 +94,10 @@ services:
     ports:
       - "9091:9091"
     networks:
-      - monitoring
+      - hft_monitoring
 
 networks:
-  monitoring:
+  hft_monitoring:
     name: hft_monitoring
 
 volumes:

@@ -27,10 +27,10 @@ fi
 
 # ── Stop the stack ────────────────────────────────────────────────────────────
 info "Stopping HFT monitoring stack..."
-$COMPOSE down
+$COMPOSE -p hft_monitoring down
 
 echo ""
 ok "Stack stopped."
 echo ""
 echo "   To also remove persistent volumes (all data), run:"
-echo "     $COMPOSE down -v"
+echo "     $COMPOSE -p hft_monitoring down -v"

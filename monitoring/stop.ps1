@@ -28,9 +28,9 @@ if (-not $ComposeCmd) {
 
 # ── Stop the stack ────────────────────────────────────────────────────────────
 Write-Host "Stopping HFT monitoring stack..." -ForegroundColor Yellow
-Invoke-Expression "$ComposeCmd down"
+Invoke-Expression "$ComposeCmd -p hft_monitoring down"
 
 Write-Host "Stack stopped." -ForegroundColor Green
 Write-Host ""
 Write-Host "To also remove persistent volumes (all data), run:" -ForegroundColor DarkGray
-Write-Host "  $ComposeCmd down -v" -ForegroundColor DarkGray
+Write-Host "  $ComposeCmd -p hft_monitoring down -v" -ForegroundColor DarkGray

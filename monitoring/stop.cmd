@@ -24,7 +24,7 @@ if "%COMPOSE_CMD%"=="" (
 
 :: ── Stop the stack ────────────────────────────────────────────────────────────
 echo [INFO] Stopping HFT monitoring stack...
-%COMPOSE_CMD% down
+%COMPOSE_CMD% -p hft_monitoring down
 if errorlevel 1 (
     echo [ERROR] docker compose down failed.
     exit /b 1
@@ -33,6 +33,6 @@ if errorlevel 1 (
 echo [OK]  Stack stopped.
 echo.
 echo       To also remove persistent volumes (all data), run:
-echo         %COMPOSE_CMD% down -v
+echo         %COMPOSE_CMD% -p hft_monitoring down -v
 
 endlocal

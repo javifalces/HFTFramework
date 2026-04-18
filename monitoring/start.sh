@@ -86,7 +86,7 @@ info "Using: $COMPOSE"
 # ── Start the stack ───────────────────────────────────────────────────────────
 echo ""
 info "Starting HFT monitoring stack..."
-$COMPOSE up -d --pull missing
+$COMPOSE -p hft_monitoring up -d --pull missing
 
 echo ""
 ok "Stack is up!"

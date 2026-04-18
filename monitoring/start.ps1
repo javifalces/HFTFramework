@@ -97,7 +97,7 @@ Write-Host "Using: $ComposeCmd" -ForegroundColor Cyan
 # ── Start the stack ───────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "Starting HFT monitoring stack..." -ForegroundColor Green
-Invoke-Expression "$ComposeCmd up -d --pull missing"
+Invoke-Expression "$ComposeCmd -p hft_monitoring up -d --pull missing"
 
 Write-Host ""
 Write-Host "Stack is up!" -ForegroundColor Green

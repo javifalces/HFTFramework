@@ -39,6 +39,7 @@
         "refresh": 2,
         "multi": false,
         "includeAll": true,
+        "allValue": ".*",
         "sort": 1,
         "hide": 0
       },
@@ -131,7 +132,7 @@
       },
       "targets": [
         {
-          "expr": "sum(count_over_time({app=\"$app\"}[$__interval]))",
+          "expr": "sum(count_over_time({app=~\"$app\"}[$__interval]))",
           "legendFormat": "total",
           "refId": "A"
         }
@@ -180,7 +181,7 @@
       },
       "targets": [
         {
-          "expr": "sum(count_over_time({app=\"$app\", level=\"ERROR\"}[$__interval]))",
+          "expr": "sum(count_over_time({app=~\"$app\", level=\"ERROR\"}[$__interval]))",
           "legendFormat": "errors",
           "refId": "A"
         }
@@ -229,7 +230,7 @@
       },
       "targets": [
         {
-          "expr": "sum(count_over_time({app=\"$app\", level=\"WARN\"}[$__interval]))",
+          "expr": "sum(count_over_time({app=~\"$app\", level=\"WARN\"}[$__interval]))",
           "legendFormat": "warnings",
           "refId": "A"
         }
@@ -316,7 +317,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (level) (count_over_time({app=\"$app\"}[1m]))",
+          "expr": "sum by (level) (count_over_time({app=~\"$app\"}[1m]))",
           "legendFormat": "{{level}}",
           "refId": "A"
         }
@@ -405,12 +406,12 @@
       },
       "targets": [
         {
-          "expr": "sum(count_over_time({app=\"$app\", level=\"ERROR\"}[1m]))",
+          "expr": "sum(count_over_time({app=~\"$app\", level=\"ERROR\"}[1m]))",
           "legendFormat": "error rate",
           "refId": "A"
         },
         {
-          "expr": "sum(count_over_time({app=\"$app\", level=\"WARN\"}[1m]))",
+          "expr": "sum(count_over_time({app=~\"$app\", level=\"WARN\"}[1m]))",
           "legendFormat": "warn rate",
           "refId": "B"
         }
@@ -455,7 +456,7 @@
       },
       "targets": [
         {
-          "expr": "{app=\"$app\", level=~\"$level\"} |~ \"(?i)$search\"",
+          "expr": "{app=~\"$app\", level=~\"$level\"} |~ \"(?i)$search\"",
           "legendFormat": "",
           "refId": "A",
           "maxLines": 500
@@ -499,7 +500,7 @@
       },
       "targets": [
         {
-          "expr": "{app=\"$app\", level=\"ERROR\"}",
+          "expr": "{app=~\"$app\", level=\"ERROR\"}",
           "legendFormat": "",
           "refId": "A",
           "maxLines": 200
@@ -531,7 +532,7 @@
       },
       "targets": [
         {
-          "expr": "{app=\"$app\", level=\"WARN\"}",
+          "expr": "{app=~\"$app\", level=\"WARN\"}",
           "legendFormat": "",
           "refId": "A",
           "maxLines": 200
@@ -575,7 +576,7 @@
       },
       "targets": [
         {
-          "expr": "{app=\"$app\"} |~ \"(?i)statistics\"",
+          "expr": "{app=~\"$app\"} |~ \"(?i)statistics\"",
           "legendFormat": "",
           "refId": "A",
           "maxLines": 200
@@ -607,7 +608,7 @@
       },
       "targets": [
         {
-          "expr": "{app=\"$app\"} |~ \"(?i)latency\"",
+          "expr": "{app=~\"$app\"} |~ \"(?i)latency\"",
           "legendFormat": "",
           "refId": "A",
           "maxLines": 200

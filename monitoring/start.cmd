@@ -80,7 +80,7 @@ echo [INFO] Using: %COMPOSE_CMD%
 :: ── Start the stack ───────────────────────────────────────────────────────────
 echo.
 echo [INFO] Starting HFT monitoring stack...
-%COMPOSE_CMD% up -d --pull missing
+%COMPOSE_CMD% -p hft_monitoring up -d --pull missing
 if errorlevel 1 (
     echo [ERROR] docker compose up failed.
     exit /b 1
