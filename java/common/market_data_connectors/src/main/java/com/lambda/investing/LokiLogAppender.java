@@ -341,12 +341,25 @@ public class LokiLogAppender extends AbstractAppender {
 
     private static String formatMessage(LogEvent e) {
         String loggerName = e.getLoggerName();
-        int dot = loggerName.lastIndexOf('.');
-        String shortLogger = dot >= 0 ? loggerName.substring(dot + 1) : loggerName;
+        String shortLogger;
+        if (loggerName == null || loggerName.isEmpty()) {
+            shortLogger = "?";
+        } else {
+            int dot = loggerName.lastIndexOf('.');
+            shortLogger = dot >= 0 ? loggerName.substring(dot + 1) : loggerName;
+        }
+
+        String text;
+        try {
+            org.apache.logging.log4j.message.Message msg = e.getMessage();
+            text = (msg != null) ? msg.getFormattedMessage() : "";
+        } catch (Exception ex) {
+            // Malformed message patterns (e.g. unclosed '{') can throw inside Log4j2
+            text = "<message formatting error: " + ex.getClass().getSimpleName() + ">";
+        }
 
         StringBuilder sb = new StringBuilder();
-        sb.append("[").append(shortLogger).append("] ")
-          .append(e.getMessage().getFormattedMessage());
+        sb.append("[").append(shortLogger).append("] ").append(text);
         if (e.getThrown() != null) {
             sb.append(" | ").append(formatThrowable(e.getThrown()));
         }
