@@ -86,6 +86,16 @@ services:
     networks:
       - monitoring
 
+  # ── Prometheus Pushgateway ───────────────────────────────────────────────────
+  pushgateway:
+    image: prom/pushgateway:v1.8.0
+    container_name: hft_pushgateway
+    restart: unless-stopped
+    ports:
+      - "9091:9091"
+    networks:
+      - monitoring
+
 networks:
   monitoring:
     name: hft_monitoring

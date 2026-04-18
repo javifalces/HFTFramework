@@ -1,33 +1,37 @@
-global:
+﻿global:
   scrape_interval: 15s
   evaluation_interval: 15s
   scrape_timeout: 10s
-
-# Alertmanager configuration (optional – comment out if not used)
+# Alertmanager configuration (optional - comment out if not used)
 # alerting:
 #   alertmanagers:
 #     - static_configs:
 #         - targets: ["alertmanager:9093"]
-
 # Rule files (optional)
 # rule_files:
 #   - "alert_rules.yml"
-
 scrape_configs:
-
-  # ── HFT Framework Java process ───────────────────────────────────────────────
-  # The Java app must be started with PROMETHEUS_PORT=8080 (or whichever port
-  # you choose). On Linux hosts replace 'host.docker.internal' with the host IP
-  # (e.g. 172.17.0.1) or use `network_mode: host` for the prometheus service.
-  - job_name: "hft-framework"
-    metrics_path: "/metrics"
+  # -- Prometheus Pushgateway --------------------------------------------------
+  # The Java app pushes metrics to the Pushgateway on port 9091.
+  # Set PROMETHEUS_HOST=localhost and PROMETHEUS_PORT=9091 in your Java process.
+  # honor_labels=true preserves the job label set by the push client.
+  - job_name: "pushgateway"
+    honor_labels: true
     static_configs:
       - targets:
-          - "host.docker.internal:8080"
+          - "pushgateway:9091"
         labels:
           app: "hft-framework"
-
-  # ── Prometheus self-monitoring ───────────────────────────────────────────────
+  # -- HFT Framework Java process (pull / scrape mode - optional) ---------------
+  # Uncomment if you also expose a /metrics HTTP endpoint from the Java app.
+  # - job_name: "hft-framework"
+  #   metrics_path: "/metrics"
+  #   static_configs:
+  #     - targets:
+  #         - "host.docker.internal:8080"
+  #       labels:
+  #         app: "hft-framework"
+  # -- Prometheus self-monitoring -----------------------------------------------
   - job_name: "prometheus"
     static_configs:
       - targets:

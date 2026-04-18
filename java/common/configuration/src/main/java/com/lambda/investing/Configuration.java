@@ -88,7 +88,7 @@ public class Configuration {
 
 
     /**
-     * Port for the Prometheus /metrics HTTP endpoint. Empty = Prometheus disabled.Normally 9090
+     * Port for the Prometheus /metrics HTTP endpoint. Empty = Prometheus disabled.Normally 9091(push)
      * Resolution order: JVM system property {@code prometeus.port} → env var {@code PROMETHEUS_PORT}.
      */
     public static String PROMETHEUS_PORT = getSysPropOrEnvOrDefault("prometheus.port", "PROMETHEUS_PORT", "");
