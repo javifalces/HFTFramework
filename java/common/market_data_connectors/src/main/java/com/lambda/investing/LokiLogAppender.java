@@ -101,6 +101,9 @@ public class LokiLogAppender extends AbstractAppender {
         }
 
         boolean active = port != 0;
+        if (host == null || host.isEmpty()) {
+            host = "localhost";
+        }
         if (active && !isReachable(host, port)) {
             System.err.println("[LokiLogAppender] WARNING: Loki host " + host + ":" + port
                     + " is not reachable — appender disabled.");

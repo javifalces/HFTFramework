@@ -48,11 +48,11 @@
 
         </RollingFile>
 
-        <!-- Optional Loki appender: active when LOKI_HOST env var is set; no-op otherwise -->
+        <!-- Optional Loki appender: active when LOKI_PORT env var is set; no-op otherwise -->
         <LokiAppender name="loki"
-                      host="${env:LOKI_HOST:-}"
-                      port="${env:LOKI_PORT:-3100}"
-                      appName="${sys:log.appName:-hft-framework}"/>
+                      host="${env:LOKI_HOST:-localhost}"
+                      port="${env:LOKI_PORT:-}"
+                      appName="${sys:log.appName:-AlgoTradingZeroMq}"/>
 
     </appenders>
 

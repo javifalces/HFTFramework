@@ -873,7 +873,7 @@ public class Depth extends CSVable implements Cloneable {
                 levelIt++;
             }
         }
-        return Double.MIN_VALUE;
+        return getWorstBid();//worst Bid
     }
 
     @JSONField(serialize = false, deserialize = false)
@@ -905,7 +905,7 @@ public class Depth extends CSVable implements Cloneable {
                 levelIt++;
             }
         }
-        return Double.MAX_VALUE;
+        return getWorstAsk();//worst Ask
     }
 
     @JSONField(serialize = false, deserialize = false)
