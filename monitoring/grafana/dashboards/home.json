@@ -1,0 +1,39 @@
+{
+  "annotations": { "list": [] },
+  "description": "HFT Framework – Dashboard Index",
+  "editable": false,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": null,
+      "gridPos": { "h": 24, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "showStarred": false,
+        "showRecentlyViewed": false,
+        "showSearch": true,
+        "showHeadings": false,
+        "maxItems": 100,
+        "query": "",
+        "tags": [],
+        "layout": "list",
+        "includeVars": false,
+        "keepTime": false
+      },
+      "title": "Dashboards",
+      "type": "dashlist"
+    }
+  ],
+  "refresh": false,
+  "schemaVersion": 39,
+  "tags": [],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": { "hidden": true },
+  "timezone": "browser",
+  "title": "Home",
+  "uid": "home",
+  "version": 1
+}

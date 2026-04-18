@@ -20,7 +20,6 @@ public class ZeroMqTradingConfiguration {
     private boolean paperTrading;
     private boolean demoTrading;
     private String[] instrumentPks;
-
     private AlgorithmConfiguration algorithm;
 
 }

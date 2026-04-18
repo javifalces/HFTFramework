@@ -18,10 +18,19 @@ public class App {
 
 	public static void main(String[] args) {
 		try {
+			System.setProperty("user.timezone", "GMT");
+			setAppName();
 			new App(args);
 		} catch (Throwable t) {
 			t.printStackTrace();
 			System.exit(-1);
+		}
+	}
+
+	private static void setAppName() {
+		String appName = System.getProperty("log.appName");
+		if (appName == null || appName.trim().isEmpty()) {
+			System.setProperty("log.appName", "MetatraderEngine");
 		}
 	}
 

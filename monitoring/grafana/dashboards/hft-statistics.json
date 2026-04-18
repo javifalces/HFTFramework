@@ -1,0 +1,441 @@
+{
+  "uid": "hft-statistics",
+  "title": "HFT - Throughput Statistics",
+  "description": "Message throughput counters per topic tracked by the Statistics class (depth, trade, executionReport)",
+  "tags": [
+    "hft",
+    "statistics",
+    "throughput"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "links": [],
+  "annotations": {
+    "list": []
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "app",
+        "label": "Application",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": "label_values(jvm_memory_bytes_used, job)",
+        "refresh": 2,
+        "multi": false,
+        "includeAll": false,
+        "sort": 1,
+        "hide": 0
+      },
+      {
+        "name": "header",
+        "label": "Statistics Header",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": "label_values({job=\"$app\", __name__=~\"statistics_.*_count_total\"}, __name__)",
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "sort": 1,
+        "hide": 0
+      },
+      {
+        "name": "topic",
+        "label": "Topic",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": "label_values({job=\"$app\", __name__=~\"statistics_.*_count_total\"}, topic)",
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "sort": 1,
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Throughput Overview",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Total Message Rate (msg/s)",
+      "description": "Aggregate message rate across all topics",
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "area",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate({job=\"$app\", __name__=~\"statistics_.*_count_total\"}[1m]))",
+          "legendFormat": "msg/s",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Depth Updates/s",
+      "gridPos": {
+        "x": 6,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate({job=\"$app\", __name__=~\"statistics_.*_count_total\", topic=~\"depth.*\"}[1m]))",
+          "legendFormat": "depth/s",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Trade Events/s",
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate({job=\"$app\", __name__=~\"statistics_.*_count_total\", topic=~\"trade.*\"}[1m]))",
+          "legendFormat": "trade/s",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Execution Reports/s",
+      "gridPos": {
+        "x": 18,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate({job=\"$app\", __name__=~\"statistics_.*_count_total\", topic=~\"executionReport.*\"}[1m]))",
+          "legendFormat": "ER/s",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "Message Rate Over Time",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Message Rate by Topic (msg/s)",
+      "description": "Per-topic message rate (1-minute rolling rate of the Statistics counter)",
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "rate({job=\"$app\", __name__=~\"statistics_.*_count_total\", topic=~\"$topic\"}[1m])",
+          "legendFormat": "{{__name__}} \u2014 {{topic}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "Cumulative Totals",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Cumulative Message Count by Topic",
+      "description": "Running total of messages received per topic (statistics_*_total gauge)",
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "{job=\"$app\", __name__=~\"statistics_.*_total\", topic=~\"$topic\"}",
+          "legendFormat": "{{__name__}} \u2014 {{topic}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "type": "row",
+      "title": "Topic Breakdown Table",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 31,
+      "type": "table",
+      "title": "Message Counts \u2014 All Topics",
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "sortBy": [
+          {
+            "displayName": "Rate (msg/s)",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Rate (msg/s)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "reqps"
+              }
+            ]
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "Value #A": "Rate (msg/s)",
+              "Value #B": "Total"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "expr": "rate({job=\"$app\", __name__=~\"statistics_.*_count_total\", topic=~\"$topic\"}[1m])",
+          "instant": true,
+          "legendFormat": "{{topic}}",
+          "refId": "A"
+        },
+        {
+          "expr": "{job=\"$app\", __name__=~\"statistics_.*_total\", topic=~\"$topic\"}",
+          "instant": true,
+          "legendFormat": "{{topic}}",
+          "refId": "B"
+        }
+      ]
+    }
+  ]
+}

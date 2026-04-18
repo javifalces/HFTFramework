@@ -62,6 +62,37 @@ public class Configuration {
     public static boolean USE_THREAD_AFFINITY = Boolean.parseBoolean(getEnvOrDefault("USE_THREAD_AFFINITY", "false"));//if true, the threads are going to be pinned to the cores
     public static String PUSHBULLET_TOKEN = getEnvOrDefault("PUSHBULLET_TOKEN", "");
 
+    // ── Loki log shipping ────────────────────────────────────────────────────
+    /**
+     * Loki server hostname/IP.
+     * Resolution order: JVM system property {@code loki.host} → env var {@code LOKI_HOST}.
+     */
+    public static String LOKI_HOST = getSysPropOrEnvOrDefault("loki.host", "LOKI_HOST", "localhost");
+    /**
+     * Loki HTTP push port. Empty = Loki disabled.Normally to 3100.
+     * Resolution order: JVM system property {@code loki.port} → env var {@code LOKI_PORT}.
+     */
+    public static String LOKI_PORT = getSysPropOrEnvOrDefault("loki.port", "LOKI_PORT", "");
+    /**
+     * Application label sent with every log entry to Loki / Prometheus.
+     */
+    public static String LOG_APP_NAME = getEnvOrDefault("APP_NAME",
+            System.getProperty("log.appName", "hft-framework"));
+
+    // ── Prometheus metrics ────────────────────────────────────────────────────
+    /**
+     * HOST for the Prometheus /metrics HTTP endpoint. Empty = Prometheus disabled.
+     * Resolution order: JVM system property {@code prometeus.host} → env var {@code PROMETHEUS_HOST}.
+     */
+    public static String PROMETHEUS_HOST = getSysPropOrEnvOrDefault("prometheus.host", "PROMETHEUS_HOST", "localhost");
+
+
+    /**
+     * Port for the Prometheus /metrics HTTP endpoint. Empty = Prometheus disabled.Normally 9091(push)
+     * Resolution order: JVM system property {@code prometeus.port} → env var {@code PROMETHEUS_PORT}.
+     */
+    public static String PROMETHEUS_PORT = getSysPropOrEnvOrDefault("prometheus.port", "PROMETHEUS_PORT", "");
+
     public static int[] GET_AFFINITY_CPUS() throws LambdaConfigurationException {
         if (!USE_THREAD_AFFINITY) {
             throw new LambdaConfigurationException("USE_AFFINITY disabled.");
@@ -136,6 +167,33 @@ public class Configuration {
             output = System.getProperty(name, defaultValue);
         }
         return output;
+    }
+
+    /**
+     * Resolves a value by checking the JVM system property first, then the environment variable,
+     * and finally returning {@code defaultValue} if neither is set.
+     */
+    public static String getSysPropOrEnvOrDefault(String sysProp, String envVar, String defaultValue) {
+        String value = System.getProperty(sysProp);
+        if (value != null && !value.isEmpty()) {
+            return value;
+        }
+        value = System.getenv(envVar);
+        if (value != null && !value.isEmpty()) {
+            return value;
+        }
+        return defaultValue;
+    }
+
+    public static int parseIntOrDefault(String value, int defaultValue) {
+        if (value == null || value.trim().isEmpty()) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
     }
 
     public static String formatLog(String string, Object... objects) {

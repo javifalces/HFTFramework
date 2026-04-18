@@ -26,6 +26,7 @@ associated risks.**
   * [How-to use](#how-to-use)
     * [1. Create algorithm and backtest](#1-create-algorithm-and-backtest)
     * [2. Live trading](#2-live-trading)
+      * [Monitoring](java/docs/MONITORING_DOCUMENTATION.md)
     * [3. Market Engine](#3-market-engine)
       * [XChangeEngine](#xchangeengine)
       * [MetatraderEngine](#metatraderengine)
@@ -38,6 +39,7 @@ associated risks.**
   * [I owe you one](#i-owe-you-one)
   * [TODO](#todo)
     * [Java documentation reference](#java-documentation-reference)
+    * [Monitoring](#monitoring)
     * [Reference](#reference)
 <!-- TOC -->
 
@@ -53,6 +55,7 @@ associated risks.**
 * [ALGORITHM_DOCUMENTATION.md](java/docs/ALGORITHM_DOCUMENTATION.md)
 * [BACKTEST_DOCUMENTATION.md](java/docs/BACKTEST_DOCUMENTATION.md)
 * [MARKET_MAKING_ALGORITHMS_DOCUMENTATION.md](java/docs/MARKET_MAKING_ALGORITHMS_DOCUMENTATION.md)
+* [MONITORING_DOCUMENTATION.md](java/docs/MONITORING_DOCUMENTATION.md)
 
 In this instance, we execute a backtest for the Java
 strategies [ConstantSpread](java/trading_algorithms/src/main/java/com/lambda/investing/algorithmic_trading/market_making/constant_spread/ConstantSpreadAlgorithm.java)
@@ -226,6 +229,13 @@ metatrader.pull.port=32768
 * ....
 
 ### [Java documentation reference](/java/docs/Index.md)
+
+### Monitoring
+
+Real-time observability via Grafana dashboards covering application logs, JVM performance, latency statistics,
+algorithm execution, portfolio PnL, and throughput.
+
+* [MONITORING_DOCUMENTATION.md](java/docs/MONITORING_DOCUMENTATION.md)
 
 ### Reference
 

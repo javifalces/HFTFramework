@@ -286,26 +286,10 @@ public class OrderMatchEngine extends OrderbookManager {
 
     private Verb inferVerbFromTrade(com.lambda.investing.model.market_data.Trade trade) {
         try {
-            Double bestBid = getSide(Verb.Buy).firstKey();
-            Double bestAsk = getSide(Verb.Sell).firstKey();
-
-            Verb output = null;
-            if (bestAsk != null && bestBid != null) {
-                Double mid = (bestBid + bestAsk) / 2;
-                if (trade.getPrice() < mid) {
-                    output = Verb.Sell;//cross the spread
-                } else if (trade.getPrice() > mid) {
-                    output = Verb.Buy;//cross the spread
-                } else {
-                    //we dont know
-                    output = null;
-                }
-            }
-            return output;
+            return trade.inferVerb(lastDepthRefreshed);
         } catch (Exception e) {
             return null;
         }
-
     }
 
     private void notifyRefreshedDepth() {

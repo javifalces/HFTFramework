@@ -11,6 +11,7 @@ import com.lambda.investing.Statistics;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
+import com.lambda.investing.model.trading.Verb;
 import com.lambda.investing.xchange.*;
 import info.bitrich.xchangestream.core.StreamingExchange;
 import io.reactivex.rxjava3.disposables.Disposable;
@@ -131,6 +132,7 @@ public class XChangeMarketDataPublisher extends AbstractMarketDataConnectorPubli
 			try {
 				tradeToNotify.setPrice(trade.getPrice().doubleValue());
 				tradeToNotify.setQuantity(trade.getOriginalAmount().doubleValue());
+				tradeToNotify.setVerb(trade.getType() == org.knowm.xchange.dto.Order.OrderType.BID ? Verb.Buy : Verb.Sell);
 			} catch (Exception e) {
 				logger.error("Error parsing trade event {} ", instrument, e);
 				return;

@@ -5,6 +5,7 @@ import com.formdev.flatlaf.FlatIntelliJLaf;
 import com.formdev.flatlaf.FlatLaf;
 import com.lambda.investing.Configuration;
 import com.lambda.investing.LatencyStatistics;
+import com.lambda.investing.PrometheusMetricsExporter;
 import com.lambda.investing.algorithmic_trading.candle_manager.CandleFromTickUpdater;
 import com.lambda.investing.algorithmic_trading.candle_manager.CandleListener;
 import com.lambda.investing.algorithmic_trading.data.CandleData;
@@ -13,6 +14,7 @@ import com.lambda.investing.algorithmic_trading.gui.main.MainMenuGUI;
 import com.lambda.investing.algorithmic_trading.hedging.HedgeManager;
 import com.lambda.investing.algorithmic_trading.hedging.NoHedgeManager;
 import com.lambda.investing.algorithmic_trading.observer.LiveTradeReport;
+import com.lambda.investing.algorithmic_trading.observer.PrometheusAlgorithmObserver;
 import com.lambda.investing.algorithmic_trading.observer.pushbullet.PushbulletAlgorithmObserver;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshot;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioManager;
@@ -330,6 +332,13 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                     logger.error("error registering PushbulletAlgorithmObserver ", e);
                 }
             }
+
+
+            boolean prometheusEnabled = PrometheusMetricsExporter.getInstance().isEnabled();
+            if (prometheusEnabled) {
+                PrometheusAlgorithmObserver prometheusAlgorithmObserver = new PrometheusAlgorithmObserver();
+                register(prometheusAlgorithmObserver);
+            }
         }
 
     }
@@ -574,6 +583,19 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         }
 
 
+    }
+
+    protected Verb inferVerb(Trade trade, Instrument instrument) {
+        try {
+            Depth lastDepth = getLastDepth(instrument);
+            if (lastDepth == null) {
+                return null;
+            }
+            return trade.inferVerb(lastDepth);
+        } catch (Exception e) {
+            logger.warn("[{}] Could not infer verb from trade {}: {}", getCurrentTime(), trade, e.getMessage());
+            return null;
+        }
     }
 
 

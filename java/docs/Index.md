@@ -27,6 +27,12 @@ explains configuration formats, execution flow, data management, reinforcement l
 analysis. Essential for understanding how algorithms are tested, how market conditions are simulated, and how
 performance metrics are calculated.
 
+### [Monitoring](MONITORING_DOCUMENTATION.md)
+
+Grafana dashboards for real-time observability: application logs, JVM performance, end-to-end latency statistics,
+algorithm trades & execution, portfolio PnL, and throughput statistics. Includes setup notes for Loki, Prometheus,
+and dashboard import.
+
 ## How to Use This Documentation
 
 These documents provide multi-layered insights that support:
