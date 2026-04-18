@@ -13,10 +13,21 @@ import io.prometheus.client.Gauge;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * {@link AlgorithmObserver} implementation that publishes algorithm metrics to Prometheus.
+ *
+ * <p>All metric updates are submitted to a dedicated single-threaded background
+ * {@link ExecutorService} so that the hot trading thread is never blocked.  If the
+ * internal queue is full (> {@value #QUEUE_CAPACITY} pending tasks) the update is
+ * silently dropped to avoid back-pressure on the trading path.
  *
  * <p>Metrics are exported on three events:
  * <ul>
@@ -45,6 +56,11 @@ import java.util.Map;
 public class PrometheusAlgorithmObserver implements AlgorithmObserver {
 
     private static final Logger logger = LogManager.getLogger(PrometheusAlgorithmObserver.class);
+
+    /**
+     * Maximum number of pending metric updates before new ones are dropped.
+     */
+    private static final int QUEUE_CAPACITY = 10_000;
 
     // -----------------------------------------------------------------------
     // Portfolio-level gauges  (label: algorithm)
@@ -80,7 +96,33 @@ public class PrometheusAlgorithmObserver implements AlgorithmObserver {
 
     private final boolean enabled;
 
+    /**
+     * Single-threaded executor used to push all Prometheus updates off the hot trading path.
+     * The bounded queue prevents unbounded memory growth under heavy load; excess tasks are
+     * dropped via the {@link ThreadPoolExecutor.DiscardPolicy}.
+     */
+    private final ExecutorService metricsExecutor;
+
+    /**
+     * Counts the number of tasks dropped because the queue was full.
+     */
+    private final AtomicLong droppedUpdates = new AtomicLong(0);
+
     public PrometheusAlgorithmObserver() {
+        // Always create the executor (it is harmless when disabled).
+        metricsExecutor = new ThreadPoolExecutor(
+                1, 1,
+                0L, TimeUnit.MILLISECONDS,
+                new ArrayBlockingQueue<>(QUEUE_CAPACITY),
+                r -> {
+                    Thread t = new Thread(r, "prometheus-observer");
+                    t.setDaemon(true);
+                    t.setPriority(Thread.MIN_PRIORITY);
+                    return t;
+                },
+                new ThreadPoolExecutor.DiscardPolicy()   // silently drop when full
+        );
+
         PrometheusMetricsExporter exporter = PrometheusMetricsExporter.getInstance();
         if (!exporter.isEnabled()) {
             logger.info("PrometheusAlgorithmObserver: Prometheus is disabled – observer is a no-op.");
@@ -196,13 +238,34 @@ public class PrometheusAlgorithmObserver implements AlgorithmObserver {
 
         } catch (Exception e) {
             logger.error("PrometheusAlgorithmObserver: failed to register Prometheus metrics – observer disabled.", e);
-            // set local enabled flag to false; the field is not final here so we use a workaround
             throw new IllegalStateException("Failed to initialise PrometheusAlgorithmObserver", e);
         }
     }
 
     // -----------------------------------------------------------------------
-    // AlgorithmObserver callbacks
+    // Internal helper – submit a task to the background thread
+    // -----------------------------------------------------------------------
+
+    /**
+     * Submits a metric-update task to the background executor.
+     * If the internal queue is full the task is silently dropped (the executor's
+     * {@link ThreadPoolExecutor.DiscardPolicy} handles this) and a counter is incremented
+     * so the drop rate can be monitored.
+     */
+    private void submitAsync(Runnable task) {
+        int queueSize = ((ThreadPoolExecutor) metricsExecutor).getQueue().size();
+        if (queueSize >= QUEUE_CAPACITY) {
+            long dropped = droppedUpdates.incrementAndGet();
+            if (dropped % 1_000 == 1) {
+                logger.warn("PrometheusAlgorithmObserver: background queue full – {} updates dropped so far.", dropped);
+            }
+            return;
+        }
+        metricsExecutor.execute(task);
+    }
+
+    // -----------------------------------------------------------------------
+    // AlgorithmObserver callbacks – all heavy work delegated to background thread
     // -----------------------------------------------------------------------
 
     @Override
@@ -219,31 +282,58 @@ public class PrometheusAlgorithmObserver implements AlgorithmObserver {
     public void onUpdatePortfolioSnapshot(String algorithmInfo, PortfolioSnapshot portfolioSnapshot) {
         if (!enabled) return;
 
-        try {
-            // Portfolio-level metrics
-            portfolioRealizedPnl.labels(algorithmInfo).set(portfolioSnapshot.getRealizedPnl());
-            portfolioUnrealizedPnl.labels(algorithmInfo).set(portfolioSnapshot.getUnrealizedPnl());
-            portfolioTotalPnl.labels(algorithmInfo).set(portfolioSnapshot.getTotalPnl());
-            portfolioTotalFees.labels(algorithmInfo).set(portfolioSnapshot.getTotalFees());
-            portfolioNetPosition.labels(algorithmInfo).set(portfolioSnapshot.getNetPosition());
-            portfolioNetInvestment.labels(algorithmInfo).set(portfolioSnapshot.getNetInvestment());
+        // Snapshot immutable values on the calling thread (cheap); all Gauge.set() calls
+        // happen on the background thread.
+        final double realizedPnl = portfolioSnapshot.getRealizedPnl();
+        final double unrealizedPnl = portfolioSnapshot.getUnrealizedPnl();
+        final double totalPnl = portfolioSnapshot.getTotalPnl();
+        final double totalFees = portfolioSnapshot.getTotalFees();
+        final double netPosition = portfolioSnapshot.getNetPosition();
+        final double netInvestment = portfolioSnapshot.getNetInvestment();
 
-            // Per-instrument metrics
-            if (portfolioSnapshot.getInstrumentPnlSnapshotMap() != null) {
-                for (Map.Entry<String, PnlSnapshot> entry : portfolioSnapshot.getInstrumentPnlSnapshotMap().entrySet()) {
-                    String instrument = entry.getKey();
-                    PnlSnapshot pnl = entry.getValue();
-
-                    instrumentRealizedPnl.labels(algorithmInfo, instrument).set(pnl.getRealizedPnl());
-                    instrumentUnrealizedPnl.labels(algorithmInfo, instrument).set(pnl.getUnrealizedPnl());
-                    instrumentTotalPnl.labels(algorithmInfo, instrument).set(pnl.getTotalPnl());
-                    instrumentNetPosition.labels(algorithmInfo, instrument).set(pnl.getNetPosition());
-                    instrumentNumberOfTrades.labels(algorithmInfo, instrument).set(pnl.getNumberOfTrades().get());
-                }
+        // Snapshot per-instrument data into a plain map so the background task does not
+        // hold a reference to the (potentially mutable) live PortfolioSnapshot object.
+        final Map<String, double[]> instrumentSnapshot;
+        if (portfolioSnapshot.getInstrumentPnlSnapshotMap() != null) {
+            instrumentSnapshot = new HashMap<>();
+            for (Map.Entry<String, PnlSnapshot> entry : portfolioSnapshot.getInstrumentPnlSnapshotMap().entrySet()) {
+                PnlSnapshot pnl = entry.getValue();
+                instrumentSnapshot.put(entry.getKey(), new double[]{
+                        pnl.getRealizedPnl(),
+                        pnl.getUnrealizedPnl(),
+                        pnl.getTotalPnl(),
+                        pnl.getNetPosition(),
+                        pnl.getNumberOfTrades().get()
+                });
             }
-        } catch (Exception e) {
-            logger.warn("PrometheusAlgorithmObserver: error updating portfolio snapshot metrics: {}", e.getMessage());
+        } else {
+            instrumentSnapshot = null;
         }
+
+        submitAsync(() -> {
+            try {
+                portfolioRealizedPnl.labels(algorithmInfo).set(realizedPnl);
+                portfolioUnrealizedPnl.labels(algorithmInfo).set(unrealizedPnl);
+                portfolioTotalPnl.labels(algorithmInfo).set(totalPnl);
+                portfolioTotalFees.labels(algorithmInfo).set(totalFees);
+                portfolioNetPosition.labels(algorithmInfo).set(netPosition);
+                portfolioNetInvestment.labels(algorithmInfo).set(netInvestment);
+
+                if (instrumentSnapshot != null) {
+                    for (Map.Entry<String, double[]> entry : instrumentSnapshot.entrySet()) {
+                        String instrument = entry.getKey();
+                        double[] v = entry.getValue();
+                        instrumentRealizedPnl.labels(algorithmInfo, instrument).set(v[0]);
+                        instrumentUnrealizedPnl.labels(algorithmInfo, instrument).set(v[1]);
+                        instrumentTotalPnl.labels(algorithmInfo, instrument).set(v[2]);
+                        instrumentNetPosition.labels(algorithmInfo, instrument).set(v[3]);
+                        instrumentNumberOfTrades.labels(algorithmInfo, instrument).set(v[4]);
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn("PrometheusAlgorithmObserver: error updating portfolio snapshot metrics: {}", e.getMessage());
+            }
+        });
     }
 
     @Override
@@ -274,25 +364,27 @@ public class PrometheusAlgorithmObserver implements AlgorithmObserver {
             return;
         }
 
-        try {
-            String instrument = executionReport.getInstrument();
-            String verb = executionReport.getVerb() != null ? executionReport.getVerb().name() : "Unknown";
-            String status = executionReport.getExecutionReportStatus() != null
-                    ? executionReport.getExecutionReportStatus().name()
-                    : "Unknown";
-            double lastQty = executionReport.getLastQuantity();
-            double price = executionReport.getPrice();
+        // Capture all values on the calling thread before handing off.
+        final String instrument = executionReport.getInstrument();
+        final String verb = executionReport.getVerb() != null ? executionReport.getVerb().name() : "Unknown";
+        final String status = executionReport.getExecutionReportStatus() != null
+                ? executionReport.getExecutionReportStatus().name()
+                : "Unknown";
+        final double lastQty = executionReport.getLastQuantity();
+        final double price = executionReport.getPrice();
 
-            tradeCount.labels(algorithmInfo, instrument, verb, status).inc();
-            if (lastQty > 0) {
-                tradeVolume.labels(algorithmInfo, instrument, verb).inc(lastQty);
+        submitAsync(() -> {
+            try {
+                tradeCount.labels(algorithmInfo, instrument, verb, status).inc();
+                if (lastQty > 0) {
+                    tradeVolume.labels(algorithmInfo, instrument, verb).inc(lastQty);
+                }
+                tradeLastPrice.labels(algorithmInfo, instrument, verb).set(price);
+                tradeLastQuantity.labels(algorithmInfo, instrument, verb).set(lastQty);
+            } catch (Exception e) {
+                logger.warn("PrometheusAlgorithmObserver: error updating execution report metrics: {}", e.getMessage());
             }
-            tradeLastPrice.labels(algorithmInfo, instrument, verb).set(price);
-            tradeLastQuantity.labels(algorithmInfo, instrument, verb).set(lastQty);
-
-        } catch (Exception e) {
-            logger.warn("PrometheusAlgorithmObserver: error updating execution report metrics: {}", e.getMessage());
-        }
+        });
     }
 
     @Override
@@ -300,13 +392,31 @@ public class PrometheusAlgorithmObserver implements AlgorithmObserver {
         if (!enabled) return;
         if (value == null || Double.isNaN(value) || Double.isInfinite(value)) return;
 
+        submitAsync(() -> {
+            try {
+                customColumn.labels(algorithmInfo, instrumentPk, key).set(value);
+            } catch (Exception e) {
+                logger.warn("PrometheusAlgorithmObserver: error updating custom column '{}': {}", key, e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Shuts down the background metrics executor gracefully.
+     * Call this when the algorithm is stopped to flush any pending updates.
+     */
+    public void shutdown() {
+        metricsExecutor.shutdown();
         try {
-            customColumn.labels(algorithmInfo, instrumentPk, key).set(value);
-        } catch (Exception e) {
-            logger.warn("PrometheusAlgorithmObserver: error updating custom column '{}': {}", key, e.getMessage());
+            if (!metricsExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                metricsExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            metricsExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+        if (droppedUpdates.get() > 0) {
+            logger.warn("PrometheusAlgorithmObserver: total dropped metric updates during lifetime: {}", droppedUpdates.get());
         }
     }
 }
-
-
-
