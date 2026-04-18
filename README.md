@@ -26,7 +26,7 @@ associated risks.**
   * [How-to use](#how-to-use)
     * [1. Create algorithm and backtest](#1-create-algorithm-and-backtest)
     * [2. Live trading](#2-live-trading)
-      * [Monitoring.md](java/docs/MONITORING_DOCUMENTATION.md)
+      * [Monitoring](java/docs/MONITORING_DOCUMENTATION.md)
     * [3. Market Engine](#3-market-engine)
       * [XChangeEngine](#xchangeengine)
       * [MetatraderEngine](#metatraderengine)
