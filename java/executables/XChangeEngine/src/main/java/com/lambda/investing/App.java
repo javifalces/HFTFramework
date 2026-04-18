@@ -25,11 +25,20 @@ public class App {
 		try {
 
 			System.setProperty("user.timezone", "GMT");
+			setAppName();
 
 			new App(args);
 		} catch (Throwable t) {
 			t.printStackTrace();
 			System.exit(-1);
+		}
+	}
+
+	private static void setAppName() {
+		//if log.appName is null or empty set it to XChangeEngine
+		String appName = System.getProperty("log.appName");
+		if (appName == null || appName.trim().isEmpty()) {
+			System.setProperty("log.appName", "XChangeEngine");
 		}
 	}
 
