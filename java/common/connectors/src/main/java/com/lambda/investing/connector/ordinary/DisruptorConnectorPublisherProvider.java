@@ -39,7 +39,7 @@ public class DisruptorConnectorPublisherProvider implements ConnectorPublisher, 
         ConnectorConfiguration connectorConfiguration;
         TypeMessage typeMessage;
         String topic;
-        String message;
+        Serializable message;
     }
 
     private Map<ConnectorConfiguration, Map<ConnectorListener, String>> listenerManager;
@@ -139,7 +139,6 @@ public class DisruptorConnectorPublisherProvider implements ConnectorPublisher, 
                 .getOrDefault(configuration, new ConcurrentHashMap<>());
         listeners.put(listener, "");
         listenerManager.put(configuration, listeners);
-        disruptor.handleEventsWith(this);
     }
 
     private void start() {
@@ -150,7 +149,7 @@ public class DisruptorConnectorPublisherProvider implements ConnectorPublisher, 
 
     @Override
     public void onEvent(DisruptorMessageObject event, long sequence, boolean endOfBatch) {
-        Map<ConnectorListener, String> listeners = listenerManager.get(event.getConnectorConfiguration());
+        Map<ConnectorListener, String> listeners = listenerManager.getOrDefault(event.getConnectorConfiguration(), new ConcurrentHashMap<>());
         Set<ConnectorListener> listenersSet = listeners.keySet();
         _notify(event.getConnectorConfiguration(), event.getTypeMessage(), event.getTopic(), event.getMessage(), listenersSet);
     }
@@ -165,7 +164,7 @@ public class DisruptorConnectorPublisherProvider implements ConnectorPublisher, 
     }
 
     private void _notify(ConnectorConfiguration connectorConfiguration, TypeMessage typeMessage, String topic,
-                         String message, Set<ConnectorListener> listenerList) {
+                         Object message, Set<ConnectorListener> listenerList) {
         boolean output = true;
         try {
             for (ConnectorListener listener : listenerList) {
@@ -204,7 +203,7 @@ public class DisruptorConnectorPublisherProvider implements ConnectorPublisher, 
         long sequenceId = ringBuffer.next();//if multi , is locked => get the space in the ringBuffer
         DisruptorMessageObject disruptorMessageObject = ringBuffer.get(sequenceId);
         disruptorMessageObject.setConnectorConfiguration(connectorConfiguration);
-        disruptorMessageObject.setMessage((String) message);
+        disruptorMessageObject.setMessage(message);
         disruptorMessageObject.setTopic(topic);
         disruptorMessageObject.setTypeMessage(typeMessage);
         ringBuffer.publish(sequenceId);
