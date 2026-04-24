@@ -1,4 +1,4 @@
-package com.lambda.investing.connector.ordinary;
+package com.lambda.investing.connector.disruptor;
 
 import com.lambda.investing.connector.ConnectorConfiguration;
 
