@@ -1,5 +1,6 @@
 package com.lambda.investing.connector.ordinary;
 
+import com.lambda.investing.connector.AbstractConnectorPublisherConfiguration;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ConnectorPublisherProviderFactory;
@@ -24,8 +25,8 @@ class DisruptorConnectorPublisherProviderTest {
     private static final int MESSAGES = 10;
     private static final String TOPIC = "test-topic";
 
-    private OrdinaryConnectorConfiguration ordinaryConfig;
-    private DisruptorConnectorConfiguration disruptorConfig;
+    private AbstractConnectorPublisherConfiguration ordinaryConfig;
+    private AbstractConnectorPublisherConfiguration disruptorConfig;
 
     @BeforeEach
     void setUp() {

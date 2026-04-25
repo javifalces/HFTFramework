@@ -30,7 +30,7 @@ public class OrdinaryBacktest extends AbstractBacktest {
     private OrdinaryBacktestRLGym ordinaryBacktestRLGym;
     private boolean isSingleThread = false;
 
-    private OrdinaryConnectorConfiguration ordinaryConnectorConfiguration = new OrdinaryConnectorConfiguration();
+    private AbstractConnectorPublisherConfiguration ordinaryConnectorConfiguration = new OrdinaryConnectorConfiguration();
 
     public OrdinaryBacktest(BacktestConfiguration backtestConfiguration) throws Exception {
         super(backtestConfiguration);

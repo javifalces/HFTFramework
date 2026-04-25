@@ -1,9 +1,6 @@
 package com.lambda.investing.trading_engine_connector.interactive_brokers;
 
-import com.lambda.investing.connector.AbstractConnectorPublisherProvider;
-import com.lambda.investing.connector.ConnectorConfiguration;
-import com.lambda.investing.connector.ConnectorListener;
-import com.lambda.investing.connector.ConnectorPublisherProviderFactory;
+import com.lambda.investing.connector.*;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorConfiguration;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorPublisherProvider;
 import com.lambda.investing.interactive_brokers.InteractiveBrokersBrokerConnector;
@@ -53,7 +50,7 @@ public class InteractiveBrokersTradingEngineTest {
     public InteractiveBrokersTradingEngineTest() {
         this.interactiveBrokersBrokerConnector = InteractiveBrokersBrokerConnector.getInstance("localhost", 7497, 555);
         //configure connector local
-        ConnectorConfiguration connectorConfiguration = new OrdinaryConnectorConfiguration();
+        AbstractConnectorPublisherConfiguration connectorConfiguration = new OrdinaryConnectorConfiguration();
         connector = ConnectorPublisherProviderFactory.createOrdinarySync("test");
         // trading engine
         this.interactiveBrokersTradingEngine = new InteractiveBrokersTradingEngine(connectorConfiguration, connector, connectorConfiguration, connector, interactiveBrokersBrokerConnector);

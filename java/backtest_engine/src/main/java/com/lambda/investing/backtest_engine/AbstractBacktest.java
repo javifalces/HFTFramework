@@ -5,7 +5,6 @@ import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
 import com.lambda.investing.algorithmic_trading.factor_investing.AbstractFactorInvestingAlgorithm;
 import com.lambda.investing.connector.*;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorConfiguration;
-import com.lambda.investing.connector.ordinary.OrdinaryConnectorPublisherProvider;
 import com.lambda.investing.factor_investing_connector.BacktestFactorProvider;
 import com.lambda.investing.factor_investing_connector.FactorProvider;
 import com.lambda.investing.factor_investing_connector.MockFactorProvider;
@@ -36,8 +35,8 @@ public abstract class AbstractBacktest {
 	protected BacktestConfiguration backtestConfiguration;
 	protected MarketDataConnectorPublisher ordinaryMarketDataConnectorPublisher;//from file to zero ordinary...
 
-	protected OrdinaryConnectorConfiguration ordinaryConnectorConfiguration;
-	protected AbstractConnectorPublisherProvider ordinaryConnectorPublisherProvider;
+	protected AbstractConnectorPublisherConfiguration ordinaryConnectorConfiguration;
+	protected AbstractConnectorPublisherProvider abstractConnectorPublisherProvider;
 	protected OrdinaryMarketDataProvider ordinaryMarketDataConnectorProvider;//from file to zero ordinary...
 
 	protected TradingEngineConfiguration tradingEngineConfiguration;
@@ -60,9 +59,9 @@ public abstract class AbstractBacktest {
 
 		//reading file publication and transform to internal market updates
 		ordinaryConnectorConfiguration = new OrdinaryConnectorConfiguration();
-		ordinaryConnectorPublisherProvider = ConnectorPublisherProviderFactory.createOrdinarySync(
+		abstractConnectorPublisherProvider = ConnectorPublisherProviderFactory.createOrdinarySync(
 				"OrdinaryConnectorPublisher_MarketDataProvider");
-		ordinaryMarketDataConnectorProvider = new OrdinaryMarketDataProvider(ordinaryConnectorPublisherProvider,
+		ordinaryMarketDataConnectorProvider = new OrdinaryMarketDataProvider(abstractConnectorPublisherProvider,
 				ordinaryConnectorConfiguration);
 
 		//external providers and publishers connectors
@@ -155,7 +154,7 @@ public abstract class AbstractBacktest {
 					backtestConfiguration.getStartTime(), backtestConfiguration.getEndTime());
 
 			CSVMarketDataConnectorPublisher csvMarketDataConnectorPublisher = new CSVMarketDataConnectorPublisher(
-					ordinaryConnectorConfiguration, ordinaryConnectorPublisherProvider, csvFileConfiguration);
+					ordinaryConnectorConfiguration, abstractConnectorPublisherProvider, csvFileConfiguration);
 			return csvMarketDataConnectorPublisher;
 		} else if (backtestConfiguration.getBacktestSource().equals(BacktestSource.parquet)) {
 
@@ -165,7 +164,7 @@ public abstract class AbstractBacktest {
 					backtestConfiguration.getEndTime());
 
 			ParquetMarketDataConnectorPublisher parquetMarketDataConnectorPublisher = new ParquetMarketDataConnectorPublisher(
-					ordinaryConnectorConfiguration, ordinaryConnectorPublisherProvider, parquetFileConfiguration);
+					ordinaryConnectorConfiguration, abstractConnectorPublisherProvider, parquetFileConfiguration);
 			return parquetMarketDataConnectorPublisher;
 		} else {
 			logger.error("backtest source not found {} in backtestConfiguration-> return null ",

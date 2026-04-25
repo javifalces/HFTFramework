@@ -1,22 +1,13 @@
 package com.lambda.investing.connector.ordinary;
 
+import com.lambda.investing.connector.AbstractConnectorPublisherConfiguration;
 import com.lambda.investing.connector.ConnectorConfiguration;
 
-public class OrdinaryConnectorConfiguration implements ConnectorConfiguration {
-
+public class OrdinaryConnectorConfiguration extends AbstractConnectorPublisherConfiguration {
 	@Override public String getConnectionConfiguration() {
 		return "ordinary listener";
 	}
-	//dummy class
 
-	///is always equal
-	@Override public int hashCode() {
-		return 1;
-	}
-
-	@Override public boolean equals(Object obj) {
-		return true;
-	}
 }
 
 

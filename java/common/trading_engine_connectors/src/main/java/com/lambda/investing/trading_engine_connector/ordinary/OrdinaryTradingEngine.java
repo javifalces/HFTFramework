@@ -3,6 +3,7 @@ package com.lambda.investing.trading_engine_connector.ordinary;
 
 import com.lambda.investing.Configuration;
 import com.lambda.investing.LambdaThreadFactory;
+import com.lambda.investing.connector.AbstractConnectorPublisherConfiguration;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ConnectorProvider;
@@ -31,7 +32,7 @@ public class OrdinaryTradingEngine implements TradingEngineConnector, ConnectorL
     private ConnectorProvider executionReportOrderRequestConnectorProvider;
     private PaperTradingEngine paperTradingEngineConnector;
 
-    private OrdinaryConnectorConfiguration ordinaryConnectorConfiguration = new OrdinaryConnectorConfiguration();
+    private AbstractConnectorPublisherConfiguration ordinaryConnectorConfiguration = new OrdinaryConnectorConfiguration();
     protected Map<String, Map<ExecutionReportListener, String>> listenersManager;
     private ExecutionReportListener allAlgorithmsExecutionReportListener;
 

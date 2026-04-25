@@ -2,6 +2,7 @@ package com.lambda.investing.trading_engine_connector;
 
 import com.lambda.investing.LatencyStatistics;
 import com.lambda.investing.Statistics;
+import com.lambda.investing.connector.AbstractConnectorPublisherConfiguration;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorConfiguration;
@@ -139,7 +140,7 @@ public class ZeroMqTradingEngineConnector extends AbstractTradingEngineConnector
 			paperTradingEngine.setBacktest(false);
 
 			//Connector configuration paper
-			OrdinaryConnectorConfiguration ordinaryConnectorConfiguration = new OrdinaryConnectorConfiguration();
+			AbstractConnectorPublisherConfiguration ordinaryConnectorConfiguration = new OrdinaryConnectorConfiguration();
 
 			PaperConnectorPublisher paperConnectorPublisher = new PaperConnectorPublisher(
 					ordinaryConnectorConfiguration, this.zeroMqPublisher);

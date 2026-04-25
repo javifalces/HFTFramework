@@ -80,7 +80,7 @@ public class MetatraderTradingEngineTest {
 //		((ZeroMqConfiguration) marketDataConfiguration).setPort(marketDataPort);
 //		ConnectorPublisher marketDataPublisher = new ZeroMqPublisher("metatraderMarketDataConnectorPublisher", 0);
 
-        OrdinaryConnectorConfiguration marketDataConfiguration = new OrdinaryConnectorConfiguration();
+        AbstractConnectorPublisherConfiguration marketDataConfiguration = new OrdinaryConnectorConfiguration();
         ConnectorPublisher marketDataPublisher = ConnectorPublisherProviderFactory.createOrdinarySync("metatraderMarketDataConnectorPublisher");
 
 
