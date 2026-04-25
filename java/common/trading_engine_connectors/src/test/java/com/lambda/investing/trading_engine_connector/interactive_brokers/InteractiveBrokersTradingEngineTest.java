@@ -1,5 +1,6 @@
 package com.lambda.investing.trading_engine_connector.interactive_brokers;
 
+import com.lambda.investing.connector.AbstractConnectorPublisherProvider;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ConnectorPublisherProviderFactory;
@@ -32,7 +33,7 @@ public class InteractiveBrokersTradingEngineTest {
     private InteractiveBrokersTradingEngine interactiveBrokersTradingEngine;
 
     private ConnectorListener executionReportListener;
-    private OrdinaryConnectorPublisherProvider connector;
+    private AbstractConnectorPublisherProvider connector;
     private String algorithmName = "junitAlgorithm_InteractiveBrokersTradingEngineTest";
     private List<ExecutionReport> lastExecutionReport = new ArrayList<>();
     private Instrument cryptoInstrument;

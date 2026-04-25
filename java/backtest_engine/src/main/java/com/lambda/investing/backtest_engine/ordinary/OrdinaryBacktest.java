@@ -5,10 +5,7 @@ import com.lambda.investing.Configuration;
 import com.lambda.investing.LambdaThreadFactory;
 import com.lambda.investing.backtest_engine.AbstractBacktest;
 import com.lambda.investing.backtest_engine.BacktestConfiguration;
-import com.lambda.investing.connector.ConnectorConfiguration;
-import com.lambda.investing.connector.ConnectorProvider;
-import com.lambda.investing.connector.ConnectorPublisher;
-import com.lambda.investing.connector.ConnectorPublisherProviderFactory;
+import com.lambda.investing.connector.*;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorConfiguration;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorPublisherProvider;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
@@ -119,8 +116,8 @@ public class OrdinaryBacktest extends AbstractBacktest {
         super.afterConstructor();
 
         //register rest of provides
-        if (backtestMarketDataAndExecutionReportPublisher instanceof OrdinaryConnectorPublisherProvider) {
-            OrdinaryConnectorPublisherProvider ordinaryConnectorPublisherProvider = (OrdinaryConnectorPublisherProvider) backtestMarketDataAndExecutionReportPublisher;
+        if (backtestMarketDataAndExecutionReportPublisher instanceof AbstractConnectorPublisherProvider) {
+            AbstractConnectorPublisherProvider ordinaryConnectorPublisherProvider = (AbstractConnectorPublisherProvider) backtestMarketDataAndExecutionReportPublisher;
 
             if (paperTradingEngineConnector instanceof OrdinaryTradingEngine) {
                 OrdinaryTradingEngine ordinaryTradingEngine = (OrdinaryTradingEngine) paperTradingEngineConnector;
@@ -159,14 +156,14 @@ public class OrdinaryBacktest extends AbstractBacktest {
 
     @Override
     protected TradingEngineConnector getPaperTradingEngineConnector() {
-        return new OrdinaryTradingEngine((OrdinaryConnectorPublisherProvider) backtestOrderRequestProvider,
+        return new OrdinaryTradingEngine((AbstractConnectorPublisherProvider) backtestOrderRequestProvider,
                 paperTradingEngine, Configuration.BACKTEST_THREADS_PUBLISHING_ORDER_REQUEST,
                 Configuration.BACKTEST_THREADS_LISTENING_EXECUTION_REPORTS, Thread.MAX_PRIORITY, Thread.NORM_PRIORITY);
     }
 
     @Override
     protected ConnectorProvider getBacktestOrderRequestProvider() {
-        OrdinaryConnectorPublisherProvider ordinaryConnectorPublisherProvider = ConnectorPublisherProviderFactory.createOrdinary(
+        AbstractConnectorPublisherProvider ordinaryConnectorPublisherProvider = ConnectorPublisherProviderFactory.createOrdinary(
                 "orderRequestConnectorProvider", Configuration.BACKTEST_THREADS_LISTENING_ORDER_REQUEST);
         return ordinaryConnectorPublisherProvider;
     }
@@ -206,10 +203,10 @@ public class OrdinaryBacktest extends AbstractBacktest {
 
     @Override
     protected ConnectorPublisher getBacktestMarketDataAndExecutionReportConnectorPublisher() {
-        OrdinaryConnectorPublisherProvider ordinaryConnectorPublisherProvider = ConnectorPublisherProviderFactory.createOrdinary(
+        AbstractConnectorPublisherProvider ordinaryConnectorPublisherProvider = ConnectorPublisherProviderFactory.createOrdinary(
                 "marketDataPublisherPublisherProvider", Configuration.BACKTEST_THREADS_PUBLISHING_MARKETDATA, Thread.MIN_PRIORITY);
 
-        if (Configuration.BACKTEST_THREADS_PUBLISHING_EXECUTION_REPORTS != 0) {
+        if (Configuration.BACKTEST_THREADS_PUBLISHING_EXECUTION_REPORTS != 0 && ordinaryConnectorPublisherProvider instanceof OrdinaryConnectorPublisherProvider) {
             Map<TypeMessage, ThreadPoolExecutor> routingMap = new HashMap<>();
 
             //ER has max priority on threadpools
@@ -219,7 +216,7 @@ public class OrdinaryBacktest extends AbstractBacktest {
             erThreadPoolExecutor.setThreadFactory(threadFactory);
             //executionReports on a differentThreadPool
             routingMap.put(TypeMessage.execution_report, erThreadPoolExecutor);
-            ordinaryConnectorPublisherProvider.setRoutingPool(routingMap);
+            ((OrdinaryConnectorPublisherProvider) ordinaryConnectorPublisherProvider).setRoutingPool(routingMap);
         }
 
         return ordinaryConnectorPublisherProvider;

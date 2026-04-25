@@ -1,10 +1,6 @@
 package com.lambda.investing.trading_engine_connector.metatrader;
 
-import com.lambda.investing.connector.ConnectorConfiguration;
-import com.lambda.investing.connector.ConnectorListener;
-import com.lambda.investing.connector.ConnectorProvider;
-import com.lambda.investing.connector.ConnectorPublisher;
-import com.lambda.investing.connector.ConnectorPublisherProviderFactory;
+import com.lambda.investing.connector.*;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorConfiguration;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorPublisherProvider;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
@@ -103,7 +99,7 @@ public class MetatraderTradingEngineTest {
         tradingEngine.start();
 
 //		OrdinaryConnectorPublisherProvider marketDataProvider = new OrdinaryConnectorPublisherProvider(,0);
-        ((OrdinaryConnectorPublisherProvider) marketDataPublisher).register(marketDataConfiguration, listener);
+        ((AbstractConnectorPublisherProvider) marketDataPublisher).register(marketDataConfiguration, listener);
 
 //
 //		ConnectorProvider marketDataProvider = ZeroMqProvider
