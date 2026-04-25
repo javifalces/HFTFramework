@@ -5,6 +5,8 @@ import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.disruptor.DisruptorConnectorConfiguration;
 import com.lambda.investing.connector.disruptor.DisruptorConnectorPublisherProvider;
 import com.lambda.investing.model.messaging.TypeMessage;
+import com.lmax.disruptor.BusySpinWaitStrategy;
+import com.lmax.disruptor.dsl.ProducerType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -56,7 +58,7 @@ class DisruptorConnectorPublisherProviderTest {
     @Test
     void testDisruptorDeliversAllMessages() throws InterruptedException {
         DisruptorConnectorPublisherProvider provider =
-                new DisruptorConnectorPublisherProvider("test", 1, 512);
+                new DisruptorConnectorPublisherProvider("test", 512, new BusySpinWaitStrategy(), ProducerType.SINGLE);
         RecordingListener listener = new RecordingListener(MESSAGES);
         provider.register(disruptorConfig, listener);
 
@@ -71,7 +73,7 @@ class DisruptorConnectorPublisherProviderTest {
     @Test
     void testDisruptorCountsMessagesSent() throws InterruptedException {
         DisruptorConnectorPublisherProvider provider =
-                new DisruptorConnectorPublisherProvider("test-count", 1, 512);
+                new DisruptorConnectorPublisherProvider("test-count", 512, new BusySpinWaitStrategy(), ProducerType.SINGLE);
         RecordingListener listener = new RecordingListener(MESSAGES);
         provider.register(disruptorConfig, listener);
 
@@ -87,7 +89,7 @@ class DisruptorConnectorPublisherProviderTest {
     @Test
     void testDisruptorPublishReturnTrue() {
         DisruptorConnectorPublisherProvider provider =
-                new DisruptorConnectorPublisherProvider("test-return", 1, 512);
+                new DisruptorConnectorPublisherProvider("test-return", 512, new BusySpinWaitStrategy(), ProducerType.SINGLE);
         RecordingListener listener = new RecordingListener(1);
         provider.register(disruptorConfig, listener);
 
@@ -119,7 +121,7 @@ class DisruptorConnectorPublisherProviderTest {
         OrdinaryConnectorPublisherProvider ordinary =
                 new OrdinaryConnectorPublisherProvider("ordinary-cmp", 1, Thread.NORM_PRIORITY);
         DisruptorConnectorPublisherProvider disruptor =
-                new DisruptorConnectorPublisherProvider("disruptor-cmp", 1, 512);
+                new DisruptorConnectorPublisherProvider("disruptor-cmp", 512, new BusySpinWaitStrategy(), ProducerType.SINGLE);
 
         RecordingListener ordinaryListener = new RecordingListener(MESSAGES);
         RecordingListener disruptorListener = new RecordingListener(MESSAGES);
@@ -161,7 +163,7 @@ class DisruptorConnectorPublisherProviderTest {
     @Test
     void testDisruptorDeregister() throws InterruptedException {
         DisruptorConnectorPublisherProvider provider =
-                new DisruptorConnectorPublisherProvider("test-deregister", 1, 512);
+                new DisruptorConnectorPublisherProvider("test-deregister", 512, new BusySpinWaitStrategy(), ProducerType.SINGLE);
         RecordingListener listener = new RecordingListener(MESSAGES);
         provider.register(disruptorConfig, listener);
 

@@ -20,9 +20,7 @@ import java.io.Serializable;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.lmax.disruptor.dsl.Disruptor;
@@ -46,11 +44,6 @@ public class DisruptorConnectorPublisherProvider implements ConnectorPublisher, 
     Logger logger = LogManager.getLogger(DisruptorConnectorPublisherProvider.class);
     ThreadFactory namedThreadFactory = LambdaThreadFactory.createThreadFactory("DisruptorConnectorPublisherProvider");
 
-    ThreadPoolExecutor senderPool;
-    private Integer priority = null;
-
-
-    private int threads;
     private String name;
 
     protected Disruptor<DisruptorMessageObject> disruptor;
@@ -58,72 +51,52 @@ public class DisruptorConnectorPublisherProvider implements ConnectorPublisher, 
 
     protected int sizeRing = 512;
     protected boolean isStart = false;
+    protected WaitStrategy waitStrategy = new BlockingWaitStrategy();
+    protected ProducerType producerType = ProducerType.MULTI;
 
     /**
      * https://www.baeldung.com/lmax-disruptor-concurrency
      * https://github.com/trevorbernard/disruptor-examples/tree/master/src/main/java/com/trevorbernard/disruptor/examples
-     *
-     * @param name    name of the threadpool
-     * @param threads number of threads that publish to register ConnectorListeners
-     * @param sizeRing size of ring
+     * https://stackoverflow.com/questions/44893194/why-is-disruptor-slower-with-smaller-ring-buffer
+     * @param name         name of the threadpool
+     * @param sizeRing     size of ring
+     * @param waitStrategy disruptor wait strategy (e.g. BlockingWaitStrategy, BusySpinWaitStrategy) when the ring is full
+     * @param producerType disruptor producer type (SINGLE lock-free, MULTI CAS)
+     * ProducerType.MULTI : has a CAS protection system in ringBuffer next sequence
+     * ProducerType.SINGLE : in lock free
      */
-    public DisruptorConnectorPublisherProvider(String name, int threads, int sizeRing) {
+    public DisruptorConnectorPublisherProvider(String name, int sizeRing, WaitStrategy waitStrategy, ProducerType producerType) {
         listenerManager = new ConcurrentHashMap<>();
         counterMessagesSent = new ConcurrentHashMap<>();
         counterMessagesNotSent = new ConcurrentHashMap<>();
 
         isStart = false;
-        //thread pool name
         this.name = name;
-        this.threads = threads;
         this.sizeRing = sizeRing;
+        this.waitStrategy = waitStrategy;
+        this.producerType = producerType;
 
         namedThreadFactory = LambdaThreadFactory.createThreadFactory(this.name, Thread.NORM_PRIORITY);
-        if (this.threads < 0) {
-            //infinite
-            senderPool = (ThreadPoolExecutor) Executors.newCachedThreadPool(namedThreadFactory);
-        }
-        if (this.threads > 0) {
-            senderPool = (ThreadPoolExecutor) Executors.newFixedThreadPool(this.threads, namedThreadFactory);
-        }
         setDisruptor();
     }
 
-    public DisruptorConnectorPublisherProvider(String name, int threads, Integer priority, int sizeRing) {
+    public DisruptorConnectorPublisherProvider(String name, Integer priority, int sizeRing, WaitStrategy waitStrategy, ProducerType producerType) {
         listenerManager = new ConcurrentHashMap<>();
         counterMessagesSent = new ConcurrentHashMap<>();
         counterMessagesNotSent = new ConcurrentHashMap<>();
 
-        //thread pool name
         this.name = name;
-        this.threads = threads;
         this.sizeRing = sizeRing;
+        this.waitStrategy = waitStrategy;
+        this.producerType = producerType;
         namedThreadFactory = LambdaThreadFactory.createThreadFactory(this.name, priority);
-        if (this.threads < 0) {
-            //infinite
-            senderPool = (ThreadPoolExecutor) Executors.newCachedThreadPool(namedThreadFactory);
-        }
-        if (this.threads > 0) {
-            senderPool = (ThreadPoolExecutor) Executors.newFixedThreadPool(this.threads, namedThreadFactory);
-        }
         setDisruptor();
     }
-
-    /***
-     *
-     * WaitStrategy is the strategy when the ring is full in BusySpinWaitStrategy
-     *
-     * ProducerType.MULTI : has a CAS protection system in ringBuffer next sequence
-     * ProducerType.SINGLE : in lock free
-     * https://stackoverflow.com/questions/44893194/why-is-disruptor-slower-with-smaller-ring-buffer
-     */
     private void setDisruptor() {
-//        WaitStrategy waitStrategy = new BusySpinWaitStrategy();
-        WaitStrategy waitStrategy = new BlockingWaitStrategy();
-        disruptor = new Disruptor<DisruptorMessageObject>(DisruptorMessageObject::new,
+        disruptor = new Disruptor<>(DisruptorMessageObject::new,
                 sizeRing,
                 namedThreadFactory,
-                ProducerType.MULTI,//SINGLE will produce lock free , MULTI CAS operation
+                producerType,
                 waitStrategy);
         disruptor.handleEventsWith(this);
 
@@ -205,14 +178,6 @@ public class DisruptorConnectorPublisherProvider implements ConnectorPublisher, 
         disruptorMessageObject.setTopic(topic);
         disruptorMessageObject.setTypeMessage(typeMessage);
         ringBuffer.publish(sequenceId);
-
-//            if (threadPoolExecutor == null) {
-//                threadPoolExecutor = this.senderPool;
-//            }
-//            threadPoolExecutor.submit(() -> {
-//                _notify(connectorConfiguration, typeMessage, topic, message, listeners.keySet());
-//            });
-
 
         return true;
     }

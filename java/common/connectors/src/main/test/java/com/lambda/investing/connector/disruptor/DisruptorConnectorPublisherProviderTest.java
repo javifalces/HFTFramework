@@ -7,6 +7,9 @@ import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorConfiguration;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorPublisherProvider;
 import com.lambda.investing.model.messaging.TypeMessage;
+import com.lmax.disruptor.BlockingWaitStrategy;
+import com.lmax.disruptor.BusySpinWaitStrategy;
+import com.lmax.disruptor.dsl.ProducerType;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -61,7 +64,8 @@ public class DisruptorConnectorPublisherProviderTest implements ConnectorListene
     @RepeatedTest(25)
     public void testSendReceiveSimple() throws InterruptedException {
         Stopwatch timer = Stopwatch.createStarted();
-        disruptorConnectorPublisherProvider = new DisruptorConnectorPublisherProvider("junit_test", 0, 4096);
+        disruptorConnectorPublisherProvider = new DisruptorConnectorPublisherProvider(
+                "junit_test", 4096, new BlockingWaitStrategy(), ProducerType.SINGLE);
         disruptorConnectorPublisherProvider.register(connectorConfiguration, this);
 
         String topic = "topic1";
@@ -106,7 +110,8 @@ public class DisruptorConnectorPublisherProviderTest implements ConnectorListene
         ConnectorConfiguration ordinaryCfg = new OrdinaryConnectorConfiguration();
 
         DisruptorConnectorPublisherProvider disruptor =
-                new DisruptorConnectorPublisherProvider("bench_disruptor", 0, 4096);
+                new DisruptorConnectorPublisherProvider("bench_disruptor", 4096,
+                        new BusySpinWaitStrategy(), ProducerType.SINGLE);
         OrdinaryConnectorPublisherProvider ordinary =
                 new OrdinaryConnectorPublisherProvider("bench_ordinary", 1, Thread.NORM_PRIORITY);
 
@@ -170,7 +175,7 @@ public class DisruptorConnectorPublisherProviderTest implements ConnectorListene
         double meanDiffMs = (ordinaryMean - disruptorMean) / 1000.0;
         double medianDiffMs = (ordinaryMedian - disruptorMedian) / 1000.0;
 
-        System.out.println("=== Disruptor vs Ordinary Latency Benchmark (" + iterations + " iterations, interleaved) ===");
+        System.out.println("=== Disruptor (BusySpinWaitStrategy/SINGLE) vs Ordinary Latency Benchmark (" + iterations + " iterations, interleaved) ===");
         System.out.printf("Disruptor  - mean: %.3f µs, median: %.3f µs%n", disruptorMean, disruptorMedian);
         System.out.printf("Ordinary   - mean: %.3f µs, median: %.3f µs%n", ordinaryMean, ordinaryMedian);
         System.out.printf("Difference (Ordinary - Disruptor) -> mean: %.3f ms, median: %.3f ms%n", meanDiffMs, medianDiffMs);
