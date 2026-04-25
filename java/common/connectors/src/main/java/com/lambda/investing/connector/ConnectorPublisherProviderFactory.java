@@ -3,7 +3,6 @@ package com.lambda.investing.connector;
 import com.lambda.investing.Configuration;
 import com.lambda.investing.connector.disruptor.DisruptorConnectorPublisherProvider;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorPublisherProvider;
-import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.BusySpinWaitStrategy;
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.YieldingWaitStrategy;
@@ -15,10 +14,7 @@ import com.lmax.disruptor.dsl.ProducerType;
  */
 public final class ConnectorPublisherProviderFactory {
 
-    /**
-     * Default ring-buffer size for Disruptor instances (must be a power of 2).
-     */
-    public static final int DEFAULT_RING_SIZE = 512;
+
 
     /**
      * Default thread priority used when none is specified.
@@ -50,13 +46,13 @@ public final class ConnectorPublisherProviderFactory {
     public static AbstractConnectorPublisherProvider createConnectorPublisherProvider(Configuration.ConnectorPublisherProviderType type, String name, int publishThreads, int priority) {
         switch (type) {
             case DISRUPTOR_HIGH_THROUGHPUT:
-                return createDisruptorHighThroughput(name, DEFAULT_RING_SIZE);
+                return createDisruptorHighThroughput(name, Configuration.DISRUPTOR_RING_BUFFER_SIZE);
             case DISRUPTOR_LOW_LATENCY:
-                return createDisruptorLowLatency(name, DEFAULT_RING_SIZE);
+                return createDisruptorLowLatency(name, Configuration.DISRUPTOR_RING_BUFFER_SIZE);
             case ORDINARY:
                 return createOrdinary(name, publishThreads, priority);
             default:
-                throw new IllegalArgumentException("Unknown connector publisher provider: " + Configuration.CONNECTOR_PUBLISHER_PROVIDER);
+                throw new IllegalArgumentException("Unknown connector publisher provider: " + Configuration.BACKTEST_CONNECTOR_PUBLISHER_PROVIDER);
         }
 
     }
@@ -76,7 +72,7 @@ public final class ConnectorPublisherProviderFactory {
      *                     {@link ProducerType#MULTI} (CAS-protected)
      * @return a configured {@link DisruptorConnectorPublisherProvider}
      */
-    public static DisruptorConnectorPublisherProvider createDisruptor(
+    private static DisruptorConnectorPublisherProvider createDisruptor(
             String name, int priority, int sizeRing,
             WaitStrategy waitStrategy, ProducerType producerType) {
         return new DisruptorConnectorPublisherProvider(name, priority, sizeRing, waitStrategy, producerType);
@@ -92,7 +88,7 @@ public final class ConnectorPublisherProviderFactory {
      * @param sizeRing ring-buffer size (must be a power of 2)
      * @return a low-latency single-producer {@link DisruptorConnectorPublisherProvider}
      */
-    public static DisruptorConnectorPublisherProvider createDisruptorLowLatency(String name, int sizeRing) {
+    private static DisruptorConnectorPublisherProvider createDisruptorLowLatency(String name, int sizeRing) {
         return createDisruptor(name, Thread.MAX_PRIORITY, sizeRing,
                 new BusySpinWaitStrategy(), ProducerType.SINGLE);
     }
@@ -106,7 +102,7 @@ public final class ConnectorPublisherProviderFactory {
      * @param sizeRing ring-buffer size (must be a power of 2)
      * @return a high-throughput multi-producer {@link DisruptorConnectorPublisherProvider}
      */
-    public static DisruptorConnectorPublisherProvider createDisruptorHighThroughput(String name, int sizeRing) {
+    private static DisruptorConnectorPublisherProvider createDisruptorHighThroughput(String name, int sizeRing) {
         return createDisruptor(name, DEFAULT_PRIORITY, sizeRing,
                 new YieldingWaitStrategy(), ProducerType.MULTI);
     }

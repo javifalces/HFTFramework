@@ -62,7 +62,7 @@ public abstract class AbstractBacktest {
 
 		//reading file publication and transform to internal market updates
 		ordinaryConnectorConfiguration = new OrdinaryConnectorConfiguration();
-		abstractConnectorPublisherProvider = ConnectorPublisherProviderFactory.createConnectorPublisherProvider(Configuration.CONNECTOR_PUBLISHER_PROVIDER,
+		abstractConnectorPublisherProvider = ConnectorPublisherProviderFactory.createConnectorPublisherProvider(Configuration.BACKTEST_CONNECTOR_PUBLISHER_PROVIDER,
 				"OrdinaryConnectorPublisher_MarketDataProvider", 0, DEFAULT_PRIORITY);
 		ordinaryMarketDataConnectorProvider = new OrdinaryMarketDataProvider(abstractConnectorPublisherProvider,
 				ordinaryConnectorConfiguration);

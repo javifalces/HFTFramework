@@ -22,8 +22,8 @@ public class Configuration {
 
     public enum ConnectorPublisherProviderType {
         ORDINARY,
-        DISRUPTOR_HIGH_THROUGHPUT,
-        DISRUPTOR_LOW_LATENCY,
+        DISRUPTOR_HIGH_THROUGHPUT,//backtest
+        DISRUPTOR_LOW_LATENCY,//real trading
     }
 
     public static String BACKTEST_MESSAGE_PRINT = null;
@@ -31,6 +31,7 @@ public class Configuration {
     public static boolean FEES_COMMISSIONS_INCLUDED = true;//by default we have commissions set by instruments.xmls
     public static long DELAY_ORDER_BACKTEST_MS = 65;
     public static LatencyEngineType LATENCY_ENGINE_TYPE = LatencyEngineType.FIXED;
+
 
     //backtest engine
     public static int BACKTEST_THREADS_PUBLISHING_MARKETDATA = 0;//used to publish from parquet and csv file!
@@ -54,7 +55,9 @@ public class Configuration {
     public static boolean IS_DEBUGGING_DEFAULT = false;//will disable latencies and muiltiThreading
     //			java.lang.management.ManagementFactory.getRuntimeMXBean().getInputArguments().toString()
     //					.indexOf("-agentlib:jdwp") > 0;
-    public static ConnectorPublisherProviderType CONNECTOR_PUBLISHER_PROVIDER = ConnectorPublisherProviderType.valueOf(getEnvOrDefault("CONNECTOR_PUBLISHER_PROVIDER", "ORDINARY"));//by default ordinary, disruptor is going to be used for high frequency and low latency
+    public static ConnectorPublisherProviderType BACKTEST_CONNECTOR_PUBLISHER_PROVIDER = ConnectorPublisherProviderType.valueOf(getEnvOrDefault("BACKTEST_CONNECTOR_PUBLISHER_PROVIDER", "ORDINARY"));//by default ordinary, DISRUPTOR_HIGH_THROUGHPUT could work here
+    public static ConnectorPublisherProviderType LIVE_CONNECTOR_PUBLISHER_PROVIDER = ConnectorPublisherProviderType.valueOf(getEnvOrDefault("LIVE_CONNECTOR_PUBLISHER_PROVIDER", "DISRUPTOR_LOW_LATENCY"));//by default low latency
+    public static int DISRUPTOR_RING_BUFFER_SIZE = Integer.parseInt(getEnvOrDefault("DISRUPTOR_RING_BUFFER_SIZE", "512"));//power of 2;//power of 2
 
     public static long RANDOM_SEED = 0;
     public static long PORTFOLIO_MANAGER_UPDATE_FREQUENCY_MS = 15000;

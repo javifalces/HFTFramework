@@ -7,7 +7,6 @@ import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ConnectorPublisherProviderFactory;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorConfiguration;
-import com.lambda.investing.connector.ordinary.OrdinaryConnectorPublisherProvider;
 import com.lambda.investing.model.messaging.TypeMessage;
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.BusySpinWaitStrategy;
@@ -116,7 +115,7 @@ public class DisruptorConnectorPublisherProviderTest implements ConnectorListene
                 new DisruptorConnectorPublisherProvider("bench_disruptor", 4096,
                         new BusySpinWaitStrategy(), ProducerType.SINGLE);
         AbstractConnectorPublisherProvider ordinary =
-                ConnectorPublisherProviderFactory.createConnectorPublisherProvider(Configuration.CONNECTOR_PUBLISHER_PROVIDER, "bench_ordinary", 1, DEFAULT_PRIORITY);
+                ConnectorPublisherProviderFactory.createConnectorPublisherProvider(Configuration.BACKTEST_CONNECTOR_PUBLISHER_PROVIDER, "bench_ordinary", 1, DEFAULT_PRIORITY);
 
         ConnectorPublisherAndProvider disruptorAdapter = new ConnectorPublisherAndProvider() {
             public void register(ConnectorConfiguration cfg, ConnectorListener l) {

@@ -101,7 +101,7 @@ class DisruptorConnectorPublisherProviderTest {
     @Test
     void testOrdinaryDeliversAllMessages() throws InterruptedException {
         AbstractConnectorPublisherProvider provider =
-                ConnectorPublisherProviderFactory.createConnectorPublisherProvider(Configuration.CONNECTOR_PUBLISHER_PROVIDER, "test-ordinary", 1, DEFAULT_PRIORITY);
+                ConnectorPublisherProviderFactory.createConnectorPublisherProvider(Configuration.BACKTEST_CONNECTOR_PUBLISHER_PROVIDER, "test-ordinary", 1, DEFAULT_PRIORITY);
         RecordingListener listener = new RecordingListener(MESSAGES);
         provider.register(ordinaryConfig, listener);
 
@@ -120,7 +120,7 @@ class DisruptorConnectorPublisherProviderTest {
     @Test
     void testDisruptorAndOrdinaryProduceSameResults() throws InterruptedException {
         AbstractConnectorPublisherProvider ordinary =
-                ConnectorPublisherProviderFactory.createConnectorPublisherProvider(Configuration.CONNECTOR_PUBLISHER_PROVIDER, "ordinary-cmp", 1, DEFAULT_PRIORITY);
+                ConnectorPublisherProviderFactory.createConnectorPublisherProvider(Configuration.BACKTEST_CONNECTOR_PUBLISHER_PROVIDER, "ordinary-cmp", 1, DEFAULT_PRIORITY);
         DisruptorConnectorPublisherProvider disruptor =
                 new DisruptorConnectorPublisherProvider("disruptor-cmp", 512, new BusySpinWaitStrategy(), ProducerType.SINGLE);
 

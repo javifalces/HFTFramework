@@ -3,7 +3,6 @@ package com.lambda.investing.trading_engine_connector.interactive_brokers;
 import com.lambda.investing.Configuration;
 import com.lambda.investing.connector.*;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorConfiguration;
-import com.lambda.investing.connector.ordinary.OrdinaryConnectorPublisherProvider;
 import com.lambda.investing.interactive_brokers.InteractiveBrokersBrokerConnector;
 import com.lambda.investing.model.Market;
 import com.lambda.investing.model.asset.Currency;
@@ -53,7 +52,7 @@ public class InteractiveBrokersTradingEngineTest {
         this.interactiveBrokersBrokerConnector = InteractiveBrokersBrokerConnector.getInstance("localhost", 7497, 555);
         //configure connector local
         AbstractConnectorPublisherConfiguration connectorConfiguration = new OrdinaryConnectorConfiguration();
-        connector = ConnectorPublisherProviderFactory.createConnectorPublisherProvider(Configuration.CONNECTOR_PUBLISHER_PROVIDER, "test", 0, DEFAULT_PRIORITY);
+        connector = ConnectorPublisherProviderFactory.createConnectorPublisherProvider(Configuration.BACKTEST_CONNECTOR_PUBLISHER_PROVIDER, "test", 0, DEFAULT_PRIORITY);
         // trading engine
         this.interactiveBrokersTradingEngine = new InteractiveBrokersTradingEngine(connectorConfiguration, connector, connectorConfiguration, connector, interactiveBrokersBrokerConnector);
         this.interactiveBrokersTradingEngine.start();
