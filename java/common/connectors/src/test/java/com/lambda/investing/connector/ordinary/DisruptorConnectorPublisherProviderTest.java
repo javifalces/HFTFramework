@@ -1,9 +1,7 @@
 package com.lambda.investing.connector.ordinary;
 
-import com.lambda.investing.connector.AbstractConnectorPublisherConfiguration;
-import com.lambda.investing.connector.ConnectorConfiguration;
-import com.lambda.investing.connector.ConnectorListener;
-import com.lambda.investing.connector.ConnectorPublisherProviderFactory;
+import com.lambda.investing.Configuration;
+import com.lambda.investing.connector.*;
 import com.lambda.investing.connector.disruptor.DisruptorConnectorConfiguration;
 import com.lambda.investing.connector.disruptor.DisruptorConnectorPublisherProvider;
 import com.lambda.investing.model.messaging.TypeMessage;
@@ -18,6 +16,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import static com.lambda.investing.connector.ConnectorPublisherProviderFactory.DEFAULT_PRIORITY;
 import static org.junit.jupiter.api.Assertions.*;
 
 class DisruptorConnectorPublisherProviderTest {
@@ -101,8 +100,8 @@ class DisruptorConnectorPublisherProviderTest {
 
     @Test
     void testOrdinaryDeliversAllMessages() throws InterruptedException {
-        OrdinaryConnectorPublisherProvider provider =
-                ConnectorPublisherProviderFactory.createOrdinary("test-ordinary", 1);
+        AbstractConnectorPublisherProvider provider =
+                ConnectorPublisherProviderFactory.createConnectorPublisherProvider(Configuration.CONNECTOR_PUBLISHER_PROVIDER, "test-ordinary", 1, DEFAULT_PRIORITY);
         RecordingListener listener = new RecordingListener(MESSAGES);
         provider.register(ordinaryConfig, listener);
 
@@ -120,8 +119,8 @@ class DisruptorConnectorPublisherProviderTest {
      */
     @Test
     void testDisruptorAndOrdinaryProduceSameResults() throws InterruptedException {
-        OrdinaryConnectorPublisherProvider ordinary =
-                ConnectorPublisherProviderFactory.createOrdinary("ordinary-cmp", 1);
+        AbstractConnectorPublisherProvider ordinary =
+                ConnectorPublisherProviderFactory.createConnectorPublisherProvider(Configuration.CONNECTOR_PUBLISHER_PROVIDER, "ordinary-cmp", 1, DEFAULT_PRIORITY);
         DisruptorConnectorPublisherProvider disruptor =
                 new DisruptorConnectorPublisherProvider("disruptor-cmp", 512, new BusySpinWaitStrategy(), ProducerType.SINGLE);
 

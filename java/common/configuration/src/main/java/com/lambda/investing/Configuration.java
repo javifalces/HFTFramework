@@ -20,6 +20,12 @@ public class Configuration {
         POISSON
     }
 
+    public enum ConnectorPublisherProviderType {
+        ORDINARY,
+        DISRUPTOR_HIGH_THROUGHPUT,
+        DISRUPTOR_LOW_LATENCY,
+    }
+
     public static String BACKTEST_MESSAGE_PRINT = null;
     public static MULTITHREAD_CONFIGURATION MULTITHREADING_CORE = MULTITHREAD_CONFIGURATION.MULTITHREADING;//by default multithreading
     public static boolean FEES_COMMISSIONS_INCLUDED = true;//by default we have commissions set by instruments.xmls
@@ -48,6 +54,7 @@ public class Configuration {
     public static boolean IS_DEBUGGING_DEFAULT = false;//will disable latencies and muiltiThreading
     //			java.lang.management.ManagementFactory.getRuntimeMXBean().getInputArguments().toString()
     //					.indexOf("-agentlib:jdwp") > 0;
+    public static ConnectorPublisherProviderType CONNECTOR_PUBLISHER_PROVIDER = ConnectorPublisherProviderType.valueOf(getEnvOrDefault("CONNECTOR_PUBLISHER_PROVIDER", "ORDINARY"));//by default ordinary, disruptor is going to be used for high frequency and low latency
 
     public static long RANDOM_SEED = 0;
     public static long PORTFOLIO_MANAGER_UPDATE_FREQUENCY_MS = 15000;

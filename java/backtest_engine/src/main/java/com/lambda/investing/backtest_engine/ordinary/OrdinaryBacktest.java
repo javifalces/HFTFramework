@@ -163,8 +163,8 @@ public class OrdinaryBacktest extends AbstractBacktest {
 
     @Override
     protected ConnectorProvider getBacktestOrderRequestProvider() {
-        AbstractConnectorPublisherProvider ordinaryConnectorPublisherProvider = ConnectorPublisherProviderFactory.createOrdinary(
-                "orderRequestConnectorProvider", Configuration.BACKTEST_THREADS_LISTENING_ORDER_REQUEST);
+        AbstractConnectorPublisherProvider ordinaryConnectorPublisherProvider = ConnectorPublisherProviderFactory.createConnectorPublisherProvider(Configuration.CONNECTOR_PUBLISHER_PROVIDER,
+                "orderRequestConnectorProvider", Configuration.BACKTEST_THREADS_LISTENING_ORDER_REQUEST, ConnectorPublisherProviderFactory.DEFAULT_PRIORITY);
         return ordinaryConnectorPublisherProvider;
     }
 

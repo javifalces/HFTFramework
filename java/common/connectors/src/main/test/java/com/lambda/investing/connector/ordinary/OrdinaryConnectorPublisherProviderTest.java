@@ -1,6 +1,8 @@
 package com.lambda.investing.connector.ordinary;
 
 import com.google.common.base.Stopwatch;
+import com.lambda.investing.Configuration;
+import com.lambda.investing.connector.AbstractConnectorPublisherProvider;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ConnectorPublisherProviderFactory;
@@ -18,11 +20,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
+import static com.lambda.investing.connector.ConnectorPublisherProviderFactory.DEFAULT_PRIORITY;
 import static org.junit.Assert.assertEquals;
 
 @RunWith(MockitoJUnitRunner.class)
 public class OrdinaryConnectorPublisherProviderTest implements ConnectorListener {
-    OrdinaryConnectorPublisherProvider ordinaryConnectorPublisherProvider = null;
+    AbstractConnectorPublisherProvider ordinaryConnectorPublisherProvider = null;
     OrdinaryConnectorConfiguration ordinaryConnectorConfiguration = new OrdinaryConnectorConfiguration();
     List<ReceivedItem> lastItemsUpdate = new ArrayList();
     CountDownLatch waiter;
@@ -49,7 +52,7 @@ public class OrdinaryConnectorPublisherProviderTest implements ConnectorListener
     @RepeatedTest(25)
     public void testSendReceiveSimple() throws InterruptedException {
         Stopwatch timer = Stopwatch.createStarted();
-        ordinaryConnectorPublisherProvider = ConnectorPublisherProviderFactory.createOrdinary("junit_test", 1);
+        ordinaryConnectorPublisherProvider = ConnectorPublisherProviderFactory.createConnectorPublisherProvider(Configuration.CONNECTOR_PUBLISHER_PROVIDER, "junit_test", 1, DEFAULT_PRIORITY);
         ordinaryConnectorPublisherProvider.register(ordinaryConnectorConfiguration, this);
 
         String topic = "topic1";

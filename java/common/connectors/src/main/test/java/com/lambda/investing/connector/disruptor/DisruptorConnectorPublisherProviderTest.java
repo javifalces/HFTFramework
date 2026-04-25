@@ -2,6 +2,7 @@ package com.lambda.investing.connector.disruptor;
 
 import com.google.common.base.Stopwatch;
 import com.lambda.investing.Configuration;
+import com.lambda.investing.connector.AbstractConnectorPublisherProvider;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ConnectorPublisherProviderFactory;
@@ -24,6 +25,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import static com.lambda.investing.connector.ConnectorPublisherProviderFactory.DEFAULT_PRIORITY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
@@ -113,8 +115,8 @@ public class DisruptorConnectorPublisherProviderTest implements ConnectorListene
         DisruptorConnectorPublisherProvider disruptor =
                 new DisruptorConnectorPublisherProvider("bench_disruptor", 4096,
                         new BusySpinWaitStrategy(), ProducerType.SINGLE);
-        OrdinaryConnectorPublisherProvider ordinary =
-                ConnectorPublisherProviderFactory.createOrdinary("bench_ordinary", 1);
+        AbstractConnectorPublisherProvider ordinary =
+                ConnectorPublisherProviderFactory.createConnectorPublisherProvider(Configuration.CONNECTOR_PUBLISHER_PROVIDER, "bench_ordinary", 1, DEFAULT_PRIORITY);
 
         ConnectorPublisherAndProvider disruptorAdapter = new ConnectorPublisherAndProvider() {
             public void register(ConnectorConfiguration cfg, ConnectorListener l) {

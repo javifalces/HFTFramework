@@ -1,5 +1,6 @@
 package com.lambda.investing.trading_engine_connector.interactive_brokers;
 
+import com.lambda.investing.Configuration;
 import com.lambda.investing.connector.*;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorConfiguration;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorPublisherProvider;
@@ -19,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 
+import static com.lambda.investing.connector.ConnectorPublisherProviderFactory.DEFAULT_PRIORITY;
 import static com.lambda.investing.model.Util.fromObject;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -51,7 +53,7 @@ public class InteractiveBrokersTradingEngineTest {
         this.interactiveBrokersBrokerConnector = InteractiveBrokersBrokerConnector.getInstance("localhost", 7497, 555);
         //configure connector local
         AbstractConnectorPublisherConfiguration connectorConfiguration = new OrdinaryConnectorConfiguration();
-        connector = ConnectorPublisherProviderFactory.createOrdinarySync("test");
+        connector = ConnectorPublisherProviderFactory.createConnectorPublisherProvider(Configuration.CONNECTOR_PUBLISHER_PROVIDER, "test", 0, DEFAULT_PRIORITY);
         // trading engine
         this.interactiveBrokersTradingEngine = new InteractiveBrokersTradingEngine(connectorConfiguration, connector, connectorConfiguration, connector, interactiveBrokersBrokerConnector);
         this.interactiveBrokersTradingEngine.start();

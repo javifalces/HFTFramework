@@ -1,5 +1,6 @@
 package com.lambda.investing.backtest_engine;
 
+import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.Algorithm;
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
 import com.lambda.investing.algorithmic_trading.factor_investing.AbstractFactorInvestingAlgorithm;
@@ -27,6 +28,8 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import static com.lambda.investing.connector.ConnectorPublisherProviderFactory.DEFAULT_PRIORITY;
 
 public abstract class AbstractBacktest {
 
@@ -59,8 +62,8 @@ public abstract class AbstractBacktest {
 
 		//reading file publication and transform to internal market updates
 		ordinaryConnectorConfiguration = new OrdinaryConnectorConfiguration();
-		abstractConnectorPublisherProvider = ConnectorPublisherProviderFactory.createOrdinarySync(
-				"OrdinaryConnectorPublisher_MarketDataProvider");
+		abstractConnectorPublisherProvider = ConnectorPublisherProviderFactory.createConnectorPublisherProvider(Configuration.CONNECTOR_PUBLISHER_PROVIDER,
+				"OrdinaryConnectorPublisher_MarketDataProvider", 0, DEFAULT_PRIORITY);
 		ordinaryMarketDataConnectorProvider = new OrdinaryMarketDataProvider(abstractConnectorPublisherProvider,
 				ordinaryConnectorConfiguration);
 
