@@ -4,6 +4,7 @@ import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ConnectorProvider;
 import com.lambda.investing.connector.ConnectorPublisher;
+import com.lambda.investing.connector.ConnectorPublisherProviderFactory;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorConfiguration;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorPublisherProvider;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
@@ -84,7 +85,7 @@ public class MetatraderTradingEngineTest {
 //		ConnectorPublisher marketDataPublisher = new ZeroMqPublisher("metatraderMarketDataConnectorPublisher", 0);
 
         OrdinaryConnectorConfiguration marketDataConfiguration = new OrdinaryConnectorConfiguration();
-        ConnectorPublisher marketDataPublisher = new OrdinaryConnectorPublisherProvider("metatraderMarketDataConnectorPublisher", 0, Thread.NORM_PRIORITY);
+        ConnectorPublisher marketDataPublisher = ConnectorPublisherProviderFactory.createOrdinarySync("metatraderMarketDataConnectorPublisher");
 
 
         MetatraderZeroBrokerConnector metatraderZeroBrokerConnector = MetatraderZeroBrokerConnector

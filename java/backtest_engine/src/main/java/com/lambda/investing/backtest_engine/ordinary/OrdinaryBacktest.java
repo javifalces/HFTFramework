@@ -8,6 +8,7 @@ import com.lambda.investing.backtest_engine.BacktestConfiguration;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorProvider;
 import com.lambda.investing.connector.ConnectorPublisher;
+import com.lambda.investing.connector.ConnectorPublisherProviderFactory;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorConfiguration;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorPublisherProvider;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
@@ -165,9 +166,8 @@ public class OrdinaryBacktest extends AbstractBacktest {
 
     @Override
     protected ConnectorProvider getBacktestOrderRequestProvider() {
-        OrdinaryConnectorPublisherProvider ordinaryConnectorPublisherProvider = new OrdinaryConnectorPublisherProvider(
-                "orderRequestConnectorProvider", Configuration.BACKTEST_THREADS_LISTENING_ORDER_REQUEST,
-                Thread.NORM_PRIORITY);
+        OrdinaryConnectorPublisherProvider ordinaryConnectorPublisherProvider = ConnectorPublisherProviderFactory.createOrdinary(
+                "orderRequestConnectorProvider", Configuration.BACKTEST_THREADS_LISTENING_ORDER_REQUEST);
         return ordinaryConnectorPublisherProvider;
     }
 
@@ -206,7 +206,7 @@ public class OrdinaryBacktest extends AbstractBacktest {
 
     @Override
     protected ConnectorPublisher getBacktestMarketDataAndExecutionReportConnectorPublisher() {
-        OrdinaryConnectorPublisherProvider ordinaryConnectorPublisherProvider = new OrdinaryConnectorPublisherProvider(
+        OrdinaryConnectorPublisherProvider ordinaryConnectorPublisherProvider = ConnectorPublisherProviderFactory.createOrdinary(
                 "marketDataPublisherPublisherProvider", Configuration.BACKTEST_THREADS_PUBLISHING_MARKETDATA, Thread.MIN_PRIORITY);
 
         if (Configuration.BACKTEST_THREADS_PUBLISHING_EXECUTION_REPORTS != 0) {

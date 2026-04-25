@@ -2,6 +2,7 @@ package com.lambda.investing.connector.ordinary;
 
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
+import com.lambda.investing.connector.ConnectorPublisherProviderFactory;
 import com.lambda.investing.connector.disruptor.DisruptorConnectorConfiguration;
 import com.lambda.investing.connector.disruptor.DisruptorConnectorPublisherProvider;
 import com.lambda.investing.model.messaging.TypeMessage;
@@ -100,7 +101,7 @@ class DisruptorConnectorPublisherProviderTest {
     @Test
     void testOrdinaryDeliversAllMessages() throws InterruptedException {
         OrdinaryConnectorPublisherProvider provider =
-                new OrdinaryConnectorPublisherProvider("test-ordinary", 1, Thread.NORM_PRIORITY);
+                ConnectorPublisherProviderFactory.createOrdinary("test-ordinary", 1);
         RecordingListener listener = new RecordingListener(MESSAGES);
         provider.register(ordinaryConfig, listener);
 
@@ -119,7 +120,7 @@ class DisruptorConnectorPublisherProviderTest {
     @Test
     void testDisruptorAndOrdinaryProduceSameResults() throws InterruptedException {
         OrdinaryConnectorPublisherProvider ordinary =
-                new OrdinaryConnectorPublisherProvider("ordinary-cmp", 1, Thread.NORM_PRIORITY);
+                ConnectorPublisherProviderFactory.createOrdinary("ordinary-cmp", 1);
         DisruptorConnectorPublisherProvider disruptor =
                 new DisruptorConnectorPublisherProvider("disruptor-cmp", 512, new BusySpinWaitStrategy(), ProducerType.SINGLE);
 

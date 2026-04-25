@@ -3,9 +3,7 @@ package com.lambda.investing.backtest_engine;
 import com.lambda.investing.algorithmic_trading.Algorithm;
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
 import com.lambda.investing.algorithmic_trading.factor_investing.AbstractFactorInvestingAlgorithm;
-import com.lambda.investing.connector.ConnectorConfiguration;
-import com.lambda.investing.connector.ConnectorProvider;
-import com.lambda.investing.connector.ConnectorPublisher;
+import com.lambda.investing.connector.*;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorConfiguration;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorPublisherProvider;
 import com.lambda.investing.factor_investing_connector.BacktestFactorProvider;
@@ -39,7 +37,7 @@ public abstract class AbstractBacktest {
 	protected MarketDataConnectorPublisher ordinaryMarketDataConnectorPublisher;//from file to zero ordinary...
 
 	protected OrdinaryConnectorConfiguration ordinaryConnectorConfiguration;
-	protected OrdinaryConnectorPublisherProvider ordinaryConnectorPublisherProvider;
+	protected AbstractConnectorPublisherProvider ordinaryConnectorPublisherProvider;
 	protected OrdinaryMarketDataProvider ordinaryMarketDataConnectorProvider;//from file to zero ordinary...
 
 	protected TradingEngineConfiguration tradingEngineConfiguration;
@@ -62,8 +60,8 @@ public abstract class AbstractBacktest {
 
 		//reading file publication and transform to internal market updates
 		ordinaryConnectorConfiguration = new OrdinaryConnectorConfiguration();
-		ordinaryConnectorPublisherProvider = new OrdinaryConnectorPublisherProvider(
-				"OrdinaryConnectorPublisher_MarketDataProvider", 0, Thread.NORM_PRIORITY);
+		ordinaryConnectorPublisherProvider = ConnectorPublisherProviderFactory.createOrdinarySync(
+				"OrdinaryConnectorPublisher_MarketDataProvider");
 		ordinaryMarketDataConnectorProvider = new OrdinaryMarketDataProvider(ordinaryConnectorPublisherProvider,
 				ordinaryConnectorConfiguration);
 

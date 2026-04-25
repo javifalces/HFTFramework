@@ -1,6 +1,7 @@
 package com.lambda.investing.market_data_connector.ordinary;
 
 
+import com.lambda.investing.connector.AbstractConnectorPublisherProvider;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorConfiguration;
@@ -20,11 +21,11 @@ import static com.lambda.investing.model.Util.fromObject;
 @Getter @Setter public class OrdinaryMarketDataProvider extends AbstractMarketDataProvider
 		implements ConnectorListener {
 
-	OrdinaryConnectorPublisherProvider ordinaryConnectorPublisherProvider;
-	OrdinaryConnectorConfiguration connectorConfiguration;
+	AbstractConnectorPublisherProvider ordinaryConnectorPublisherProvider;
+	ConnectorConfiguration connectorConfiguration;
 
-	public OrdinaryMarketDataProvider(OrdinaryConnectorPublisherProvider ordinaryConnectorPublisherProvider,
-			OrdinaryConnectorConfiguration connectorConfiguration) {
+	public OrdinaryMarketDataProvider(AbstractConnectorPublisherProvider ordinaryConnectorPublisherProvider,
+									  ConnectorConfiguration connectorConfiguration) {
 		super();
 		this.ordinaryConnectorPublisherProvider = ordinaryConnectorPublisherProvider;
 		this.connectorConfiguration = connectorConfiguration;

@@ -3,6 +3,7 @@ package com.lambda.investing.connector.ordinary;
 import com.google.common.base.Stopwatch;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
+import com.lambda.investing.connector.ConnectorPublisherProviderFactory;
 import com.lambda.investing.model.messaging.TypeMessage;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -48,7 +49,7 @@ public class OrdinaryConnectorPublisherProviderTest implements ConnectorListener
     @RepeatedTest(25)
     public void testSendReceiveSimple() throws InterruptedException {
         Stopwatch timer = Stopwatch.createStarted();
-        ordinaryConnectorPublisherProvider = new OrdinaryConnectorPublisherProvider("junit_test", 1, Thread.NORM_PRIORITY);
+        ordinaryConnectorPublisherProvider = ConnectorPublisherProviderFactory.createOrdinary("junit_test", 1);
         ordinaryConnectorPublisherProvider.register(ordinaryConnectorConfiguration, this);
 
         String topic = "topic1";

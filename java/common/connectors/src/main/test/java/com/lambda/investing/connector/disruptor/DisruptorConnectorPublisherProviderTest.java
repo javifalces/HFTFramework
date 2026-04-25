@@ -4,6 +4,7 @@ import com.google.common.base.Stopwatch;
 import com.lambda.investing.Configuration;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
+import com.lambda.investing.connector.ConnectorPublisherProviderFactory;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorConfiguration;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorPublisherProvider;
 import com.lambda.investing.model.messaging.TypeMessage;
@@ -113,7 +114,7 @@ public class DisruptorConnectorPublisherProviderTest implements ConnectorListene
                 new DisruptorConnectorPublisherProvider("bench_disruptor", 4096,
                         new BusySpinWaitStrategy(), ProducerType.SINGLE);
         OrdinaryConnectorPublisherProvider ordinary =
-                new OrdinaryConnectorPublisherProvider("bench_ordinary", 1, Thread.NORM_PRIORITY);
+                ConnectorPublisherProviderFactory.createOrdinary("bench_ordinary", 1);
 
         ConnectorPublisherAndProvider disruptorAdapter = new ConnectorPublisherAndProvider() {
             public void register(ConnectorConfiguration cfg, ConnectorListener l) {

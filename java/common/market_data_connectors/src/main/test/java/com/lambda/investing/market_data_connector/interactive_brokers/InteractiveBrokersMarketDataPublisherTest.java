@@ -5,6 +5,7 @@ import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ConnectorProvider;
 import com.lambda.investing.connector.ConnectorPublisher;
+import com.lambda.investing.connector.ConnectorPublisherProviderFactory;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorConfiguration;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorPublisherProvider;
 import com.lambda.investing.interactive_brokers.InteractiveBrokersBrokerConnector;
@@ -40,7 +41,7 @@ public class InteractiveBrokersMarketDataPublisherTest {
     private InteractiveBrokersMarketDataPublisher interactiveBrokersMarketDataPublisher;
 
     private ConnectorListener marketDataListener;
-    private OrdinaryConnectorPublisherProvider connector;
+    private AbstractConnectorPublisherProvider connector;
 
 
     private class MockMarketDataListener implements ConnectorListener {
@@ -71,7 +72,7 @@ public class InteractiveBrokersMarketDataPublisherTest {
         instrumentList.add(instrument);
         //configure connector local
         ConnectorConfiguration connectorConfiguration = new OrdinaryConnectorConfiguration();
-        connector = new OrdinaryConnectorPublisherProvider("test", 0, Thread.NORM_PRIORITY);
+        connector = ConnectorPublisherProviderFactory.createOrdinarySync("test");
 
         //publisher
         this.interactiveBrokersMarketDataPublisher = new InteractiveBrokersMarketDataPublisher(connectorConfiguration, connector, interactiveBrokersBrokerConnector, instrumentList);
