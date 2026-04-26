@@ -17,7 +17,6 @@ import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
@@ -65,22 +64,6 @@ public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implem
 		this.instrumentPksList = instrumentPksList;
 	}
 
-	//	public ZeroMqMarketDataConnector(ZeroMqConfiguration zeroMqConfigurationIn, Instrument instrument,
-	//			int threadsListening) {
-	//		List<ZeroMqConfiguration> zeroMqConfigurationList = ZeroMqConfiguration
-	//				.getMarketDataZeroMqConfiguration(zeroMqConfigurationIn.getHost(), zeroMqConfigurationIn.getPort(),
-	//						instrument);
-	//
-	//		for (ZeroMqConfiguration zeroMqConfiguration : zeroMqConfigurationList) {
-	//			zeroMqProvider = ZeroMqProvider.getInstance(zeroMqConfiguration, threadsListening);
-	//			zeroMqProvider.register(zeroMqConfiguration, this);
-	//
-	//			logger.info("Listening {}   in tcp://{}:{}", zeroMqConfiguration.getTopic(), zeroMqConfiguration.getHost(),
-	//					zeroMqConfiguration.getPort());
-	//		}
-
-	//	}
-
 	public ZeroMqMarketDataConnector(ZeroMqConfiguration zeroMqConfigurationIn, List<Instrument> instruments,
 									 int threadsListening) {
 		List<ZeroMqConfiguration> zeroMqConfigurationList = new ArrayList<>();
@@ -110,7 +93,15 @@ public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implem
 	@Override
 	public void onUpdate(ConnectorConfiguration configuration, long timestampReceived,
 						 TypeMessage typeMessage, Object content) {
-		//
+		processUpdate(configuration, timestampReceived, typeMessage, content);
+	}
+
+	/**
+	 * Core business logic extracted so that subclasses (e.g. the Disruptor variant)
+	 * can call it from a different thread without duplicating code.
+	 */
+	protected void processUpdate(ConnectorConfiguration configuration, long timestampReceived,
+								 TypeMessage typeMessage, Object content) {
 		ZeroMqConfiguration zeroMqConfigurationReceived = (ZeroMqConfiguration) configuration;
 		String topicReceived = zeroMqConfigurationReceived.getTopic();
 
@@ -151,16 +142,6 @@ public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implem
 			Command command = fromJsonString((String) content, Command.class);
 			notifyCommand(command);
 		}
-
-		//// ER should come from the trading engine!
-		//		when trading is coming here
-//		if (typeMessage == TypeMessage.execution_report && listenER) {
-//			//ExecutionReport received
-//			ExecutionReport executionReport = fromJsonString(content, ExecutionReport.class);
-//			logger.warn("ER received on ZeroMqMarketDataConnector -> please do another thing!! {}",executionReport.getClientOrderId());
-//
-//			notifyExecutionReport(executionReport);
-//		}
 
 		if (statisticsReceived != null)
 			statisticsReceived.addStatistics(topicReceived);
