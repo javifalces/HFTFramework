@@ -51,8 +51,8 @@ public abstract class AbstractConnectorPublisherProvider implements ConnectorPub
         listenerManager.put(configuration, listeners);
     }
 
-    protected void _notify(ConnectorConfiguration connectorConfiguration, TypeMessage typeMessage, String topic,
-                           Object message, Set<ConnectorListener> listenerList) {
+    protected void notify(ConnectorConfiguration connectorConfiguration, TypeMessage typeMessage, String topic,
+                          Object message, Set<ConnectorListener> listenerList) {
         boolean output = true;
         try {
             for (ConnectorListener listener : listenerList) {

@@ -4,6 +4,8 @@ import com.lambda.investing.LambdaThreadFactory;
 import com.lambda.investing.connector.AbstractConnectorPublisherProvider;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
+import com.lambda.investing.model.market_data.Depth;
+import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.messaging.TypeMessage;
 import com.lmax.disruptor.*;
 import com.lmax.disruptor.dsl.Disruptor;
@@ -16,6 +18,7 @@ import java.io.Serializable;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 public class DisruptorConnectorPublisherProvider extends AbstractConnectorPublisherProvider
         implements EventHandler<DisruptorConnectorPublisherProvider.DisruptorMessageObject> {
@@ -83,6 +86,32 @@ public class DisruptorConnectorPublisherProvider extends AbstractConnectorPublis
     private void start() {
         ringBuffer = disruptor.start();
         isStart = true;
+        // Drain the ring buffer gracefully when System.exit() is called so that
+        // no in-flight events are silently dropped (e.g. when exitOnStop=true
+        // calls System.exit(0) from inside the Disruptor consumer thread).
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try {
+                disruptor.shutdown(5, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                logger.warn("DisruptorConnectorPublisherProvider [{}]: timed out waiting for ring buffer to drain on shutdown", name);
+            }
+        }, "disruptor-shutdown-" + name));
+    }
+
+    /**
+     * Gracefully shuts down the disruptor, waiting up to {@code timeoutSeconds} for
+     * all pending ring-buffer events to be consumed.  Safe to call from any thread
+     * <em>except</em> the Disruptor consumer thread itself (would deadlock).
+     */
+    public void shutdown(long timeoutSeconds) {
+        if (!isStart) {
+            return;
+        }
+        try {
+            disruptor.shutdown(timeoutSeconds, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            logger.warn("DisruptorConnectorPublisherProvider [{}]: shutdown timed out after {} s", name, timeoutSeconds);
+        }
     }
 
     @Override
@@ -90,7 +119,18 @@ public class DisruptorConnectorPublisherProvider extends AbstractConnectorPublis
         Map<ConnectorListener, String> listeners = listenerManager
                 .getOrDefault(event.getConnectorConfiguration(), new ConcurrentHashMap<>());
         Set<ConnectorListener> listenersSet = listeners.keySet();
-        _notify(event.getConnectorConfiguration(), event.getTypeMessage(), event.getTopic(), event.getMessage(), listenersSet);
+        notify(event.getConnectorConfiguration(), event.getTypeMessage(), event.getTopic(), event.getMessage(), listenersSet);
+        cleanPoolObjects(event);
+
+    }
+
+    private void cleanPoolObjects(DisruptorMessageObject event) {
+        // Return pooled objects back to their pool after all listeners have been notified
+        if (event.getMessage() instanceof Depth) {
+            ((Depth) event.getMessage()).delete();
+        } else if (event.getMessage() instanceof Trade) {
+            ((Trade) event.getMessage()).delete();
+        }
     }
 
     @Override

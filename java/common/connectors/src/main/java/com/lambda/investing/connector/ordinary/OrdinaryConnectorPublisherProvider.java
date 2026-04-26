@@ -58,10 +58,10 @@ public class OrdinaryConnectorPublisherProvider extends AbstractConnectorPublish
 
         ThreadPoolExecutor threadPoolExecutor = typeOfMessageToThreads.getOrDefault(typeMessage, this.senderPool);
         if (threadPoolExecutor == null || publishThreads == 0) {
-            _notify(connectorConfiguration, typeMessage, topic, message, listeners.keySet());
+            notify(connectorConfiguration, typeMessage, topic, message, listeners.keySet());
         } else {
             threadPoolExecutor.submit(() ->
-                    _notify(connectorConfiguration, typeMessage, topic, message, listeners.keySet()));
+                    notify(connectorConfiguration, typeMessage, topic, message, listeners.keySet()));
         }
         return true;
     }

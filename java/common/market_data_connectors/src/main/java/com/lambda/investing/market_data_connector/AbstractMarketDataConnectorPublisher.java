@@ -4,6 +4,7 @@ import com.lambda.investing.LatencyStatistics;
 import com.lambda.investing.Statistics;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorPublisher;
+import com.lambda.investing.connector.disruptor.DisruptorConnectorPublisherProvider;
 import com.lambda.investing.connector.zero_mq.ZeroMqPublisher;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
@@ -25,6 +26,7 @@ public abstract class AbstractMarketDataConnectorPublisher implements MarketData
     protected Statistics statistics;
     protected Logger logger = LogManager.getLogger(AbstractMarketDataConnectorPublisher.class);
     private boolean isZeroMq = false;
+    private boolean isDisruptor = false;
     protected String outputPath;
     private List<MarketDataConnectorPublisherListener> listenerList;
 
@@ -55,6 +57,9 @@ public abstract class AbstractMarketDataConnectorPublisher implements MarketData
         this.connectorPublisher = connectorPublisher;
         if (connectorPublisher instanceof ZeroMqPublisher) {
             isZeroMq = true;
+        }
+        if (connectorPublisher instanceof DisruptorConnectorPublisherProvider) {
+            isDisruptor = true;
         }
         listenerList = new ArrayList<>();
     }
@@ -157,6 +162,9 @@ public abstract class AbstractMarketDataConnectorPublisher implements MarketData
         if (connectorPublisher instanceof ZeroMqPublisher) {
             isZeroMq = true;
         }
+        if (connectorPublisher instanceof DisruptorConnectorPublisherProvider) {
+            isDisruptor = true;
+        }
         listenerList = new ArrayList<>();
     }
 
@@ -200,7 +208,11 @@ public abstract class AbstractMarketDataConnectorPublisher implements MarketData
         if (statistics != null) {
             statistics.addStatistics(topic);
         }
-        depth.delete();//return to the pool
+
+        if (!isDisruptor) {
+            depth.delete();//return to the pool
+        }
+        // when isDisruptor, delete() is called by DisruptorConnectorPublisherProvider.onEvent after processing
     }
 
     @Override
@@ -213,7 +225,10 @@ public abstract class AbstractMarketDataConnectorPublisher implements MarketData
         if (statistics != null) {
             statistics.addStatistics(topic);
         }
-        trade.delete();//return to the pool
+        if (!isDisruptor) {
+            trade.delete();//return to the pool
+        }
+        // when isDisruptor, delete() is called by DisruptorConnectorPublisherProvider.onEvent after processing
     }
 
     public synchronized void notifyCommand(String topic, Command command) {
