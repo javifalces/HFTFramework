@@ -289,6 +289,27 @@ public class App {
         System.setProperty("log.appName", zeroMqTradingConfiguration.getAlgorithm().getAlgorithmName());
     }
 
+    protected static void onShutdown() {
+        Logger shutdownLogger = LogManager.getLogger(App.class);
+        shutdownLogger.info("Shutdown hook triggered - controlling shutdown sequence...");
+        System.out.println("Shutdown hook triggered - controlling shutdown sequence...");
+        if (ALGORITHM != null) {
+            try {
+                shutdownLogger.info("Cancelling all orders and stopping algorithm: {}", ALGORITHM.getAlgorithmInfo());
+                System.out.println("Cancelling all orders and stopping algorithm: " + ALGORITHM.getAlgorithmInfo());
+                ALGORITHM.manualStop();
+                shutdownLogger.info("Algorithm stopped successfully.");
+                System.out.println("Algorithm stopped successfully.");
+            } catch (Exception e) {
+                shutdownLogger.error("Error during algorithm shutdown", e);
+                e.printStackTrace();
+            }
+        } else {
+            shutdownLogger.warn("No algorithm instance found during shutdown.");
+            System.out.println("No algorithm instance found during shutdown.");
+        }
+    }
+
     private static ZeroMqTradingConfiguration loadJson(String[] args) {
         ZeroMqTradingConfiguration zeroMqTradingConfiguration = fromJsonString(args[0], ZeroMqTradingConfiguration.class);
         System.out.println("-----");
@@ -342,6 +363,9 @@ public class App {
             configureFactorPublisherConnector(zeroMqTradingConfiguration);
             //load all beans
             ac = new ClassPathXmlApplicationContext(new String[]{"classpath:core_zero_beans.xml"});
+
+            // Register JVM shutdown hook to gracefully stop the algorithm
+            Runtime.getRuntime().addShutdownHook(new Thread(App::onShutdown, "shutdown-hook"));
         } catch (BeansException be) {
             be.printStackTrace();
             logger = LogManager.getLogger();
