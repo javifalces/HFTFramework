@@ -133,6 +133,9 @@ public class ZeroMqMarketDataConnectorDisruptor extends ZeroMqMarketDataConnecto
     @Override
     public void onUpdate(ConnectorConfiguration configuration, long timestampReceived,
                          TypeMessage typeMessage, Object content) {
+        if (ringBuffer == null) {
+            return;
+        }//very fast!
         final long sequence = ringBuffer.next();
         try {
             final DisruptorEvent slot = ringBuffer.get(sequence);
