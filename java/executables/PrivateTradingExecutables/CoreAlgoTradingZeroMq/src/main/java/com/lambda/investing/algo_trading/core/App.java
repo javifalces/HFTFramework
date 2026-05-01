@@ -41,7 +41,6 @@ public class App {
     protected final ApplicationContext ac;
     protected final Logger logger;
     private static Algorithm ALGORITHM;
-    private static final AtomicBoolean SHUTDOWN_INITIATED = new AtomicBoolean(false);
 
     static {
         //		Asyn logs all
@@ -323,10 +322,48 @@ public class App {
         }
     }
 
+    /**
+     * Starts a lightweight daemon thread that polls for a stop-file named {@code <pid>.stop}
+     * in the input directory (same folder where {@code <name>.pid} files live).
+     * <p>
+     * This is the reliable cross-platform IPC mechanism for graceful shutdown:
+     * the PowerShell stop script writes the file; the watcher calls {@link #onShutdown()}
+     * and then {@code System.exit(0)}, which triggers the registered JVM shutdown hook.
+     * Unlike {@code taskkill /PID} (WM_CLOSE), this works for any console process.
+     *
+     * @param inputDir directory to watch (typically {@code LAMBDA_INPUT_PATH} or {@code ./input})
+     * @param pid      the current process PID
+     */
+    private static void startStopFileWatcher(final String inputDir, final long pid) {
+        // Pre-resolve the path once — no allocation inside the polling loop
+        final String stopFilePath = inputDir + File.separator + pid + ".stop";
+        final java.io.File stopFile = new java.io.File(stopFilePath);
+
+        Thread watcher = new Thread(() -> {
+            LogManager.getLogger(App.class).info("Stop-file watcher started — watching for: {}", stopFilePath);
+            System.out.println("Stop-file watcher started — watching for: " + stopFilePath);
+            while (!Thread.currentThread().isInterrupted()) {
+                try {
+                    Thread.sleep(15_000);   // check every 15 s — coarse enough to be invisible to the OS scheduler
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                if (stopFile.exists()) {
+                    LogManager.getLogger(App.class).info("Stop file detected: {} — initiating graceful shutdown", stopFilePath);
+                    System.out.println("Stop file detected: " + stopFilePath + " — initiating graceful shutdown");
+                    stopFile.delete();
+                    onShutdown();
+                    System.exit(0);
+                }
+            }
+        }, "stop-file-watcher");
+        watcher.setDaemon(true);
+        watcher.setPriority(Thread.MIN_PRIORITY); // never compete with trading threads for CPU time
+        watcher.start();
+    }
+
     protected static void onShutdown() {
-        if (!SHUTDOWN_INITIATED.compareAndSet(false, true)) {
-            return; // already shutting down, avoid duplicate execution
-        }
         Logger shutdownLogger = LogManager.getLogger(App.class);
         shutdownLogger.info("Shutdown hook triggered - controlling shutdown sequence...");
         System.out.println("Shutdown hook triggered - controlling shutdown sequence...");
@@ -401,18 +438,16 @@ public class App {
             //load all beans
             ac = new ClassPathXmlApplicationContext(new String[]{"classpath:core_zero_beans.xml"});
 
-            // Register JVM shutdown hook to gracefully stop the algorithm
-            Runtime.getRuntime().addShutdownHook(new Thread("shutdown-hook") {
-                public void run() {
-                    System.out.println("🧹 Shutdown Hook is running!");
-                    onShutdown();
-                }
-            });
-
-
-            // Register OS signal handlers so that `taskkill /PID <pid>` on Windows
-            // (which sends SIGINT/SIGTERM) also triggers the graceful shutdown.
-            registerSignalHandlers();
+            // Start stop-file watcher: the PowerShell stop script writes <pid>.stop
+            // in the input directory; this watcher triggers onShutdown() reliably even
+            // when taskkill without /F fails (java.exe has no message queue for WM_CLOSE).
+            long currentPid = ProcessHandle.current().pid();
+            String inputDir = System.getenv("LAMBDA_INPUT_PATH");
+            if (inputDir == null || inputDir.isEmpty()) {
+                inputDir = System.getProperty("user.dir") + File.separator + "input";
+            }
+            new File(inputDir).mkdirs();
+            startStopFileWatcher(inputDir, currentPid);
         } catch (BeansException be) {
             be.printStackTrace();
             logger = LogManager.getLogger();
