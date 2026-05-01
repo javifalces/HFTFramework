@@ -144,7 +144,7 @@ public abstract class AbstractTradingEngineConnector implements TradingEngineCon
 
         if (typeMessage.equals(TypeMessage.execution_report)) {
             ExecutionReport executionReport = fromObject(content, ExecutionReport.class);
-            executionReport.setTimestampAlgoConnector(System.currentTimeMillis());
+            executionReport.setTimestampAlgoConnector(timestampReceived);
             notifyExecutionReport(executionReport);
         }
         if (typeMessage.equals(TypeMessage.info)) {
