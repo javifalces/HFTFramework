@@ -31,6 +31,7 @@ import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.lambda.investing.model.Util.fromJsonString;
 import static com.lambda.investing.model.Util.toJsonString;
@@ -40,6 +41,7 @@ public class App {
     protected final ApplicationContext ac;
     protected final Logger logger;
     private static Algorithm ALGORITHM;
+    private static final AtomicBoolean SHUTDOWN_INITIATED = new AtomicBoolean(false);
 
     static {
         //		Asyn logs all
@@ -289,7 +291,42 @@ public class App {
         System.setProperty("log.appName", zeroMqTradingConfiguration.getAlgorithm().getAlgorithmName());
     }
 
+    /**
+     * Registers OS-level signal handlers so that a Windows {@code taskkill /PID <pid>}
+     * (graceful kill, without {@code /F}) results in {@link #onShutdown()} being called.
+     * <p>
+     * On Windows the JVM maps both SIGINT (Ctrl+C / taskkill) and SIGTERM to the
+     * {@code sun.misc.Signal} facility.  The shutdown hook alone is sufficient when
+     * the process owns a console window; the signal handlers cover the case where it
+     * runs without one (e.g. launched via {@code javaw.exe} or a service wrapper).
+     */
+    private static void registerSignalHandlers() {
+        String[] signals = {"INT", "TERM"};
+
+
+        for (String sigName : signals) {
+            try {
+                sun.misc.Signal.handle(new sun.misc.Signal(sigName), signal -> {
+                    LogManager.getLogger(App.class)
+                            .info("Received OS signal SIG{} – initiating graceful shutdown", sigName);
+                    onShutdown();
+                    // System.exit triggers the JVM shutdown hook as well; the
+                    // AtomicBoolean in onShutdown() guarantees it runs only once.
+                    System.exit(0);
+                });
+            } catch (IllegalArgumentException e) {
+                // Signal not supported on this platform – ignore silently
+            } catch (Exception e) {
+                LogManager.getLogger(App.class)
+                        .warn("Could not register SIG{} handler: {}", sigName, e.getMessage());
+            }
+        }
+    }
+
     protected static void onShutdown() {
+        if (!SHUTDOWN_INITIATED.compareAndSet(false, true)) {
+            return; // already shutting down, avoid duplicate execution
+        }
         Logger shutdownLogger = LogManager.getLogger(App.class);
         shutdownLogger.info("Shutdown hook triggered - controlling shutdown sequence...");
         System.out.println("Shutdown hook triggered - controlling shutdown sequence...");
@@ -365,7 +402,17 @@ public class App {
             ac = new ClassPathXmlApplicationContext(new String[]{"classpath:core_zero_beans.xml"});
 
             // Register JVM shutdown hook to gracefully stop the algorithm
-            Runtime.getRuntime().addShutdownHook(new Thread(App::onShutdown, "shutdown-hook"));
+            Runtime.getRuntime().addShutdownHook(new Thread("shutdown-hook") {
+                public void run() {
+                    System.out.println("🧹 Shutdown Hook is running!");
+                    onShutdown();
+                }
+            });
+
+
+            // Register OS signal handlers so that `taskkill /PID <pid>` on Windows
+            // (which sends SIGINT/SIGTERM) also triggers the graceful shutdown.
+            registerSignalHandlers();
         } catch (BeansException be) {
             be.printStackTrace();
             logger = LogManager.getLogger();
