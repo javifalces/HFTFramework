@@ -43,12 +43,12 @@ import static com.lambda.investing.model.Util.fromObject;
 		if (typeMessage.equals(TypeMessage.depth)) {
 			Depth depth = Depth.copyFrom(fromObject(content, Depth.class));//new copy from pool
 			depth.setLevelsFromData();
-            depth.setTimestampAlgoConnector(System.currentTimeMillis());
+            depth.setTimestampAlgoConnector(timestampReceived);
 			notifyDepth(depth);
 			depth.delete();//delete from pool
 		} else if (typeMessage.equals(TypeMessage.trade)) {
 			Trade trade = Trade.copyFrom(fromObject(content, Trade.class));
-            trade.setTimestampAlgoConnector(System.currentTimeMillis());
+            trade.setTimestampAlgoConnector(timestampReceived);
 			notifyTrade(trade);
 			trade.delete();
 		} else if (typeMessage.equals(TypeMessage.command)) {

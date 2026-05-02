@@ -244,14 +244,14 @@ public class ZeroMqProvider implements ConnectorProvider {
             running.set(true);
         }
 
-        private void treatMessage(String topic, Object message) {
+        private void treatMessage(String topic, Object message, long timestampReceived) {
             // Get or create a lock object for this specific topic
             Object topicLock = topicLocks.computeIfAbsent(topic, k -> new Object());
 
             synchronized (topicLock) {
                 if (!parsedObjects) {
                     try {
-                        onUpdate(null, topic, topic, System.currentTimeMillis());
+                        onUpdate(null, topic, topic, timestampReceived);
                     } catch (Exception e) {
                         logger.error("Error reading nonParseZeroMq ", e);
                     }
@@ -273,7 +273,7 @@ public class ZeroMqProvider implements ConnectorProvider {
                     if (typeMessage == null) {
                         logger.error("discarded no type found\ntopic:{}\nmessage:{}", topic, message);
                     } else {
-                        onUpdate(typeMessage, message, topic, System.currentTimeMillis());
+                        onUpdate(typeMessage, message, topic, timestampReceived);
                     }
                 } catch (IOException e) {
                     logger.error("Error receiving topic {}  message {}", topic, message, e);
@@ -285,34 +285,42 @@ public class ZeroMqProvider implements ConnectorProvider {
         public void run() {
             while (running.get()) {
                 try {
-                    // Read envelope with topic
+                    final String topic;
+                    final byte[] messageBytes;
+                    final long timestampReceived;
+
+                    // Minimal lock scope: only socket I/O to minimise time the socket is held
                     synchronized (socketSub) {
                         ZMsg zMsg = ZMsg.recvMsg(socketSub);
-                        //Read message contents
-                        String topic = zMsg.popString();
-                        byte[] message = zMsg.pop().getData();
-                        Object objMessage = SerializationUtils.deserialize(message);
+                        topic = zMsg.popString();
+                        messageBytes = zMsg.pop().getData();
+                        // Capture timestamp immediately after bytes are read from socket,
+                        // before any deserialization, so timestampAlgoConnector reflects true arrival
+                        timestampReceived = System.currentTimeMillis();
+                    }
+
+                    // Deserialization and listener dispatch run outside the socket lock.
+                    // When a thread pool is configured (threadsListening > 0 or < 0) the receiver
+                    // thread returns to the socket immediately, reducing head-of-line blocking.
+                    if (onUpdateExecutorService != null) {
+                        onUpdateExecutorService.submit(() -> {
+                            try {
+                                Object objMessage = SerializationUtils.deserialize(messageBytes);
+                                treatMessage(topic, objMessage, timestampReceived);
+                            } catch (Exception e) {
+                                logger.error("exception processing zeroMq message in thread pool topic:{}", topic, e);
+                                e.printStackTrace();
+                            }
+                        });
+                    } else {
+                        Object objMessage = SerializationUtils.deserialize(messageBytes);
                         try {
-
-                            treatMessage(topic, objMessage);
-
-                            //						if (threadsListening != 0) {
-                            //							onUpdateExecutorService.submit(new Runnable() {
-                            //
-                            //								public void run() {
-                            //									treatMessage(topic, message);
-                            //								}
-                            //							});
-                            //						} else {
-                            //							treatMessage(topic, message);
-                            //						}
-
+                            treatMessage(topic, objMessage, timestampReceived);
                         } catch (Exception e) {
-                            logger.error("exception reading zeroMq \ntopic:{}\nmessage:{}\n", topic, message, e);
+                            logger.error("exception processing zeroMq message \ntopic:{}\n", topic, e);
                             e.printStackTrace();
                         }
                     }
-
 
                 } catch (Exception e) {
                     logger.error("error reading ZeroMQ message ", e);
