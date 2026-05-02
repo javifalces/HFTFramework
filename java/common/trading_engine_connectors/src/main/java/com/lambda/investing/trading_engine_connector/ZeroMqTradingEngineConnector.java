@@ -81,7 +81,7 @@ public class ZeroMqTradingEngineConnector extends AbstractTradingEngineConnector
 				this.zeroMqConfigurationOrderRequest.getUrl());
 
 		this.zeroMqPublisher
-				.publish(this.zeroMqConfigurationOrderRequest, TypeMessage.command, "*", "starting publishing");
+				.publish(this.zeroMqConfigurationOrderRequest, TypeMessage.command, TypeMessage.command.toString(), "starting publishing");
 
 		//portfolio file not on the broker side
 		//		portfolio = Portfolio.getPortfolio(Configuration.OUTPUT_PATH + File.separator + name + "_position.json");
