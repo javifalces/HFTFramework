@@ -72,11 +72,11 @@ public class ZeroMqProviderFactory {
                                         Configuration.ConnectorProviderType connectorProviderType) {
         switch (connectorProviderType) {
             case ORDINARY -> {
-                logger.debug("ZeroMqProviderFactory – creating ordinary ZeroMqProvider ({})", zeroMqConfiguration);
+                logger.info("ZeroMqProviderFactory – creating ordinary ZeroMqProvider ({})", zeroMqConfiguration);
                 return ZeroMqProvider.getInstance(zeroMqConfiguration, threadsListening, isServer);
             }
             case DISRUPTOR_LOW_LATENCY, DISRUPTOR_HIGH_THROUGHPUT -> {
-                logger.debug("ZeroMqProviderFactory – creating ZeroMqProviderDisruptor ({}, strategy={})",
+                logger.info("ZeroMqProviderFactory – creating ZeroMqProviderDisruptor ({}, strategy={})",
                         zeroMqConfiguration, connectorProviderType);
                 return new ZeroMqProviderDisruptor(zeroMqConfiguration, threadsListening, isServer,
                         connectorProviderType);
