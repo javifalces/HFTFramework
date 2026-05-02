@@ -84,11 +84,11 @@ public class ZeroMqMarketDataConnectorDisruptor extends ZeroMqMarketDataConnecto
     // -----------------------------------------------------------------------
 
     /**
-     * Starts the Disruptor consumer thread <em>before</em> the ZeroMq provider
-     * so the ring buffer is ready as soon as the first message arrives.
+     * Initialises and starts the LMAX Disruptor ring-buffer and consumer thread.
+     * Extracted so that subclasses (e.g. test fixtures) can start the Disruptor
+     * without also bringing up the ZeroMq provider.
      */
-    @Override
-    public void start() {
+    protected void initDisruptor() {
         ThreadFactory consumerThreadFactory = r -> {
             Thread t = new Thread(r, "zeromq-disruptor-consumer");
             t.setDaemon(true);
@@ -107,6 +107,15 @@ public class ZeroMqMarketDataConnectorDisruptor extends ZeroMqMarketDataConnecto
         ringBuffer = disruptor.start();
 
         logger.info("Disruptor started (ringBufferSize={}, waitStrategy=BusySpin)", RING_BUFFER_SIZE);
+    }
+
+    /**
+     * Starts the Disruptor consumer thread <em>before</em> the ZeroMq provider
+     * so the ring buffer is ready as soon as the first message arrives.
+     */
+    @Override
+    public void start() {
+        initDisruptor();
 
         // Starts statisticsReceived reset + zeroMqProvider
         super.start();
@@ -166,5 +175,3 @@ public class ZeroMqMarketDataConnectorDisruptor extends ZeroMqMarketDataConnecto
         }
     }
 }
-
-
