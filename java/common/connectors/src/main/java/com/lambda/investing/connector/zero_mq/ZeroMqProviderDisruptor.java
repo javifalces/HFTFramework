@@ -108,6 +108,8 @@ public class ZeroMqProviderDisruptor extends ZeroMqProvider {
                                    boolean isServer) {
         this(zeroMqConfiguration, threadsListening, isServer,
                 Configuration.ConnectorProviderType.DISRUPTOR_LOW_LATENCY);
+
+
     }
 
     // -----------------------------------------------------------------------
@@ -157,6 +159,12 @@ public class ZeroMqProviderDisruptor extends ZeroMqProvider {
     @Override
     public void start() {
         initDisruptor();
+        String topic = zeroMqConfiguration.getTopic();
+        if (topic == null) {
+            topic = "";
+        }
+        subscribeTopic(topic);
+
         super.start();
     }
 

@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class ZeroMqProvider implements ConnectorProvider {
 
     @Getter
-    private ZeroMqConfiguration zeroMqConfiguration;
+    protected ZeroMqConfiguration zeroMqConfiguration;
     Logger logger = LogManager.getLogger(ZeroMqProvider.class);
     private Map<ConnectorListener, ConnectorConfiguration> listenerManager;
 
