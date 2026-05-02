@@ -249,6 +249,53 @@ Key panels:
 
 ---
 
+#### Latency Stage Definitions
+
+Every message tracked by the latency system carries a chain of timestamps set at well-defined
+handoff points. The latency **stages** measure the time elapsed *between consecutive handoffs*.
+
+##### Inbound messages — `depth`, `trade`, `executionReport`
+
+These messages originate outside the application and travel *inward* toward the strategy:
+
+```
+Exchange / Broker  →  BrokerConnector  →  AlgoConnector  →  Strategy  →  (now)
+     timestamp            toBrokerConnector  toAlgoConnector  toStrategy   toNow
+```
+
+| Stage                   | Metric name                                                                                   | What it measures                                                                                                                                                                                                                                                 |
+|-------------------------|-----------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Origin timestamp        | *(baseline)*                                                                                  | For **depth** and **trade**: the exchange-side event time.<br>For **executionReport**: when the order status was created/changed on the broker side.                                                                                                             |
+| **`toBrokerConnector`** | `depth.toBrokerConnector`<br>`trade.toBrokerConnector`<br>`executionReport.toBrokerConnector` | Time from the origin timestamp until the BrokerConnector (e.g. `AbstractMarketDataConnectorPublisher` or `AbstractBrokerTradingEngine`) stamped the message just before publishing it internally. Captures exchange-to-connector network and processing latency. |
+| **`toAlgoConnector`**   | `depth.toAlgoConnector`<br>`trade.toAlgoConnector`<br>`executionReport.toAlgoConnector`       | Time from the BrokerConnector stamp until the AlgoConnector (e.g. `ZeroMqMarketDataConnector` or `AbstractTradingEngineConnector`) received and de-serialised the message. Captures ZeroMQ transport and deserialization latency.                                |
+| **`toStrategy`**        | `depth.toStrategy`<br>`trade.toStrategy`<br>`executionReport.toStrategy`                      | Time from the AlgoConnector stamp until the strategy callback ran (e.g. `Algorithm.onDepthUpdate`, `Algorithm.onTradeUpdate`, `Algorithm.onExecutionReportUpdate`). Captures internal dispatch and queue latency.                                                |
+| **`toNow`**             | `depth.toNow`<br>`trade.toNow`<br>`executionReport.toNow`                                     | Time from the last recorded stamp (strategy, or the latest available stage) until the latency statistics are collected. Captures any remaining processing time or measurement overhead still pending at collection time.                                         |
+| **`TOTAL`**             | `depth.TOTAL`<br>`trade.TOTAL`<br>`executionReport.TOTAL`                                     | Sum of all stages above — end-to-end elapsed time from the origin timestamp to *now*.                                                                                                                                                                            |
+
+##### Outbound messages — `orderRequest`
+
+Order requests originate *inside* the strategy and travel *outward* toward the broker/exchange:
+
+```
+Strategy creates order  →  AlgoConnector  →  BrokerConnector  →  (now / market)
+  timestampCreation          toAlgoConnector   toBrokerConnector      toNow
+```
+
+| Stage                   | Metric name                      | What it measures                                                                                                                                                                                 |
+|-------------------------|----------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Origin timestamp        | *(baseline)*                     | When the strategy created and submitted the `OrderRequest`.                                                                                                                                      |
+| **`toAlgoConnector`**   | `orderRequest.toAlgoConnector`   | Time from strategy creation until the AlgoConnector picked up and forwarded the order. Captures internal dispatch latency.                                                                       |
+| **`toBrokerConnector`** | `orderRequest.toBrokerConnector` | Time from the AlgoConnector stamp until the BrokerConnector (e.g. ZeroMQ or IB gateway) received the order and was about to send it to the exchange. Captures ZeroMQ transport latency outbound. |
+| **`toNow`**             | `orderRequest.toNow`             | Time from the BrokerConnector stamp until the latency statistics are collected — residual overhead and wire-send time.                                                                           |
+| **`TOTAL`**             | `orderRequest.TOTAL`             | Full round-trip from strategy order creation to the moment it is recorded by the statistics collector.                                                                                           |
+
+> **Tip:** High `toBrokerConnector` on inbound messages usually points to network/broker latency.
+> High `toAlgoConnector` on inbound messages usually points to ZeroMQ transport or deserialization bottlenecks.
+> High `toStrategy` on inbound messages indicates internal queue or thread-scheduling delays.
+> High `toAlgoConnector` on `orderRequest` indicates internal dispatch delays before the order leaves the process.
+
+---
+
 ### HFT - Algorithm Custom Columns
 
 Custom per-algorithm metrics defined by each strategy (user-defined columns logged by the algorithm).
