@@ -112,7 +112,7 @@ public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implem
 		if (typeMessage == TypeMessage.depth) {
 			//DEPTH received
 			Depth depth = fromObject(content, Depth.class);
-			depth.setTimestampAlgoConnector(System.currentTimeMillis());
+			depth.setTimestampAlgoConnector(timestampReceived);
 
 			if (instrumentPksList != null) {
 				//filtering
@@ -127,7 +127,7 @@ public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implem
 		if (typeMessage == TypeMessage.trade) {
 			//TRADE received
 			Trade trade = fromObject(content, Trade.class);
-			trade.setTimestampAlgoConnector(System.currentTimeMillis());
+			trade.setTimestampAlgoConnector(timestampReceived);
 			if (instrumentPksList != null) {
 				//filtering
 				if (!instrumentPksList.contains(trade.getInstrument())) {
