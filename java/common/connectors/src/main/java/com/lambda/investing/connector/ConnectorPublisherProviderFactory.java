@@ -43,7 +43,7 @@ public final class ConnectorPublisherProviderFactory {
     }
 
 
-    public static AbstractConnectorPublisherProvider createConnectorPublisherProvider(Configuration.ConnectorPublisherProviderType type, String name, int publishThreads, int priority) {
+    public static AbstractConnectorPublisherProvider createConnectorPublisherProvider(Configuration.ConnectorProviderType type, String name, int publishThreads, int priority) {
         switch (type) {
             case DISRUPTOR_HIGH_THROUGHPUT:
                 return createDisruptorHighThroughput(name, Configuration.DISRUPTOR_RING_BUFFER_SIZE);

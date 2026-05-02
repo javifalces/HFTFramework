@@ -1,5 +1,6 @@
 package com.lambda.investing.trading_engine_connector;
 
+import com.lambda.investing.Configuration;
 import com.lambda.investing.LatencyStatistics;
 import com.lambda.investing.Statistics;
 import com.lambda.investing.connector.AbstractConnectorPublisherConfiguration;
@@ -34,6 +35,7 @@ import java.lang.reflect.Modifier;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static com.lambda.investing.Configuration.logger;
 import static com.lambda.investing.model.Util.fromJsonString;
 import static com.lambda.investing.model.Util.toJsonString;
 import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_POSITION_INFO;

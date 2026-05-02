@@ -122,4 +122,5 @@ public class ZeroMqConfiguration implements ConnectorConfiguration {
 	@Override public int hashCode() {
 		return Objects.hash(protocol, host, port);
 	}
+
 }

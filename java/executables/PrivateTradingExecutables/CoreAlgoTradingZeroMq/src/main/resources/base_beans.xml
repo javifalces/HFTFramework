@@ -75,7 +75,8 @@
     <!--</util:list>-->
 
     <bean id="zeroMQTradingEngine"
-          class="com.lambda.investing.trading_engine_connector.ZeroMqTradingEngineConnector" init-method="start">
+          class="com.lambda.investing.trading_engine_connector.ZeroMqTradingEngineConnectorFactory"
+          factory-method="create" init-method="start">
         <constructor-arg index="0" value="zeroMqTradingEngine"/>
         <constructor-arg index="1" value="0"/>
         <constructor-arg index="2" value="0"/>
@@ -90,7 +91,8 @@
 
 
     <bean id="marketDataConnector"
-          class="com.lambda.investing.market_data_connector.ZeroMqMarketDataConnectorDisruptor" init-method="start">
+          class="com.lambda.investing.market_data_connector.ZeroMqMarketDataConnectorFactory" factory-method="create"
+          init-method="start">
         <constructor-arg index="0" ref="marketDataAndERconnectorConfiguration"/>
         <constructor-arg index="1" value="1"/>
         <property name="listenER" value="false"></property>

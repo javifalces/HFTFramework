@@ -20,7 +20,7 @@ public class Configuration {
         POISSON
     }
 
-    public enum ConnectorPublisherProviderType {
+    public enum ConnectorProviderType {
         ORDINARY,
         DISRUPTOR_HIGH_THROUGHPUT,//backtest
         DISRUPTOR_LOW_LATENCY,//real trading
@@ -55,9 +55,16 @@ public class Configuration {
     public static boolean IS_DEBUGGING_DEFAULT = false;//will disable latencies and muiltiThreading
     //			java.lang.management.ManagementFactory.getRuntimeMXBean().getInputArguments().toString()
     //					.indexOf("-agentlib:jdwp") > 0;
-    public static ConnectorPublisherProviderType BACKTEST_CONNECTOR_PUBLISHER_PROVIDER = ConnectorPublisherProviderType.valueOf(getEnvOrDefault("BACKTEST_CONNECTOR_PUBLISHER_PROVIDER", "ORDINARY"));//by default ORDINARY, DISRUPTOR_HIGH_THROUGHPUT could work here
-    public static ConnectorPublisherProviderType LIVE_CONNECTOR_PUBLISHER_PROVIDER = ConnectorPublisherProviderType.valueOf(getEnvOrDefault("LIVE_CONNECTOR_PUBLISHER_PROVIDER", "DISRUPTOR_LOW_LATENCY"));//by default low latency
+    public static ConnectorProviderType BACKTEST_CONNECTOR_PUBLISHER_PROVIDER = ConnectorProviderType.valueOf(getEnvOrDefault("BACKTEST_CONNECTOR_PUBLISHER_PROVIDER", "ORDINARY"));//by default ORDINARY, DISRUPTOR_HIGH_THROUGHPUT could work here
+    public static ConnectorProviderType LIVE_CONNECTOR_PROVIDER = ConnectorProviderType.valueOf(getEnvOrDefault("LIVE_CONNECTOR_PROVIDER", "DISRUPTOR_LOW_LATENCY"));//by default low latency
     public static int DISRUPTOR_RING_BUFFER_SIZE = Integer.parseInt(getEnvOrDefault("DISRUPTOR_RING_BUFFER_SIZE", "512"));//power of 2;//power of 2
+    /**
+     * Number of dummy events published through the Disruptor pipeline on startup to
+     * prime the JIT compiler and pre-touch ring-buffer memory before the first real
+     * market-data message arrives.  Set to 0 to disable warmup.
+     * Recommended: ≥ 2 000 (enough to trigger C1 compilation of the hot path).
+     */
+    public static int DISRUPTOR_WARMUP_ITERATIONS = Integer.parseInt(getEnvOrDefault("DISRUPTOR_WARMUP_ITERATIONS", "2000"));
 
     public static long RANDOM_SEED = 0;
     public static long PORTFOLIO_MANAGER_UPDATE_FREQUENCY_MS = 15000;

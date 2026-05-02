@@ -2,19 +2,15 @@ package com.lambda.investing.market_data_connector;
 
 import com.lambda.investing.Configuration;
 import com.lambda.investing.connector.ConnectorConfiguration;
+import com.lambda.investing.connector.disruptor.DisruptorConnectorHelper;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
 import com.lambda.investing.model.asset.Instrument;
+import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.messaging.TypeMessage;
-import com.lmax.disruptor.BusySpinWaitStrategy;
-import com.lmax.disruptor.EventFactory;
-import com.lmax.disruptor.RingBuffer;
-import com.lmax.disruptor.dsl.Disruptor;
-import com.lmax.disruptor.dsl.ProducerType;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.List;
-import java.util.concurrent.ThreadFactory;
 
 /**
  * Low-latency variant of {@link ZeroMqMarketDataConnector} that interposes an
@@ -24,8 +20,12 @@ import java.util.concurrent.ThreadFactory;
  * <p>The ZeroMq callback ({@link #onUpdate}) is the <em>producer</em>: it only
  * writes four references into a pre-allocated ring-buffer slot and publishes the
  * sequence – typically tens of nanoseconds.  All decoding and listener
- * notification happens on the dedicated {@code zeromq-disruptor-consumer} thread
- * via {@link ZeroMqMarketDataConnector#processUpdate}.
+ * notification happens on the dedicated {@code zmq-md-disruptor} thread via
+ * {@link ZeroMqMarketDataConnector#processUpdate}.
+ *
+ * <p>The shared ring-buffer infrastructure lives in
+ * {@link DisruptorConnectorHelper}; the identical helper is reused by
+ * {@code ZeroMqTradingEngineConnectorDisruptor} in the trading-engine-connectors module.
  *
  * <p>Use {@code ZeroMqMarketDataConnectorFactory} to obtain an instance.
  */
@@ -33,50 +33,31 @@ public class ZeroMqMarketDataConnectorDisruptor extends ZeroMqMarketDataConnecto
 
     private static final Logger logger = LogManager.getLogger(ZeroMqMarketDataConnectorDisruptor.class);
 
+
     // -----------------------------------------------------------------------
-    // Disruptor wiring
+    // Disruptor – delegated to the shared helper
     // -----------------------------------------------------------------------
 
-    /**
-     * Pre-allocated ring-buffer slot.
-     */
-    private static final class DisruptorEvent {
-        ConnectorConfiguration configuration;
-        long timestampReceived;
-        TypeMessage typeMessage;
-        Object content;
-
-        void reset() {
-            configuration = null;
-            typeMessage = null;
-            content = null;
-        }
-    }
-
-    private static final EventFactory<DisruptorEvent> EVENT_FACTORY = DisruptorEvent::new;
-
-    /**
-     * Ring-buffer size – must be a power of two.
-     * 1 024 slots covers typical ZeroMQ burst throughput; raise to 4 096 for
-     * very high-frequency feeds.
-     */
-    private static final int RING_BUFFER_SIZE = Configuration.DISRUPTOR_RING_BUFFER_SIZE;
-
-    private Disruptor<DisruptorEvent> disruptor;
-    private RingBuffer<DisruptorEvent> ringBuffer;
+    private DisruptorConnectorHelper helper;
+    private String disruptorThreadName;
+    private Configuration.ConnectorProviderType connectorProviderType;
 
     // -----------------------------------------------------------------------
     // Constructors – mirror the parent constructors
     // -----------------------------------------------------------------------
 
-    public ZeroMqMarketDataConnectorDisruptor(ZeroMqConfiguration zeroMqConfiguration, int threadsListening) {
+    public ZeroMqMarketDataConnectorDisruptor(ZeroMqConfiguration zeroMqConfiguration, int threadsListening, Configuration.ConnectorProviderType connectorProviderType) {
         super(zeroMqConfiguration, threadsListening);
+        disruptorThreadName = zeroMqConfiguration.toString();
+        this.connectorProviderType = connectorProviderType;
     }
 
     public ZeroMqMarketDataConnectorDisruptor(ZeroMqConfiguration zeroMqConfigurationIn,
                                               List<Instrument> instruments,
-                                              int threadsListening) {
+                                              int threadsListening, Configuration.ConnectorProviderType connectorProviderType) {
         super(zeroMqConfigurationIn, instruments, threadsListening);
+        disruptorThreadName = zeroMqConfigurationIn.toString();
+        this.connectorProviderType = connectorProviderType;
     }
 
     // -----------------------------------------------------------------------
@@ -84,29 +65,35 @@ public class ZeroMqMarketDataConnectorDisruptor extends ZeroMqMarketDataConnecto
     // -----------------------------------------------------------------------
 
     /**
-     * Initialises and starts the LMAX Disruptor ring-buffer and consumer thread.
+     * Initialises and starts the LMAX Disruptor ring-buffer and consumer thread,
+     * then runs the warmup cycle.
      * Extracted so that subclasses (e.g. test fixtures) can start the Disruptor
      * without also bringing up the ZeroMq provider.
      */
     protected void initDisruptor() {
-        ThreadFactory consumerThreadFactory = r -> {
-            Thread t = new Thread(r, "zeromq-disruptor-consumer");
-            t.setDaemon(true);
-            return t;
-        };
+        helper = DisruptorConnectorHelper.getInstance(disruptorThreadName, connectorProviderType);
+        helper.init();
+        helper.addConsumer(this::processUpdate,
+                TypeMessage.depth, TypeMessage.trade, TypeMessage.command);
+        warmupDisruptor();
+    }
 
-        disruptor = new Disruptor<>(
-                EVENT_FACTORY,
-                RING_BUFFER_SIZE,
-                consumerThreadFactory,
-                ProducerType.SINGLE,        // ZeroMq callback is single-threaded
-                new BusySpinWaitStrategy()  // lowest latency – spins one CPU core
+    /**
+     * Primes the JIT and pre-touches ring-buffer memory by publishing synthetic
+     * {@link TypeMessage#depth} events through the full pipeline.
+     * Blocks until all warmup events are drained so no event leaks to real listeners.
+     *
+     * <p>Override in tests or subclasses to skip warmup:
+     * <pre>{@code @Override protected void warmupDisruptor() { } }</pre>
+     */
+    protected void warmupDisruptor() {
+        helper.warmup(
+                new ZeroMqConfiguration(DisruptorConnectorHelper.WARMUP_HOST,
+                        DisruptorConnectorHelper.WARMUP_PORT,
+                        DisruptorConnectorHelper.WARMUP_INSTRUMENT),
+                TypeMessage.depth,
+                this::buildWarmupDepth
         );
-
-        disruptor.handleEventsWith(this::dispatchEvent);
-        ringBuffer = disruptor.start();
-
-        logger.info("Disruptor started (ringBufferSize={}, waitStrategy=BusySpin)", RING_BUFFER_SIZE);
     }
 
     /**
@@ -116,7 +103,6 @@ public class ZeroMqMarketDataConnectorDisruptor extends ZeroMqMarketDataConnecto
     @Override
     public void start() {
         initDisruptor();
-
         // Starts statisticsReceived reset + zeroMqProvider
         super.start();
     }
@@ -125,8 +111,8 @@ public class ZeroMqMarketDataConnectorDisruptor extends ZeroMqMarketDataConnecto
      * Drains any remaining events then shuts down the consumer thread.
      */
     public void stop() {
-        if (disruptor != null) {
-            disruptor.shutdown();
+        if (helper != null) {
+            helper.shutdown();
         }
     }
 
@@ -135,43 +121,38 @@ public class ZeroMqMarketDataConnectorDisruptor extends ZeroMqMarketDataConnecto
     // -----------------------------------------------------------------------
 
     /**
-     * Hot path: grabs the next ring-buffer sequence, copies four references
-     * into the pre-allocated slot, and publishes.  No allocation, no business
-     * logic.
+     * Hot path: delegates to {@link DisruptorConnectorHelper#publish} which
+     * grabs the next ring-buffer sequence, copies four references into the
+     * pre-allocated slot, and publishes.  No allocation, no business logic.
      */
     @Override
     public void onUpdate(ConnectorConfiguration configuration, long timestampReceived,
                          TypeMessage typeMessage, Object content) {
-        if (ringBuffer == null) {
+        if (helper == null || !helper.isReady()) {
             return;
-        }//very fast!
-        final long sequence = ringBuffer.next();
-        try {
-            final DisruptorEvent slot = ringBuffer.get(sequence);
-            slot.configuration = configuration;
-            slot.timestampReceived = timestampReceived;
-            slot.typeMessage = typeMessage;
-            slot.content = content;
-        } finally {
-            ringBuffer.publish(sequence);
         }
+        helper.publish(configuration, timestampReceived, typeMessage, content);
     }
 
     // -----------------------------------------------------------------------
-    // Consumer – dedicated zeromq-disruptor-consumer thread
+    // Warmup content builder
     // -----------------------------------------------------------------------
 
     /**
-     * Delegates to {@link ZeroMqMarketDataConnector#processUpdate} which holds
-     * all decoding and listener-notification logic.
+     * Builds a minimal synthetic {@link Depth} for the warmup cycle.
+     * The sentinel instrument {@link DisruptorConnectorHelper#WARMUP_INSTRUMENT}
+     * ensures these events are invisible to downstream strategies.
      */
-    private void dispatchEvent(DisruptorEvent slot, long sequence, boolean endOfBatch) {
-        try {
-            processUpdate(slot.configuration, slot.timestampReceived, slot.typeMessage, slot.content);
-        } catch (Exception e) {
-            logger.error("Error in Disruptor consumer dispatching typeMessage={}", slot.typeMessage, e);
-        } finally {
-            slot.reset();
-        }
+    private Depth buildWarmupDepth(int i) {
+        Depth depth = Depth.getInstance();
+        depth.setInstrument(DisruptorConnectorHelper.WARMUP_INSTRUMENT);
+        depth.setTimestamp(i + 1L);
+        depth.setLevels(1);
+        depth.setBids(new double[]{1.0});
+        depth.setAsks(new double[]{1.01});
+        depth.setBidsQuantities(new double[]{1.0});
+        depth.setAsksQuantities(new double[]{1.0});
+        depth.setLevelsFromData();
+        return depth;
     }
 }
