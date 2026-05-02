@@ -4,6 +4,7 @@ import com.binance.api.client.BinanceApiClientFactory;
 import com.lambda.investing.binance.BinanceBrokerConnector;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
 import com.lambda.investing.connector.zero_mq.ZeroMqProvider;
+import com.lambda.investing.connector.zero_mq.ZeroMqProviderFactory;
 import lombok.Getter;
 
 import java.text.NumberFormat;
@@ -51,7 +52,7 @@ public class MetatraderZeroBrokerConnector {
 		this.portPull = portPull;
 
 		this.publisherZeroMqConfiguration = new ZeroMqConfiguration(host, portPublisher, "");
-		this.publisherProvider = ZeroMqProvider.getInstance(this.publisherZeroMqConfiguration, 0);
+		this.publisherProvider = ZeroMqProviderFactory.create(this.publisherZeroMqConfiguration, 0);
 		this.publisherProvider.setParsedObjects(false);
 
 	}

@@ -5,6 +5,7 @@ import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
 import com.lambda.investing.connector.zero_mq.ZeroMqProvider;
+import com.lambda.investing.connector.zero_mq.ZeroMqProviderFactory;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
@@ -45,7 +46,7 @@ public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implem
 	 */
 	public ZeroMqMarketDataConnector(ZeroMqConfiguration zeroMqConfiguration, int threadsListening) {
 		this.zeroMqConfiguration = new ZeroMqConfiguration(zeroMqConfiguration);
-		zeroMqProvider = ZeroMqProvider.getInstance(this.zeroMqConfiguration, threadsListening);
+		zeroMqProvider = ZeroMqProviderFactory.create(this.zeroMqConfiguration, threadsListening);
 		zeroMqProvider.register(this.zeroMqConfiguration, this);
 		logger.info("Listening MarketData {}   in {}", this.zeroMqConfiguration.getTopic(), this.zeroMqConfiguration.getUrl());
 	}
@@ -75,7 +76,7 @@ public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implem
 		}
 
 		for (ZeroMqConfiguration zeroMqConfiguration : zeroMqConfigurationList) {
-			zeroMqProvider = ZeroMqProvider.getInstance(zeroMqConfiguration, threadsListening);
+			zeroMqProvider = ZeroMqProviderFactory.create(zeroMqConfiguration, threadsListening);
 			zeroMqProvider.register(zeroMqConfiguration, this);
 
 			logger.info("Listening {}   in {}}", zeroMqConfiguration.getTopic(), zeroMqConfiguration.getUrl());

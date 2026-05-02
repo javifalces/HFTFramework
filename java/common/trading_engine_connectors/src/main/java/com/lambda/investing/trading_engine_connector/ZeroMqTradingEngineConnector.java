@@ -9,6 +9,7 @@ import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorConfiguration;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
 import com.lambda.investing.connector.zero_mq.ZeroMqProvider;
+import com.lambda.investing.connector.zero_mq.ZeroMqProviderFactory;
 import com.lambda.investing.connector.zero_mq.ZeroMqPublisher;
 import com.lambda.investing.market_data_connector.MarketDataListener;
 import com.lambda.investing.market_data_connector.MarketDataProvider;
@@ -64,8 +65,8 @@ public class ZeroMqTradingEngineConnector extends AbstractTradingEngineConnector
 
 		this.zeroMqConfigurationExecutionReportListening = zeroMqConfigurationExecutionReportListening;
 		//listen the answers here
-		zeroMqExecutionReportProvider = ZeroMqProvider
-				.getInstance(this.zeroMqConfigurationExecutionReportListening, threadsListen);
+		zeroMqExecutionReportProvider = ZeroMqProviderFactory
+				.create(this.zeroMqConfigurationExecutionReportListening, threadsListen);
 		zeroMqExecutionReportProvider.register(this.zeroMqConfigurationExecutionReportListening, this);
 		logger.info("Listening ExecutionReports on topic {}   in {}",
 				zeroMqConfigurationExecutionReportListening.getTopic(),

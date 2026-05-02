@@ -5,6 +5,7 @@ import com.lambda.investing.connector.*;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorConfiguration;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
 import com.lambda.investing.connector.zero_mq.ZeroMqProvider;
+import com.lambda.investing.connector.zero_mq.ZeroMqProviderFactory;
 import com.lambda.investing.market_data_connector.metatrader.MetatraderMarketDataPublisher;
 import com.lambda.investing.metatrader.MetatraderZeroBrokerConnector;
 import com.lambda.investing.model.messaging.TypeMessage;
@@ -71,8 +72,8 @@ public class MetatraderTradingEngineTest {
         ((ZeroMqConfiguration) orderRequestConfiguration).setHost(HOST);
         ((ZeroMqConfiguration) orderRequestConfiguration).setPort(tradingEnginePort);
 
-        ConnectorProvider orderRequestConnectorProvider = ZeroMqProvider
-                .getInstance((ZeroMqConfiguration) orderRequestConfiguration, 0);
+        ConnectorProvider orderRequestConnectorProvider = ZeroMqProviderFactory
+                .create((ZeroMqConfiguration) orderRequestConfiguration, 0);
         ((ZeroMqProvider) orderRequestConnectorProvider).start();
 
 //		ZEROMQ publisher

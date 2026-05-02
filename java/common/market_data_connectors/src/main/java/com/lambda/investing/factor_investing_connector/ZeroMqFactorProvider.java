@@ -5,6 +5,7 @@ import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
 import com.lambda.investing.connector.zero_mq.ZeroMqProvider;
+import com.lambda.investing.connector.zero_mq.ZeroMqProviderFactory;
 import com.lambda.investing.market_data_connector.ZeroMqMarketDataConnector;
 import com.lambda.investing.model.messaging.TypeMessage;
 import org.apache.logging.log4j.LogManager;
@@ -31,7 +32,7 @@ public class ZeroMqFactorProvider extends AbstractFactorProvider implements Conn
             return;
         }
         this.zeroMqConfiguration = new ZeroMqConfiguration(zeroMqConfiguration);
-        zeroMqProvider = ZeroMqProvider.getInstance(this.zeroMqConfiguration, threadsListening);
+        zeroMqProvider = ZeroMqProviderFactory.create(this.zeroMqConfiguration, threadsListening);
         zeroMqProvider.register(this.zeroMqConfiguration, this);
         logger.info("Listening FactorData {}   in {}}", this.zeroMqConfiguration.getTopic(),
                 this.zeroMqConfiguration.getUrl());

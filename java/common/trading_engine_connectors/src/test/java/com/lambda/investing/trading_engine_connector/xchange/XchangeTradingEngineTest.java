@@ -2,6 +2,7 @@ package com.lambda.investing.trading_engine_connector.xchange;
 
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
 import com.lambda.investing.connector.zero_mq.ZeroMqProvider;
+import com.lambda.investing.connector.zero_mq.ZeroMqProviderFactory;
 import com.lambda.investing.connector.zero_mq.ZeroMqPublisher;
 import com.lambda.investing.market_data_connector.MarketDataConfiguration;
 import com.lambda.investing.market_data_connector.MarketDataListener;
@@ -247,7 +248,7 @@ import static com.lambda.investing.Configuration.RANDOM_GENERATOR;
 		BinanceXchangeTradingEngineConfiguration tradingEngineConfiguration = new BinanceXchangeTradingEngineConfiguration(
 				binanceApikey, binanceSecretKey);
 
-		ZeroMqProvider zeroMqMdProvider = ZeroMqProvider.getInstance(mqConfigurationPublisher, threadsListen);
+		ZeroMqProvider zeroMqMdProvider = ZeroMqProviderFactory.create(mqConfigurationPublisher, threadsListen);
 
 		ZeroMqPublisher zeroMqPublisher = mdZeroMqPublisher;//same as md for ER
 

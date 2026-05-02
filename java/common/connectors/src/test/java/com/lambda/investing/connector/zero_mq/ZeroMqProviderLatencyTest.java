@@ -1,45 +1,41 @@
-package com.lambda.investing.market_data_connector;
+package com.lambda.investing.connector.zero_mq;
 
 import com.lambda.investing.Configuration;
-import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
-import com.lambda.investing.model.market_data.Depth;
-import com.lambda.investing.model.messaging.Command;
+import com.lambda.investing.connector.ConnectorConfiguration;
+import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.model.messaging.TypeMessage;
-import com.lambda.investing.model.market_data.Trade;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.LockSupport;
 
 /**
- * Latency benchmark comparing {@link ZeroMqMarketDataConnector} (synchronous,
+ * Latency benchmark comparing {@link ZeroMqProvider} (synchronous,
  * caller blocks for the full processing time) against
- * {@link ZeroMqMarketDataConnectorDisruptor} (LMAX Disruptor, caller returns
+ * {@link ZeroMqProviderDisruptor} (LMAX Disruptor, caller returns
  * after a single ring-buffer write).
  *
  * <h2>Two latency metrics are measured</h2>
  * <ol>
  *   <li><strong>Producer latency</strong> – how long the "ZeroMq I/O thread"
- *       (the caller of {@code onUpdate}/{@code processUpdate}) is blocked.
+ *       (the caller of {@code onUpdate}) is blocked.
  *       This is the number that matters for live trading because a slow
  *       producer misses the next market-data message.
  *       <ul>
- *         <li>Plain    → full {@code processUpdate()} duration (includes
- *             deserialisation + all listener callbacks)</li>
- *         <li>Disruptor → just {@code onUpdate()} duration (ring-buffer
- *             write only; ~100–300 ns)</li>
+ *         <li>Plain    → full {@code onUpdate()} duration (includes
+ *             all {@link ConnectorListener} callbacks)</li>
+ *         <li>Disruptor → just ring-buffer write only (~100–300 ns)</li>
  *       </ul>
  *   </li>
- *   <li><strong>End-to-end latency</strong> – time from {@code onUpdate} call
- *       to the {@link MarketDataListener#onDepthUpdate} callback.  Plain is
+ *   <li><strong>End-to-end latency</strong> – time from {@code onUpdate} injection
+ *       to the {@link ConnectorListener#onUpdate} callback.  Plain is
  *       synchronous, so this equals producer latency.  Disruptor adds async
  *       dispatch overhead, so this is larger – that is expected and normal.
  *   </li>
@@ -47,10 +43,10 @@ import java.util.concurrent.locks.LockSupport;
  *
  * <h2>Slow-consumer scenario</h2>
  * A listener that burns {@value SLOW_CONSUMER_DELAY_NS} ns per message is
- * registered.  For the plain connector the producer is blocked for that delay
- * on every message.  For the Disruptor the producer still returns in < 1 µs.
+ * registered.  For the plain provider the producer is blocked for that delay
+ * on every message.  For the Disruptor the producer still returns in &lt; 1 µs.
  */
-public class ZeroMqMarketDataConnectorLatencyTest {
+public class ZeroMqProviderLatencyTest {
 
     // -----------------------------------------------------------------------
     // Benchmark parameters
@@ -73,32 +69,61 @@ public class ZeroMqMarketDataConnectorLatencyTest {
      */
     private static final long SLOW_CONSUMER_DELAY_NS = 200_000L;
 
-    private static final String INSTRUMENT = "BTCUSD_TEST";
+    private static final String TOPIC = "depth.BTCUSD_TEST";
 
     private static final ZeroMqConfiguration DUMMY_CFG =
-            new ZeroMqConfiguration("localhost", 19999, null);
+            new ZeroMqConfiguration("localhost", 19998, null);
 
     // -----------------------------------------------------------------------
-    // Inner test-doubles  (no real ZeroMq socket)
+    // Test doubles  (no real ZeroMq socket I/O)
     // -----------------------------------------------------------------------
 
-    static class TestConnector extends ZeroMqMarketDataConnector {
-        TestConnector() {
+    /**
+     * Plain provider test double: skips ZeroMq socket binding/connecting,
+     * exposes the protected {@code onUpdate} for direct injection.
+     */
+    static class TestPlainProvider extends ZeroMqProvider {
+        TestPlainProvider() {
             super(DUMMY_CFG, 0);
         }
 
         @Override
-        public void start() { /* skip ZeroMq */ }
+        public void start() { /* skip ZeroMq bind/connect */ }
+
+        /**
+         * Directly inject a message as if it arrived from the ZeroMq thread.
+         */
+        void inject(TypeMessage type, Object msg, long timestampNs) throws IOException {
+            onUpdate(type, msg, TOPIC, timestampNs);
+        }
     }
 
-    static class TestDisruptorConnector extends ZeroMqMarketDataConnectorDisruptor {
-        TestDisruptorConnector() {
-            super(DUMMY_CFG, 0, Configuration.ConnectorProviderType.DISRUPTOR_LOW_LATENCY);
+    /**
+     * Disruptor provider test double: initialises only the Disruptor ring-buffer,
+     * skips ZeroMq socket binding/connecting and skips the built-in warmup
+     * (the test performs its own warmup pass).
+     */
+    static class TestDisruptorProvider extends ZeroMqProviderDisruptor {
+        TestDisruptorProvider() {
+            super(DUMMY_CFG, 0, false, Configuration.ConnectorProviderType.DISRUPTOR_LOW_LATENCY);
         }
 
         @Override
         public void start() {
             initDisruptor(); /* skip ZeroMq */
+        }
+
+        /**
+         * Skip built-in warmup – the test performs its own warm-up pass.
+         */
+        @Override
+        protected void warmupDisruptor() { /* no-op */ }
+
+        /**
+         * Directly inject a message as if it arrived from the ZeroMq thread.
+         */
+        void inject(TypeMessage type, Object msg, long timestampNs) throws IOException {
+            onUpdate(type, msg, TOPIC, timestampNs);
         }
     }
 
@@ -107,60 +132,48 @@ public class ZeroMqMarketDataConnectorLatencyTest {
     // -----------------------------------------------------------------------
 
     /**
-     * Captures end-to-end latency via {@code depth.getTimestampAlgoConnector()}.
+     * Captures end-to-end latency via the {@code timestampReceived} parameter
+     * (populated with {@code System.nanoTime()} by the injector).
      */
-    static class E2ELatencyListener implements MarketDataListener {
+    static class E2ELatencyConnectorListener implements ConnectorListener {
         final List<Long> latenciesNs = Collections.synchronizedList(new ArrayList<>());
         final CountDownLatch latch;
 
-        E2ELatencyListener(int n) {
-            latch = new CountDownLatch(n); }
+        E2ELatencyConnectorListener(int n) {
+            latch = new CountDownLatch(n);
+        }
 
         @Override
-        public boolean onDepthUpdate(Depth depth) {
-            latenciesNs.add(System.nanoTime() - depth.getTimestampAlgoConnector());
+        public void onUpdate(ConnectorConfiguration configuration, long timestampReceived,
+                             TypeMessage typeMessage, Object content) {
+            latenciesNs.add(System.nanoTime() - timestampReceived);
             latch.countDown();
-            return true;
-        }
-
-        @Override
-        public boolean onTradeUpdate(Trade t) {
-            return false;
-        }
-
-        @Override
-        public boolean onCommandUpdate(Command c) {
-            return false;
-        }
-
-        @Override
-        public boolean onInfoUpdate(String h, Object m) {
-            return false;
         }
 
         boolean await(long t, TimeUnit u) throws InterruptedException {
-            return latch.await(t, u); }
+            return latch.await(t, u);
+        }
     }
 
     /**
-     * Same as {@link E2ELatencyListener} but burns {@code delayNs} nanoseconds
+     * Same as {@link E2ELatencyConnectorListener} but burns {@code delayNs} nanoseconds
      * per message to simulate expensive business logic.
      */
-    static class SlowE2ELatencyListener extends E2ELatencyListener {
+    static class SlowE2ELatencyConnectorListener extends E2ELatencyConnectorListener {
         private final long delayNs;
 
-        SlowE2ELatencyListener(int n, long delayNs) {
+        SlowE2ELatencyConnectorListener(int n, long delayNs) {
             super(n);
             this.delayNs = delayNs;
         }
 
         @Override
-        public boolean onDepthUpdate(Depth depth) {
+        public void onUpdate(ConnectorConfiguration configuration, long timestampReceived,
+                             TypeMessage typeMessage, Object content) {
             long deadline = System.nanoTime() + delayNs;
             while (System.nanoTime() < deadline) { /* busy-spin */ }
-            latenciesNs.add(System.nanoTime() - depth.getTimestampAlgoConnector());
+            latenciesNs.add(System.nanoTime() - timestampReceived);
             latch.countDown();
-            return true;
         }
     }
 
@@ -168,42 +181,20 @@ public class ZeroMqMarketDataConnectorLatencyTest {
     // Fixtures
     // -----------------------------------------------------------------------
 
-    private TestConnector plainConnector;
-    private TestDisruptorConnector disruptorConnector;
+    private TestPlainProvider plainProvider;
+    private TestDisruptorProvider disruptorProvider;
 
     @Before
     public void setUp() {
-        AbstractMarketDataProvider.CHECK_TIMESTAMPS_RECEIVED = false;
-        plainConnector = new TestConnector();
-        plainConnector.start();
-        disruptorConnector = new TestDisruptorConnector();
-        disruptorConnector.start();
+        plainProvider = new TestPlainProvider();
+        plainProvider.start();
+        disruptorProvider = new TestDisruptorProvider();
+        disruptorProvider.start();
     }
 
     @After
     public void tearDown() {
-        disruptorConnector.stop(); }
-
-    // -----------------------------------------------------------------------
-    // Depth factory
-    // -----------------------------------------------------------------------
-
-    @SuppressWarnings("unchecked")
-    private static Depth buildDepth(long seqNum) {
-        Depth depth = Depth.getInstance();
-        depth.setInstrument(INSTRUMENT);
-        depth.setTimestamp(seqNum);
-        depth.setTimestampBrokerConnector(seqNum);
-        depth.setLevels(1);
-        depth.setBids(new double[]{100.0});
-        depth.setAsks(new double[]{100.1});
-        depth.setBidsQuantities(new double[]{1.0});
-        depth.setAsksQuantities(new double[]{1.0});
-        List<String>[] algo = new List[]{Arrays.asList(Depth.ALGORITHM_INFO_MM) };
-        depth.setBidsAlgorithmInfo(algo);
-        depth.setAsksAlgorithmInfo(algo);
-        depth.setLevelsFromData();
-        return depth;
+        disruptorProvider.stop();
     }
 
     // -----------------------------------------------------------------------
@@ -211,52 +202,52 @@ public class ZeroMqMarketDataConnectorLatencyTest {
     // -----------------------------------------------------------------------
 
     /**
-     * Runs the plain connector benchmark.
+     * Runs the plain provider benchmark.
      * Producer and e2e are identical because processing is synchronous.
      *
-     * @return [0] = producer/e2e latencies (same list)
+     * @return [0] = producer latencies, [1] = e2e latencies (same list)
      */
-    private List<Long>[] benchmarkPlain(int count, E2ELatencyListener listener)
-            throws InterruptedException {
+    @SuppressWarnings("unchecked")
+    private List<Long>[] benchmarkPlain(int count, E2ELatencyConnectorListener listener)
+            throws Exception {
         List<Long> producerNs = new ArrayList<>(count);
-        plainConnector.register(listener);
+        plainProvider.register(DUMMY_CFG, listener);
         try {
             for (int i = 0; i < count; i++) {
-                Depth d = buildDepth(i + 1);
                 long t0 = System.nanoTime();
-                plainConnector.processUpdate(DUMMY_CFG, t0, TypeMessage.depth, d);
-                producerNs.add(System.nanoTime() - t0);  // caller unblocked after full processing
+                plainProvider.inject(TypeMessage.depth, "msg_" + i, t0);
+                producerNs.add(System.nanoTime() - t0); // caller unblocked after full listener fan-out
             }
         } finally {
-            plainConnector.deregister(listener);
+            plainProvider.deregister(DUMMY_CFG, listener);
         }
-        return new List[]{producerNs, listener.latenciesNs };
+        return new List[]{producerNs, listener.latenciesNs};
     }
 
     /**
-     * Runs the Disruptor benchmark.
+     * Runs the Disruptor provider benchmark.
      *
      * @return [0] = producer latencies (ring-buffer write only),
      *         [1] = end-to-end latencies (submission → listener callback)
      */
-    private List<Long>[] benchmarkDisruptor(int count, E2ELatencyListener listener)
-            throws InterruptedException {
+    @SuppressWarnings("unchecked")
+    private List<Long>[] benchmarkDisruptor(int count, E2ELatencyConnectorListener listener)
+            throws Exception {
         List<Long> producerNs = new ArrayList<>(count);
-        disruptorConnector.register(listener);
+        disruptorProvider.register(DUMMY_CFG, listener);
         try {
             for (int i = 0; i < count; i++) {
-                Depth d = buildDepth(i + 1);
                 long t0 = System.nanoTime();
-                disruptorConnector.onUpdate(DUMMY_CFG, t0, TypeMessage.depth, d);
-                producerNs.add(System.nanoTime() - t0);  // caller unblocked after ring-buffer write
+                disruptorProvider.inject(TypeMessage.depth, "msg_" + i, t0);
+                producerNs.add(System.nanoTime() - t0); // caller unblocked after ring-buffer write
             }
             if (!listener.await(30, TimeUnit.SECONDS)) {
                 System.err.println("[WARN] Disruptor consumer did not drain within 30 s");
             }
         } finally {
-            disruptorConnector.deregister(listener);
+            disruptorProvider.deregister(DUMMY_CFG, listener);
         }
-        return new List[]{producerNs, listener.latenciesNs };
+        return new List[]{producerNs, listener.latenciesNs};
     }
 
     // -----------------------------------------------------------------------
@@ -270,13 +261,15 @@ public class ZeroMqMarketDataConnectorLatencyTest {
 
     private static void printStats(String label, List<Long> samples) {
         if (samples.isEmpty()) {
-            System.out.printf("  %s – NO DATA%n", label); return; }
+            System.out.printf("  %s – NO DATA%n", label);
+            return;
+        }
         long[] s = samples.stream().mapToLong(Long::longValue).sorted().toArray();
         double mean = samples.stream().mapToLong(Long::longValue).average().orElse(0);
         System.out.printf(
                 "  %-46s  mean=%7.0f  p50=%7d  p75=%7d  p90=%7d  p99=%7d  max=%8d  (ns)%n",
                 label, mean,
-                percentile(s, 50), percentile(s, 75), percentile(s, 90), percentile(s, 99), s[s.length-1]);
+                percentile(s, 50), percentile(s, 75), percentile(s, 90), percentile(s, 99), s[s.length - 1]);
     }
 
     private static void printSection(String title) {
@@ -291,38 +284,38 @@ public class ZeroMqMarketDataConnectorLatencyTest {
     // -----------------------------------------------------------------------
 
     @Test
-    public void compareProcessingLatency() throws InterruptedException {
+    public void compareProcessingLatency() throws Exception {
 
         System.out.println();
-        System.out.println("╔══════════════════════════════════════════════════════════════╗");
-        System.out.println("║   ZeroMqMarketDataConnector vs Disruptor – Latency Benchmark ║");
-        System.out.println("╚══════════════════════════════════════════════════════════════╝");
+        System.out.println("╔══════════════════════════════════════════════════════════════════╗");
+        System.out.println("║   ZeroMqProvider vs ZeroMqProviderDisruptor – Latency Benchmark  ║");
+        System.out.println("╚══════════════════════════════════════════════════════════════════╝");
 
-        // ── warm-up ──────────────────────────────────────────────────────────
-        System.out.printf("%n  Warm-up: %,d messages × 2 connectors ...%n", WARMUP_MESSAGES);
-        benchmarkPlain(WARMUP_MESSAGES, new E2ELatencyListener(WARMUP_MESSAGES));
-        benchmarkDisruptor(WARMUP_MESSAGES, new E2ELatencyListener(WARMUP_MESSAGES));
+        // ── warm-up ─────────────────────────────────────────────────────────
+        System.out.printf("%n  Warm-up: %,d messages × 2 providers ...%n", WARMUP_MESSAGES);
+        benchmarkPlain(WARMUP_MESSAGES, new E2ELatencyConnectorListener(WARMUP_MESSAGES));
+        benchmarkDisruptor(WARMUP_MESSAGES, new E2ELatencyConnectorListener(WARMUP_MESSAGES));
         System.out.printf("  Done.%n");
 
         // ── fast-consumer benchmark ──────────────────────────────────────────
         System.out.printf("%n  Benchmark: %,d messages, fast consumer%n", BENCH_MESSAGES);
 
-        E2ELatencyListener plainFastE2E = new E2ELatencyListener(BENCH_MESSAGES);
-        E2ELatencyListener disruptorFastE2E = new E2ELatencyListener(BENCH_MESSAGES);
+        E2ELatencyConnectorListener plainFastE2E = new E2ELatencyConnectorListener(BENCH_MESSAGES);
+        E2ELatencyConnectorListener disruptorFastE2E = new E2ELatencyConnectorListener(BENCH_MESSAGES);
 
         List<Long>[] plainFast = benchmarkPlain(BENCH_MESSAGES, plainFastE2E);
         List<Long>[] disruptorFast = benchmarkDisruptor(BENCH_MESSAGES, disruptorFastE2E);
 
         List<Long> plainProducer = plainFast[0];
-        List<Long> plainE2E = plainFast[1];       // same as producer (sync)
+        List<Long> plainE2E = plainFast[1];         // same as producer (sync)
         List<Long> disruptorProducer = disruptorFast[0];
         List<Long> disruptorE2E = disruptorFast[1];
 
         printSection("PRODUCER latency  (how long the I/O thread is blocked)");
-        printStats("Plain    processUpdate() incl. listener", plainProducer);
+        printStats("Plain    onUpdate() incl. listener fan-out", plainProducer);
         printStats("Disruptor onUpdate()  ring-buffer write", disruptorProducer);
 
-        printSection("END-TO-END latency  (submission → MarketDataListener.onDepthUpdate)");
+        printSection("END-TO-END latency  (submission → ConnectorListener.onUpdate)");
         printStats("Plain    (sync: producer == e2e)", plainE2E);
         printStats("Disruptor (async dispatch overhead)", disruptorE2E);
 
@@ -330,8 +323,10 @@ public class ZeroMqMarketDataConnectorLatencyTest {
         System.out.printf("%n  Benchmark: %,d messages, slow consumer (%,d ns / msg)%n",
                 SLOW_BATCH, SLOW_CONSUMER_DELAY_NS);
 
-        SlowE2ELatencyListener plainSlowE2E = new SlowE2ELatencyListener(SLOW_BATCH, SLOW_CONSUMER_DELAY_NS);
-        SlowE2ELatencyListener disruptorSlowE2E = new SlowE2ELatencyListener(SLOW_BATCH, SLOW_CONSUMER_DELAY_NS);
+        SlowE2ELatencyConnectorListener plainSlowE2E =
+                new SlowE2ELatencyConnectorListener(SLOW_BATCH, SLOW_CONSUMER_DELAY_NS);
+        SlowE2ELatencyConnectorListener disruptorSlowE2E =
+                new SlowE2ELatencyConnectorListener(SLOW_BATCH, SLOW_CONSUMER_DELAY_NS);
 
         List<Long>[] plainSlow = benchmarkPlain(SLOW_BATCH, plainSlowE2E);
         List<Long>[] disruptorSlow = benchmarkDisruptor(SLOW_BATCH, disruptorSlowE2E);
@@ -364,10 +359,10 @@ public class ZeroMqMarketDataConnectorLatencyTest {
                     plainSlowMean / disruptorSlowMean);
 
         System.out.println();
-        System.out.println("  Note: Plain connector e2e == producer (synchronous call).");
+        System.out.println("  Note: Plain provider e2e == producer (synchronous call).");
         System.out.println("        Disruptor e2e > producer by design (async dispatch).");
         System.out.println("        The producer latency metric is what matters for HFT I/O threads.");
-        System.out.println("╚══════════════════════════════════════════════════════════════╝");
+        System.out.println("╚══════════════════════════════════════════════════════════════════╝");
 
         // ── assertions ───────────────────────────────────────────────────────
         Assert.assertEquals("Plain fast: sample count", BENCH_MESSAGES, plainProducer.size());

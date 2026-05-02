@@ -52,11 +52,13 @@
 
 
     <!--persistance listener-->
-    <bean id="marketData_ConnectorProvider" class="com.lambda.investing.connector.zero_mq.ZeroMqProvider"
-          factory-method="getInstance" init-method="start">
-        <constructor-arg index="0" ref="marketdata_ConnectorConfiguration"/>
-        <constructor-arg index="1" value="${provider.threads}"/>
-    </bean>
+    <!--    <bean id="marketData_ConnectorProvider" class="com.lambda.investing.connector.zero_mq.ZeroMqProviderFactory"-->
+    <!--          factory-method="create" init-method="start">-->
+    <!--        <constructor-arg index="0" ref="marketdata_ConnectorConfiguration"/>-->
+    <!--        <constructor-arg index="1" value="${provider.threads}"/>-->
+    <!--        <constructor-arg index="2" value="false"/>-->
+    <!--        <constructor-arg index="3" value="ORDINARY"/>-->
+    <!--    </bean>-->
 
     <!--We dont want persist in IB-->
     <!--    <bean id="ib_persistMarketDataConnectorPublisher"-->
@@ -89,8 +91,8 @@
         <property name="host" value="localhost"/>
     </bean>
 
-    <bean id="orderRequest_ConnectorProvider" class="com.lambda.investing.connector.zero_mq.ZeroMqProvider"
-          factory-method="getInstance" init-method="start">
+    <bean id="orderRequest_ConnectorProvider" class="com.lambda.investing.connector.zero_mq.ZeroMqProviderFactory"
+          factory-method="create" init-method="start">
         <constructor-arg index="0" ref="orderRequest_ConnectorConfiguration"/>
         <constructor-arg index="1" value="1"/>
         <constructor-arg index="2" value="true"/>

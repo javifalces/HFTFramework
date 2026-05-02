@@ -48,10 +48,12 @@
 
 
     <!--persistance listener-->
-    <bean id="marketDataConnectorProvider" class="com.lambda.investing.connector.zero_mq.ZeroMqProvider"
-          factory-method="getInstance" init-method="start">
+    <bean id="marketDataConnectorProvider" class="com.lambda.investing.connector.zero_mq.ZeroMqProviderFactory"
+          factory-method="create" init-method="start">
         <constructor-arg index="0" ref="marketDataPublisherConnectorConfiguration"/>
         <constructor-arg index="1" value="1"/>
+        <constructor-arg index="2" value="false"/>
+        <constructor-arg index="3" value="ORDINARY"/>
     </bean>
 
 
@@ -73,8 +75,8 @@
         <property name="host" value="localhost"/>
     </bean>
 
-    <bean id="orderRequestConnectorProvider" class="com.lambda.investing.connector.zero_mq.ZeroMqProvider"
-          factory-method="getInstance" init-method="start">
+    <bean id="orderRequestConnectorProvider" class="com.lambda.investing.connector.zero_mq.ZeroMqProviderFactory"
+          factory-method="create" init-method="start">
         <constructor-arg index="0" ref="orderRequestConfiguration"/>
         <constructor-arg index="1" value="1"/>
         <constructor-arg index="2" value="true"/>

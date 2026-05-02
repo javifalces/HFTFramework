@@ -31,10 +31,11 @@
     </bean>
 
     <!--persistance listener-->
-    <bean id="marketDataAndERconnectorProvider" class="com.lambda.investing.connector.zero_mq.ZeroMqProvider"
-          factory-method="getInstance" init-method="start">
+    <bean id="marketDataAndERconnectorProvider" class="com.lambda.investing.connector.zero_mq.ZeroMqProviderFactory"
+          factory-method="create" init-method="start">
         <constructor-arg index="0" ref="marketDataAndERconnectorConfiguration"/>
         <constructor-arg index="1" value="1"/>
+
     </bean>
 
     <!--factor listener-->
@@ -62,8 +63,8 @@
     <!--        <constructor-arg index="1" value="1"/>-->
     <!--    </bean>-->
 
-    <bean id="orderRequestConnectorProvider" class="com.lambda.investing.connector.zero_mq.ZeroMqProvider"
-          factory-method="getInstance">
+    <bean id="orderRequestConnectorProvider" class="com.lambda.investing.connector.zero_mq.ZeroMqProviderFactory"
+          factory-method="create" init-method="start">
         <constructor-arg index="0" ref="orderRequestConnectorConfigurationPublisher"/>
         <constructor-arg index="1" value="1"/>
         <property name="server" value="false"/>

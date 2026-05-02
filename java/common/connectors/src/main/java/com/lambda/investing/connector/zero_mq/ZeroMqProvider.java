@@ -27,8 +27,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ZeroMqProvider implements ConnectorProvider {
 
-    private static Integer THREADS_ON_UPDATE = 3;
-
     @Getter
     private ZeroMqConfiguration zeroMqConfiguration;
     Logger logger = LogManager.getLogger(ZeroMqProvider.class);
@@ -86,7 +84,7 @@ public class ZeroMqProvider implements ConnectorProvider {
         this.parsedObjects = parsedObjects;
     }
 
-    private ZeroMqProvider(ZeroMqConfiguration zeroMqConfiguration, int threadsListening) {
+    protected ZeroMqProvider(ZeroMqConfiguration zeroMqConfiguration, int threadsListening) {
         this.zeroMqConfiguration = zeroMqConfiguration;
         listenerManager = new ConcurrentHashMap<>();
         topicListSubscribed = new ArrayList<>();
@@ -100,11 +98,8 @@ public class ZeroMqProvider implements ConnectorProvider {
         socketReq.setHWM(1);
         socketReq.setLinger(0);
 
-
-        this.threadsListening = threadsListening;
         //ThreadPool initialiting
         ThreadFactory namedThreadFactory = LambdaThreadFactory.createThreadFactory("ZeroMqProvider-OnUpdate", Thread.NORM_PRIORITY);
-
         this.threadsListening = threadsListening;
         if (this.threadsListening > 0) {
             onUpdateExecutorService = (ThreadPoolExecutor) Executors
@@ -233,6 +228,7 @@ public class ZeroMqProvider implements ConnectorProvider {
         return subscribeSocket;
 
     }
+
 
     private class ZeroMqThreadReceiver implements Runnable {
 
