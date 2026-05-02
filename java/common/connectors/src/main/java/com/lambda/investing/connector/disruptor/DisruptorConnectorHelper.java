@@ -3,6 +3,9 @@ package com.lambda.investing.connector.disruptor;
 import com.lambda.investing.Configuration;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
+import com.lambda.investing.model.CSVable;
+import com.lambda.investing.model.market_data.Depth;
+import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.messaging.TypeMessage;
 import com.lmax.disruptor.BusySpinWaitStrategy;
 import com.lmax.disruptor.EventFactory;
@@ -34,7 +37,7 @@ import java.util.function.IntFunction;
  * <h2>Multiple consumers on a shared ring buffer</h2>
  * Multiple connectors with different concerns (market-data, execution-reports)
  * may share the <em>same</em> ring buffer by calling
- * {@link #getInstance(String)} with the same {@code consumerThreadName}.
+ *  with the same {@code consumerThreadName}.
  * Each connector registers its callback via
  * {@link #addConsumer(EventConsumer, TypeMessage...)} with a set of
  * {@link TypeMessage} types it cares about; events are routed exclusively to
@@ -208,7 +211,7 @@ public class DisruptorConnectorHelper {
     // -----------------------------------------------------------------------
 
     /**
-     * Private – use {@link #getInstance(String)}.
+     * Private – use .
      */
     private DisruptorConnectorHelper(String consumerThreadName, Configuration.ConnectorProviderType connectorProviderType) {
         this.consumerThreadName = consumerThreadName;
@@ -325,6 +328,15 @@ public class DisruptorConnectorHelper {
                 slot.content = content;
             } finally {
                 ringBuffer.publish(seq);
+
+                if (content instanceof Depth depth) {
+                    depth.delete();
+                }
+
+                if (content instanceof Trade trade) {
+                    trade.delete();
+                }
+
             }
         }
 

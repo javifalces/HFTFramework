@@ -6,6 +6,7 @@ import com.lambda.investing.connector.disruptor.DisruptorConnectorHelper;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
+import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.messaging.TypeMessage;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -94,6 +95,13 @@ public class ZeroMqMarketDataConnectorDisruptor extends ZeroMqMarketDataConnecto
                 TypeMessage.depth,
                 this::buildWarmupDepth
         );
+        helper.warmup(
+                new ZeroMqConfiguration(DisruptorConnectorHelper.WARMUP_HOST,
+                        DisruptorConnectorHelper.WARMUP_PORT,
+                        DisruptorConnectorHelper.WARMUP_INSTRUMENT),
+                TypeMessage.trade,
+                this::buildWarmupTrade
+        );
     }
 
     /**
@@ -144,7 +152,7 @@ public class ZeroMqMarketDataConnectorDisruptor extends ZeroMqMarketDataConnecto
      * ensures these events are invisible to downstream strategies.
      */
     private Depth buildWarmupDepth(int i) {
-        Depth depth = Depth.getInstance();
+        Depth depth = Depth.getInstancePool();
         depth.setInstrument(DisruptorConnectorHelper.WARMUP_INSTRUMENT);
         depth.setTimestamp(i + 1L);
         depth.setLevels(1);
@@ -154,5 +162,19 @@ public class ZeroMqMarketDataConnectorDisruptor extends ZeroMqMarketDataConnecto
         depth.setAsksQuantities(new double[]{1.0});
         depth.setLevelsFromData();
         return depth;
+    }
+
+    /**
+     * Builds a minimal synthetic {@link Trade} for the warmup cycle.
+     * The sentinel instrument {@link DisruptorConnectorHelper#WARMUP_INSTRUMENT}
+     * ensures these events are invisible to downstream strategies.
+     */
+    private Trade buildWarmupTrade(int i) {
+        Trade trade = Trade.getInstancePool();
+        trade.setInstrument(DisruptorConnectorHelper.WARMUP_INSTRUMENT);
+        trade.setTimestamp(i + 1L);
+        trade.setPrice(1.0);
+        trade.setQuantity(1.0);
+        return trade;
     }
 }

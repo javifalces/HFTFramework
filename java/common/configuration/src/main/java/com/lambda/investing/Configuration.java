@@ -55,8 +55,8 @@ public class Configuration {
     public static boolean IS_DEBUGGING_DEFAULT = false;//will disable latencies and muiltiThreading
     //			java.lang.management.ManagementFactory.getRuntimeMXBean().getInputArguments().toString()
     //					.indexOf("-agentlib:jdwp") > 0;
-    public static ConnectorProviderType BACKTEST_CONNECTOR_PUBLISHER_PROVIDER = ConnectorProviderType.valueOf(getEnvOrDefault("BACKTEST_CONNECTOR_PUBLISHER_PROVIDER", "ORDINARY"));//by default ORDINARY, DISRUPTOR_HIGH_THROUGHPUT could work here
-    public static ConnectorProviderType LIVE_CONNECTOR_PROVIDER = ConnectorProviderType.valueOf(getEnvOrDefault("LIVE_CONNECTOR_PROVIDER", "DISRUPTOR_LOW_LATENCY"));//by default low latency
+    public static ConnectorProviderType BACKTEST_CONNECTOR_PUBLISHER_PROVIDER = ConnectorProviderType.valueOf(getEnvOrDefault("BACKTEST_CONNECTOR_PUBLISHER_PROVIDER", ConnectorProviderType.ORDINARY.name()));//by default ORDINARY, DISRUPTOR_HIGH_THROUGHPUT could work here
+    public static ConnectorProviderType LIVE_CONNECTOR_PROVIDER = ConnectorProviderType.valueOf(getEnvOrDefault("LIVE_CONNECTOR_PROVIDER", ConnectorProviderType.ORDINARY.name()));//by default low latency
     public static int DISRUPTOR_RING_BUFFER_SIZE = Integer.parseInt(getEnvOrDefault("DISRUPTOR_RING_BUFFER_SIZE", "512"));//power of 2;//power of 2
     /**
      * Number of dummy events published through the Disruptor pipeline on startup to
