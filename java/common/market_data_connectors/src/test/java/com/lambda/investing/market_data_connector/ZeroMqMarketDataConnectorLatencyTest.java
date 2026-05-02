@@ -1,5 +1,6 @@
 package com.lambda.investing.market_data_connector;
 
+import com.lambda.investing.Configuration;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.messaging.Command;
@@ -92,7 +93,7 @@ public class ZeroMqMarketDataConnectorLatencyTest {
 
     static class TestDisruptorConnector extends ZeroMqMarketDataConnectorDisruptor {
         TestDisruptorConnector() {
-            super(DUMMY_CFG, 0);
+            super(DUMMY_CFG, 0, Configuration.ConnectorProviderType.DISRUPTOR_LOW_LATENCY);
         }
 
         @Override
@@ -113,8 +114,7 @@ public class ZeroMqMarketDataConnectorLatencyTest {
         final CountDownLatch latch;
 
         E2ELatencyListener(int n) {
-            latch = new CountDownLatch(n);
-        }
+            latch = new CountDownLatch(n); }
 
         @Override
         public boolean onDepthUpdate(Depth depth) {
@@ -139,8 +139,7 @@ public class ZeroMqMarketDataConnectorLatencyTest {
         }
 
         boolean await(long t, TimeUnit u) throws InterruptedException {
-            return latch.await(t, u);
-        }
+            return latch.await(t, u); }
     }
 
     /**
@@ -183,8 +182,7 @@ public class ZeroMqMarketDataConnectorLatencyTest {
 
     @After
     public void tearDown() {
-        disruptorConnector.stop();
-    }
+        disruptorConnector.stop(); }
 
     // -----------------------------------------------------------------------
     // Depth factory
@@ -201,7 +199,7 @@ public class ZeroMqMarketDataConnectorLatencyTest {
         depth.setAsks(new double[]{100.1});
         depth.setBidsQuantities(new double[]{1.0});
         depth.setAsksQuantities(new double[]{1.0});
-        List<String>[] algo = new List[]{Arrays.asList(Depth.ALGORITHM_INFO_MM)};
+        List<String>[] algo = new List[]{Arrays.asList(Depth.ALGORITHM_INFO_MM) };
         depth.setBidsAlgorithmInfo(algo);
         depth.setAsksAlgorithmInfo(algo);
         depth.setLevelsFromData();
@@ -232,14 +230,14 @@ public class ZeroMqMarketDataConnectorLatencyTest {
         } finally {
             plainConnector.deregister(listener);
         }
-        return new List[]{producerNs, listener.latenciesNs};
+        return new List[]{producerNs, listener.latenciesNs };
     }
 
     /**
      * Runs the Disruptor benchmark.
      *
      * @return [0] = producer latencies (ring-buffer write only),
-     * [1] = end-to-end latencies (submission → listener callback)
+     *         [1] = end-to-end latencies (submission → listener callback)
      */
     private List<Long>[] benchmarkDisruptor(int count, E2ELatencyListener listener)
             throws InterruptedException {
@@ -258,7 +256,7 @@ public class ZeroMqMarketDataConnectorLatencyTest {
         } finally {
             disruptorConnector.deregister(listener);
         }
-        return new List[]{producerNs, listener.latenciesNs};
+        return new List[]{producerNs, listener.latenciesNs };
     }
 
     // -----------------------------------------------------------------------
@@ -272,15 +270,13 @@ public class ZeroMqMarketDataConnectorLatencyTest {
 
     private static void printStats(String label, List<Long> samples) {
         if (samples.isEmpty()) {
-            System.out.printf("  %s – NO DATA%n", label);
-            return;
-        }
+            System.out.printf("  %s – NO DATA%n", label); return; }
         long[] s = samples.stream().mapToLong(Long::longValue).sorted().toArray();
         double mean = samples.stream().mapToLong(Long::longValue).average().orElse(0);
         System.out.printf(
                 "  %-46s  mean=%7.0f  p50=%7d  p75=%7d  p90=%7d  p99=%7d  max=%8d  (ns)%n",
                 label, mean,
-                percentile(s, 50), percentile(s, 75), percentile(s, 90), percentile(s, 99), s[s.length - 1]);
+                percentile(s, 50), percentile(s, 75), percentile(s, 90), percentile(s, 99), s[s.length-1]);
     }
 
     private static void printSection(String title) {
