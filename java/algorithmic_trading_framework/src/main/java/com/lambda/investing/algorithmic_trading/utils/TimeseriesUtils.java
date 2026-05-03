@@ -271,6 +271,44 @@ public class TimeseriesUtils {
         return zscore;
     }
 
+    /**
+     * Computes the Volume-Weighted Average Price (VWAP) over a list of prices and corresponding
+     * volumes.
+     *
+     * <p>Both lists must be non-null, non-empty, and of equal size.
+     *
+     * @param prices  list of price observations (non-null, non-empty)
+     * @param volumes list of volume observations (non-null, same size as {@code prices})
+     * @return VWAP value, or the simple mean of {@code prices} when total volume is zero
+     */
+    public static double computeVwap(List<Double> prices, List<Long> volumes) {
+        double notional = 0.0;
+        long totalVolume = 0;
+        for (int i = 0; i < prices.size(); i++) {
+            long vol = volumes.get(i);
+            notional += prices.get(i) * vol;
+            totalVolume += vol;
+        }
+        if (totalVolume == 0) {
+            return GetMean(prices.toArray(new Double[0]));
+        }
+        return notional / totalVolume;
+    }
+
+    /**
+     * Computes the Time-Weighted Average Price (TWAP) as the arithmetic mean of the provided price
+     * series (assuming evenly-spaced observations).
+     *
+     * <p>For unevenly-spaced series pass time-weighted prices; this method computes a simple
+     * mean which equals TWAP when intervals are uniform.
+     *
+     * @param prices list of price observations (non-null, non-empty)
+     * @return TWAP value
+     */
+    public static double computeTwap(List<Double> prices) {
+        return GetMean(prices.toArray(new Double[0]));
+    }
+
     public static double GetZscorePositive(Double[] serie, double value) {
         Double[] seriePos = new Double[serie.length];
         for (int i = 0; i < seriePos.length; i++) {
