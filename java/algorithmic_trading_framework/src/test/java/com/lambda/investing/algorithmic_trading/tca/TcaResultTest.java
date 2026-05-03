@@ -142,7 +142,7 @@ class TcaResultTest {
      *                                                            = 0.05 / 0.05 = 1.0
      */
     @Test
-    void spreadCapture_positivForPassiveFill() {
+    void spreadCapture_positiveForPassiveFill() {
         ParentOrder order = buyOrder(1, 100.0);
 
         List<ChildFill> fills = Collections.singletonList(
