@@ -2,6 +2,7 @@ package com.lambda.investing.connector.zero_mq;
 
 import com.lambda.investing.Configuration;
 import com.lambda.investing.connector.ConnectorConfiguration;
+import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.disruptor.DisruptorConnectorHelper;
 import com.lambda.investing.model.messaging.TypeMessage;
 import org.apache.logging.log4j.LogManager;
@@ -23,11 +24,8 @@ import java.util.concurrent.ConcurrentHashMap;
  *             ▼  DisruptorConnectorHelper.publish()  (ring-buffer write, ~50 ns)
  *                     │
  *                     ▼  [zmq-provider-disruptor thread]
- *                 dispatchToListeners()
- *                     │
- *                     ▼
- *                 ZeroMqProvider.onUpdate(TypeMessage, Object, String, long)
- *                     └─ notifies all registered ConnectorListeners
+ *                 per-listener EventConsumer (one per registered ConnectorListener)
+ *                     └─ ConnectorListener.onUpdate(...)
  * </pre>
  *
  * <p>The shared ring-buffer infrastructure ({@link DisruptorConnectorHelper}) is
@@ -65,6 +63,14 @@ public class ZeroMqProviderDisruptor extends ZeroMqProvider {
      * allocation on the producer hot path while preserving topic metadata for consumers.
      */
     private final ConcurrentHashMap<String, ZeroMqConfiguration> topicConfigCache =
+            new ConcurrentHashMap<>();
+
+    /**
+     * Maps each registered {@link ConnectorListener} to its corresponding
+     * ring-buffer {@link DisruptorConnectorHelper.EventConsumer} so it can be
+     * removed on {@link #deregister}.
+     */
+    private final ConcurrentHashMap<ConnectorListener, DisruptorConnectorHelper.EventConsumer> listenerConsumers =
             new ConcurrentHashMap<>();
 
     // -----------------------------------------------------------------------
@@ -120,18 +126,17 @@ public class ZeroMqProviderDisruptor extends ZeroMqProvider {
      * Initialises the LMAX Disruptor ring-buffer and consumer thread, then runs
      * the startup warmup cycle.
      *
-     * <p>Extracted so that subclasses (e.g. test fixtures) can start the Disruptor
-     * without also bringing up the ZeroMq provider:
-     * <pre>{@code
-     * @Override public void start() { initDisruptor(); }
-     * }</pre>
+     * <p>Any listeners registered <em>before</em> {@link #start()} are wired to
+     * the ring buffer here.  Listeners registered after {@link #start()} are
+     * added immediately inside {@link #register}.
      */
     protected void initDisruptor() {
         helper = DisruptorConnectorHelper.getInstance(disruptorThreadName, connectorProviderType);
         helper.init();
-        // Accept ALL TypeMessage types – this is a general-purpose provider.
-        // Downstream ConnectorListeners apply their own filtering.
-        helper.addConsumer(this::dispatchToListeners);
+        // Wire every listener that was registered before start() was called.
+        for (DisruptorConnectorHelper.EventConsumer consumer : listenerConsumers.values()) {
+            helper.addConsumer(consumer);
+        }
         warmupDisruptor();
     }
 
@@ -155,9 +160,16 @@ public class ZeroMqProviderDisruptor extends ZeroMqProvider {
     /**
      * Initialises the Disruptor consumer thread <em>before</em> the ZeroMq provider
      * so the ring buffer is ready to drain as soon as the first message arrives.
+     *
+     * <p><strong>Important:</strong> this overrides the 2-argument form so that both
+     * {@code start()} and {@code start(true, true)} (as called by
+     * {@link com.lambda.investing.market_data_connector.ZeroMqMarketDataConnector#start()})
+     * go through the same initialisation code path.  The previous no-arg override was
+     * silently bypassed whenever callers used {@code start(boolean, boolean)} directly,
+     * leaving {@code topicListSubscribed} empty and the Disruptor uninitialised.
      */
     @Override
-    public void start() {
+    public void start(boolean hardTopicFilter, boolean sendAck) {
         initDisruptor();
         String topic = zeroMqConfiguration.getTopic();
         if (topic == null) {
@@ -165,7 +177,7 @@ public class ZeroMqProviderDisruptor extends ZeroMqProvider {
         }
         subscribeTopic(topic);
 
-        super.start();
+        super.start(hardTopicFilter, sendAck);
     }
 
     /**
@@ -216,42 +228,70 @@ public class ZeroMqProviderDisruptor extends ZeroMqProvider {
     }
 
     // -----------------------------------------------------------------------
-    // Consumer – dedicated zmq-provider-disruptor thread
+    // Consumer – per-listener ring-buffer consumers
     // -----------------------------------------------------------------------
 
     /**
-     * Invoked on the Disruptor consumer thread for every dequeued event.
-     * Extracts the topic from the {@link ZeroMqConfiguration} slot and
-     * delegates to the parent's listener fan-out logic.
+     * Builds a ring-buffer {@link DisruptorConnectorHelper.EventConsumer} that
+     * routes events to a single {@link ConnectorListener}.
      *
-     * <p>Warmup events tagged with
-     * {@link DisruptorConnectorHelper#WARMUP_INSTRUMENT} are silently discarded
-     * so they never reach registered {@link com.lambda.investing.connector.ConnectorListener}s.
-     *
-     * @param configuration     {@link ZeroMqConfiguration} carrying the topic.
-     * @param timestampReceived Arrival timestamp in milliseconds.
-     * @param typeMessage       Message type.
-     * @param content           Deserialised message payload.
+     * <ul>
+     *   <li>Warmup sentinel events are silently discarded.</li>
+     *   <li>The topic embedded in the incoming {@link ZeroMqConfiguration} is
+     *       forwarded to the listener so it receives the same enriched
+     *       configuration that {@link ZeroMqProvider#onUpdate} would provide.</li>
+     * </ul>
      */
-    private void dispatchToListeners(ConnectorConfiguration configuration,
-                                     long timestampReceived,
-                                     TypeMessage typeMessage,
-                                     Object content) {
-        String topic = "";
-        if (configuration instanceof ZeroMqConfiguration zmqCfg) {
-            topic = zmqCfg.getTopic();
-        }
+    private DisruptorConnectorHelper.EventConsumer createConsumerFor(ConnectorListener listener) {
+        return (cfg, timestampReceived, typeMessage, content) -> {
+            // Discard warmup sentinel events.
+            if (cfg instanceof ZeroMqConfiguration zmqCfg
+                    && DisruptorConnectorHelper.WARMUP_INSTRUMENT.equals(zmqCfg.getTopic())) {
+                return;
+            }
+            try {
+                listener.onUpdate(cfg, timestampReceived, typeMessage, content);
+            } catch (Exception e) {
+                logger.error("[{}] Listener error (typeMessage={})", disruptorThreadName, typeMessage, e);
+            }
+        };
+    }
 
-        // Silently drop warmup sentinel events – no registered listener should see them.
-        if (DisruptorConnectorHelper.WARMUP_INSTRUMENT.equals(topic)) {
-            return;
-        }
+    // -----------------------------------------------------------------------
+    // ConnectorProvider – register / deregister
+    // -----------------------------------------------------------------------
 
-        try {
-            super.onUpdate(typeMessage, content, topic, timestampReceived);
-        } catch (IOException e) {
-            logger.error("[{}] Error dispatching ZeroMq event (typeMessage={}, topic={})",
-                    disruptorThreadName, typeMessage, topic, e);
+    /**
+     * Registers {@code listener} with the parent listener map <em>and</em> adds a
+     * dedicated ring-buffer consumer so events flow directly from the Disruptor
+     * consumer thread to this listener without an intermediate fan-out step.
+     *
+     * <p>If the Disruptor has not been initialised yet (i.e. {@link #start()} has
+     * not been called), the consumer is queued in {@link #listenerConsumers} and
+     * wired to the ring buffer during {@link #initDisruptor()}.
+     */
+    @Override
+    public void register(ConnectorConfiguration configuration, ConnectorListener listener) {
+        super.register(configuration, listener);
+        DisruptorConnectorHelper.EventConsumer consumer = createConsumerFor(listener);
+        listenerConsumers.put(listener, consumer);
+        if (helper != null && helper.isReady()) {
+            helper.addConsumer(consumer);
+        }
+        // If helper is not yet ready, initDisruptor() will call helper.addConsumer for all
+        // pending entries in listenerConsumers.
+    }
+
+    /**
+     * Deregisters {@code listener} from both the parent listener map and the
+     * ring-buffer consumer list so no further events are delivered to it.
+     */
+    @Override
+    public void deregister(ConnectorConfiguration configuration, ConnectorListener listener) {
+        super.deregister(configuration, listener);
+        DisruptorConnectorHelper.EventConsumer consumer = listenerConsumers.remove(listener);
+        if (consumer != null && helper != null) {
+            helper.removeConsumer(consumer);
         }
     }
 }

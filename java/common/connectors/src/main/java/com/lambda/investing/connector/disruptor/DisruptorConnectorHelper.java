@@ -290,6 +290,21 @@ public class DisruptorConnectorHelper {
     }
 
     /**
+     * Removes a previously registered event consumer by identity.
+     * Safe to call at any time; the change takes effect on the next event dispatch.
+     *
+     * @param consumer The consumer instance to remove (matched by reference equality).
+     */
+    public void removeConsumer(EventConsumer consumer) {
+        boolean removed = consumers.removeIf(reg -> reg.consumer == consumer);
+        if (removed) {
+            logger.info("Disruptor [{}] consumer deregistered", consumerThreadName);
+        } else {
+            logger.warn("Disruptor [{}] removeConsumer: consumer not found", consumerThreadName);
+        }
+    }
+
+    /**
      * Primes the JIT by publishing {@code DISRUPTOR_WARMUP_ITERATIONS} synthetic events
      * through the full pipeline and blocking until the consumer thread has drained them.
      *
