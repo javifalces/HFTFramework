@@ -1,5 +1,6 @@
 package com.lambda.investing;
 
+import com.lambda.investing.connector.disruptor.DisruptorConnectorHelper;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import io.prometheus.client.Counter;
@@ -113,6 +114,9 @@ public class Statistics implements Runnable {
 
             logger.info("Depth.Pool: {}", Depth.logPool());
             logger.info("Trade.Pool: {}", Trade.logPool());
+            if (!DisruptorConnectorHelper.isEmpty()) {
+                logger.info("{}", DisruptorConnectorHelper.getAllInstancesStatus());
+            }
             logger.info("****************");
 
             if (RESET_STATISTICS_PER_UPDATE) {

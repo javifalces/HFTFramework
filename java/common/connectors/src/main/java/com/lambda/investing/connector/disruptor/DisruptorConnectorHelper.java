@@ -389,6 +389,55 @@ public class DisruptorConnectorHelper {
         return ringBuffer != null;
     }
 
+    /**
+     * Returns a human-readable status string for this single Disruptor instance,
+     * including ring-buffer capacity, remaining slots, and consumer count.
+     */
+    public String getStatus() {
+        if (ringBuffer == null) {
+            return String.format("[%s] NOT_INITIALISED consumers=%d",
+                    consumerThreadName, consumers.size());
+        }
+        long remainingCapacity = ringBuffer.remainingCapacity();
+        long bufferSize = ringBuffer.getBufferSize();
+        long used = bufferSize - remainingCapacity;
+        return String.format("[%s] bufferSize=%d usedSlots=%d availableSlots=%d consumers=%d",
+                consumerThreadName, bufferSize, used, remainingCapacity, consumers.size());
+    }
+
+    /**
+     * Returns a human-readable status report for <em>all</em> currently registered
+     * {@link DisruptorConnectorHelper} instances, showing ring-buffer slot usage
+     * and consumer counts for each.
+     *
+     * <p>Example output:
+     * <pre>
+     * DisruptorConnectorHelper instances (2):
+     *   [zmq-md-disruptor] bufferSize=1024 usedSlots=0 availableSlots=1024 consumers=2
+     *   [zmq-er-disruptor] bufferSize=1024 usedSlots=3 availableSlots=1021 consumers=1
+     * </pre>
+     *
+     * @return Multi-line status string; never {@code null}.
+     */
+    public static String getAllInstancesStatus() {
+        if (INSTANCES.isEmpty()) {
+            return "DisruptorConnectorHelper instances (0): none";
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("DisruptorConnectorHelper instances (").append(INSTANCES.size()).append("):\n");
+        INSTANCES.forEach((name, helper) ->
+                sb.append("  ").append(helper.getStatus()).append('\n'));
+        // trim trailing newline
+        if (sb.charAt(sb.length() - 1) == '\n') {
+            sb.setLength(sb.length() - 1);
+        }
+        return sb.toString();
+    }
+
+    public static boolean isEmpty() {
+        return INSTANCES.isEmpty();
+    }
+
     // -----------------------------------------------------------------------
     // Producer – hot path (ZeroMq I/O thread)
     // -----------------------------------------------------------------------
