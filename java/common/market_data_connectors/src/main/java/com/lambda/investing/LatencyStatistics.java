@@ -28,10 +28,10 @@ public class LatencyStatistics implements Runnable {
     // Track daily maximum statistics by basePrefix and topic
     private Map<String, Map<String, DailyMaxStats>> basePrefixToTopicToDailyMaxStats;
 
-    // Prometheus gauges for latency percentiles (created lazily, keyed by metric name)
-    private Map<String, Gauge> prometheusGauges;
+    // Prometheus gauges for latency percentiles (static so all instances share the same registered gauges)
+    private static final Map<String, Gauge> prometheusGauges = new ConcurrentHashMap<>();
     // Track metric names for which registration has already failed to avoid repeated log noise
-    private Set<String> prometheusGaugesFailed;
+    private static final Set<String> prometheusGaugesFailed = new ConcurrentSkipListSet<>();
     private boolean prometheusEnabled;
 
     // Inner class to hold daily maximum statistics
@@ -62,8 +62,6 @@ public class LatencyStatistics implements Runnable {
         keyToTopic = new ConcurrentHashMap<>();
         topicToLatency = new ConcurrentHashMap<>();
         basePrefixToTopicToDailyMaxStats = new ConcurrentHashMap<>();
-        prometheusGauges = new ConcurrentHashMap<>();
-        prometheusGaugesFailed = new ConcurrentSkipListSet<>();
         prometheusEnabled = PrometheusMetricsExporter.getInstance().isEnabled();
         enable = true;
         if (sleepMs > 0) {
