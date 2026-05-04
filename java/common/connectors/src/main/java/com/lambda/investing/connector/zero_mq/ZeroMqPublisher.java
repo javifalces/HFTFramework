@@ -139,10 +139,14 @@ public class ZeroMqPublisher implements ConnectorPublisher {
             logger.error("configuration is not ZeroMqConfiguration");
             return false;
         }
+        if (typeMessage == null) {
+            logger.warn("typeMessage is null with topic: {} message: {}", topic, message);
+        }
         int retries = 1;
         if (typeMessage.equals(TypeMessage.command)) {
             retries = COMMAND_RETRIES_PUBLISH;
         }
+
 
         ZeroMqConfiguration zeroMqConfiguration = (ZeroMqConfiguration) connectorConfiguration;
         ZMQ.Socket socket = getPublishSocket(zeroMqConfiguration);

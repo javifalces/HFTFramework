@@ -197,6 +197,11 @@ public class OrdinaryTradingEngine implements TradingEngineConnector, ConnectorL
 
     private void _onUpdate(ConnectorConfiguration configuration, long timestampReceived, TypeMessage typeMessage, Object content) {
 
+        if (typeMessage == null) {
+            logger.warn("_onUpdate received null typeMessage, ignoring message content={}", content);
+            return;
+        }
+
         if (typeMessage.equals(TypeMessage.execution_report)) {
             ExecutionReport executionReport = fromObject(content, ExecutionReport.class);
             executionReport.setTimestampAlgoConnector(System.currentTimeMillis());

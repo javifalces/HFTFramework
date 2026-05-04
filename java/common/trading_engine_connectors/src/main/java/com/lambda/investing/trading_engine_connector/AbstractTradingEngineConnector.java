@@ -142,6 +142,11 @@ public abstract class AbstractTradingEngineConnector implements TradingEngineCon
                          TypeMessage typeMessage, Object content) {
         //ER read
 
+        if (typeMessage == null) {
+            logger.warn("onUpdate received null typeMessage, ignoring message content={}", content);
+            return;
+        }
+
         if (typeMessage.equals(TypeMessage.execution_report)) {
             ExecutionReport executionReport = fromObject(content, ExecutionReport.class);
             executionReport.setTimestampAlgoConnector(timestampReceived);

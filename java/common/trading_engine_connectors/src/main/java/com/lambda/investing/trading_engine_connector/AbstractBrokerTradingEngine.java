@@ -128,6 +128,11 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
     public void onUpdate(ConnectorConfiguration configuration, long timestampReceived,
                          TypeMessage typeMessage, Object content) {
 
+        if (typeMessage == null) {
+            logger.warn("onUpdate received null typeMessage, ignoring message content={}", content);
+            return;
+        }
+
         if (typeMessage.equals(TypeMessage.order_request)) {
 //			OrderRequest orderRequest = fromJsonString(content, OrderRequest.class);
             OrderRequest orderRequest = fromObject(content, OrderRequest.class);
