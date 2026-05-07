@@ -1,0 +1,18 @@
+{
+  "backtest": {
+    "startDate": "20250708 08:00:00",
+    "endDate": "20250708 15:00:00",
+    "bucleRun": false,
+    "delayOrderMs": 0,
+    "multithreadConfiguration": "single_thread",
+    "feesCommissionsIncluded": true
+  },
+  "algorithm": {
+    "algorithmName": "LookForwardBiasAlgorithm_junit",
+    "parameters": {
+      "instrument": "btceur_kraken",
+      "quantity": 0.01,
+      "secondsCandles": 60
+    }
+  }
+}

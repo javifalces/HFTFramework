@@ -92,7 +92,18 @@ public class InputConfiguration implements Cloneable {
         private List<Instrument> getInstrumentList(com.lambda.investing.algorithmic_trading.Algorithm algorithm) throws Exception {
 
             if (instrument == null || instrument.isEmpty()) {
-                throw new Exception("Instrument not found in backtestConfiguration");
+                // Try to load instrument from algorithm parameters
+                Map<String, Object> algoParams = algorithm.getParameters();
+                if (algoParams != null && algoParams.containsKey("instrument")) {
+                    String paramInstrument = String.valueOf(algoParams.get("instrument"));
+                    if (paramInstrument != null && !paramInstrument.equalsIgnoreCase("null") && !paramInstrument.isEmpty()) {
+                        instrument = paramInstrument;
+                        logger.info("instrument not set in backtestConfiguration, loaded from algorithm parameters: {}", instrument);
+                    }
+                }
+            }
+            if (instrument == null || instrument.isEmpty()) {
+                throw new Exception("Instrument not found in backtestConfiguration or algorithm parameters");
             }
             List<Instrument> instrumentList = new ArrayList<>();
             String[] instrumentPKs = instrument.split(",");

@@ -140,6 +140,34 @@ public class App {
 
     }
 
+    /**
+     * Returns the effective instrument PKs: uses {@code instrumentPks} from the configuration if present,
+     * otherwise falls back to the {@code instrument} parameter of the algorithm (comma-separated string).
+     */
+    protected String[] getEffectiveInstrumentPks(ZeroMqTradingConfiguration zeroMqTradingConfiguration) {
+        String[] instrumentPks = zeroMqTradingConfiguration.getInstrumentPks();
+        if (instrumentPks != null && instrumentPks.length > 0) {
+            return instrumentPks;
+        }
+        // Fall back to algorithm parameters
+        AlgorithmConfiguration algorithmConfiguration = zeroMqTradingConfiguration.getAlgorithm();
+        if (algorithmConfiguration != null && algorithmConfiguration.getParameters() != null) {
+            Map<String, Object> params = algorithmConfiguration.getParameters();
+            if (params.containsKey("instrument")) {
+                String instrumentStr = String.valueOf(params.get("instrument"));
+                if (instrumentStr != null && !instrumentStr.equalsIgnoreCase("null") && !instrumentStr.isEmpty()) {
+                    logger.info("instrumentPks not set in ZeroMqTradingConfiguration, loaded from algorithm parameters: {}", instrumentStr);
+                    String[] pks = instrumentStr.split(",");
+                    for (int i = 0; i < pks.length; i++) {
+                        pks[i] = pks[i].trim();
+                    }
+                    return pks;
+                }
+            }
+        }
+        return new String[0];
+    }
+
     protected void configurePaperTrading(ApplicationContext ac, ZeroMqTradingConfiguration zeroMqTradingConfiguration) {
         if (zeroMqTradingConfiguration.isPaperTrading()) {
             System.out.println("PAPER TRADING CONFIGURED!");
@@ -147,7 +175,7 @@ public class App {
             ZeroMqMarketDataConnector zeroMqMarketDataConnector = ac.getBean(ZeroMqMarketDataConnector.class);
 
             zeroMqTradingEngineConnector.setPaperTrading(zeroMqMarketDataConnector);
-            String[] instrumentPkArr = zeroMqTradingConfiguration.getInstrumentPks();
+            String[] instrumentPkArr = getEffectiveInstrumentPks(zeroMqTradingConfiguration);
             List<String> instrumentList = Arrays.asList(instrumentPkArr);
             List<Instrument> instruments = new ArrayList<>();
             for (String instrumentPk : instrumentList) {
@@ -174,7 +202,7 @@ public class App {
                                                                 ZeroMqTradingConfiguration zeroMqTradingConfiguration) throws Exception {
         ZeroMqMarketDataConnector marketDataConnector = ac.getBean(ZeroMqMarketDataConnector.class);
         //set instrument?
-        String[] instrumentPkArr = zeroMqTradingConfiguration.getInstrumentPks();
+        String[] instrumentPkArr = getEffectiveInstrumentPks(zeroMqTradingConfiguration);
         List<String> instrumentList = ArrayUtils.StringArrayList(instrumentPkArr);
 
         //add hedgeManagerInstruments
@@ -235,7 +263,7 @@ public class App {
 
     protected void setInstruments(LiveTrading liveTrading, ZeroMqTradingConfiguration zeroMqTradingConfiguration) {
         //set instrument?
-        String[] instrumentPkArr = zeroMqTradingConfiguration.getInstrumentPks();
+        String[] instrumentPkArr = getEffectiveInstrumentPks(zeroMqTradingConfiguration);
         List<String> instrumentList = Arrays.asList(instrumentPkArr);
         List<Instrument> instruments = new ArrayList<>();
         for (String instrumentPk : instrumentList) {
