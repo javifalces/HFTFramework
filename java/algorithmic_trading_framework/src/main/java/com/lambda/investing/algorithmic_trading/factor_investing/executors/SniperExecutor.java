@@ -60,6 +60,7 @@ public class SniperExecutor extends AbstractExecutor {
         double ask = lastDepth.getBestAsk();
         logger.info("{} {} [bid:{} ask:{}] increasePosition {} {}@{} of verb {}", getCurrentTime(), instrument, bid, ask, orderRequest.getOrderType().toString(), quantity, price, verb);
         this.tradingEngineConnector.orderRequest(orderRequest);
+        notifyExecutionStarted(verb, price);
         return true;
     }
 
@@ -128,6 +129,7 @@ public class SniperExecutor extends AbstractExecutor {
                 logger.warn("{} executing finished rejected  {} {}@{} because {}", getCurrentTime(), instrument, executionReport.getQuantityFill(), executionReport.getPrice(), executionReport.getRejectReason());
 
             }
+            notifyExecutionFinished(executionReport);
             finish();
         }
         return true;

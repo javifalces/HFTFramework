@@ -33,8 +33,10 @@ public class MarketExecutor extends AbstractExecutor {
 
         double bid = lastDepth.getBestBid();
         double ask = lastDepth.getBestAsk();
+        double sentPrice = verb == Verb.Buy ? ask : bid;
         logger.info("{} {} [bid:{} ask:{}] increasePosition {} {}@{} of verb {}", getCurrentTime(), instrument, bid, ask, orderRequest.getOrderType().toString(), quantity, price, verb);
         this.tradingEngineConnector.orderRequest(orderRequest);
+        notifyExecutionStarted(verb, sentPrice);
         return true;
     }
 
@@ -90,6 +92,7 @@ public class MarketExecutor extends AbstractExecutor {
                 logger.warn("{} executing finished rejected  {} {}@{} because {}", getCurrentTime(), instrument, executionReport.getQuantityFill(), executionReport.getPrice(), executionReport.getRejectReason());
 
             }
+            notifyExecutionFinished(executionReport);
             finish();
         }
         return true;
