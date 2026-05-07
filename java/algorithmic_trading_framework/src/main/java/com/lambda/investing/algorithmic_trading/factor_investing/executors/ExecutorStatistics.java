@@ -8,6 +8,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -111,17 +112,22 @@ public class ExecutorStatistics {
             slippagesTicks.add(slippageTicks);
 
             // Midprice movement in ticks: positive means market moved against us during execution
-            double midPriceMovement = midPriceAtFill - midPriceAtStart;
-            if (verb == Verb.Sell) {
-                midPriceMovement = -midPriceMovement;
+            // Only recorded when both midprice snapshots are available
+            String midPriceMovementStr = "n/a";
+            if (!Double.isNaN(midPriceAtFill) && !Double.isNaN(midPriceAtStart)) {
+                double midPriceMovement = midPriceAtFill - midPriceAtStart;
+                if (verb == Verb.Sell) {
+                    midPriceMovement = -midPriceMovement;
+                }
+                double midPriceMovementTicks = midPriceMovement / priceTick;
+                midPriceMovementsTicks.add(midPriceMovementTicks);
+                midPriceMovementStr = String.format("%.2f", midPriceMovementTicks);
             }
-            double midPriceMovementTicks = midPriceMovement / priceTick;
-            midPriceMovementsTicks.add(midPriceMovementTicks);
 
             logger.info("[{}] execution finished: verb={} qty={} sentPrice={} filledPrice={} slippage(ticks)={} midPriceMovement(ticks)={} timeToExecute(ms)={}",
                     header, verb, quantityFill, sentPrice, filledPrice,
                     String.format("%.2f", slippageTicks),
-                    String.format("%.2f", midPriceMovementTicks),
+                    midPriceMovementStr,
                     timeToExecuteMs);
         } else {
             logger.warn("[{}] execution rejected: verb={} qty={} sentPrice={} reason={} timeToExecute(ms)={}",
@@ -185,18 +191,18 @@ public class ExecutorStatistics {
     }
 
     public List<Long> getExecutionTimesMs() {
-        return executionTimesMs;
+        return Collections.unmodifiableList(executionTimesMs);
     }
 
     public List<Double> getSlippagesTicks() {
-        return slippagesTicks;
+        return Collections.unmodifiableList(slippagesTicks);
     }
 
     public List<Double> getMidPriceMovementsTicks() {
-        return midPriceMovementsTicks;
+        return Collections.unmodifiableList(midPriceMovementsTicks);
     }
 
     public List<Double> getQuantitiesFilled() {
-        return quantitiesFilled;
+        return Collections.unmodifiableList(quantitiesFilled);
     }
 }

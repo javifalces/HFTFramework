@@ -1,0 +1,6 @@
+06:06:01.032 INFO  [main] ExecutorStatistics - [testAlgo] execution finished: verb=Buy qty=10.0 sentPrice=100.0 filledPrice=100.02 slippage(ticks)=2.00 midPriceMovement(ticks)=2.00 timeToExecute(ms)=500
+06:06:01.034 INFO  [main] ExecutorStatistics - [testAlgo] execution finished: verb=Buy qty=10.0 sentPrice=100.0 filledPrice=100.01 slippage(ticks)=1.00 midPriceMovement(ticks)=1.00 timeToExecute(ms)=200
+06:06:01.035 INFO  [main] ExecutorStatistics - [testAlgo] execution finished: verb=Sell qty=8.0 sentPrice=100.05 filledPrice=100.03 slippage(ticks)=2.00 midPriceMovement(ticks)=2.00 timeToExecute(ms)=400
+06:06:01.035 WARN  [main] ExecutorStatistics - [testAlgo] execution rejected: verb=Buy qty=5.0 sentPrice=101.0 reason=null timeToExecute(ms)=50
+06:06:01.035 WARN  [main] ExecutorStatistics - [testAlgo] execution rejected: verb=Buy qty=5.0 sentPrice=100.0 reason=InsufficientFunds timeToExecute(ms)=100
+06:06:01.036 INFO  [main] ExecutorStatistics - [testAlgo] execution finished: verb=Sell qty=5.0 sentPrice=100.0 filledPrice=99.97 slippage(ticks)=3.00 midPriceMovement(ticks)=3.00 timeToExecute(ms)=300
