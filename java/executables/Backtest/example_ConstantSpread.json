@@ -2,7 +2,6 @@
   "backtest": {
     "startDate": "20250113 06:00:00",
     "endDate": "20250113 20:00:00",
-    "instrument": "btceur_kraken",
     "delayOrderMs": 0,
     "feesCommissionsIncluded": false,
     "multithreadConfiguration": "single_thread"
@@ -10,6 +9,9 @@
   "algorithm": {
     "algorithmName": "ConstantSpread_test",
     "parameters": {
+      "instrumentPks": [
+        "btceur_kraken"
+      ],
       "level": "0",
       "skewLevel": "0",
       "minQuantityFollow": 0.006,

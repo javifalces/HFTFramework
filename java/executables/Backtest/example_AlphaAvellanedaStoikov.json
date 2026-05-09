@@ -2,7 +2,7 @@
   "backtest": {
     "startDate": "20250306 9:00:00",
     "endDate": "20250306 11:00:00",
-    "instrument": "btceur_kraken",
+
     "delayOrderMs": 0,
     "feesCommissionsIncluded": false,
     "seed": 0,
@@ -12,6 +12,9 @@
   "algorithm": {
     "algorithmName": "AlphaAvellanedaStoikov_test",
     "parameters": {
+      "instrumentPks": [
+        "btceur_kraken"
+      ],
       "dummyAgent": 1,
       "quantity": 0.001,
       "seed": 28220,

@@ -85,6 +85,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     private static final String SEND_STATS = "->";
     private static final String RECEIVE_STATS = "<-";
 
+    protected String[] instrumentPks = null;
     protected Integer firstHourOperatingIncluded = FIRST_HOUR_DEFAULT;//starting
     protected Integer lastHourOperatingIncluded = LAST_HOUR_DEFAULT;//stopping
 
@@ -418,6 +419,15 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     //Parameter settings
     public void setParameters(Map<String, Object> parameters) {
         this.parameters = parameters;
+
+        this.instrumentPks = getParameterArrayString(parameters, "instrumentPks");
+        if (instrumentPks == null) {
+            String instrumentPk = getParameterString(parameters, "instrument");
+            if (instrumentPk != null) {
+                this.instrumentPks = new String[]{instrumentPk};
+            }
+        }
+
         this.firstHourOperatingIncluded = getParameterIntOrDefault(parameters, "firstHour", "first_hour",
                 FIRST_HOUR_DEFAULT);//UTC time 6 -9
         this.lastHourOperatingIncluded = getParameterIntOrDefault(parameters, "lastHour", "last_hour",

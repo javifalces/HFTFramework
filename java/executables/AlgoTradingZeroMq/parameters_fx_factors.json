@@ -7,12 +7,12 @@
 	"factorPublisherHost": "localhost",
 	"paperTrading": "False",
 	"demoTrading": "False",
-	"instrumentPks": [
-		"eurusd_darwinex"
-	],
 	"algorithm": {
 		"algorithmName": "MarketFactorInvestingAlgorithm_FX_neutral1",
 		"parameters": {
+			"instrumentPks": [
+				"eurusd_darwinex"
+			],
 			"modelName": "FX_neutral1",
 			"seed": 5,
 			"capital": "10000",

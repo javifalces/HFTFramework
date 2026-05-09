@@ -1,8 +1,7 @@
 {
   "backtest": {
     "startDate": "20250407 9:00:00",
-    "endDate": "20250407 12:00:00",
-    "instrument": "btceur_kraken",
+    "endDate": "20250407 12:00:00"
     "delayOrderMs": 0,
     "feesCommissionsIncluded": false,
     "multithreadConfiguration": "single_thread"
@@ -10,6 +9,9 @@
   "algorithm": {
     "algorithmName": "AvellanedaStoikov_test",
     "parameters": {
+      "instrumentPks": [
+        "btceur_kraken"
+      ],
       "riskAversion": 0.00006,
       "midpricePeriodSeconds": 3,
       "midpricePeriodWindow": 60,

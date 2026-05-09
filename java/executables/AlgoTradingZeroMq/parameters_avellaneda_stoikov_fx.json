@@ -5,12 +5,13 @@
   "marketDataHost": "localhost",
   "paperTrading": "False",
   "demoTrading": "False",
-  "instrumentPks": [
-    "eurusd_darwinex"
-  ],
+
   "algorithm": {
     "algorithmName": "AvellanedaStoikov_metatrader",
     "parameters": {
+      "instrumentPks": [
+        "eurusd_darwinex"
+      ],
       "riskAversion": 0.00006,
       "midpricePeriodSeconds": 3,
       "midpricePeriodWindow": 60,
