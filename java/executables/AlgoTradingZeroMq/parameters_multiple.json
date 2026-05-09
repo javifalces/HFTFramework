@@ -1,0 +1,46 @@
+{
+  "marketDataPort": 666,
+  "tradeEnginePort": 677,
+  "tradeEngineHost": "localhost",
+  "marketDataHost": "localhost",
+  "paperTrading": "False",
+  "demoTrading": "False",
+  "algorithms": [
+    {
+      "instrumentPks": [
+        "eurusd_darwinex"
+      ],
+      "algorithm": {
+        "algorithmName": "AvellanedaStoikov_fx_a",
+        "parameters": {
+          "instrumentPks": [
+            "eurusd_darwinex"
+          ],
+          "riskAversion": 0.00006,
+          "midpricePeriodSeconds": 3,
+          "midpricePeriodWindow": 60,
+          "changeKPeriodSeconds": 60.0,
+          "quantity": 0.1
+        }
+      }
+    },
+    {
+      "instrumentPks": [
+        "usdjpy_darwinex"
+      ],
+      "algorithm": {
+        "algorithmName": "AvellanedaStoikov_fx_b",
+        "parameters": {
+          "instrumentPks": [
+            "usdjpy_darwinex"
+          ],
+          "riskAversion": 0.0002,
+          "midpricePeriodSeconds": 5,
+          "midpricePeriodWindow": 30,
+          "changeKPeriodSeconds": 120.0,
+          "quantity": 0.2
+        }
+      }
+    }
+  ]
+}

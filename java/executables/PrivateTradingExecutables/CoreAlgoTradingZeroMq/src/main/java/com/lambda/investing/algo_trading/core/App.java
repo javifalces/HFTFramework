@@ -3,6 +3,7 @@ package com.lambda.investing.algo_trading.core;
 
 import com.lambda.investing.Configuration;
 import com.lambda.investing.algo_trading.AlgorithmConfiguration;
+import com.lambda.investing.algo_trading.AlgorithmInstanceConfiguration;
 import com.lambda.investing.algo_trading.ZeroMqTradingConfiguration;
 import com.lambda.investing.algorithmic_trading.Algorithm;
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
@@ -39,7 +40,9 @@ public class App {
     private static boolean DISABLED_WARNING = false;
     protected final ApplicationContext ac;
     protected final Logger logger;
-    private static Algorithm ALGORITHM;
+    private static Algorithm ROOT_ALGORITHM;
+    private static List<Algorithm> ALGORITHMS = new ArrayList<>();
+    private static final Map<String, String[]> ALGORITHM_INSTRUMENTS = new HashMap<>();
 
     static {
         //		Asyn logs all
@@ -149,18 +152,35 @@ public class App {
         if (instrumentPks != null && instrumentPks.length > 0) {
             return instrumentPks;
         }
-        // Fall back to algorithm parameters
-        AlgorithmConfiguration algorithmConfiguration = zeroMqTradingConfiguration.getAlgorithm();
+        Set<String> output = new LinkedHashSet<>();
+        for (AlgorithmInstanceConfiguration algorithmInstanceConfiguration : zeroMqTradingConfiguration.getEffectiveAlgorithms()) {
+            String[] algorithmInstrumentPks = getAlgorithmInstrumentPks(algorithmInstanceConfiguration, null);
+            Collections.addAll(output, algorithmInstrumentPks);
+        }
+        if (!output.isEmpty()) {
+            return output.toArray(new String[0]);
+        }
+        return new String[0];
+    }
+
+    private String[] getAlgorithmInstrumentPks(AlgorithmInstanceConfiguration algorithmInstanceConfiguration, String[] defaultInstrumentPks) {
+        if (algorithmInstanceConfiguration == null) {
+            return defaultInstrumentPks == null ? new String[0] : defaultInstrumentPks;
+        }
+
+        String[] configured = algorithmInstanceConfiguration.getInstrumentPks();
+        if (configured != null && configured.length > 0) {
+            return configured;
+        }
+
+        AlgorithmConfiguration algorithmConfiguration = algorithmInstanceConfiguration.getEffectiveAlgorithm();
         if (algorithmConfiguration != null && algorithmConfiguration.getParameters() != null) {
             Map<String, Object> params = algorithmConfiguration.getParameters();
-            // Check "instrumentPks" first (supports JSON array or comma-separated string)
             String instrumentStr = resolveInstrumentParam(params, "instrumentPks");
             if (instrumentStr == null) {
-                // Backward compat: fall back to "instrument"
                 instrumentStr = resolveInstrumentParam(params, "instrument");
             }
             if (instrumentStr != null) {
-                logger.info("instrumentPks not set in ZeroMqTradingConfiguration, loaded from algorithm parameters: {}", instrumentStr);
                 String[] pks = instrumentStr.split(",");
                 for (int i = 0; i < pks.length; i++) {
                     pks[i] = pks[i].trim();
@@ -168,7 +188,8 @@ public class App {
                 return pks;
             }
         }
-        return new String[0];
+
+        return defaultInstrumentPks == null ? new String[0] : defaultInstrumentPks;
     }
 
     /**
@@ -230,35 +251,22 @@ public class App {
         String[] instrumentPkArr = getEffectiveInstrumentPks(zeroMqTradingConfiguration);
         List<String> instrumentList = ArrayUtils.StringArrayList(instrumentPkArr);
 
-        //add hedgeManagerInstruments
-        AlgorithmConnectorConfiguration algorithmConnectorConfiguration = ac
-                .getBean(AlgorithmConnectorConfiguration.class);
-
-        AlgorithmConfiguration algorithmConfiguration = zeroMqTradingConfiguration.getAlgorithm();
-        Algorithm algorithm = ALGORITHM;
-        if (algorithm == null) {
-            algorithm = algorithmConfiguration.getAlgorithm(algorithmConnectorConfiguration);
-            ALGORITHM = algorithm;
-        }
-
-        if (algorithm == null) {
-            logger.error("Algorithm not configured " + algorithmConfiguration.getAlgorithmName());
-            throw new Exception("Algorithm not configured " + algorithmConfiguration.getAlgorithmName());
-        }
-
-        for (Instrument instrument : algorithm.getHedgeManager().getInstrumentsHedgeList()) {
-            String instrumentPk = instrument.getPrimaryKey();
-            if (!instrumentList.contains(instrumentPk)) {
-                instrumentList.add(instrumentPk);
+        ensureAlgorithmsCreated(ac, zeroMqTradingConfiguration);
+        for (Algorithm algorithm : ALGORITHMS) {
+            for (Instrument instrument : algorithm.getHedgeManager().getInstrumentsHedgeList()) {
+                String instrumentPk = instrument.getPrimaryKey();
+                if (!instrumentList.contains(instrumentPk)) {
+                    instrumentList.add(instrumentPk);
+                }
             }
-        }
-        for (Instrument instrument : algorithm.getInstruments()) {
-            if (instrument == null) {
-                continue;
-            }
-            String instrumentPk = instrument.getPrimaryKey();
-            if (!instrumentList.contains(instrumentPk)) {
-                instrumentList.add(instrumentPk);
+            for (Instrument instrument : algorithm.getInstruments()) {
+                if (instrument == null) {
+                    continue;
+                }
+                String instrumentPk = instrument.getPrimaryKey();
+                if (!instrumentList.contains(instrumentPk)) {
+                    instrumentList.add(instrumentPk);
+                }
             }
         }
 
@@ -312,26 +320,28 @@ public class App {
             throws Exception {
 
 
-        AlgorithmConfiguration algorithmConfiguration = zeroMqTradingConfiguration.getAlgorithm();
         LiveTrading liveTrading = ac.getBean(LiveTrading.class);
 
         setInstruments(liveTrading, zeroMqTradingConfiguration);
         liveTrading.setDemoTrading(zeroMqTradingConfiguration.isDemoTrading());
         liveTrading.setPaperTrading(zeroMqTradingConfiguration.isPaperTrading());
 
-        AlgorithmConnectorConfiguration algorithmConnectorConfiguration = ac
-                .getBean(AlgorithmConnectorConfiguration.class);
+        ensureAlgorithmsCreated(ac, zeroMqTradingConfiguration);
+        Algorithm algorithm = ROOT_ALGORITHM;
 
-        Algorithm algorithm = ALGORITHM;
-        if (algorithm == null) {
-            algorithm = algorithmConfiguration.getAlgorithm(algorithmConnectorConfiguration);
-            ALGORITHM = algorithm;
-        }
-
-
-        Instrument firstInstrumentToSetAlgo = liveTrading.getInstrumentList().get(0);
+        List<Instrument> liveTradingInstruments = liveTrading.getInstrumentList();
+        Instrument firstInstrumentToSetAlgo = liveTradingInstruments.isEmpty() ? null : liveTradingInstruments.get(0);
         if (algorithm instanceof SingleInstrumentAlgorithm) {
-            ((SingleInstrumentAlgorithm) algorithm).setInstrument(firstInstrumentToSetAlgo);
+            String[] algorithmInstrumentPks = ALGORITHM_INSTRUMENTS.getOrDefault(algorithm.getAlgorithmInfo(), new String[0]);
+            if (algorithmInstrumentPks.length > 0) {
+                Instrument configuredInstrument = Instrument.getInstrument(algorithmInstrumentPks[0]);
+                if (configuredInstrument != null) {
+                    firstInstrumentToSetAlgo = configuredInstrument;
+                }
+            }
+            if (firstInstrumentToSetAlgo != null) {
+                ((SingleInstrumentAlgorithm) algorithm).setInstrument(firstInstrumentToSetAlgo);
+            }
         }
 
         liveTrading.setAlgorithm(algorithm);
@@ -340,7 +350,15 @@ public class App {
     }
 
     protected void setLogProperty(ZeroMqTradingConfiguration zeroMqTradingConfiguration) {
-        System.setProperty("log.appName", zeroMqTradingConfiguration.getAlgorithm().getAlgorithmName());
+        List<AlgorithmInstanceConfiguration> effectiveAlgorithms = zeroMqTradingConfiguration.getEffectiveAlgorithms();
+        if (effectiveAlgorithms.size() == 1) {
+            AlgorithmConfiguration algorithmConfiguration = effectiveAlgorithms.get(0).getEffectiveAlgorithm();
+            if (algorithmConfiguration != null) {
+                System.setProperty("log.appName", algorithmConfiguration.getAlgorithmName());
+                return;
+            }
+        }
+        System.setProperty("log.appName", "MultiAlgorithm");
     }
 
     /**
@@ -420,11 +438,13 @@ public class App {
         Logger shutdownLogger = LogManager.getLogger(App.class);
         shutdownLogger.info("Shutdown hook triggered - controlling shutdown sequence...");
         System.out.println("Shutdown hook triggered - controlling shutdown sequence...");
-        if (ALGORITHM != null) {
+        if (!ALGORITHMS.isEmpty()) {
             try {
-                shutdownLogger.info("Cancelling all orders and stopping algorithm: {}", ALGORITHM.getAlgorithmInfo());
-                System.out.println("Cancelling all orders and stopping algorithm: " + ALGORITHM.getAlgorithmInfo());
-                ALGORITHM.manualStop();
+                for (Algorithm algorithm : ALGORITHMS) {
+                    shutdownLogger.info("Cancelling all orders and stopping algorithm: {}", algorithm.getAlgorithmInfo());
+                    System.out.println("Cancelling all orders and stopping algorithm: " + algorithm.getAlgorithmInfo());
+                    algorithm.manualStop();
+                }
                 shutdownLogger.info("Algorithm stopped successfully.");
                 System.out.println("Algorithm stopped successfully.");
             } catch (Exception e) {
@@ -434,6 +454,37 @@ public class App {
         } else {
             shutdownLogger.warn("No algorithm instance found during shutdown.");
             System.out.println("No algorithm instance found during shutdown.");
+        }
+    }
+
+    protected void ensureAlgorithmsCreated(ApplicationContext ac, ZeroMqTradingConfiguration zeroMqTradingConfiguration) throws Exception {
+        if (ROOT_ALGORITHM != null && !ALGORITHMS.isEmpty()) {
+            return;
+        }
+        ALGORITHMS.clear();
+        ALGORITHM_INSTRUMENTS.clear();
+        AlgorithmConnectorConfiguration algorithmConnectorConfiguration = ac.getBean(AlgorithmConnectorConfiguration.class);
+        List<AlgorithmInstanceConfiguration> effectiveAlgorithms = zeroMqTradingConfiguration.getEffectiveAlgorithms();
+        if (effectiveAlgorithms.isEmpty()) {
+            throw new Exception("No algorithms configured in ZeroMqTradingConfiguration");
+        }
+        String[] defaultInstrumentPks = zeroMqTradingConfiguration.getInstrumentPks();
+        for (AlgorithmInstanceConfiguration algorithmInstanceConfiguration : effectiveAlgorithms) {
+            AlgorithmConfiguration algorithmConfiguration = algorithmInstanceConfiguration.getEffectiveAlgorithm();
+            if (algorithmConfiguration == null) {
+                throw new Exception("AlgorithmConfiguration is null for one of the configured algorithms");
+            }
+            Algorithm algorithm = algorithmConfiguration.getAlgorithm(algorithmConnectorConfiguration);
+            if (algorithm == null) {
+                throw new Exception("Algorithm not configured " + algorithmConfiguration.getAlgorithmName());
+            }
+            ALGORITHMS.add(algorithm);
+            ALGORITHM_INSTRUMENTS.put(algorithm.getAlgorithmInfo(), getAlgorithmInstrumentPks(algorithmInstanceConfiguration, defaultInstrumentPks));
+        }
+        if (ALGORITHMS.size() == 1) {
+            ROOT_ALGORITHM = ALGORITHMS.get(0);
+        } else {
+            ROOT_ALGORITHM = new MultiAlgorithm(algorithmConnectorConfiguration, ALGORITHMS);
         }
     }
 
@@ -631,4 +682,3 @@ public class App {
 
 
 }
-
