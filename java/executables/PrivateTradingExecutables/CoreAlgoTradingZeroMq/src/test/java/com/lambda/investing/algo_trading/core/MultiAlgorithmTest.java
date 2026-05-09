@@ -108,11 +108,11 @@ public class MultiAlgorithmTest {
         MultiAlgorithm multiAlgorithm = new MultiAlgorithm(null, Arrays.asList(algoA, algoB));
         multiAlgorithm.init();
 
-        Depth depthA = new Depth();
+        Depth depthA = Depth.getInstance();
         depthA.setInstrument("btceur_kraken");
         multiAlgorithm.onDepthUpdate(depthA);
 
-        Trade tradeB = new Trade();
+        Trade tradeB = Trade.getInstance();
         tradeB.setInstrument("etheur_kraken");
         multiAlgorithm.onTradeUpdate(tradeB);
 
