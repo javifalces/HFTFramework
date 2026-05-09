@@ -177,9 +177,12 @@ public class ImplementationShortfallExecutor extends AbstractExecutor {
         }
 
         if (status == ExecutionReportStatus.CompletelyFilled) {
-            // Use total fill reported in the final ER; previous partial fills were already tracked
-            totalFilledQuantity = executionReport.getQuantityFill();
-            totalFilledValue = executionReport.getPrice() * executionReport.getQuantityFill();
+            // Accumulate the final-fill increment (lastQuantity) alongside any earlier partial fills
+            double lastQty = executionReport.getLastQuantity() > 0
+                    ? executionReport.getLastQuantity()
+                    : executionReport.getQuantityFill() - totalFilledQuantity;
+            totalFilledQuantity += lastQty;
+            totalFilledValue += executionReport.getPrice() * lastQty;
 
             logger.info("{} {} IS CF {}@{} decisionMid={} IS={} ticks",
                     getCurrentTime(), instrument,

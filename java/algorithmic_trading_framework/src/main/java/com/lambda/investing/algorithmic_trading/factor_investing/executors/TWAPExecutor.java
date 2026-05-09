@@ -33,6 +33,7 @@ public class TWAPExecutor extends AbstractExecutor {
     private double sliceQuantity;
     private int slicesSent;        // how many slices have been scheduled so far
     private int slicesCompleted;   // how many slices have been completely filled
+    private int slicesFailed;      // how many slices were cancelled due to interval expiry (unfilled)
 
     // Accumulated fill tracking (used to synthesize final ER)
     private double totalFilledQuantity;
@@ -66,6 +67,7 @@ public class TWAPExecutor extends AbstractExecutor {
         sliceQuantity = quantity / numberOfSlices;
         slicesSent = 0;
         slicesCompleted = 0;
+        slicesFailed = 0;
         totalFilledQuantity = 0.0;
         totalFilledValue = 0.0;
         activeClientOrderId = null;
@@ -165,7 +167,7 @@ public class TWAPExecutor extends AbstractExecutor {
     }
 
     private void checkAllSlicesDone() {
-        if (slicesCompleted >= numberOfSlices) {
+        if ((slicesCompleted + slicesFailed) >= numberOfSlices) {
             finishWithStatus(ExecutionReportStatus.CompletelyFilled);
         }
         // else next slice will be sent on the next scheduled interval in onDepthUpdate
@@ -224,7 +226,7 @@ public class TWAPExecutor extends AbstractExecutor {
             boolean moreSlicesRemaining = slicesSent < numberOfSlices;
 
             if (sliceIntervalExpired && moreSlicesRemaining) {
-                // Cancel current slice and send the next one at market
+                // Cancel the unfilled slice (increment slicesFailed, NOT slicesCompleted)
                 String idToCancel = (activeConfirmedClientOrderId != null) ? activeConfirmedClientOrderId : activeClientOrderId;
                 logger.info("{} {} TWAP slice interval expired, cancelling {} and re-submitting",
                         getCurrentTime(), instrument, idToCancel);
@@ -232,8 +234,7 @@ public class TWAPExecutor extends AbstractExecutor {
                 this.tradingEngineConnector.orderRequest(cancel);
                 activeClientOrderId = null;
                 activeConfirmedClientOrderId = null;
-                // Count the unfilled slice as "lost" - record a partial fill
-                slicesCompleted++;
+                slicesFailed++;
                 sendNextSlice(depth.getTimestamp());
             }
         }
