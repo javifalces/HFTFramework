@@ -5,12 +5,13 @@
   "marketDataHost": "localhost",
   "paperTrading": "True",
   "demoTrading": "False",
-  "instrumentPks": [
-    "btceur_kraken"
-  ],
+
   "algorithm": {
     "algorithmName": "ConstantSpread_zeromq_test",
     "parameters": {
+      "instrumentPks": [
+        "btceur_kraken"
+      ],
       "level": "0",
       "skewLevel": "0",
       "seed": 5,
