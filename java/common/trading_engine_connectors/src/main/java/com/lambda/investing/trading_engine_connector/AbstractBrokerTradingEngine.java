@@ -16,12 +16,10 @@ import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.Date;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static com.lambda.investing.PrintUtils.PrintDate;
 import static com.lambda.investing.model.Util.*;
 import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_PORTFOLIO_INFO;
 
@@ -44,6 +42,11 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
 
     LatencyStatistics latencyStatistics;
 
+    /**
+     * Pre-trade risk controller – initialised from system properties. May be {@code null} if disabled.
+     */
+    protected PreTradeController preTradeController;
+
 
     public AbstractBrokerTradingEngine(ConnectorConfiguration orderRequestConnectorConfiguration,
                                        ConnectorProvider orderRequestConnectorProvider,
@@ -58,6 +61,7 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
         lastOrderRequestClOrdId = EvictingQueue.create(QUEUE_SIZE);
         CfERNotified = EvictingQueue.create(QUEUE_SIZE);
         latencyStatistics = new LatencyStatistics("AbstractBrokerTradingEngine", 60 * 1000);//to check latencies in orderRequests
+        preTradeController = new PreTradeController();
     }
 
     @Override
@@ -67,6 +71,15 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
 
 
     public void reset() {
+    }
+
+    /**
+     * Replaces the default pre-trade controller (built from system properties) with a custom one.
+     * Pass {@code null} to disable pre-trade checks entirely.
+     */
+    public void setPreTradeController(PreTradeController preTradeController) {
+        this.preTradeController = preTradeController;
+        logger.info("PreTradeController set to {}", preTradeController == null ? "disabled" : preTradeController);
     }
 
     public abstract void setDemoTrading();
@@ -118,6 +131,12 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
 
         logger.info("notifyExecutionReportById {} : {} ", id, executionReport);
         executionReport.setTimestampBrokerConnector(System.currentTimeMillis());//when broker notify
+
+        // update pre-trade controller with broker-originated fills
+        if (preTradeController != null) {
+            preTradeController.onExecutionReport(executionReport);
+        }
+
         this.executionReportConnectorPublisher
                 .publish(executionReportConnectorConfiguration, TypeMessage.execution_report, id, executionReport);
 
@@ -154,6 +173,18 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
                 latencyStatistics.addOrderRequestLatencyStatistics(orderRequest.getAlgorithmInfo(), System.currentTimeMillis(), orderRequest);
             }
 
+            // ── Pre-trade risk check ───────────────────────────────────────────────
+            if (preTradeController != null) {
+                ExecutionReport rejection = preTradeController.checkOrderRequest(orderRequest);
+                if (rejection != null) {
+                    logger.warn("Pre-trade rejection for order {}: {}", orderRequest.getClientOrderId(), rejection.getRejectReason());
+                    System.out.println(Configuration.formatLog("onUpdate.orderRequest pre-trade REJECTED {}: {}",
+                            orderRequest.getClientOrderId(), rejection.getRejectReason()));
+                    notifyExecutionReport(rejection);
+                    return;
+                }
+            }
+
             orderRequest(orderRequest);
         }
 
@@ -167,9 +198,10 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
             //but here is for brokers only----> not so much sense
             portfolio.updateTrade(executionReport);
 
-            //			if (isPaperTrading && paperTradingEngine != null) {
-            //				this.paperTradingEngine.notifyExecutionReport(executionReport);
-            //			}
+            // keep pre-trade controller position state in sync
+            if (preTradeController != null) {
+                preTradeController.onExecutionReport(executionReport);
+            }
         }
 
         if (typeMessage.equals(TypeMessage.info)) {
