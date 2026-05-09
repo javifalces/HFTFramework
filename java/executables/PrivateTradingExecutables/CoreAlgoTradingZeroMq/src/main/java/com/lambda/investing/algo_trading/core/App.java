@@ -33,8 +33,7 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static com.lambda.investing.model.Util.fromJsonString;
-import static com.lambda.investing.model.Util.toJsonString;
+import static com.lambda.investing.model.Util.*;
 
 public class App {
     private static boolean DISABLED_WARNING = false;
@@ -417,6 +416,9 @@ public class App {
         System.out.println("-----");
         System.out.println(args[0]);
         System.out.println("-----");
+        System.out.println("----");
+        System.out.println(toJsonStringGSON(zeroMqTradingConfiguration));
+        System.out.println("----");
 
         return zeroMqTradingConfiguration;
     }
