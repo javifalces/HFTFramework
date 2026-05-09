@@ -188,7 +188,7 @@ public class App {
         } else {
             str = String.valueOf(value);
         }
-        if (str == null || str.equalsIgnoreCase("null") || str.isEmpty()) {
+        if (str.equalsIgnoreCase("null") || str.isEmpty()) {
             return null;
         }
         return str;
