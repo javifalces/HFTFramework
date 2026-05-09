@@ -7,6 +7,7 @@ import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.messaging.Command;
+import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.Verb;
 import com.lambda.investing.trading_engine_connector.ExecutionReportListener;
 import com.lambda.investing.trading_engine_connector.TradingEngineConnector;
@@ -27,6 +28,7 @@ public abstract class AbstractExecutor implements Executor, ExecutionReportListe
     protected long timeoutIsExecutingMs = 30000;//30 seconds
     protected Depth lastDepth;
     protected TimeServiceIfc timeService;
+    protected ExecutorStatistics executorStatistics;
 
     public AbstractExecutor(TimeServiceIfc timeServiceIfc, String algorithmInfo, Instrument instrument, AlgorithmConnectorConfiguration algorithmConnectorConfiguration) {
         this.timeService = timeServiceIfc;
@@ -37,6 +39,7 @@ public abstract class AbstractExecutor implements Executor, ExecutionReportListe
         this.tradingEngineConnector.register(algorithmInfo, this);
         this.algorithmConnectorConfiguration.getMarketDataProvider().register(this);
         isExecuting = false;
+        this.executorStatistics = new ExecutorStatistics(algorithmInfo + "." + instrument.getPrimaryKey(), instrument);
     }
 
     public void setTimeoutIsExecutingMs(long timeoutIsExecutingMs) {
@@ -59,6 +62,29 @@ public abstract class AbstractExecutor implements Executor, ExecutionReportListe
     public abstract boolean increasePosition(long timestamp, Verb verb, double quantity, double price);
 
     public abstract boolean cancelAll();
+
+    /**
+     * Notifies the {@link ExecutorStatistics} that an execution has started.
+     * Subclasses should call this after setting {@code isExecuting = true} and sending the order.
+     *
+     * @param verb      Buy or Sell
+     * @param sentPrice price sent in the order request
+     */
+    protected void notifyExecutionStarted(Verb verb, double sentPrice) {
+        double midPrice = (lastDepth != null) ? lastDepth.getMidPrice() : Double.NaN;
+        executorStatistics.onExecutionStarted(timeService.getCurrentTimestamp(), verb, sentPrice, midPrice);
+    }
+
+    /**
+     * Notifies the {@link ExecutorStatistics} that an execution has finished.
+     * Subclasses should call this when they receive a terminal execution report (completely filled or rejected).
+     *
+     * @param executionReport the terminal execution report
+     */
+    protected void notifyExecutionFinished(ExecutionReport executionReport) {
+        double midPrice = (lastDepth != null) ? lastDepth.getMidPrice() : Double.NaN;
+        executorStatistics.onExecutionFinished(timeService.getCurrentTimestamp(), executionReport, midPrice);
+    }
 
     @Override
     public String toString() {
