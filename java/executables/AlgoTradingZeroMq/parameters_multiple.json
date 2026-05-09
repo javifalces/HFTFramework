@@ -7,9 +7,6 @@
   "demoTrading": "False",
   "algorithms": [
     {
-      "instrumentPks": [
-        "eurusd_darwinex"
-      ],
       "algorithm": {
         "algorithmName": "AvellanedaStoikov_fx_a",
         "parameters": {
@@ -25,9 +22,6 @@
       }
     },
     {
-      "instrumentPks": [
-        "usdjpy_darwinex"
-      ],
       "algorithm": {
         "algorithmName": "AvellanedaStoikov_fx_b",
         "parameters": {
