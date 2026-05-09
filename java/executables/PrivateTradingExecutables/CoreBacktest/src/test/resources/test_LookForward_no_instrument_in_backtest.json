@@ -10,7 +10,9 @@
   "algorithm": {
     "algorithmName": "LookForwardBiasAlgorithm_junit",
     "parameters": {
-      "instrument": "btceur_kraken",
+      "instrumentPks": [
+        "btceur_kraken"
+      ],
       "quantity": 0.01,
       "secondsCandles": 60
     }

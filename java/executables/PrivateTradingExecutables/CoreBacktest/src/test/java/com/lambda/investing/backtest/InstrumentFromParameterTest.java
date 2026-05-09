@@ -51,14 +51,47 @@ public class InstrumentFromParameterTest {
     }
 
     /**
-     * Validates that when 'instrument' is NOT in the backtest section but IS in algorithm parameters,
-     * the instrument is loaded from algorithm parameters.
+     * Validates that when 'instrument' is NOT in the backtest section but 'instrumentPks' (array) IS in
+     * algorithm parameters, the instrument is loaded from algorithm parameters.
      */
     @Test
     public void testInstrumentFromAlgorithmParameters() throws Exception {
         InputStream inputStream = Configuration.class.getClassLoader()
                 .getResourceAsStream("test_LookForward_no_instrument_in_backtest.json");
         String json = new String(inputStream.readAllBytes());
+        InputConfiguration inputConfiguration = fromJsonString(json, InputConfiguration.class);
+
+        Assert.assertNull("backtest instrument should be null", inputConfiguration.getBacktest().getInstrument());
+
+        BacktestConfiguration backtestConfiguration = inputConfiguration.getBacktestConfiguration();
+        Assert.assertNotNull(backtestConfiguration);
+        Assert.assertFalse("instrument list should not be empty", backtestConfiguration.getInstruments().isEmpty());
+
+        Instrument firstInstrument = backtestConfiguration.getInstruments().get(0);
+        Assert.assertEquals("btceur_kraken", firstInstrument.getPrimaryKey());
+    }
+
+    /**
+     * Validates that the legacy 'instrument' parameter (comma-separated string) still works as a fallback.
+     */
+    @Test
+    public void testInstrumentFallbackFromLegacyParameter() throws Exception {
+        String json = "{\n" +
+                "  \"backtest\": {\n" +
+                "    \"startDate\": \"20250708 08:00:00\",\n" +
+                "    \"endDate\": \"20250708 15:00:00\",\n" +
+                "    \"delayOrderMs\": 0,\n" +
+                "    \"multithreadConfiguration\": \"single_thread\"\n" +
+                "  },\n" +
+                "  \"algorithm\": {\n" +
+                "    \"algorithmName\": \"LookForwardBiasAlgorithm_junit\",\n" +
+                "    \"parameters\": {\n" +
+                "      \"instrument\": \"btceur_kraken\",\n" +
+                "      \"quantity\": 0.01,\n" +
+                "      \"secondsCandles\": 60\n" +
+                "    }\n" +
+                "  }\n" +
+                "}";
         InputConfiguration inputConfiguration = fromJsonString(json, InputConfiguration.class);
 
         Assert.assertNull("backtest instrument should be null", inputConfiguration.getBacktest().getInstrument());

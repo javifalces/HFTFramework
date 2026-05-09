@@ -142,7 +142,8 @@ public class App {
 
     /**
      * Returns the effective instrument PKs: uses {@code instrumentPks} from the configuration if present,
-     * otherwise falls back to the {@code instrument} parameter of the algorithm (comma-separated string).
+     * otherwise falls back to the algorithm parameters.
+     * Priority for parameter fallback: "instrumentPks" (array or comma-separated) then "instrument" (backward compat).
      */
     protected String[] getEffectiveInstrumentPks(ZeroMqTradingConfiguration zeroMqTradingConfiguration) {
         String[] instrumentPks = zeroMqTradingConfiguration.getInstrumentPks();
@@ -153,19 +154,44 @@ public class App {
         AlgorithmConfiguration algorithmConfiguration = zeroMqTradingConfiguration.getAlgorithm();
         if (algorithmConfiguration != null && algorithmConfiguration.getParameters() != null) {
             Map<String, Object> params = algorithmConfiguration.getParameters();
-            if (params.containsKey("instrument")) {
-                String instrumentStr = String.valueOf(params.get("instrument"));
-                if (instrumentStr != null && !instrumentStr.equalsIgnoreCase("null") && !instrumentStr.isEmpty()) {
-                    logger.info("instrumentPks not set in ZeroMqTradingConfiguration, loaded from algorithm parameters: {}", instrumentStr);
-                    String[] pks = instrumentStr.split(",");
-                    for (int i = 0; i < pks.length; i++) {
-                        pks[i] = pks[i].trim();
-                    }
-                    return pks;
+            // Check "instrumentPks" first (supports JSON array or comma-separated string)
+            String instrumentStr = resolveInstrumentParam(params, "instrumentPks");
+            if (instrumentStr == null) {
+                // Backward compat: fall back to "instrument"
+                instrumentStr = resolveInstrumentParam(params, "instrument");
+            }
+            if (instrumentStr != null) {
+                logger.info("instrumentPks not set in ZeroMqTradingConfiguration, loaded from algorithm parameters: {}", instrumentStr);
+                String[] pks = instrumentStr.split(",");
+                for (int i = 0; i < pks.length; i++) {
+                    pks[i] = pks[i].trim();
                 }
+                return pks;
             }
         }
         return new String[0];
+    }
+
+    /**
+     * Reads a parameter from the map as a comma-separated string.
+     * The value may be a {@link List} (from JSON array deserialization) or a plain String.
+     * Returns {@code null} if the key is absent, null, or empty.
+     */
+    private String resolveInstrumentParam(Map<String, Object> params, String key) {
+        if (!params.containsKey(key)) {
+            return null;
+        }
+        Object value = params.get(key);
+        String str;
+        if (value instanceof List) {
+            str = ((List<?>) value).stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
+        } else {
+            str = String.valueOf(value);
+        }
+        if (str == null || str.equalsIgnoreCase("null") || str.isEmpty()) {
+            return null;
+        }
+        return str;
     }
 
     protected void configurePaperTrading(ApplicationContext ac, ZeroMqTradingConfiguration zeroMqTradingConfiguration) {
