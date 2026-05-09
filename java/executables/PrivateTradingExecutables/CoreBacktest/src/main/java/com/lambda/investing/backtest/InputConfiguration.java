@@ -2,6 +2,7 @@ package com.lambda.investing.backtest;
 
 import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.MultiStrategy;
+import com.lambda.investing.algorithmic_trading.MultipleAlgorithms;
 import com.lambda.investing.algorithmic_trading.provider.AlgorithmCreationUtils;
 import com.lambda.investing.algorithmic_trading.utils.AlgorithmUtils;
 import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
@@ -59,12 +60,86 @@ public class InputConfiguration implements Cloneable {
 
     @Getter
     private Algorithm algorithm;
+    @Getter
+    private List<Algorithm> algorithms;
 
     public InputConfiguration() {
     }
 
     public BacktestConfiguration getBacktestConfiguration() throws Exception {
-        return backtest.getBacktestConfiguration(algorithm.getAlgorithm());
+        com.lambda.investing.algorithmic_trading.Algorithm algorithm = getConfiguredAlgorithm();
+        return backtest.getBacktestConfiguration(algorithm);
+    }
+
+    private com.lambda.investing.algorithmic_trading.Algorithm getConfiguredAlgorithm() throws Exception {
+        if (algorithm != null) {
+            return algorithm.getAlgorithm();
+        }
+        if (algorithms == null || algorithms.isEmpty()) {
+            throw new Exception("Algorithm not found");
+        }
+        List<com.lambda.investing.algorithmic_trading.Algorithm> configuredAlgorithms = new ArrayList<>();
+        Set<String> instruments = new LinkedHashSet<>();
+        for (Algorithm algorithmConfiguration : algorithms) {
+            if (algorithmConfiguration == null) {
+                continue;
+            }
+            com.lambda.investing.algorithmic_trading.Algorithm algorithm = algorithmConfiguration.getAlgorithm();
+            configureSingleInstrumentAlgorithm(algorithm);
+            configuredAlgorithms.add(algorithm);
+            instruments.addAll(getInstrumentsFromParameters(algorithm.getParameters()));
+        }
+        if (configuredAlgorithms.isEmpty()) {
+            throw new Exception("Algorithm not found");
+        }
+        if ((backtest.instrument == null || backtest.instrument.isEmpty()) && !instruments.isEmpty()) {
+            backtest.instrument = String.join(",", instruments);
+            logger.info("instrument not set in backtestConfiguration, loaded from algorithms parameters: {}", backtest.instrument);
+        }
+        if (configuredAlgorithms.size() == 1) {
+            return configuredAlgorithms.get(0);
+        }
+        String compositeName = String.format("MultipleAlgorithms_%d", ++COUNTER_ALGORITHMS);
+        return new MultipleAlgorithms(compositeName, configuredAlgorithms);
+    }
+
+    private void configureSingleInstrumentAlgorithm(com.lambda.investing.algorithmic_trading.Algorithm algorithm) {
+        if (!(algorithm instanceof SingleInstrumentAlgorithm)) {
+            return;
+        }
+        Set<String> instruments = getInstrumentsFromParameters(algorithm.getParameters());
+        if (instruments.isEmpty()) {
+            return;
+        }
+        String instrumentPk = instruments.iterator().next();
+        Instrument instrument = Instrument.getInstrument(instrumentPk);
+        if (instrument != null) {
+            ((SingleInstrumentAlgorithm) algorithm).setInstrument(instrument);
+        }
+    }
+
+    private Set<String> getInstrumentsFromParameters(Map<String, Object> parameters) {
+        Set<String> instruments = new LinkedHashSet<>();
+        if (parameters == null) {
+            return instruments;
+        }
+        Object instrumentPks = parameters.get("instrumentPks");
+        if (instrumentPks != null) {
+            for (String instrument : String.valueOf(instrumentPks).split(",")) {
+                if (!instrument.trim().isEmpty() && !"null".equalsIgnoreCase(instrument.trim())) {
+                    instruments.add(instrument.trim());
+                }
+            }
+        }
+        Object instrument = parameters.get("instrument");
+        if (instrument != null) {
+            for (String instrumentPk : String.valueOf(instrument).split(",")) {
+                if (!instrumentPk.trim().isEmpty() && !"null".equalsIgnoreCase(instrumentPk.trim())) {
+                    instruments.add(instrumentPk.trim());
+                }
+            }
+        }
+        return instruments;
     }
 
 //    @Override
@@ -240,6 +315,7 @@ public class InputConfiguration implements Cloneable {
         InputConfiguration output = new InputConfiguration();
         output.setBacktest(this.backtest);
         output.setAlgorithm(this.algorithm);
+        output.setAlgorithms(this.algorithms);
         return output;
     }
 
