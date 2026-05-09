@@ -13,7 +13,8 @@ configuration options, performance metrics, and visualization capabilities.
 Backtest configurations are defined in JSON files with two main sections:
 
 - `backtest`: Defines simulation parameters
-- `algorithm`: Defines the algorithm and its parameters
+- `algorithm` (legacy): Defines one algorithm and its parameters
+- `algorithms` (new): Defines multiple algorithms to run simultaneously
 
 Example:
 
@@ -37,6 +38,36 @@ Example:
       // other algorithm-specific parameters
     }
   }
+}
+```
+
+Multiple algorithms example:
+
+```json
+{
+  "backtest": {
+    "startDate": "20250407 9:00:00",
+    "endDate": "20250407 12:00:00",
+    "delayOrderMs": 0,
+    "feesCommissionsIncluded": false,
+    "multithreadConfiguration": "single_thread"
+  },
+  "algorithms": [
+    {
+      "algorithmName": "AvellanedaStoikov_test",
+      "parameters": {
+        "instrumentPks": ["btceur_kraken"],
+        "quantity": 0.001
+      }
+    },
+    {
+      "algorithmName": "ConstantSpread_test",
+      "parameters": {
+        "instrumentPks": ["btceur_kraken"],
+        "quantity": 0.001
+      }
+    }
+  ]
 }
 ```
 

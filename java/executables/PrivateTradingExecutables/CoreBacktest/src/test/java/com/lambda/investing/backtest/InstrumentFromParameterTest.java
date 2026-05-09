@@ -1,6 +1,8 @@
 package com.lambda.investing.backtest;
 
 import com.lambda.investing.Configuration;
+import com.lambda.investing.algorithmic_trading.Algorithm;
+import com.lambda.investing.algorithmic_trading.MultipleAlgorithms;
 import com.lambda.investing.algorithmic_trading.provider.TradingAlgorithmsProvider;
 import com.lambda.investing.backtest_engine.BacktestConfiguration;
 import com.lambda.investing.model.asset.Instrument;
@@ -12,6 +14,8 @@ import org.junit.runner.RunWith;
 import org.mockito.runners.MockitoJUnitRunner;
 
 import java.io.InputStream;
+import java.util.HashSet;
+import java.util.Set;
 
 import static com.lambda.investing.model.Util.fromJsonString;
 
@@ -128,5 +132,63 @@ public class InstrumentFromParameterTest {
         InputConfiguration inputConfiguration = fromJsonString(json, InputConfiguration.class);
         // Should throw because neither backtest.instrument nor algorithm.parameters.instrument is set
         inputConfiguration.getBacktestConfiguration();
+    }
+
+    /**
+     * Validates that the new 'algorithms' array format creates a composed algorithm with all strategies.
+     */
+    @Test
+    public void testMultipleAlgorithmsConfiguration() throws Exception {
+        String json = "{\n" +
+                "  \"backtest\": {\n" +
+                "    \"startDate\": \"20250708 08:00:00\",\n" +
+                "    \"endDate\": \"20250708 15:00:00\",\n" +
+                "    \"delayOrderMs\": 0,\n" +
+                "    \"multithreadConfiguration\": \"single_thread\"\n" +
+                "  },\n" +
+                "  \"algorithms\": [\n" +
+                "    {\n" +
+                "      \"algorithmName\": \"AvellanedaStoikov_test\",\n" +
+                "      \"parameters\": {\n" +
+                "        \"instrumentPks\": [\"btceur_kraken\"],\n" +
+                "        \"riskAversion\": 0.1,\n" +
+                "        \"midpricePeriodSeconds\": 1,\n" +
+                "        \"midpricePeriodWindow\": 60,\n" +
+                "        \"changeKPeriodSeconds\": 30.0,\n" +
+                "        \"quantity\": 0.0001,\n" +
+                "        \"firstHour\": 0.0,\n" +
+                "        \"lastHour\": 23.0,\n" +
+                "        \"ui\": 0\n" +
+                "      }\n" +
+                "    },\n" +
+                "    {\n" +
+                "      \"algorithmName\": \"ConstantSpread_test\",\n" +
+                "      \"parameters\": {\n" +
+                "        \"instrumentPks\": [\"btceur_kraken\"],\n" +
+                "        \"quantity\": 0.0001,\n" +
+                "        \"firstHour\": 0.0,\n" +
+                "        \"lastHour\": 23.0,\n" +
+                "        \"ui\": 0\n" +
+                "      }\n" +
+                "    }\n" +
+                "  ]\n" +
+                "}";
+        InputConfiguration inputConfiguration = fromJsonString(json, InputConfiguration.class);
+
+        BacktestConfiguration backtestConfiguration = inputConfiguration.getBacktestConfiguration();
+        Assert.assertNotNull(backtestConfiguration);
+        Assert.assertTrue(backtestConfiguration.getAlgorithm() instanceof MultipleAlgorithms);
+
+        MultipleAlgorithms multipleAlgorithms = (MultipleAlgorithms) backtestConfiguration.getAlgorithm();
+        Assert.assertEquals(2, multipleAlgorithms.getAlgorithmsList().size());
+
+        Set<String> algorithmNames = new HashSet<>();
+        for (Algorithm algorithm : multipleAlgorithms.getAlgorithmsList()) {
+            algorithmNames.add(algorithm.getAlgorithmInfo());
+        }
+        Assert.assertTrue(algorithmNames.contains("AvellanedaStoikov_test"));
+        Assert.assertTrue(algorithmNames.contains("ConstantSpread_test"));
+        Assert.assertFalse(backtestConfiguration.getInstruments().isEmpty());
+        Assert.assertEquals("btceur_kraken", backtestConfiguration.getInstruments().get(0).getPrimaryKey());
     }
 }
