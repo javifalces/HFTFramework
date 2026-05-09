@@ -109,7 +109,7 @@ public class MultiAlgorithm extends Algorithm {
     public boolean onExecutionReportUpdate(ExecutionReport executionReport) {
         boolean result = false;
         for (Algorithm algorithm : algorithms) {
-            if (executionReport.getAlgorithmInfo().equals(algorithm.getAlgorithmInfo())) {
+            if (Objects.equals(executionReport.getAlgorithmInfo(), algorithm.getAlgorithmInfo())) {
                 result = algorithm.onExecutionReportUpdate(executionReport) || result;
             }
         }

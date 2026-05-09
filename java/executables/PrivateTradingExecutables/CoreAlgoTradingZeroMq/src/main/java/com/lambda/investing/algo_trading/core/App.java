@@ -329,8 +329,8 @@ public class App {
         ensureAlgorithmsCreated(ac, zeroMqTradingConfiguration);
         Algorithm algorithm = ROOT_ALGORITHM;
 
-
-        Instrument firstInstrumentToSetAlgo = liveTrading.getInstrumentList().isEmpty() ? null : liveTrading.getInstrumentList().get(0);
+        List<Instrument> liveTradingInstruments = liveTrading.getInstrumentList();
+        Instrument firstInstrumentToSetAlgo = liveTradingInstruments.isEmpty() ? null : liveTradingInstruments.get(0);
         if (algorithm instanceof SingleInstrumentAlgorithm) {
             String[] algorithmInstrumentPks = ALGORITHM_INSTRUMENTS.getOrDefault(algorithm.getAlgorithmInfo(), new String[0]);
             if (algorithmInstrumentPks.length > 0) {
@@ -466,13 +466,13 @@ public class App {
         AlgorithmConnectorConfiguration algorithmConnectorConfiguration = ac.getBean(AlgorithmConnectorConfiguration.class);
         List<AlgorithmInstanceConfiguration> effectiveAlgorithms = zeroMqTradingConfiguration.getEffectiveAlgorithms();
         if (effectiveAlgorithms.isEmpty()) {
-            throw new Exception("Algorithm not configured");
+            throw new Exception("No algorithms configured in ZeroMqTradingConfiguration");
         }
         String[] defaultInstrumentPks = zeroMqTradingConfiguration.getInstrumentPks();
         for (AlgorithmInstanceConfiguration algorithmInstanceConfiguration : effectiveAlgorithms) {
             AlgorithmConfiguration algorithmConfiguration = algorithmInstanceConfiguration.getEffectiveAlgorithm();
             if (algorithmConfiguration == null) {
-                throw new Exception("Algorithm not configured");
+                throw new Exception("AlgorithmConfiguration is null for one of the configured algorithms");
             }
             Algorithm algorithm = algorithmConfiguration.getAlgorithm(algorithmConnectorConfiguration);
             if (algorithm == null) {
