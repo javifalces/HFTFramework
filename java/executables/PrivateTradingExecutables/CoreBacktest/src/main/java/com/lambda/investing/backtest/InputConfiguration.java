@@ -92,7 +92,23 @@ public class InputConfiguration implements Cloneable {
         private List<Instrument> getInstrumentList(com.lambda.investing.algorithmic_trading.Algorithm algorithm) throws Exception {
 
             if (instrument == null || instrument.isEmpty()) {
-                throw new Exception("Instrument not found in backtestConfiguration");
+                // Try to load instrument(s) from algorithm parameters.
+                // Priority: "instrumentPks" (array or comma-separated) then "instrument" (backward compat).
+                Map<String, Object> algoParams = algorithm.getParameters();
+                String paramInstrument = null;
+                if (algoParams != null && algoParams.containsKey("instrumentPks")) {
+                    // AlgorithmUtils.getParameters() already converted List -> comma-separated string
+                    paramInstrument = String.valueOf(algoParams.get("instrumentPks"));
+                } else if (algoParams != null && algoParams.containsKey("instrument")) {
+                    paramInstrument = String.valueOf(algoParams.get("instrument"));
+                }
+                if (paramInstrument != null && !paramInstrument.equalsIgnoreCase("null") && !paramInstrument.isEmpty()) {
+                    instrument = paramInstrument;
+                    logger.info("instrument not set in backtestConfiguration, loaded from algorithm parameters: {}", instrument);
+                }
+            }
+            if (instrument == null || instrument.isEmpty()) {
+                throw new Exception("Instrument not found in backtestConfiguration or algorithm parameters");
             }
             List<Instrument> instrumentList = new ArrayList<>();
             String[] instrumentPKs = instrument.split(",");
@@ -126,7 +142,7 @@ public class InputConfiguration implements Cloneable {
 
 
             for (Instrument instrument : algoInstrumentSet) {
-                if (!instrumentList.contains(instrument)) {
+                if (instrument != null && !instrumentList.contains(instrument)) {
                     instrumentList.add(instrument);
                 }
             }
@@ -135,9 +151,11 @@ public class InputConfiguration implements Cloneable {
             if (algorithm.getHedgeManager() != null) {
                 //adding
                 Set<Instrument> instrumentSet = algorithm.getHedgeManager().getInstrumentsHedgeList();
-                Set<Instrument> instrumentSetSource = new HashSet<>(instrumentList);
-                instrumentSetSource.addAll(instrumentSet);
-                instrumentList = new ArrayList<>(instrumentSetSource);
+                for (Instrument hedgeInstrument : instrumentSet) {
+                    if (hedgeInstrument != null && !instrumentList.contains(hedgeInstrument)) {
+                        instrumentList.add(hedgeInstrument);
+                    }
+                }
                 if (instrumentSet.size() > 0) {
                     logger.info("adding {} HedgeManager instruments to backtestConfiguration -> {}",
                             instrumentSet.size(), instrumentList.size());

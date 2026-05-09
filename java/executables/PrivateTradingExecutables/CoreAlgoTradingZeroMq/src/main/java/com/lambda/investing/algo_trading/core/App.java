@@ -140,6 +140,60 @@ public class App {
 
     }
 
+    /**
+     * Returns the effective instrument PKs: uses {@code instrumentPks} from the configuration if present,
+     * otherwise falls back to the algorithm parameters.
+     * Priority for parameter fallback: "instrumentPks" (array or comma-separated) then "instrument" (backward compat).
+     */
+    protected String[] getEffectiveInstrumentPks(ZeroMqTradingConfiguration zeroMqTradingConfiguration) {
+        String[] instrumentPks = zeroMqTradingConfiguration.getInstrumentPks();
+        if (instrumentPks != null && instrumentPks.length > 0) {
+            return instrumentPks;
+        }
+        // Fall back to algorithm parameters
+        AlgorithmConfiguration algorithmConfiguration = zeroMqTradingConfiguration.getAlgorithm();
+        if (algorithmConfiguration != null && algorithmConfiguration.getParameters() != null) {
+            Map<String, Object> params = algorithmConfiguration.getParameters();
+            // Check "instrumentPks" first (supports JSON array or comma-separated string)
+            String instrumentStr = resolveInstrumentParam(params, "instrumentPks");
+            if (instrumentStr == null) {
+                // Backward compat: fall back to "instrument"
+                instrumentStr = resolveInstrumentParam(params, "instrument");
+            }
+            if (instrumentStr != null) {
+                logger.info("instrumentPks not set in ZeroMqTradingConfiguration, loaded from algorithm parameters: {}", instrumentStr);
+                String[] pks = instrumentStr.split(",");
+                for (int i = 0; i < pks.length; i++) {
+                    pks[i] = pks[i].trim();
+                }
+                return pks;
+            }
+        }
+        return new String[0];
+    }
+
+    /**
+     * Reads a parameter from the map as a comma-separated string.
+     * The value may be a {@link List} (from JSON array deserialization) or a plain String.
+     * Returns {@code null} if the key is absent, null, or empty.
+     */
+    private String resolveInstrumentParam(Map<String, Object> params, String key) {
+        if (!params.containsKey(key)) {
+            return null;
+        }
+        Object value = params.get(key);
+        String str;
+        if (value instanceof List) {
+            str = ((List<?>) value).stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
+        } else {
+            str = String.valueOf(value);
+        }
+        if (str.equalsIgnoreCase("null") || str.isEmpty()) {
+            return null;
+        }
+        return str;
+    }
+
     protected void configurePaperTrading(ApplicationContext ac, ZeroMqTradingConfiguration zeroMqTradingConfiguration) {
         if (zeroMqTradingConfiguration.isPaperTrading()) {
             System.out.println("PAPER TRADING CONFIGURED!");
@@ -147,7 +201,7 @@ public class App {
             ZeroMqMarketDataConnector zeroMqMarketDataConnector = ac.getBean(ZeroMqMarketDataConnector.class);
 
             zeroMqTradingEngineConnector.setPaperTrading(zeroMqMarketDataConnector);
-            String[] instrumentPkArr = zeroMqTradingConfiguration.getInstrumentPks();
+            String[] instrumentPkArr = getEffectiveInstrumentPks(zeroMqTradingConfiguration);
             List<String> instrumentList = Arrays.asList(instrumentPkArr);
             List<Instrument> instruments = new ArrayList<>();
             for (String instrumentPk : instrumentList) {
@@ -174,7 +228,7 @@ public class App {
                                                                 ZeroMqTradingConfiguration zeroMqTradingConfiguration) throws Exception {
         ZeroMqMarketDataConnector marketDataConnector = ac.getBean(ZeroMqMarketDataConnector.class);
         //set instrument?
-        String[] instrumentPkArr = zeroMqTradingConfiguration.getInstrumentPks();
+        String[] instrumentPkArr = getEffectiveInstrumentPks(zeroMqTradingConfiguration);
         List<String> instrumentList = ArrayUtils.StringArrayList(instrumentPkArr);
 
         //add hedgeManagerInstruments
@@ -235,7 +289,7 @@ public class App {
 
     protected void setInstruments(LiveTrading liveTrading, ZeroMqTradingConfiguration zeroMqTradingConfiguration) {
         //set instrument?
-        String[] instrumentPkArr = zeroMqTradingConfiguration.getInstrumentPks();
+        String[] instrumentPkArr = getEffectiveInstrumentPks(zeroMqTradingConfiguration);
         List<String> instrumentList = Arrays.asList(instrumentPkArr);
         List<Instrument> instruments = new ArrayList<>();
         for (String instrumentPk : instrumentList) {
