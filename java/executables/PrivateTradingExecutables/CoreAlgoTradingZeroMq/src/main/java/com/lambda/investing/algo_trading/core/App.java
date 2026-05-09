@@ -614,7 +614,7 @@ public class App {
                 setProperties();
 
             } catch (Exception e) {
-                logger.error("error in backtest ", e);
+                logger.error("error in AlgoTradingZeroMq ", e);
                 e.printStackTrace();
                 System.exit(-1);
             }

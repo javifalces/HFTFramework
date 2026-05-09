@@ -45,7 +45,7 @@ public class TradingAlgorithmsProvider implements AlgorithmProvider {
         }
 
         public Algorithm createAlgorithm(AlgorithmConnectorConfiguration config, String algorithmName, Map<String, Object> parameters) {
-            System.out.println(prefix + " backtest " + algorithmName);
+            System.out.println(prefix + " createAlgorithm " + algorithmName);
             switch (this) {
                 case CONSTANT_SPREAD:
                     return new ConstantSpreadAlgorithm(config, algorithmName, parameters);
