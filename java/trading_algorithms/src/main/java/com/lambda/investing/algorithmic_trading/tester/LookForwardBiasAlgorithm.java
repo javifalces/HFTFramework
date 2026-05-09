@@ -42,8 +42,8 @@ public class LookForwardBiasAlgorithm extends Algorithm {
     @Override
     public String printAlgo() {
         return String
-                .format("%s  \n\tmainInstrument=%s\n\tsyntheticInstrument=%s\n\tquantity=%.3f\n\tfirstHourOperatingIncluded=%d\n\tlastHourOperatingIncluded=%d",
-                        algorithmInfo, quantity, firstHourOperatingIncluded,
+                .format("%s  \n\tmainInstrument=%s\n\tquantity=%.3f\n\tfirstHourOperatingIncluded=%d\n\tlastHourOperatingIncluded=%d",
+                        algorithmInfo, instrument, quantity, firstHourOperatingIncluded,
                         lastHourOperatingIncluded);
     }
 
@@ -54,7 +54,7 @@ public class LookForwardBiasAlgorithm extends Algorithm {
         this.quantity = getParameterDouble(parameters, "quantity");
         getCandleFromTickUpdater().setSecondsThreshold(secondsCandles);
 
-        String instrumentPK = getParameterString(parameters, "instrument");
+        String instrumentPK = this.instrumentPks[0];
         if (instrumentPK != null) {
             Instrument instrument = Instrument.getInstrument(instrumentPK);
             if (instrument == null) {
