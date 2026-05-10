@@ -1,0 +1,773 @@
+{
+  "uid": "hft-slippage",
+  "title": "HFT - Slippage Statistics",
+  "description": "Slippage distribution (in price ticks) per header tracked by SlippageStatistics: mean, max, and percentiles P50/P75/P90/P95/P99",
+  "tags": [
+    "hft",
+    "slippage",
+    "execution"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "links": [],
+  "annotations": {
+    "list": []
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "app",
+        "label": "Application",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": "label_values(jvm_memory_bytes_used, job)",
+        "refresh": 2,
+        "multi": false,
+        "includeAll": false,
+        "sort": 1,
+        "hide": 0
+      },
+      {
+        "name": "header",
+        "label": "Slippage Header",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": "label_values({job=\"$app\", __name__=~\"slippage_statistics_.*_count\"}, __name__)",
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "sort": 1,
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Current Snapshot",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Sample Count",
+      "description": "Number of fills recorded in the last reporting interval",
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum({job=\"$app\", __name__=~\"slippage_statistics_.*_count\"})",
+          "legendFormat": "fills",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Mean Slippage (ticks)",
+      "description": "Average slippage across all headers in the last interval. Positive = favourable, negative = adverse.",
+      "gridPos": {
+        "x": 4,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "yellow", "value": -1   },
+              { "color": "green",  "value": 0    }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "avg({job=\"$app\", __name__=~\"slippage_statistics_.*_mean_ticks\"})",
+          "legendFormat": "mean",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "P50 Slippage (ticks)",
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "yellow", "value": -1   },
+              { "color": "green",  "value": 0    }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "avg({job=\"$app\", __name__=~\"slippage_statistics_.*_p50_ticks\"})",
+          "legendFormat": "P50",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "P90 Slippage (ticks)",
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "yellow", "value": -2   },
+              { "color": "green",  "value": 0    }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "avg({job=\"$app\", __name__=~\"slippage_statistics_.*_p90_ticks\"})",
+          "legendFormat": "P90",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "P99 Slippage (ticks)",
+      "gridPos": {
+        "x": 16,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "yellow", "value": -3   },
+              { "color": "green",  "value": 0    }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "avg({job=\"$app\", __name__=~\"slippage_statistics_.*_p99_ticks\"})",
+          "legendFormat": "P99",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Max Slippage (ticks)",
+      "gridPos": {
+        "x": 20,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "yellow", "value": -5   },
+              { "color": "green",  "value": 0    }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "max({job=\"$app\", __name__=~\"slippage_statistics_.*_max_ticks\"})",
+          "legendFormat": "max",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "Slippage Distribution Over Time",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Slippage Percentiles — All Headers (ticks)",
+      "description": "P50 / P75 / P90 / P95 / P99 slippage in price ticks over time. Negative = adverse slippage.",
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 24,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["lastNotNull", "min", "mean", "max"]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 5
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "P50" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "green",  "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "P75" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "P90" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "P95" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red",    "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "P99" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "purple", "mode": "fixed" } }]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "expr": "avg({job=\"$app\", __name__=~\"slippage_statistics_.*_p50_ticks\"})",
+          "legendFormat": "P50",
+          "refId": "A"
+        },
+        {
+          "expr": "avg({job=\"$app\", __name__=~\"slippage_statistics_.*_p75_ticks\"})",
+          "legendFormat": "P75",
+          "refId": "B"
+        },
+        {
+          "expr": "avg({job=\"$app\", __name__=~\"slippage_statistics_.*_p90_ticks\"})",
+          "legendFormat": "P90",
+          "refId": "C"
+        },
+        {
+          "expr": "avg({job=\"$app\", __name__=~\"slippage_statistics_.*_p95_ticks\"})",
+          "legendFormat": "P95",
+          "refId": "D"
+        },
+        {
+          "expr": "avg({job=\"$app\", __name__=~\"slippage_statistics_.*_p99_ticks\"})",
+          "legendFormat": "P99",
+          "refId": "E"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Mean & Max Slippage Over Time (ticks)",
+      "description": "Mean and worst-case (max) slippage in price ticks. Dashed line = zero (no slippage).",
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 14,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["lastNotNull", "min", "mean", "max"]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Mean" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "blue",   "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Max" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } },
+              { "id": "custom.lineStyle", "value": { "dash": [8, 4], "fill": "dash" } }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "expr": "avg({job=\"$app\", __name__=~\"slippage_statistics_.*_mean_ticks\"})",
+          "legendFormat": "Mean",
+          "refId": "A"
+        },
+        {
+          "expr": "max({job=\"$app\", __name__=~\"slippage_statistics_.*_max_ticks\"})",
+          "legendFormat": "Max",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Fill Count Over Time",
+      "description": "Number of fills (executions) recorded per reporting interval.",
+      "gridPos": {
+        "x": 14,
+        "y": 15,
+        "w": 10,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "{job=\"$app\", __name__=~\"slippage_statistics_.*_count\"}",
+          "legendFormat": "{{__name__}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "Per-Header Breakdown",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "P50 per Header (ticks)",
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["lastNotNull", "mean"]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "custom": { "lineWidth": 2, "fillOpacity": 5 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "{job=\"$app\", __name__=~\"slippage_statistics_.*_p50_ticks\"}",
+          "legendFormat": "{{__name__}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "P99 per Header (ticks)",
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["lastNotNull", "mean"]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "custom": { "lineWidth": 2, "fillOpacity": 5 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "{job=\"$app\", __name__=~\"slippage_statistics_.*_p99_ticks\"}",
+          "legendFormat": "{{__name__}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "type": "row",
+      "title": "Summary Table",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 31,
+      "type": "table",
+      "title": "Slippage Snapshot — All Headers",
+      "description": "Latest values of all slippage metrics per header.",
+      "gridPos": {
+        "x": 0,
+        "y": 33,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "sortBy": [
+          {
+            "displayName": "Mean (ticks)",
+            "desc": false
+          }
+        ],
+        "footer": {
+          "show": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Count" },
+            "properties": [{ "id": "unit", "value": "short" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Mean (ticks)" },
+            "properties": [
+              { "id": "thresholds", "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "red",    "value": null },
+                    { "color": "yellow", "value": -1 },
+                    { "color": "green",  "value": 0 }
+                  ]
+                }
+              },
+              { "id": "custom.displayMode", "value": "color-background" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Max (ticks)" },
+            "properties": [
+              { "id": "thresholds", "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "red",    "value": null },
+                    { "color": "yellow", "value": -3 },
+                    { "color": "green",  "value": 0 }
+                  ]
+                }
+              },
+              { "id": "custom.displayMode", "value": "color-background" }
+            ]
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "Value #A": "Count",
+              "Value #B": "Mean (ticks)",
+              "Value #C": "Max (ticks)",
+              "Value #D": "P50 (ticks)",
+              "Value #E": "P75 (ticks)",
+              "Value #F": "P90 (ticks)",
+              "Value #G": "P95 (ticks)",
+              "Value #H": "P99 (ticks)"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "expr": "{job=\"$app\", __name__=~\"slippage_statistics_.*_count\"}",
+          "instant": true,
+          "legendFormat": "{{__name__}}",
+          "refId": "A"
+        },
+        {
+          "expr": "{job=\"$app\", __name__=~\"slippage_statistics_.*_mean_ticks\"}",
+          "instant": true,
+          "legendFormat": "{{__name__}}",
+          "refId": "B"
+        },
+        {
+          "expr": "{job=\"$app\", __name__=~\"slippage_statistics_.*_max_ticks\"}",
+          "instant": true,
+          "legendFormat": "{{__name__}}",
+          "refId": "C"
+        },
+        {
+          "expr": "{job=\"$app\", __name__=~\"slippage_statistics_.*_p50_ticks\"}",
+          "instant": true,
+          "legendFormat": "{{__name__}}",
+          "refId": "D"
+        },
+        {
+          "expr": "{job=\"$app\", __name__=~\"slippage_statistics_.*_p75_ticks\"}",
+          "instant": true,
+          "legendFormat": "{{__name__}}",
+          "refId": "E"
+        },
+        {
+          "expr": "{job=\"$app\", __name__=~\"slippage_statistics_.*_p90_ticks\"}",
+          "instant": true,
+          "legendFormat": "{{__name__}}",
+          "refId": "F"
+        },
+        {
+          "expr": "{job=\"$app\", __name__=~\"slippage_statistics_.*_p95_ticks\"}",
+          "instant": true,
+          "legendFormat": "{{__name__}}",
+          "refId": "G"
+        },
+        {
+          "expr": "{job=\"$app\", __name__=~\"slippage_statistics_.*_p99_ticks\"}",
+          "instant": true,
+          "legendFormat": "{{__name__}}",
+          "refId": "H"
+        }
+      ]
+    }
+  ]
+}
+
