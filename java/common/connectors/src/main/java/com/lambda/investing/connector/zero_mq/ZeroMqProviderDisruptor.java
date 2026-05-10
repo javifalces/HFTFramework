@@ -127,7 +127,7 @@ public class ZeroMqProviderDisruptor extends ZeroMqProvider {
      *                              {@link Configuration.ConnectorProviderType#DISRUPTOR_HIGH_THROUGHPUT}
      *                              (Yielding, lower CPU at slightly higher latency).
      */
-    private ZeroMqProviderDisruptor(ZeroMqConfiguration zeroMqConfiguration,
+    protected ZeroMqProviderDisruptor(ZeroMqConfiguration zeroMqConfiguration,
                                    int threadsListening,
                                    boolean isServer,
                                    Configuration.ConnectorProviderType connectorProviderType) {
