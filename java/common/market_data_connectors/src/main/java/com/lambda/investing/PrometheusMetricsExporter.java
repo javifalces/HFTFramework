@@ -64,6 +64,8 @@ public class PrometheusMetricsExporter {
                 port = Integer.parseInt(portStr.trim());
             } catch (NumberFormatException e) {
                 logger.warn("Invalid PROMETHEUS_PORT value '{}'; Prometheus exporter disabled.", portStr);
+                System.err.println("[PrometheusMetricsExporter] WARNING: Invalid PROMETHEUS_PORT value '" + portStr
+                        + "'; Prometheus exporter disabled.");
                 this.enabled = false;
                 return;
             }

@@ -1,4 +1,4 @@
-package com.lambda.investing.algorithmic_trading.observer.pushbullet;
+package com.lambda.investing.algorithmic_trading.observer.push.pushbullet;
 
 /**
  * Interface for listening to incoming Pushbullet messages.

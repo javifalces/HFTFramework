@@ -15,7 +15,8 @@ import com.lambda.investing.algorithmic_trading.hedging.HedgeManager;
 import com.lambda.investing.algorithmic_trading.hedging.NoHedgeManager;
 import com.lambda.investing.algorithmic_trading.observer.LiveTradeReport;
 import com.lambda.investing.algorithmic_trading.observer.PrometheusAlgorithmObserver;
-import com.lambda.investing.algorithmic_trading.observer.pushbullet.PushbulletAlgorithmObserver;
+import com.lambda.investing.algorithmic_trading.observer.push.PushService;
+import com.lambda.investing.algorithmic_trading.observer.push.pushbullet.PushbulletAlgorithmObserver;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshot;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioManager;
 import com.lambda.investing.algorithmic_trading.quoting.QuoteManager;
@@ -325,15 +326,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
         if (!isBacktest) {
             register(new LiveTradeReport());// always register live csv observer
-            if (!PUSHBULLET_TOKEN.isBlank()) {
-                try {
-                    PushbulletAlgorithmObserver pushbulletAlgorithmObserver = new PushbulletAlgorithmObserver(this, PUSHBULLET_TOKEN);
-                    register(pushbulletAlgorithmObserver);
-                } catch (Exception e) {
-                    logger.error("error registering PushbulletAlgorithmObserver ", e);
-                }
-            }
-
+            PushService.CreatePushServices(this);
 
             boolean prometheusEnabled = PrometheusMetricsExporter.getInstance().isEnabled();
             if (prometheusEnabled) {

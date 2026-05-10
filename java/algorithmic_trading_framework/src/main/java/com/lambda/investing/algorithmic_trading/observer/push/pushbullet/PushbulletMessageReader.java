@@ -1,4 +1,4 @@
-package com.lambda.investing.algorithmic_trading.observer.pushbullet;
+package com.lambda.investing.algorithmic_trading.observer.push.pushbullet;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
