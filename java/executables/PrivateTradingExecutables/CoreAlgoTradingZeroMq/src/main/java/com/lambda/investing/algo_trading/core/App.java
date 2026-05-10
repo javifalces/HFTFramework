@@ -416,22 +416,6 @@ public class App {
 
         ensureAlgorithmsCreated(ac, zeroMqTradingConfiguration);
         Algorithm algorithm = ROOT_ALGORITHM;
-
-        List<Instrument> liveTradingInstruments = liveTrading.getInstrumentList();
-        Instrument firstInstrumentToSetAlgo = liveTradingInstruments.isEmpty() ? null : liveTradingInstruments.get(0);
-        if (algorithm instanceof SingleInstrumentAlgorithm) {
-            String[] algorithmInstrumentPks = ALGORITHM_INSTRUMENTS.getOrDefault(algorithm.getAlgorithmInfo(), new String[0]);
-            if (algorithmInstrumentPks.length > 0) {
-                Instrument configuredInstrument = Instrument.getInstrument(algorithmInstrumentPks[0]);
-                if (configuredInstrument != null) {
-                    firstInstrumentToSetAlgo = configuredInstrument;
-                }
-            }
-            if (firstInstrumentToSetAlgo != null) {
-                ((SingleInstrumentAlgorithm) algorithm).setInstrument(firstInstrumentToSetAlgo);
-            }
-        }
-
         liveTrading.setAlgorithm(algorithm);
         liveTrading.init();
 

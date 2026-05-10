@@ -62,12 +62,18 @@ public abstract class SingleInstrumentAlgorithm extends Algorithm {
     }
 
 
-
     @Override
     public void setParameters(Map<String, Object> parameters) {
         super.setParameters(parameters);
         syntheticInstrumentFile = getSyntheticInstrumentPath();
         enableAutoHedger = syntheticInstrumentFile != null;
+        if (instrumentPks != null && instrumentPks.length == 1) {
+            Instrument instrument1 = getInstrumentManager(instrumentPks[0]).getInstrument();
+            setInstrument(instrument1);
+        } else {
+            logger.warn("SingleInstrumentAlgorithm received more than 1 instrumentPks or null, disable auto set instrument! instrumentPks: {}", instrumentPks);
+        }
+
 
     }
 
