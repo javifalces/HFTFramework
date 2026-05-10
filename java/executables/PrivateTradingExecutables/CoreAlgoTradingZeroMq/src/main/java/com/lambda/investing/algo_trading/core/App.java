@@ -9,6 +9,7 @@ import com.lambda.investing.algorithmic_trading.Algorithm;
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
 import com.lambda.investing.ArrayUtils;
 import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
+import com.lambda.investing.algorithmic_trading.hedging.synthetic_portfolio.SyntheticInstrument;
 import com.lambda.investing.algorithmic_trading.utils.AppUtils;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
 import com.lambda.investing.live_trading_engine.LiveTrading;
@@ -54,6 +55,22 @@ public class App {
 
     }
 
+    /**
+     * On Windows the console window closes immediately when the process exits.
+     * Calling this method before a fatal {@code System.exit(-1)} gives the user
+     * a chance to read the error output before the window disappears.
+     */
+    private static void waitForKeyPress() {
+        System.out.println("\n[Press ENTER to close...]");
+        System.out.flush();
+        try {
+            //noinspection ResultOfMethodCallIgnored
+            System.in.read();
+        } catch (Exception ignored) {
+            // If stdin is not available (e.g. running as a service) just continue
+        }
+    }
+
     public static void main(String[] args) {
         try {
             System.setProperty("user.timezone", "GMT");
@@ -61,6 +78,7 @@ public class App {
             new App(args);
         } catch (Throwable t) {
             t.printStackTrace();
+            waitForKeyPress();
             System.exit(-1);
         }
     }
@@ -163,33 +181,103 @@ public class App {
         return new String[0];
     }
 
+    /**
+     * Returns the instrument PKs for a single algorithm instance, merging:
+     * <ol>
+     *   <li>Explicit {@code instrumentPks} on the instance configuration (highest priority).</li>
+     *   <li>Instrument PKs resolved from algorithm parameters ("instrumentPks" / "instrument").</li>
+     *   <li>Instrument PKs found inside a {@code syntheticInstrumentFile} parameter, if present.</li>
+     *   <li>{@code defaultInstrumentPks} as a fallback when nothing else is configured.</li>
+     * </ol>
+     */
     private String[] getAlgorithmInstrumentPks(AlgorithmInstanceConfiguration algorithmInstanceConfiguration, String[] defaultInstrumentPks) {
         if (algorithmInstanceConfiguration == null) {
             return defaultInstrumentPks == null ? new String[0] : defaultInstrumentPks;
         }
 
+        // 1. Explicit PKs on the instance win immediately
         String[] configured = algorithmInstanceConfiguration.getInstrumentPks();
         if (configured != null && configured.length > 0) {
             return configured;
         }
 
+        // 2 & 3. Resolve from algorithm parameters
         AlgorithmConfiguration algorithmConfiguration = algorithmInstanceConfiguration.getEffectiveAlgorithm();
         if (algorithmConfiguration != null && algorithmConfiguration.getParameters() != null) {
-            Map<String, Object> params = algorithmConfiguration.getParameters();
-            String instrumentStr = resolveInstrumentParam(params, "instrumentPks");
-            if (instrumentStr == null) {
-                instrumentStr = resolveInstrumentParam(params, "instrument");
-            }
-            if (instrumentStr != null) {
-                String[] pks = instrumentStr.split(",");
-                for (int i = 0; i < pks.length; i++) {
-                    pks[i] = pks[i].trim();
-                }
-                return pks;
+            Set<String> pksSet = resolveInstrumentPksFromParams(algorithmConfiguration.getParameters());
+            if (!pksSet.isEmpty()) {
+                return pksSet.toArray(new String[0]);
             }
         }
 
+        // 4. Fallback
         return defaultInstrumentPks == null ? new String[0] : defaultInstrumentPks;
+    }
+
+    /**
+     * Resolves all instrument PKs that can be derived from an algorithm's parameter map.
+     * Combines the main instrument parameter(s) with any instruments referenced by
+     * {@code syntheticInstrumentFile}.
+     *
+     * @param params algorithm parameter map (never {@code null})
+     * @return ordered, de-duplicated set of instrument PKs (may be empty)
+     */
+    private Set<String> resolveInstrumentPksFromParams(Map<String, Object> params) {
+        Set<String> pksSet = new LinkedHashSet<>();
+        pksSet.addAll(resolveMainInstrumentPks(params));
+        pksSet.addAll(resolveSyntheticInstrumentPks(params));
+        return pksSet;
+    }
+
+    /**
+     * Reads the primary instrument PK(s) from the parameter map.
+     * Tries "instrumentPks" first, then falls back to the legacy "instrument" key.
+     * The value may be a comma-separated string or a JSON array (deserialized as {@link List}).
+     *
+     * @param params algorithm parameter map
+     * @return ordered set of trimmed, non-empty instrument PKs (may be empty)
+     */
+    private Set<String> resolveMainInstrumentPks(Map<String, Object> params) {
+        String instrumentStr = resolveInstrumentParam(params, "instrumentPks");
+        if (instrumentStr == null) {
+            instrumentStr = resolveInstrumentParam(params, "instrument");
+        }
+        Set<String> pks = new LinkedHashSet<>();
+        if (instrumentStr != null) {
+            for (String pk : instrumentStr.split(",")) {
+                String trimmed = pk.trim();
+                if (!trimmed.isEmpty()) {
+                    pks.add(trimmed);
+                }
+            }
+        }
+        return pks;
+    }
+
+    /**
+     * Loads a {@link SyntheticInstrument} from the file path stored under the
+     * {@code syntheticInstrumentFile} parameter and returns its instrument PKs.
+     * Returns an empty set if the parameter is absent or the file cannot be read.
+     *
+     * @param params algorithm parameter map
+     * @return set of instrument PKs from the synthetic instrument file (may be empty)
+     */
+    private Set<String> resolveSyntheticInstrumentPks(Map<String, Object> params) {
+        String syntheticFile = resolveInstrumentParam(params, "syntheticInstrumentFile");
+        if (syntheticFile == null || syntheticFile.isEmpty()) {
+            return Collections.emptySet();
+        }
+        try {
+            SyntheticInstrument syntheticInstrument = new SyntheticInstrument(syntheticFile);
+            Set<String> syntheticPks = syntheticInstrument.getInstrumentPks();
+            System.out.println("resolveSyntheticInstrumentPks: loaded " + syntheticPks.size()
+                    + " instruments from syntheticInstrumentFile: " + syntheticFile + " -> " + syntheticPks);
+            return syntheticPks;
+        } catch (Exception e) {
+            System.err.println("resolveSyntheticInstrumentPks: could not load syntheticInstrumentFile '"
+                    + syntheticFile + "': " + e.getMessage());
+            return Collections.emptySet();
+        }
     }
 
     /**
@@ -503,7 +591,8 @@ public class App {
     private static String[] argsFileToString(String[] args) {
         boolean checkFile = true;
         if (args.length != 1) {
-            System.err.print("need a json file path as input argument to load backtest configuration");
+            System.err.println("need a json file path as input argument to load backtest configuration");
+            waitForKeyPress();
             System.exit(-1);
         } else {
 
@@ -511,16 +600,18 @@ public class App {
             if (checkFile) {
                 File file = new File(args[0]);
                 if (!file.exists()) {
-                    System.err.print("need valid a json file path as input argument to load backtest configuration "
+                    System.err.println("need valid a json file path as input argument to load backtest configuration "
                             + args[0]);
+                    waitForKeyPress();
                     System.exit(-1);
                 }
                 try {
                     String content = new String(Files.readAllBytes(Paths.get(args[0])));
                     args[0] = content;
                 } catch (IOException e) {
-                    System.err.print("need valid a json file path as input argument to load backtest configuration "
+                    System.err.println("need valid a json file path as input argument to load backtest configuration "
                             + args[0]);
+                    waitForKeyPress();
                     System.exit(-1);
 
                 }
@@ -559,6 +650,7 @@ public class App {
             be.printStackTrace();
             logger = LogManager.getLogger();
             logger.fatal("Unable to load Spring application context files", be);
+            waitForKeyPress();
             throw be;
         }
         logger = LogManager.getLogger();//load logger properties
@@ -586,6 +678,7 @@ public class App {
         } catch (Exception e) {
             logger.error("error in algoTrading ", e);
             e.printStackTrace();
+            waitForKeyPress();
             System.exit(-1);
         }
 
@@ -616,6 +709,7 @@ public class App {
             } catch (Exception e) {
                 logger.error("error in AlgoTradingZeroMq ", e);
                 e.printStackTrace();
+                waitForKeyPress();
                 System.exit(-1);
             }
 
