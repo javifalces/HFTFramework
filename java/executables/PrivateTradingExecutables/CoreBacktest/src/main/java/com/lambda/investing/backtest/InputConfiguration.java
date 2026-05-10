@@ -1,7 +1,6 @@
 package com.lambda.investing.backtest;
 
 import com.lambda.investing.Configuration;
-import com.lambda.investing.algorithmic_trading.MultiStrategy;
 import com.lambda.investing.algorithmic_trading.MultipleAlgorithms;
 import com.lambda.investing.algorithmic_trading.provider.AlgorithmCreationUtils;
 import com.lambda.investing.algorithmic_trading.utils.AlgorithmUtils;
@@ -200,11 +199,6 @@ public class InputConfiguration implements Cloneable {
                 if (algorithm instanceof SingleInstrumentAlgorithm) {
                     ((SingleInstrumentAlgorithm) algorithm).setInstrument(instrumentObject);
                 }
-            }
-
-            if (algorithm instanceof MultiStrategy) {
-                String[] instrumentPKsFiltered = Arrays.stream(instrumentPKs).filter(pk -> !pk.trim().isEmpty()).toArray(String[]::new);
-                ((MultiStrategy) algorithm).setInstrumentPKs(instrumentPKsFiltered);
             }
 
             //add the rest of instruments in case needed

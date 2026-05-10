@@ -2,7 +2,6 @@ package com.lambda.investing.live_trading_engine;
 
 import com.lambda.investing.algorithmic_trading.Algorithm;
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
-import com.lambda.investing.algorithmic_trading.MultiStrategy;
 import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
 import com.lambda.investing.market_data_connector.MarketDataProvider;
 import com.lambda.investing.model.asset.Instrument;
@@ -100,12 +99,6 @@ public class LiveTrading {
 						algorithm.getAlgorithmInfo(), single.getPrimaryKey(), instrumentList.get(0).getPrimaryKey());
 				singleInstrumentAlgorithm.setInstrument(instrumentList.get(0));
 			}
-		}
-
-		if (instrumentList != null && !instrumentList.isEmpty()
-				&& this.algorithm instanceof MultiStrategy multiStrategy) {
-			String[] instrumentPKs = instrumentList.stream().map(Instrument::getPrimaryKey).toArray(String[]::new);
-			multiStrategy.setInstrumentPKs(instrumentPKs);
 		}
 
 

@@ -2,7 +2,6 @@ package com.lambda.investing.algorithmic_trading.provider;
 
 import com.lambda.investing.algorithmic_trading.Algorithm;
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
-import com.lambda.investing.algorithmic_trading.MultiStrategy;
 import com.lambda.investing.algorithmic_trading.factor_investing.MarketFactorInvestingAlgorithm;
 import com.lambda.investing.algorithmic_trading.factor_investing.SniperFactorInvestingAlgorithm;
 import com.lambda.investing.algorithmic_trading.market_making.avellaneda_stoikov.AlphaAvellanedaStoikov;
@@ -26,8 +25,8 @@ public class TradingAlgorithmsProvider implements AlgorithmProvider {
         ALPHA_AVELLANEDA_STOIKOV("AlphaAvellanedaStoikov"),
         LOOK_FORWARD_BIAS("LookForwardBiasAlgorithm"),
         MARKET_FACTOR_INVESTING("MarketFactorInvestingAlgorithm"),
-        SNIPER_FACTOR_INVESTING("SniperFactorInvestingAlgorithm"),
-        MULTI_STRATEGY("MultiStrategy");
+        SNIPER_FACTOR_INVESTING("SniperFactorInvestingAlgorithm");
+
 
         private final String prefix;
 
@@ -63,8 +62,6 @@ public class TradingAlgorithmsProvider implements AlgorithmProvider {
                     return new MarketFactorInvestingAlgorithm(config, algorithmName, parameters);
                 case SNIPER_FACTOR_INVESTING:
                     return new SniperFactorInvestingAlgorithm(config, algorithmName, parameters);
-                case MULTI_STRATEGY:
-                    return new MultiStrategy(config, algorithmName, parameters);
                 default:
                     throw new IllegalArgumentException("Unexpected value: " + this);
             }
