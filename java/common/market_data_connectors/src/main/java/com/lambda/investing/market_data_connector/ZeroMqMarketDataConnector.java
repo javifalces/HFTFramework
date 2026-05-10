@@ -20,7 +20,9 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static com.lambda.investing.model.Util.fromJsonString;
 import static com.lambda.investing.model.Util.fromObject;
@@ -37,6 +39,43 @@ public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implem
 
 	private Queue<String> ActiveOrderIdNotified = EvictingQueue.create(BUFFER_ER_ORDER_ID);
 	private Queue<String> FinishedOrderIdNotified = EvictingQueue.create(BUFFER_ER_ORDER_ID);
+
+	private static final Map<String, ZeroMqMarketDataConnector> INSTANCES = new ConcurrentHashMap<>();
+
+	///////////////////// Factory methods ////////////////////
+
+	/**
+	 * Returns a cached or new instance for the given zeroMqConfiguration.
+	 * Key is based on url + topic so configurations with different topics are treated as distinct.
+	 */
+	public static ZeroMqMarketDataConnector getInstance(ZeroMqConfiguration zeroMqConfiguration, int threadsListening) {
+		String key = buildKey(zeroMqConfiguration);
+		return INSTANCES.computeIfAbsent(key, k -> new ZeroMqMarketDataConnector(zeroMqConfiguration, threadsListening));
+	}
+
+	/**
+	 * Returns a cached or new instance for the given zeroMqConfiguration and instruments list.
+	 * Key is derived from host:port plus each instrument so the same combination is reused.
+	 */
+	public static ZeroMqMarketDataConnector getInstance(ZeroMqConfiguration zeroMqConfigurationIn,
+	                                                    List<Instrument> instruments, int threadsListening) {
+		String key = buildKey(zeroMqConfigurationIn, instruments);
+		return INSTANCES.computeIfAbsent(key,
+				k -> new ZeroMqMarketDataConnector(zeroMqConfigurationIn, instruments, threadsListening));
+	}
+
+	private static String buildKey(ZeroMqConfiguration cfg) {
+		return cfg.getUrl() + "#" + cfg.getTopic();
+	}
+
+	private static String buildKey(ZeroMqConfiguration cfg, List<Instrument> instruments) {
+		StringBuilder sb = new StringBuilder(cfg.getUrl());
+		for (Instrument instrument : instruments) {
+			sb.append("#").append(instrument.getPrimaryKey());
+		}
+		return sb.toString();
+	}
+
 	///////////////////// Constructors ////////////////////
 
 	/**
@@ -44,7 +83,7 @@ public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implem
 	 *
 	 * @param zeroMqConfiguration
 	 */
-	public ZeroMqMarketDataConnector(ZeroMqConfiguration zeroMqConfiguration, int threadsListening) {
+	private ZeroMqMarketDataConnector(ZeroMqConfiguration zeroMqConfiguration, int threadsListening) {
 		this.zeroMqConfiguration = new ZeroMqConfiguration(zeroMqConfiguration);
 		zeroMqProvider = ZeroMqProviderFactory.create(this.zeroMqConfiguration, threadsListening);
 		zeroMqProvider.register(this.zeroMqConfiguration, this);

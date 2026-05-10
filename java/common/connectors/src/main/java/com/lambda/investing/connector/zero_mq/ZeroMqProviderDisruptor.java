@@ -9,6 +9,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -48,6 +49,41 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ZeroMqProviderDisruptor extends ZeroMqProvider {
 
     private static final Logger logger = LogManager.getLogger(ZeroMqProviderDisruptor.class);
+
+    private static final Map<String, ZeroMqProviderDisruptor> INSTANCES = new ConcurrentHashMap<>();
+
+    // -----------------------------------------------------------------------
+    // Factory methods
+    // -----------------------------------------------------------------------
+
+    /**
+     * Returns a cached or new instance for the given configuration.
+     * Key is based on url, topic, threadsListening, isServer and connectorProviderType.
+     */
+    public static ZeroMqProviderDisruptor getInstance(ZeroMqConfiguration zeroMqConfiguration,
+                                                      int threadsListening,
+                                                      boolean isServer,
+                                                      Configuration.ConnectorProviderType connectorProviderType) {
+        String key = buildKey(zeroMqConfiguration, threadsListening, isServer, connectorProviderType);
+        return INSTANCES.computeIfAbsent(key,
+                k -> new ZeroMqProviderDisruptor(zeroMqConfiguration, threadsListening, isServer, connectorProviderType));
+    }
+
+    /**
+     * Returns a cached or new instance defaulting to
+     * {@link Configuration.ConnectorProviderType#DISRUPTOR_LOW_LATENCY}.
+     */
+    public static ZeroMqProviderDisruptor getInstance(ZeroMqConfiguration zeroMqConfiguration,
+                                                      int threadsListening,
+                                                      boolean isServer) {
+        return getInstance(zeroMqConfiguration, threadsListening, isServer,
+                Configuration.ConnectorProviderType.DISRUPTOR_LOW_LATENCY);
+    }
+
+    private static String buildKey(ZeroMqConfiguration cfg, int threadsListening,
+                                   boolean isServer, Configuration.ConnectorProviderType type) {
+        return cfg.getUrl() + "#" + cfg.getTopic() + "#" + threadsListening + "#" + isServer + "#" + type;
+    }
 
     // -----------------------------------------------------------------------
     // Disruptor – delegated to the shared helper
@@ -91,7 +127,7 @@ public class ZeroMqProviderDisruptor extends ZeroMqProvider {
      *                              {@link Configuration.ConnectorProviderType#DISRUPTOR_HIGH_THROUGHPUT}
      *                              (Yielding, lower CPU at slightly higher latency).
      */
-    public ZeroMqProviderDisruptor(ZeroMqConfiguration zeroMqConfiguration,
+    private ZeroMqProviderDisruptor(ZeroMqConfiguration zeroMqConfiguration,
                                    int threadsListening,
                                    boolean isServer,
                                    Configuration.ConnectorProviderType connectorProviderType) {

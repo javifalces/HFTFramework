@@ -86,7 +86,7 @@
 
 
     <bean id="marketDataConnector"
-          class="com.lambda.investing.market_data_connector.ZeroMqMarketDataConnector"
+          class="com.lambda.investing.market_data_connector.ZeroMqMarketDataConnector" factory-method="getInstance"
           init-method="start">
         <constructor-arg index="0" ref="marketDataAndERconnectorConfiguration"/>
         <constructor-arg index="1" value="1"/>

@@ -52,7 +52,7 @@ public class CSVZeroMqBacktest extends AbstractBacktest {
 	}
 
 	@Override protected MarketDataProvider getAlgorithmMarketDataProvider() {
-		ZeroMqMarketDataConnector zeroMqMarketDataConnector = new ZeroMqMarketDataConnector(
+		ZeroMqMarketDataConnector zeroMqMarketDataConnector = ZeroMqMarketDataConnector.getInstance(
 				(ZeroMqConfiguration) marketDataConnectorConfiguration,
 				//todo fix it if need more instruments
 				THREADS_PUBLISHING_MARKET_DATA_FILE);

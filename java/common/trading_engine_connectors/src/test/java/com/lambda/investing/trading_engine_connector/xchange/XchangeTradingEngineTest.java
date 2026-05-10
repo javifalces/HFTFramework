@@ -81,7 +81,7 @@ import static com.lambda.investing.Configuration.RANDOM_GENERATOR;
 
 		lastDepth = null;
 		lastTrade = null;
-		ZeroMqMarketDataConnector marketDataProvider = new ZeroMqMarketDataConnector(mqConfigurationPublisher,
+		ZeroMqMarketDataConnector marketDataProvider = ZeroMqMarketDataConnector.getInstance(mqConfigurationPublisher,
 				threadsListen);
 
 		marketDataProvider.setListenER(true);

@@ -78,7 +78,7 @@ public class ZeroMqProviderFactory {
             case DISRUPTOR_LOW_LATENCY, DISRUPTOR_HIGH_THROUGHPUT -> {
                 logger.info("ZeroMqProviderFactory – creating ZeroMqProviderDisruptor ({}, strategy={})",
                         zeroMqConfiguration, connectorProviderType);
-                return new ZeroMqProviderDisruptor(zeroMqConfiguration, threadsListening, isServer,
+                return ZeroMqProviderDisruptor.getInstance(zeroMqConfiguration, threadsListening, isServer,
                         connectorProviderType);
             }
             default -> throw new IllegalArgumentException(
