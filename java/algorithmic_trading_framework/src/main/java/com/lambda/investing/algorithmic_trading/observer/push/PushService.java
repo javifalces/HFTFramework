@@ -13,6 +13,7 @@ import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.OrderRequest;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.threadly.concurrent.collections.ConcurrentArrayList;
 
 import java.util.Arrays;
 import java.util.List;
@@ -56,14 +57,27 @@ public abstract class PushService implements AlgorithmObserver {
 
 
     protected static final Logger logger = LogManager.getLogger(PushService.class);
+    private static List<PushService> activePushServices = new ConcurrentArrayList<>();
 
-    public static void CreatePushServices(Algorithm algorithm) {
+    public static void createPushServices(Algorithm algorithm) {
         if (!PUSHBULLET_TOKEN.isBlank()) {
             try {
                 PushbulletAlgorithmObserver pushbulletAlgorithmObserver = new PushbulletAlgorithmObserver(algorithm, PUSHBULLET_TOKEN);
                 algorithm.register(pushbulletAlgorithmObserver);
+                activePushServices.add(pushbulletAlgorithmObserver);
+                logger.info("PushbulletAlgorithmObserver registered successfully");
             } catch (Exception e) {
                 logger.error("error registering createPushServices PushbulletAlgorithmObserver ", e);
+            }
+        }
+    }
+
+    public static void sendPushMessage(String topic, String message) {
+        for (PushService pushService : activePushServices) {
+            try {
+                pushService.sendMessage(topic, message);
+            } catch (Exception e) {
+                logger.error("Error sending push message: {}", e.getMessage());
             }
         }
     }

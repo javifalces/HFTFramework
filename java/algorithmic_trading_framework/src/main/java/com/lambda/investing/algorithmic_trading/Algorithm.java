@@ -326,7 +326,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
         if (!isBacktest) {
             register(new LiveTradeReport());// always register live csv observer
-            PushService.CreatePushServices(this);
+            PushService.createPushServices(this);
 
             boolean prometheusEnabled = PrometheusMetricsExporter.getInstance().isEnabled();
             if (prometheusEnabled) {
