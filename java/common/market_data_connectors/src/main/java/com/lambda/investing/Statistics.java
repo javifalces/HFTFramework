@@ -35,7 +35,7 @@ public class Statistics implements Runnable {
         this.prometheusPrefix = toPrometheusName("statistics_" + header);
         initPrometheusMetrics();
         if (sleepMs > 0) {
-            Thread thread = new Thread(this, "Statistics");
+            Thread thread = new Thread(this, "Statistics_" + header);
             thread.setPriority(Thread.MIN_PRIORITY);
             thread.start();
         }

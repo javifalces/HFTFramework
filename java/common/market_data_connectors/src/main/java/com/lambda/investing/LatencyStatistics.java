@@ -65,7 +65,7 @@ public class LatencyStatistics implements Runnable {
         prometheusEnabled = PrometheusMetricsExporter.getInstance().isEnabled();
         enable = true;
         if (sleepMs > 0) {
-            Thread thread = new Thread(this, "LatencyStatistics");
+            Thread thread = new Thread(this, "LatencyStatistics_" + header);
             thread.setPriority(Thread.MIN_PRIORITY);
             thread.start();
         }
