@@ -63,36 +63,42 @@ public class PrometheusAlgorithmObserver implements AlgorithmObserver {
     private static final int QUEUE_CAPACITY = 10_000;
 
     // -----------------------------------------------------------------------
-    // Portfolio-level gauges  (label: algorithm)
+    // Portfolio-level gauges  (label: algorithm)  – static: registered once
     // -----------------------------------------------------------------------
-    private Gauge portfolioRealizedPnl;
-    private Gauge portfolioUnrealizedPnl;
-    private Gauge portfolioTotalPnl;
-    private Gauge portfolioTotalFees;
-    private Gauge portfolioNetPosition;
-    private Gauge portfolioNetInvestment;
+    private static Gauge portfolioRealizedPnl;
+    private static Gauge portfolioUnrealizedPnl;
+    private static Gauge portfolioTotalPnl;
+    private static Gauge portfolioTotalFees;
+    private static Gauge portfolioNetPosition;
+    private static Gauge portfolioNetInvestment;
 
     // -----------------------------------------------------------------------
     // Per-instrument gauges  (labels: algorithm, instrument)
     // -----------------------------------------------------------------------
-    private Gauge instrumentRealizedPnl;
-    private Gauge instrumentUnrealizedPnl;
-    private Gauge instrumentTotalPnl;
-    private Gauge instrumentNetPosition;
-    private Gauge instrumentNumberOfTrades;
+    private static Gauge instrumentRealizedPnl;
+    private static Gauge instrumentUnrealizedPnl;
+    private static Gauge instrumentTotalPnl;
+    private static Gauge instrumentNetPosition;
+    private static Gauge instrumentNumberOfTrades;
 
     // -----------------------------------------------------------------------
     // Trade execution metrics  (labels: algorithm, instrument, verb, status)
     // -----------------------------------------------------------------------
-    private Counter tradeCount;
-    private Counter tradeVolume;
-    private Gauge tradeLastPrice;
-    private Gauge tradeLastQuantity;
+    private static Counter tradeCount;
+    private static Counter tradeVolume;
+    private static Gauge tradeLastPrice;
+    private static Gauge tradeLastQuantity;
 
     // -----------------------------------------------------------------------
     // Custom column gauge  (labels: algorithm, instrument, key)
     // -----------------------------------------------------------------------
-    private Gauge customColumn;
+    private static Gauge customColumn;
+
+    /**
+     * Guards one-time static registration of all Prometheus metrics.
+     */
+    private static volatile boolean metricsRegistered = false;
+    private static final Object METRICS_INIT_LOCK = new Object();
 
     private final boolean enabled;
 
@@ -130,116 +136,127 @@ public class PrometheusAlgorithmObserver implements AlgorithmObserver {
             return;
         }
 
-        System.out.println("PrometheusAlgorithmObserver: Prometheus is enabled – registering metrics.");
+        // Register static metrics only once, even if multiple instances are created.
+        if (!metricsRegistered) {
+            synchronized (METRICS_INIT_LOCK) {
+                if (!metricsRegistered) {
+                    System.out.println("PrometheusAlgorithmObserver: Prometheus is enabled – registering metrics.");
+                    try {
+                        // Portfolio gauges
+                        portfolioRealizedPnl = Gauge.build()
+                                .name("algo_portfolio_realized_pnl")
+                                .help("Realized PnL at portfolio level")
+                                .labelNames("algorithm")
+                                .register(exporter.getRegistry());
 
-        try {
-            // Portfolio gauges
-            portfolioRealizedPnl = Gauge.build()
-                    .name("algo_portfolio_realized_pnl")
-                    .help("Realized PnL at portfolio level")
-                    .labelNames("algorithm")
-                    .register(exporter.getRegistry());
+                        portfolioUnrealizedPnl = Gauge.build()
+                                .name("algo_portfolio_unrealized_pnl")
+                                .help("Unrealized PnL at portfolio level")
+                                .labelNames("algorithm")
+                                .register(exporter.getRegistry());
 
-            portfolioUnrealizedPnl = Gauge.build()
-                    .name("algo_portfolio_unrealized_pnl")
-                    .help("Unrealized PnL at portfolio level")
-                    .labelNames("algorithm")
-                    .register(exporter.getRegistry());
+                        portfolioTotalPnl = Gauge.build()
+                                .name("algo_portfolio_total_pnl")
+                                .help("Total PnL (realized + unrealized) at portfolio level")
+                                .labelNames("algorithm")
+                                .register(exporter.getRegistry());
 
-            portfolioTotalPnl = Gauge.build()
-                    .name("algo_portfolio_total_pnl")
-                    .help("Total PnL (realized + unrealized) at portfolio level")
-                    .labelNames("algorithm")
-                    .register(exporter.getRegistry());
+                        portfolioTotalFees = Gauge.build()
+                                .name("algo_portfolio_total_fees")
+                                .help("Total fees paid at portfolio level")
+                                .labelNames("algorithm")
+                                .register(exporter.getRegistry());
 
-            portfolioTotalFees = Gauge.build()
-                    .name("algo_portfolio_total_fees")
-                    .help("Total fees paid at portfolio level")
-                    .labelNames("algorithm")
-                    .register(exporter.getRegistry());
+                        portfolioNetPosition = Gauge.build()
+                                .name("algo_portfolio_net_position")
+                                .help("Net position across the portfolio")
+                                .labelNames("algorithm")
+                                .register(exporter.getRegistry());
 
-            portfolioNetPosition = Gauge.build()
-                    .name("algo_portfolio_net_position")
-                    .help("Net position across the portfolio")
-                    .labelNames("algorithm")
-                    .register(exporter.getRegistry());
+                        portfolioNetInvestment = Gauge.build()
+                                .name("algo_portfolio_net_investment")
+                                .help("Net investment (capital at risk) at portfolio level")
+                                .labelNames("algorithm")
+                                .register(exporter.getRegistry());
 
-            portfolioNetInvestment = Gauge.build()
-                    .name("algo_portfolio_net_investment")
-                    .help("Net investment (capital at risk) at portfolio level")
-                    .labelNames("algorithm")
-                    .register(exporter.getRegistry());
+                        // Per-instrument gauges
+                        instrumentRealizedPnl = Gauge.build()
+                                .name("algo_instrument_realized_pnl")
+                                .help("Realized PnL per instrument")
+                                .labelNames("algorithm", "instrument")
+                                .register(exporter.getRegistry());
 
-            // Per-instrument gauges
-            instrumentRealizedPnl = Gauge.build()
-                    .name("algo_instrument_realized_pnl")
-                    .help("Realized PnL per instrument")
-                    .labelNames("algorithm", "instrument")
-                    .register(exporter.getRegistry());
+                        instrumentUnrealizedPnl = Gauge.build()
+                                .name("algo_instrument_unrealized_pnl")
+                                .help("Unrealized PnL per instrument")
+                                .labelNames("algorithm", "instrument")
+                                .register(exporter.getRegistry());
 
-            instrumentUnrealizedPnl = Gauge.build()
-                    .name("algo_instrument_unrealized_pnl")
-                    .help("Unrealized PnL per instrument")
-                    .labelNames("algorithm", "instrument")
-                    .register(exporter.getRegistry());
+                        instrumentTotalPnl = Gauge.build()
+                                .name("algo_instrument_total_pnl")
+                                .help("Total PnL per instrument")
+                                .labelNames("algorithm", "instrument")
+                                .register(exporter.getRegistry());
 
-            instrumentTotalPnl = Gauge.build()
-                    .name("algo_instrument_total_pnl")
-                    .help("Total PnL per instrument")
-                    .labelNames("algorithm", "instrument")
-                    .register(exporter.getRegistry());
+                        instrumentNetPosition = Gauge.build()
+                                .name("algo_instrument_net_position")
+                                .help("Net position per instrument")
+                                .labelNames("algorithm", "instrument")
+                                .register(exporter.getRegistry());
 
-            instrumentNetPosition = Gauge.build()
-                    .name("algo_instrument_net_position")
-                    .help("Net position per instrument")
-                    .labelNames("algorithm", "instrument")
-                    .register(exporter.getRegistry());
+                        instrumentNumberOfTrades = Gauge.build()
+                                .name("algo_instrument_number_of_trades")
+                                .help("Number of trades executed per instrument")
+                                .labelNames("algorithm", "instrument")
+                                .register(exporter.getRegistry());
 
-            instrumentNumberOfTrades = Gauge.build()
-                    .name("algo_instrument_number_of_trades")
-                    .help("Number of trades executed per instrument")
-                    .labelNames("algorithm", "instrument")
-                    .register(exporter.getRegistry());
+                        // Trade execution metrics
+                        tradeCount = Counter.build()
+                                .name("algo_trade_count_total")
+                                .help("Total number of trade fills")
+                                .labelNames("algorithm", "instrument", "verb", "status")
+                                .register(exporter.getRegistry());
 
-            // Trade execution metrics
-            tradeCount = Counter.build()
-                    .name("algo_trade_count_total")
-                    .help("Total number of trade fills")
-                    .labelNames("algorithm", "instrument", "verb", "status")
-                    .register(exporter.getRegistry());
+                        tradeVolume = Counter.build()
+                                .name("algo_trade_volume_total")
+                                .help("Total traded volume (quantity) per instrument")
+                                .labelNames("algorithm", "instrument", "verb")
+                                .register(exporter.getRegistry());
 
-            tradeVolume = Counter.build()
-                    .name("algo_trade_volume_total")
-                    .help("Total traded volume (quantity) per instrument")
-                    .labelNames("algorithm", "instrument", "verb")
-                    .register(exporter.getRegistry());
+                        tradeLastPrice = Gauge.build()
+                                .name("algo_trade_last_price")
+                                .help("Last trade execution price")
+                                .labelNames("algorithm", "instrument", "verb")
+                                .register(exporter.getRegistry());
 
-            tradeLastPrice = Gauge.build()
-                    .name("algo_trade_last_price")
-                    .help("Last trade execution price")
-                    .labelNames("algorithm", "instrument", "verb")
-                    .register(exporter.getRegistry());
+                        tradeLastQuantity = Gauge.build()
+                                .name("algo_trade_last_quantity")
+                                .help("Last trade filled quantity")
+                                .labelNames("algorithm", "instrument", "verb")
+                                .register(exporter.getRegistry());
 
-            tradeLastQuantity = Gauge.build()
-                    .name("algo_trade_last_quantity")
-                    .help("Last trade filled quantity")
-                    .labelNames("algorithm", "instrument", "verb")
-                    .register(exporter.getRegistry());
+                        // Custom column gauge
+                        customColumn = Gauge.build()
+                                .name("algo_custom_column")
+                                .help("Custom algorithm column value")
+                                .labelNames("algorithm", "instrument", "key")
+                                .register(exporter.getRegistry());
 
-            // Custom column gauge
-            customColumn = Gauge.build()
-                    .name("algo_custom_column")
-                    .help("Custom algorithm column value")
-                    .labelNames("algorithm", "instrument", "key")
-                    .register(exporter.getRegistry());
+                        metricsRegistered = true;
+                        logger.info("PrometheusAlgorithmObserver: metrics registered.");
 
-            this.enabled = true;
-            logger.info("PrometheusAlgorithmObserver initialised and metrics registered.");
-
-        } catch (Exception e) {
-            logger.error("PrometheusAlgorithmObserver: failed to register Prometheus metrics – observer disabled.", e);
-            throw new IllegalStateException("Failed to initialise PrometheusAlgorithmObserver", e);
+                    } catch (Exception e) {
+                        logger.error("PrometheusAlgorithmObserver: failed to register Prometheus metrics – observer disabled.", e);
+                        throw new IllegalStateException("Failed to initialise PrometheusAlgorithmObserver", e);
+                    }
+                }
+            }
+        } else {
+            logger.debug("PrometheusAlgorithmObserver: reusing already-registered static metrics.");
         }
+
+        this.enabled = true;
+        logger.info("PrometheusAlgorithmObserver initialised.");
     }
 
     // -----------------------------------------------------------------------
