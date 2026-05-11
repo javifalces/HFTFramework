@@ -65,6 +65,11 @@ public class MultiAlgorithm extends Algorithm {
     @Override
     public void init() {
         super.init();
+
+        // Deregister from parent connectors to avoid duplicate registrations from child algorithms
+        this.algorithmConnectorConfiguration.getTradingEngineConnector().deregister(this.algorithmInfo, this);
+        this.algorithmConnectorConfiguration.getMarketDataProvider().deregister(this);
+
         for (Algorithm algorithm : algorithms) {
             algorithm.setExitOnStop(false);
             algorithm.init();
@@ -95,48 +100,53 @@ public class MultiAlgorithm extends Algorithm {
 
     @Override
     public boolean onDepthUpdate(Depth depth) {
-        boolean parentResult = super.onDepthUpdate(depth);
-        boolean childResult = false;
-        for (Algorithm algorithm : instrumentToAlgorithms.getOrDefault(depth.getInstrument(), Collections.emptyList())) {
-            childResult = algorithm.onDepthUpdate(depth) || childResult;
-        }
-        return parentResult || childResult;
+        return true;
+//        boolean parentResult = super.onDepthUpdate(depth);
+//        boolean childResult = false;
+//        for (Algorithm algorithm : instrumentToAlgorithms.getOrDefault(depth.getInstrument(), Collections.emptyList())) {
+//            childResult = algorithm.onDepthUpdate(depth) || childResult;
+//        }
+//        return parentResult || childResult;
     }
 
     @Override
     public boolean onTradeUpdate(Trade trade) {
-        boolean parentResult = super.onTradeUpdate(trade);
-        boolean childResult = false;
-        for (Algorithm algorithm : instrumentToAlgorithms.getOrDefault(trade.getInstrument(), Collections.emptyList())) {
-            childResult = algorithm.onTradeUpdate(trade) || childResult;
-        }
-        return parentResult || childResult;
+        return true;
+//        boolean parentResult = super.onTradeUpdate(trade);
+//        boolean childResult = false;
+//        for (Algorithm algorithm : instrumentToAlgorithms.getOrDefault(trade.getInstrument(), Collections.emptyList())) {
+//            childResult = algorithm.onTradeUpdate(trade) || childResult;
+//        }
+//        return parentResult || childResult;
     }
 
     @Override
     public boolean onExecutionReportUpdate(ExecutionReport executionReport) {
-        boolean result = false;
-        for (Algorithm algorithm : algorithms) {
-            if (Objects.equals(executionReport.getAlgorithmInfo(), algorithm.getAlgorithmInfo())) {
-                result = algorithm.onExecutionReportUpdate(executionReport) || result;
-            }
-        }
-        return result;
+        return true;
+//        boolean result = false;
+//        for (Algorithm algorithm : algorithms) {
+//            if (Objects.equals(executionReport.getAlgorithmInfo(), algorithm.getAlgorithmInfo())) {
+//                result = algorithm.onExecutionReportUpdate(executionReport) || result;
+//            }
+//        }
+//        return result;
     }
 
     @Override
     public void onCandleUpdate(Candle candle) {
-        for (Algorithm algorithm : instrumentToAlgorithms.getOrDefault(candle.getInstrumentPk(), Collections.emptyList())) {
-            algorithm.onCandleUpdate(candle);
-        }
+        return;
+//        for (Algorithm algorithm : instrumentToAlgorithms.getOrDefault(candle.getInstrumentPk(), Collections.emptyList())) {
+//            algorithm.onCandleUpdate(candle);
+//        }
     }
 
     @Override
     public boolean onCommandUpdate(Command command) {
-        boolean result = super.onCommandUpdate(command);
-        for (Algorithm algorithm : algorithms) {
-            result = algorithm.onCommandUpdate(command) || result;
-        }
-        return result;
+        return true;
+//        boolean result = super.onCommandUpdate(command);
+//        for (Algorithm algorithm : algorithms) {
+//            result = algorithm.onCommandUpdate(command) || result;
+//        }
+//        return result;
     }
 }

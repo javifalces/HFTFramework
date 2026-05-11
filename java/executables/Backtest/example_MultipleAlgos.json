@@ -13,19 +13,17 @@
         "instrumentPks": [
           "btceur_kraken"
         ],
-        "riskAversion": 0.00006,
+        "riskAversion": 0.6,
         "midpricePeriodSeconds": 3,
-        "midpricePeriodWindow": 60,
-        "changeKPeriodSeconds": 60.0,
+        "midpricePeriodWindow": 5,
+        "changeKPeriodSeconds": 5.0,
         "quantity": 0.001,
         "firstHour": 7.0,
         "lastHour": 19.0,
         "spreadCalculation": "Avellaneda",
         "kCalculation": "Pct",
         "calculateTt": 0,
-        "skew": 0,
-        "ui": 1,
-        "syntheticInstrumentFile": "StatArb_crypto.json"
+        "skew": 0
       }
     },
     {
@@ -36,7 +34,7 @@
         ],
         "level": "0",
         "skewLevel": "0",
-        "minQuantityFollow": 0.006,
+        "minQuantityFollow": 0.0,
         "seed": 5,
         "quantity": "0.001",
         "firstHour": "7.0",

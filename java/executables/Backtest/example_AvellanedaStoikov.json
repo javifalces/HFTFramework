@@ -1,7 +1,7 @@
 {
   "backtest": {
     "startDate": "20250407 9:00:00",
-    "endDate": "20250407 12:00:00"
+    "endDate": "20250407 12:00:00",
     "delayOrderMs": 0,
     "feesCommissionsIncluded": false,
     "multithreadConfiguration": "single_thread"
