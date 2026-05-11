@@ -1,7 +1,7 @@
 {
   "backtest": {
-    "startDate": "20250407 9:00:00",
-    "endDate": "20250407 12:00:00",
+    "startDate": "20260420 8:00:00",
+    "endDate": "20260420 23:00:00",
     "delayOrderMs": 0,
     "feesCommissionsIncluded": false,
     "multithreadConfiguration": "single_thread"
@@ -11,15 +11,15 @@
       "algorithmName": "AvellanedaStoikov_test",
       "parameters": {
         "instrumentPks": [
-          "btceur_kraken"
+          "eurusd_darwinex"
         ],
         "riskAversion": 0.6,
         "midpricePeriodSeconds": 3,
         "midpricePeriodWindow": 5,
         "changeKPeriodSeconds": 5.0,
         "quantity": 0.001,
-        "firstHour": 7.0,
-        "lastHour": 19.0,
+        "firstHour": -1.0,
+        "lastHour": -1.0,
         "spreadCalculation": "Avellaneda",
         "kCalculation": "Pct",
         "calculateTt": 0,
@@ -30,15 +30,15 @@
       "algorithmName": "ConstantSpread_test",
       "parameters": {
         "instrumentPks": [
-          "btceur_kraken"
+          "eurusd_darwinex"
         ],
-        "level": "0",
-        "skewLevel": "0",
+        "level": 0,
+        "skewLevel": 0,
         "minQuantityFollow": 0.0,
         "seed": 5,
-        "quantity": "0.001",
-        "firstHour": "7.0",
-        "lastHour": "19.0"
+        "quantity": 0.001,
+        "firstHour": -1.0,
+        "lastHour": -1.0
       }
     }
   ]
