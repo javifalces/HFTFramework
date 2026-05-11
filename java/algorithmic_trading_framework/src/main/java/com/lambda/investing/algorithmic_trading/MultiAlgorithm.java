@@ -1,7 +1,5 @@
-package com.lambda.investing.algo_trading.core;
+package com.lambda.investing.algorithmic_trading;
 
-import com.lambda.investing.algorithmic_trading.Algorithm;
-import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
 import com.lambda.investing.algorithmic_trading.hedging.HedgeManager;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.candle.Candle;
@@ -9,17 +7,27 @@ import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.messaging.Command;
 import com.lambda.investing.model.trading.ExecutionReport;
+import lombok.Getter;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
 public class MultiAlgorithm extends Algorithm {
 
+    @Getter
     private final List<Algorithm> algorithms;
+
+    @Getter
     private final Map<String, List<Algorithm>> instrumentToAlgorithms = new HashMap<>();
 
     public MultiAlgorithm(AlgorithmConnectorConfiguration algorithmConnectorConfiguration, List<Algorithm> algorithms) {
         super(algorithmConnectorConfiguration, "MultiAlgorithm", new HashMap<>());
+        this.algorithms = new ArrayList<>(algorithms);
+        rebuildInstrumentCache();
+    }
+
+    public MultiAlgorithm(String algorithmInfo, List<Algorithm> algorithms) {
+        super(algorithmInfo, new HashMap<>());
         this.algorithms = new ArrayList<>(algorithms);
         rebuildInstrumentCache();
     }

@@ -3,6 +3,7 @@ package com.lambda.investing.algo_trading.core;
 import com.lambda.investing.algo_trading.AlgorithmConfiguration;
 import com.lambda.investing.algo_trading.ZeroMqTradingConfiguration;
 import com.lambda.investing.algorithmic_trading.Algorithm;
+import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
@@ -105,7 +106,7 @@ public class MultiAlgorithmTest {
         DummyAlgorithm algoA = new DummyAlgorithm("AlgoA", "btceur_kraken");
         DummyAlgorithm algoB = new DummyAlgorithm("AlgoB", "etheur_kraken");
 
-        MultiAlgorithm multiAlgorithm = new MultiAlgorithm(null, Arrays.asList(algoA, algoB));
+        com.lambda.investing.algorithmic_trading.MultiAlgorithm multiAlgorithm = new com.lambda.investing.algorithmic_trading.MultiAlgorithm((AlgorithmConnectorConfiguration) null, Arrays.asList(algoA, algoB));
         multiAlgorithm.init();
 
         Depth depthA = Depth.getInstance();

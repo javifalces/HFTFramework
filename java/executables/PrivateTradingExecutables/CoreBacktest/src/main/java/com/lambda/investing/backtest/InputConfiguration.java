@@ -1,7 +1,7 @@
 package com.lambda.investing.backtest;
 
 import com.lambda.investing.Configuration;
-import com.lambda.investing.algorithmic_trading.MultipleAlgorithms;
+import com.lambda.investing.algorithmic_trading.MultiAlgorithm;
 import com.lambda.investing.algorithmic_trading.provider.AlgorithmCreationUtils;
 import com.lambda.investing.algorithmic_trading.utils.AlgorithmUtils;
 import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
@@ -99,7 +99,7 @@ public class InputConfiguration implements Cloneable {
             return configuredAlgorithms.get(0);
         }
         String compositeName = String.format("MultipleAlgorithms_%d", ++COUNTER_ALGORITHMS);
-        return new MultipleAlgorithms(compositeName, configuredAlgorithms);
+        return new MultiAlgorithm(compositeName, configuredAlgorithms);
     }
 
     private void configureSingleInstrumentAlgorithm(com.lambda.investing.algorithmic_trading.Algorithm algorithm) {

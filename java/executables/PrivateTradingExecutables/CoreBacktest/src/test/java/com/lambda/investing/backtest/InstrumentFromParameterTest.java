@@ -2,7 +2,7 @@ package com.lambda.investing.backtest;
 
 import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.Algorithm;
-import com.lambda.investing.algorithmic_trading.MultipleAlgorithms;
+import com.lambda.investing.algorithmic_trading.MultiAlgorithm;
 import com.lambda.investing.algorithmic_trading.provider.TradingAlgorithmsProvider;
 import com.lambda.investing.backtest_engine.BacktestConfiguration;
 import com.lambda.investing.model.asset.Instrument;
@@ -177,13 +177,13 @@ public class InstrumentFromParameterTest {
 
         BacktestConfiguration backtestConfiguration = inputConfiguration.getBacktestConfiguration();
         Assert.assertNotNull(backtestConfiguration);
-        Assert.assertTrue(backtestConfiguration.getAlgorithm() instanceof MultipleAlgorithms);
+        Assert.assertTrue(backtestConfiguration.getAlgorithm() instanceof com.lambda.investing.algorithmic_trading.MultiAlgorithm);
 
-        MultipleAlgorithms multipleAlgorithms = (MultipleAlgorithms) backtestConfiguration.getAlgorithm();
-        Assert.assertEquals(2, multipleAlgorithms.getAlgorithmsList().size());
+        com.lambda.investing.algorithmic_trading.MultiAlgorithm multipleAlgorithms = (com.lambda.investing.algorithmic_trading.MultiAlgorithm) backtestConfiguration.getAlgorithm();
+        Assert.assertEquals(2, multipleAlgorithms.getAlgorithms().size());
 
         Set<String> algorithmNames = new HashSet<>();
-        for (Algorithm algorithm : multipleAlgorithms.getAlgorithmsList()) {
+        for (Algorithm algorithm : multipleAlgorithms.getAlgorithms()) {
             algorithmNames.add(algorithm.getAlgorithmInfo());
         }
         Assert.assertTrue(algorithmNames.contains("AvellanedaStoikov_test"));

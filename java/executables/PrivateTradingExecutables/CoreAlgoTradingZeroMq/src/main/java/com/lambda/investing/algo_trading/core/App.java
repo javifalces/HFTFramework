@@ -8,7 +8,6 @@ import com.lambda.investing.algo_trading.ZeroMqTradingConfiguration;
 import com.lambda.investing.algorithmic_trading.Algorithm;
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
 import com.lambda.investing.ArrayUtils;
-import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
 import com.lambda.investing.algorithmic_trading.hedging.synthetic_portfolio.SyntheticInstrument;
 import com.lambda.investing.algorithmic_trading.utils.AppUtils;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
@@ -29,11 +28,9 @@ import org.springframework.core.io.support.PropertiesLoaderUtils;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.lambda.investing.model.Util.*;
 
@@ -556,7 +553,7 @@ public class App {
         if (ALGORITHMS.size() == 1) {
             ROOT_ALGORITHM = ALGORITHMS.get(0);
         } else {
-            ROOT_ALGORITHM = new MultiAlgorithm(algorithmConnectorConfiguration, ALGORITHMS);
+            ROOT_ALGORITHM = new com.lambda.investing.algorithmic_trading.MultiAlgorithm(algorithmConnectorConfiguration, ALGORITHMS);
         }
     }
 
