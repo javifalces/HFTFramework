@@ -73,6 +73,10 @@ public abstract class SingleInstrumentAlgorithm extends Algorithm {
     private void setInstrument() {
         if (instrumentPks != null && instrumentPks.length == 1) {
             Instrument instrument1 = Instrument.getInstrument(instrumentPks[0]);
+            if (instrument1 == null) {
+                logger.warn("Instrument {} not found in universe, can't set it for SingleInstrumentAlgorithm", instrumentPks[0]);
+                throw new IllegalArgumentException("Instrument " + instrumentPks[0] + " not found in universe, can't set it for SingleInstrumentAlgorithm");
+            }
             setInstrument(instrument1);
         } else {
             logger.warn("SingleInstrumentAlgorithm received more than 1 instrumentPks or null, disable auto set instrument! instrumentPks: {}", instrumentPks);

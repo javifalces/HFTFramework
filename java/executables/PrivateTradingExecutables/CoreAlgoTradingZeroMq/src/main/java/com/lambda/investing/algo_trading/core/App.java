@@ -543,10 +543,18 @@ public class App {
             if (algorithmConfiguration == null) {
                 throw new Exception("AlgorithmConfiguration is null for one of the configured algorithms");
             }
-            Algorithm algorithm = algorithmConfiguration.getAlgorithm(algorithmConnectorConfiguration);
-            if (algorithm == null) {
-                throw new Exception("Algorithm not configured " + algorithmConfiguration.getAlgorithmName());
+            Algorithm algorithm = null;
+            try {
+                algorithm = algorithmConfiguration.getAlgorithm(algorithmConnectorConfiguration);
+                if (algorithm == null) {
+                    throw new Exception("Algorithm not configured " + algorithmConfiguration.getAlgorithmName());
+                }
+            } catch (Exception e) {
+                System.err.println("Error creating algorithm instance for " + algorithmConfiguration.getAlgorithmName() + " -> skip it");
+                logger.warn("Error creating algorithm instance for {} -> skip it: {}", algorithmConfiguration.getAlgorithmName(), e.getMessage());
+                continue;
             }
+
             ALGORITHMS.add(algorithm);
             ALGORITHM_INSTRUMENTS.put(algorithm.getAlgorithmInfo(), getAlgorithmInstrumentPks(algorithmInstanceConfiguration, defaultInstrumentPks));
         }
