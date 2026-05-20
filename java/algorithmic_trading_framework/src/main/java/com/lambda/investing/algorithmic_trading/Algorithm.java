@@ -1770,7 +1770,13 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         if (header.startsWith(REQUESTED_POSITION_INFO)) {
             logger.info("received position from broker {}", message);
 
-            Map<String, Double> positions = fromJsonString(fromObject(message, String.class), Map.class);
+            Map<?, ?> rawPositions = fromJsonString(fromObject(message, String.class), Map.class);
+            Map<String, Double> positions = new HashMap<>();
+            for (Map.Entry<?, ?> entry : rawPositions.entrySet()) {
+                // FastJSON deserializes numbers as BigDecimal when target type is raw Map;
+                // use Number.doubleValue() to safely handle both BigDecimal and Double.
+                positions.put((String) entry.getKey(), ((Number) entry.getValue()).doubleValue());
+            }
             return onPosition(positions);
         }
         if (header.endsWith(REQUESTED_PORTFOLIO_INFO)) {
