@@ -488,6 +488,11 @@ public class DisruptorConnectorHelper {
                     }
                 }
             }
+        } catch (Throwable t) {
+            logger.error("[{}] Unexpected error in dispatchEvent (sequence={}, typeMessage={})",
+                    consumerThreadName, sequence, slot.typeMessage, t);
+            System.err.println("Unexpected error in DisruptorConnectorHelper.dispatchEvent:");
+            t.printStackTrace();
         } finally {
             // Count down the warmup latch.  On the live path this is a single
             // volatile read (warmupLatch == null) → negligible overhead.

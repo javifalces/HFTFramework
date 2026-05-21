@@ -476,12 +476,15 @@ public class Depth extends CSVable implements Cloneable {
         }
         double output = -1;
         int levelCounter = Math.max(asks.length - 1, 0);
-        while (output == -1) {
+        while (output == -1 && levelCounter >= 0) {
             if (!Depth.isDefaultValue(asks[levelCounter])) {
                 output = asks[levelCounter];
             } else {
                 levelCounter--;
             }
+        }
+        if (levelCounter < 0) {
+            return Double.MAX_VALUE;
         }
         return output;
     }
@@ -493,12 +496,15 @@ public class Depth extends CSVable implements Cloneable {
         }
         double output = -1;
         int levelCounter = Math.max(bids.length - 1, 0);
-        while (output == -1) {
+        while (output == -1 && levelCounter >= 0) {
             if (!Depth.isDefaultValue(bids[levelCounter])) {
                 output = bids[levelCounter];
             } else {
                 levelCounter--;
             }
+        }
+        if (levelCounter < 0) {
+            return Double.MIN_VALUE;
         }
         return output;
 
