@@ -10,7 +10,6 @@ import com.lambda.investing.model.trading.OrderRequest;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -57,9 +56,9 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
      * Creates and starts the web server on the given port.
      *
      * @param port TCP port to listen on (e.g. 9001)
-     * @throws IOException if the server cannot bind to the port
+     * @throws InterruptedException if the thread is interrupted while the server binds
      */
-    public WebAlgorithmObserver(int port) throws IOException {
+    public WebAlgorithmObserver(int port) throws InterruptedException {
         this.server = new AlgorithmWebServer(port);
         logger.info("Web UI available at http://localhost:{}", port);
         System.out.println("[WebAlgorithmObserver] Web UI available at http://localhost:" + port);

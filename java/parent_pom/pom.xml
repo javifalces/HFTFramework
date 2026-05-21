@@ -120,6 +120,7 @@
         <openhft.affinity.version>2026.2</openhft.affinity.version>
         <openhft.chroniclequeue.version>2026.1</openhft.chroniclequeue.version>
         <maven.artifact.checksumPolicy>warn</maven.artifact.checksumPolicy>
+        <netty.version>4.1.108.Final</netty.version>
 
         <!-- default off locally; CI/release enables with -Dgpg.skip=false -->
         <gpg.skip>true</gpg.skip>
@@ -816,6 +817,13 @@
                 <groupId>org.javassist</groupId>
                 <artifactId>javassist</artifactId>
                 <version>3.30.2-GA</version>
+            </dependency>
+
+            <!-- Netty – high-performance async networking (HTTP + WebSocket server) -->
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-all</artifactId>
+                <version>${netty.version}</version>
             </dependency>
 
             <!-- Prometheus Java client -->

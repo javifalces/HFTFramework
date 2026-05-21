@@ -125,6 +125,12 @@
             <groupId>org.threadly</groupId>
             <artifactId>threadly</artifactId>
         </dependency>
+
+        <!-- Netty – embedded HTTP + WebSocket server for the web monitoring UI -->
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-all</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.testng</groupId>
             <artifactId>testng</artifactId>

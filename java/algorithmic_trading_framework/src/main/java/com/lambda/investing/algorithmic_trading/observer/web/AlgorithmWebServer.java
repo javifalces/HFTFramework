@@ -1,354 +1,226 @@
 package com.lambda.investing.algorithmic_trading.observer.web;
 
+import io.netty.bootstrap.ServerBootstrap;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.*;
+import io.netty.channel.group.ChannelGroup;
+import io.netty.channel.group.DefaultChannelGroup;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.codec.http.*;
+import io.netty.handler.codec.http.websocketx.*;
+import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketServerCompressionHandler;
+import io.netty.handler.logging.LogLevel;
+import io.netty.handler.logging.LoggingHandler;
+import io.netty.util.CharsetUtil;
+import io.netty.util.concurrent.GlobalEventExecutor;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.io.*;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.net.InetSocketAddress;
+
+import static io.netty.handler.codec.http.HttpResponseStatus.*;
+import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 
 /**
- * Embedded HTTP + WebSocket server implemented with pure JDK (no external dependencies).
+ * Embedded HTTP + WebSocket server backed by <a href="https://netty.io">Netty</a> for
+ * high-performance, low-latency monitoring of algorithm state.
  *
- * <p>HTTP endpoints served on the same port:
+ * <p>Endpoints:
  * <ul>
  *   <li>{@code GET /}          – serves the single-page dashboard HTML</li>
- *   <li>{@code GET /api/state} – returns the current algorithm state as JSON</li>
- * </ul>
- *
- * <p>WebSocket endpoint:
- * <ul>
- *   <li>{@code GET /ws} – upgrades the connection and streams typed JSON update messages</li>
+ *   <li>{@code GET /api/state} – returns the current algorithm state snapshot as JSON</li>
+ *   <li>{@code GET /ws}        – WebSocket upgrade; pushes typed JSON update envelopes</li>
  * </ul>
  */
 public class AlgorithmWebServer {
 
     private static final Logger logger = LogManager.getLogger(AlgorithmWebServer.class);
 
-    // Magic GUID defined by the WebSocket specification (RFC 6455)
-    private static final String WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+    private static final String WS_PATH = "/ws";
 
     private final int port;
-    private final Set<WsClient> clients = ConcurrentHashMap.newKeySet();
+    /** All active WebSocket channels – writes are fan-out broadcast. */
+    private final ChannelGroup wsChannels = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
     private volatile String currentStateJson = "{}";
 
-    public AlgorithmWebServer(int port) throws IOException {
+    private final EventLoopGroup bossGroup;
+    private final EventLoopGroup workerGroup;
+
+    public AlgorithmWebServer(int port) throws InterruptedException {
         this.port = port;
-        ServerSocket serverSocket = new ServerSocket(port);
-        Thread acceptor = new Thread(() -> acceptLoop(serverSocket), "web-server-accept");
-        acceptor.setDaemon(true);
-        acceptor.start();
-        logger.info("AlgorithmWebServer started on port {}", port);
-    }
+        bossGroup  = new NioEventLoopGroup(1);
+        workerGroup = new NioEventLoopGroup();
 
-    // -----------------------------------------------------------------------
-    // Accept loop
-    // -----------------------------------------------------------------------
+        ServerBootstrap bootstrap = new ServerBootstrap();
+        bootstrap.group(bossGroup, workerGroup)
+                 .channel(NioServerSocketChannel.class)
+                 .handler(new LoggingHandler(LogLevel.DEBUG))
+                 .childHandler(new ChannelInitializer<SocketChannel>() {
+                     @Override
+                     protected void initChannel(SocketChannel ch) {
+                         ChannelPipeline p = ch.pipeline();
+                         p.addLast(new HttpServerCodec());
+                         p.addLast(new HttpObjectAggregator(65536));
+                         p.addLast(new WebSocketServerCompressionHandler());
+                         p.addLast(new AlgorithmServerHandler());
+                     }
+                 })
+                 .option(ChannelOption.SO_BACKLOG, 128)
+                 .childOption(ChannelOption.SO_KEEPALIVE, true)
+                 .childOption(ChannelOption.TCP_NODELAY, true);
 
-    private void acceptLoop(ServerSocket serverSocket) {
-        while (!serverSocket.isClosed()) {
-            try {
-                Socket socket = serverSocket.accept();
-                socket.setSoTimeout(60_000);
-                Thread handler = new Thread(() -> handleConnection(socket), "web-client");
-                handler.setDaemon(true);
-                handler.start();
-            } catch (IOException e) {
-                if (!serverSocket.isClosed()) {
-                    logger.debug("Accept error: {}", e.getMessage());
-                }
-            }
-        }
-    }
+        ChannelFuture future = bootstrap.bind(new InetSocketAddress(port)).sync();
+        logger.info("AlgorithmWebServer (Netty) started on port {}", port);
 
-    // -----------------------------------------------------------------------
-    // Connection handler
-    // -----------------------------------------------------------------------
-
-    private void handleConnection(Socket socket) {
-        try (Socket s = socket) {
-            InputStream in = s.getInputStream();
-            OutputStream out = s.getOutputStream();
-
-            HttpRequest req = parseHttpRequest(in);
-            if (req == null) {
-                return;
-            }
-
-            String upgrade = req.headers.getOrDefault("upgrade", "");
-            if ("websocket".equalsIgnoreCase(upgrade)) {
-                handleWebSocketUpgrade(req, in, out);
-            } else {
-                handleHttp(req, out);
-                out.flush();
-            }
-        } catch (Exception e) {
-            logger.debug("Connection error: {}", e.getMessage());
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // HTTP handler
-    // -----------------------------------------------------------------------
-
-    private void handleHttp(HttpRequest req, OutputStream out) throws IOException {
-        String path = req.path.contains("?") ? req.path.substring(0, req.path.indexOf('?')) : req.path;
-        if ("/".equals(path) || "/index.html".equals(path)) {
-            sendHttpResponse(out, 200, "text/html; charset=utf-8", DASHBOARD_HTML);
-        } else if ("/api/state".equals(path)) {
-            sendHttpResponse(out, 200, "application/json", currentStateJson);
-        } else {
-            sendHttpResponse(out, 404, "text/plain", "Not Found");
-        }
-    }
-
-    private static void sendHttpResponse(OutputStream out, int status, String contentType, String body) throws IOException {
-        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-        PrintStream ps = new PrintStream(out, false, StandardCharsets.UTF_8);
-        ps.print("HTTP/1.1 " + status + " " + statusMessage(status) + "\r\n");
-        ps.print("Content-Type: " + contentType + "\r\n");
-        ps.print("Content-Length: " + bytes.length + "\r\n");
-        ps.print("Connection: close\r\n");
-        ps.print("Access-Control-Allow-Origin: *\r\n");
-        ps.print("\r\n");
-        ps.flush();
-        out.write(bytes);
-        out.flush();
-    }
-
-    // -----------------------------------------------------------------------
-    // WebSocket upgrade and message loop
-    // -----------------------------------------------------------------------
-
-    private void handleWebSocketUpgrade(HttpRequest req, InputStream in, OutputStream out) throws IOException {
-        String key = req.headers.getOrDefault("sec-websocket-key", "");
-        String accept = computeAcceptKey(key);
-
-        PrintStream ps = new PrintStream(out, false, StandardCharsets.US_ASCII);
-        ps.print("HTTP/1.1 101 Switching Protocols\r\n");
-        ps.print("Upgrade: websocket\r\n");
-        ps.print("Connection: Upgrade\r\n");
-        ps.print("Sec-WebSocket-Accept: " + accept + "\r\n");
-        ps.print("\r\n");
-        ps.flush();
-
-        WsClient client = new WsClient(out);
-        clients.add(client);
-        logger.debug("WebSocket client connected – total: {}", clients.size());
-        try {
-            client.sendText("{\"type\":\"STATE\",\"data\":" + currentStateJson + "}");
-            wsReadLoop(in, client);
-        } finally {
-            clients.remove(client);
-            logger.debug("WebSocket client disconnected – total: {}", clients.size());
-        }
-    }
-
-    private void wsReadLoop(InputStream in, WsClient client) {
-        try {
-            while (true) {
-                int b0 = in.read();
-                if (b0 < 0) break;
-                int b1 = in.read();
-                if (b1 < 0) break;
-
-                int opcode = b0 & 0x0F;
-                boolean masked = (b1 & 0x80) != 0;
-                long payloadLen = b1 & 0x7F;
-
-                if (payloadLen == 126) {
-                    payloadLen = ((in.read() & 0xFF) << 8L) | (in.read() & 0xFF);
-                } else if (payloadLen == 127) {
-                    payloadLen = 0;
-                    for (int i = 0; i < 8; i++) {
-                        payloadLen = (payloadLen << 8) | (in.read() & 0xFF);
-                    }
-                }
-
-                byte[] maskKey = null;
-                if (masked) {
-                    maskKey = new byte[4];
-                    int read = 0;
-                    while (read < 4) {
-                        int r = in.read(maskKey, read, 4 - read);
-                        if (r < 0) return;
-                        read += r;
-                    }
-                }
-
-                int plen = (int) Math.min(payloadLen, 1024 * 1024);
-                byte[] payload = new byte[plen];
-                int read = 0;
-                while (read < plen) {
-                    int r = in.read(payload, read, plen - read);
-                    if (r < 0) return;
-                    read += r;
-                }
-
-                if (masked && maskKey != null) {
-                    for (int i = 0; i < plen; i++) {
-                        payload[i] ^= maskKey[i % 4];
-                    }
-                }
-
-                if (opcode == 0x08) break; // close frame
-                if (opcode == 0x09) {      // ping frame – reply with pong
-                    client.sendPong(payload);
-                }
-                if (opcode == 0x01) { // text frame
-                    String text = new String(payload, StandardCharsets.UTF_8);
-                    if (text.contains("\"type\":\"GET_STATE\"")) {
-                        try {
-                            client.sendText("{\"type\":\"STATE\",\"data\":" + currentStateJson + "}");
-                        } catch (IOException e) {
-                            logger.debug("Error responding to GET_STATE: {}", e.getMessage());
-                        }
-                    }
-                }
-            }
-        } catch (IOException e) {
-            logger.debug("WebSocket read error: {}", e.getMessage());
-        }
+        // Close the server when the JVM exits
+        future.channel().closeFuture().addListener(f -> {
+            bossGroup.shutdownGracefully();
+            workerGroup.shutdownGracefully();
+        });
     }
 
     // -----------------------------------------------------------------------
     // Broadcast API (called by WebAlgorithmObserver)
     // -----------------------------------------------------------------------
 
+    /**
+     * Broadcasts a JSON message to all currently connected WebSocket clients.
+     * Runs on Netty's I/O thread – the {@link ChannelGroup#writeAndFlush} is non-blocking.
+     *
+     * @param message JSON-encoded update message
+     */
     public void broadcastUpdate(String message) {
-        for (WsClient client : clients) {
-            try {
-                client.sendText(message);
-            } catch (IOException e) {
-                logger.debug("Error broadcasting to client: {}", e.getMessage());
-                clients.remove(client);
-            }
-        }
+        wsChannels.writeAndFlush(new TextWebSocketFrame(message));
     }
 
+    /**
+     * Updates the state JSON returned by the {@code /api/state} REST endpoint and sent to
+     * new WebSocket clients upon connection.
+     *
+     * @param stateJson full current-state JSON object
+     */
     public void updateState(String stateJson) {
         this.currentStateJson = stateJson;
     }
 
     // -----------------------------------------------------------------------
-    // WebSocket frame writer (thread-safe per client)
+    // Netty channel handler
     // -----------------------------------------------------------------------
 
-    private static class WsClient {
-        private final OutputStream out;
+    /**
+     * Single handler that manages the per-connection lifecycle:
+     * <ol>
+     *   <li>Serves plain HTTP requests (GET / and GET /api/state).</li>
+     *   <li>Upgrades {@code GET /ws} connections to WebSocket via
+     *       Netty's built-in {@link WebSocketServerHandshaker}.</li>
+     *   <li>Handles WebSocket frames (text / close) after the upgrade.</li>
+     * </ol>
+     */
+    @ChannelHandler.Sharable
+    private class AlgorithmServerHandler extends SimpleChannelInboundHandler<Object> {
 
-        WsClient(OutputStream out) {
-            this.out = out;
+        private WebSocketServerHandshaker handshaker;
+
+        @Override
+        protected void channelRead0(ChannelHandlerContext ctx, Object msg) {
+            if (msg instanceof FullHttpRequest) {
+                handleHttpRequest(ctx, (FullHttpRequest) msg);
+            } else if (msg instanceof WebSocketFrame) {
+                handleWebSocketFrame(ctx, (WebSocketFrame) msg);
+            }
         }
 
-        synchronized void sendText(String text) throws IOException {
-            writeFrame(0x81, text.getBytes(StandardCharsets.UTF_8));
-        }
+        // -- HTTP ----------------------------------------------------------
 
-        synchronized void sendPong(byte[] payload) throws IOException {
-            writeFrame(0x8A, payload);
-        }
+        private void handleHttpRequest(ChannelHandlerContext ctx, FullHttpRequest req) {
+            // Reject malformed or expectation-failed requests immediately
+            if (!req.decoderResult().isSuccess()) {
+                sendHttpResponse(ctx, req, new DefaultFullHttpResponse(HTTP_1_1, BAD_REQUEST));
+                return;
+            }
 
-        private void writeFrame(int firstByte, byte[] payload) throws IOException {
-            int len = payload.length;
-            out.write(firstByte);
-            if (len <= 125) {
-                out.write(len);
-            } else if (len <= 65535) {
-                out.write(126);
-                out.write((len >> 8) & 0xFF);
-                out.write(len & 0xFF);
+            String uri = req.uri().contains("?")
+                    ? req.uri().substring(0, req.uri().indexOf('?'))
+                    : req.uri();
+
+            // WebSocket upgrade
+            if (WS_PATH.equals(uri)) {
+                String wsUrl = "ws://" + req.headers().get(HttpHeaderNames.HOST) + WS_PATH;
+                WebSocketServerHandshakerFactory wsFactory =
+                        new WebSocketServerHandshakerFactory(wsUrl, null, true, 65536);
+                handshaker = wsFactory.newHandshaker(req);
+                if (handshaker == null) {
+                    WebSocketServerHandshakerFactory.sendUnsupportedVersionResponse(ctx.channel());
+                } else {
+                    handshaker.handshake(ctx.channel(), req).addListener(future -> {
+                        if (future.isSuccess()) {
+                            wsChannels.add(ctx.channel());
+                            logger.debug("WebSocket client connected – total: {}", wsChannels.size());
+                            // Send current state to the newly connected client
+                            ctx.channel().writeAndFlush(new TextWebSocketFrame(
+                                    "{\"type\":\"STATE\",\"data\":" + currentStateJson + "}"));
+                        }
+                    });
+                }
+                return;
+            }
+
+            // Static HTTP responses
+            FullHttpResponse response;
+            if ("/".equals(uri) || "/index.html".equals(uri)) {
+                response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                        Unpooled.copiedBuffer(DASHBOARD_HTML, CharsetUtil.UTF_8));
+                response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+            } else if ("/api/state".equals(uri)) {
+                response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                        Unpooled.copiedBuffer(currentStateJson, CharsetUtil.UTF_8));
+                response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
             } else {
-                out.write(127);
-                for (int i = 7; i >= 0; i--) {
-                    out.write((len >> (i * 8)) & 0xFF);
+                response = new DefaultFullHttpResponse(HTTP_1_1, NOT_FOUND);
+            }
+
+            response.headers().set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, "*");
+            sendHttpResponse(ctx, req, response);
+        }
+
+        private void sendHttpResponse(ChannelHandlerContext ctx, FullHttpRequest req, FullHttpResponse res) {
+            res.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, res.content().readableBytes());
+            ChannelFuture f = ctx.writeAndFlush(res);
+            if (!HttpUtil.isKeepAlive(req) || res.status().code() != 200) {
+                f.addListener(ChannelFutureListener.CLOSE);
+            }
+        }
+
+        // -- WebSocket -----------------------------------------------------
+
+        private void handleWebSocketFrame(ChannelHandlerContext ctx, WebSocketFrame frame) {
+            if (frame instanceof CloseWebSocketFrame) {
+                handshaker.close(ctx.channel(), (CloseWebSocketFrame) frame.retain());
+                wsChannels.remove(ctx.channel());
+                logger.debug("WebSocket client disconnected – total: {}", wsChannels.size());
+            } else if (frame instanceof PingWebSocketFrame) {
+                ctx.writeAndFlush(new PongWebSocketFrame(frame.content().retain()));
+            } else if (frame instanceof TextWebSocketFrame) {
+                String text = ((TextWebSocketFrame) frame).text();
+                if (text.contains("\"type\":\"GET_STATE\"")) {
+                    ctx.writeAndFlush(new TextWebSocketFrame(
+                            "{\"type\":\"STATE\",\"data\":" + currentStateJson + "}"));
                 }
             }
-            out.write(payload);
-            out.flush();
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // HTTP request parser
-    // -----------------------------------------------------------------------
-
-    private static final class HttpRequest {
-        final String method;
-        final String path;
-        final Map<String, String> headers;
-
-        HttpRequest(String method, String path, Map<String, String> headers) {
-            this.method = method;
-            this.path = path;
-            this.headers = headers;
-        }
-    }
-
-    private static HttpRequest parseHttpRequest(InputStream in) throws IOException {
-        ByteArrayOutputStream buf = new ByteArrayOutputStream(2048);
-        int prev1 = -1, prev2 = -1, prev3 = -1;
-        int b;
-        while ((b = in.read()) != -1) {
-            buf.write(b);
-            if (prev3 == '\r' && prev2 == '\n' && prev1 == '\r' && b == '\n') {
-                break;
-            }
-            prev3 = prev2;
-            prev2 = prev1;
-            prev1 = b;
         }
 
-        String raw = buf.toString(StandardCharsets.US_ASCII);
-        String[] lines = raw.split("\r\n");
-        if (lines.length < 1 || lines[0].isBlank()) {
-            return null;
+        @Override
+        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+            wsChannels.remove(ctx.channel());
+            logger.debug("Channel error: {}", cause.getMessage());
+            ctx.close();
         }
 
-        String[] parts = lines[0].trim().split(" ");
-        if (parts.length < 2) {
-            return null;
-        }
-        String method = parts[0];
-        String path = parts[1];
-
-        Map<String, String> headers = new HashMap<>();
-        for (int i = 1; i < lines.length; i++) {
-            int colon = lines[i].indexOf(':');
-            if (colon > 0) {
-                String hName = lines[i].substring(0, colon).trim().toLowerCase(Locale.ROOT);
-                String hVal = lines[i].substring(colon + 1).trim();
-                headers.put(hName, hVal);
-            }
-        }
-        return new HttpRequest(method, path, headers);
-    }
-
-    // -----------------------------------------------------------------------
-    // Crypto / utility helpers
-    // -----------------------------------------------------------------------
-
-    private static String computeAcceptKey(String key) {
-        try {
-            String combined = key + WS_GUID;
-            MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
-            byte[] hash = sha1.digest(combined.getBytes(StandardCharsets.UTF_8));
-            return Base64.getEncoder().encodeToString(hash);
-        } catch (Exception e) {
-            throw new RuntimeException("SHA-1 unavailable", e);
-        }
-    }
-
-    private static String statusMessage(int code) {
-        switch (code) {
-            case 200: return "OK";
-            case 404: return "Not Found";
-            case 400: return "Bad Request";
-            default:  return "";
+        @Override
+        public void channelInactive(ChannelHandlerContext ctx) {
+            wsChannels.remove(ctx.channel());
         }
     }
 
