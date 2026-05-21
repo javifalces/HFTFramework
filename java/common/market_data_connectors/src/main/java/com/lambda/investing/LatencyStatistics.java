@@ -408,7 +408,8 @@ public class LatencyStatistics implements Runnable {
 
             // Export to Prometheus when enabled
             if (prometheusEnabled) {
-                publishLatencyToPrometheus(topic, counter, mean, percentile50, percentile75,
+                String prometheusTopic = Configuration.formatLog(basePrefix + "." + topic);
+                publishLatencyToPrometheus(prometheusTopic, counter, mean, percentile50, percentile75,
                         percentile90, percentile95, percentile99, maxLatency);
             }
 
