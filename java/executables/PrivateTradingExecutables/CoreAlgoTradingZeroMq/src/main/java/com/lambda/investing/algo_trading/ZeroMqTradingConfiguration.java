@@ -26,6 +26,14 @@ public class ZeroMqTradingConfiguration {
     private AlgorithmConfiguration algorithm;
     private List<AlgorithmInstanceConfiguration> algorithms;
 
+    /**
+     * Optional port for the web monitoring UI.
+     * When set to a value > 0, an embedded HTTP + WebSocket server is started
+     * on this port and the real-time dashboard is available at
+     * {@code http://localhost:<uiWebPort>}.
+     */
+    private int uiWebPort = 0;
+
     public List<AlgorithmInstanceConfiguration> getEffectiveAlgorithms() {
         if (algorithms != null && !algorithms.isEmpty()) {
             return algorithms;

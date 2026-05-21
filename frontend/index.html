@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>HFT Framework – Algorithm Monitor</title>
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --border: #2e3347;
+  --accent: #4e9af1;
+  --green: #3ecf8e;
+  --red: #f56565;
+  --yellow: #ecc94b;
+  --text: #e2e8f0;
+  --muted: #718096;
+  --font: "Segoe UI", system-ui, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; min-height: 100vh; }
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+header h1 { font-size: 18px; font-weight: 600; color: var(--accent); }
+#status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+#status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); transition: background .3s; }
+#status-dot.connected { background: var(--green); }
+#algo-info { font-size: 12px; color: var(--muted); }
+#port-form { display: flex; align-items: center; gap: 8px; }
+#port-form label { font-size: 12px; color: var(--muted); }
+#port-input {
+  background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  border-radius: 4px; padding: 4px 8px; font-size: 12px; width: 80px;
+}
+#connect-btn {
+  background: var(--accent); color: #fff; border: none; border-radius: 4px;
+  padding: 4px 10px; font-size: 12px; cursor: pointer;
+}
+main {
+  padding: 20px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+.card h2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 12px;
+}
+.full-width { grid-column: 1 / -1; }
+.kv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.kv { background: var(--bg); border-radius: 6px; padding: 8px 12px; }
+.kv .label { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+.kv .value { font-size: 15px; font-weight: 600; }
+.positive { color: var(--green); }
+.negative { color: var(--red); }
+.neutral { color: var(--text); }
+.table-wrap { overflow-x: auto; max-height: 240px; overflow-y: auto; }
+.table-wrap::-webkit-scrollbar { width: 4px; height: 4px; }
+.table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th {
+  text-align: left; padding: 6px 8px;
+  color: var(--muted); font-weight: 500;
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--surface);
+}
+td { padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+tr:hover td { background: rgba(255,255,255,.03); }
+#log-container { max-height: 220px; overflow-y: auto; }
+#log-container::-webkit-scrollbar { width: 4px; }
+#log-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.log-entry { font-size: 11px; color: var(--muted); padding: 3px 0; border-bottom: 1px solid var(--border); font-family: monospace; }
+.log-entry .ts { color: var(--accent); margin-right: 6px; }
+.badge { display: inline-block; padding: 1px 6px; border-radius: 10px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+.badge-buy { background: rgba(62,207,142,.15); color: var(--green); }
+.badge-sell { background: rgba(245,101,101,.15); color: var(--red); }
+.badge-neutral { background: rgba(113,128,150,.15); color: var(--muted); }
+#params-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; }
+.param-entry { background: var(--bg); border-radius: 4px; padding: 6px 10px; font-size: 12px; }
+.param-key { color: var(--muted); font-size: 11px; }
+.param-val { font-weight: 500; word-break: break-all; }
+</style>
+</head>
+<body>
+<header>
+  <h1>HFT Framework – Algorithm Monitor</h1>
+  <span id="algo-info"></span>
+  <div id="port-form">
+    <label for="port-input">Port</label>
+    <input id="port-input" type="number" value="9001" min="1" max="65535"/>
+    <button id="connect-btn" onclick="reconnect()">Connect</button>
+  </div>
+  <div id="status">
+    <div id="status-dot"></div>
+    <span id="status-text">Disconnected</span>
+  </div>
+</header>
+<main>
+  <!-- Portfolio Summary -->
+  <div class="card">
+    <h2>Portfolio</h2>
+    <div class="kv-grid">
+      <div class="kv"><div class="label">Realized PnL</div><div class="value neutral" id="pnl-realized">–</div></div>
+      <div class="kv"><div class="label">Unrealized PnL</div><div class="value neutral" id="pnl-unrealized">–</div></div>
+      <div class="kv"><div class="label">Total PnL</div><div class="value neutral" id="pnl-total">–</div></div>
+      <div class="kv"><div class="label">Net Position</div><div class="value neutral" id="pnl-position">–</div></div>
+      <div class="kv"><div class="label">Total Fees</div><div class="value neutral" id="pnl-fees">–</div></div>
+      <div class="kv"><div class="label">Net Investment</div><div class="value neutral" id="pnl-investment">–</div></div>
+    </div>
+  </div>
+
+  <!-- Instrument PnL -->
+  <div class="card">
+    <h2>Instruments</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Instrument</th><th>Realized</th><th>Unrealized</th><th>Total</th><th>Position</th></tr></thead>
+        <tbody id="instruments-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Execution Reports -->
+  <div class="card">
+    <h2>Execution Reports</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Time</th><th>Instrument</th><th>Side</th><th>Qty</th><th>Price</th><th>Status</th></tr></thead>
+        <tbody id="er-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Order Requests -->
+  <div class="card">
+    <h2>Order Requests</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Time</th><th>Instrument</th><th>Side</th><th>Qty</th><th>Price</th><th>Type</th></tr></thead>
+        <tbody id="or-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Parameters -->
+  <div class="card">
+    <h2>Parameters</h2>
+    <div id="params-container"><span style="color:var(--muted);font-size:12px">No parameters received yet.</span></div>
+  </div>
+
+  <!-- Custom Metrics -->
+  <div class="card">
+    <h2>Custom Metrics</h2>
+    <div class="kv-grid" id="custom-kv"><span style="color:var(--muted);font-size:12px">No custom metrics yet.</span></div>
+  </div>
+
+  <!-- Event Log -->
+  <div class="card full-width">
+    <h2>Event Log</h2>
+    <div id="log-container"></div>
+  </div>
+</main>
+
+<script>
+// ──────────────────────────────────────────────────────────────────────────────
+// Configuration
+// ──────────────────────────────────────────────────────────────────────────────
+const MAX_TABLE_ROWS = 100;
+const MAX_LOG_ENTRIES = 300;
+
+let ws = null;
+let reconnectTimer = null;
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Utilities
+// ──────────────────────────────────────────────────────────────────────────────
+function fmt(n) {
+  if (n === null || n === undefined) return '–';
+  if (typeof n === 'number') return n.toFixed(4);
+  return String(n);
+}
+
+function fmtTs(ts) {
+  if (!ts) return '';
+  return new Date(ts).toLocaleTimeString();
+}
+
+function colorClass(n) {
+  if (n === null || n === undefined || n === 0) return 'neutral';
+  return n > 0 ? 'positive' : 'negative';
+}
+
+function sideClass(verb) {
+  if (!verb) return 'badge-neutral';
+  return verb.toLowerCase() === 'buy' ? 'badge-buy' : 'badge-sell';
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// WebSocket connection
+// ──────────────────────────────────────────────────────────────────────────────
+function getPort() {
+  const urlPort = new URLSearchParams(location.search).get('port');
+  const inputPort = document.getElementById('port-input').value;
+  return urlPort || inputPort || location.port || '9001';
+}
+
+function setStatus(connected, text) {
+  const dot = document.getElementById('status-dot');
+  const label = document.getElementById('status-text');
+  dot.classList.toggle('connected', connected);
+  label.textContent = text;
+}
+
+function connect() {
+  const port = getPort();
+  const host = location.hostname || 'localhost';
+  const url = `ws://${host}:${port}/ws`;
+
+  setStatus(false, `Connecting to ${url}…`);
+
+  if (ws) {
+    ws.onclose = null;
+    ws.onerror = null;
+    try { ws.close(); } catch(e) {}
+    ws = null;
+  }
+
+  ws = new WebSocket(url);
+
+  ws.onopen = () => {
+    setStatus(true, `Connected – ws://${host}:${port}`);
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  };
+
+  ws.onclose = () => {
+    setStatus(false, 'Disconnected – reconnecting in 3s…');
+    reconnectTimer = setTimeout(connect, 3000);
+  };
+
+  ws.onerror = () => ws.close();
+
+  ws.onmessage = e => {
+    try { handleMessage(JSON.parse(e.data)); } catch (err) { console.error('Parse error:', err); }
+  };
+}
+
+function reconnect() {
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  connect();
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Message routing
+// ──────────────────────────────────────────────────────────────────────────────
+function handleMessage(msg) {
+  appendLog(msg.type, msg.algorithmInfo, msg.data);
+
+  if (msg.algorithmInfo) {
+    document.getElementById('algo-info').textContent = msg.algorithmInfo;
+  }
+
+  switch (msg.type) {
+    case 'STATE':            applyState(msg.data); break;
+    case 'PORTFOLIO_SNAPSHOT': updatePortfolio(msg.data); break;
+    case 'PNL_SNAPSHOT':     /* handled via portfolio updates */ break;
+    case 'EXECUTION_REPORT': prependRow('er-body', formatER(msg.data, msg.timestamp)); break;
+    case 'ORDER_REQUEST':    prependRow('or-body', formatOR(msg.data, msg.timestamp)); break;
+    case 'PARAMS':           updateParams(msg.data); break;
+    case 'CUSTOM_COLUMN':    updateCustom(msg.data); break;
+    case 'MESSAGE':          appendLog('MSG', msg.algorithmInfo, msg.data?.name + ': ' + msg.data?.body); break;
+    case 'TRADE':            /* could add separate trade table if desired */ break;
+    case 'DEPTH':            /* live depth updates – not rendered to keep UI fast */ break;
+    default: break;
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// State restoration (sent on connect)
+// ──────────────────────────────────────────────────────────────────────────────
+function applyState(state) {
+  if (!state) return;
+  if (state.portfolio)      updatePortfolio(state.portfolio);
+  if (state.params)         updateParams(state.params);
+  if (state.customColumns) {
+    Object.entries(state.customColumns).forEach(([k, v]) => {
+      const parts = k.split('.');
+      const key = parts.pop();
+      const instrumentPk = parts.join('.') || null;
+      updateCustom({ instrumentPk, key, value: v });
+    });
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Portfolio / instrument view
+// ──────────────────────────────────────────────────────────────────────────────
+function setKv(id, val) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = fmt(val);
+  el.className = 'value ' + colorClass(val);
+}
+
+function updatePortfolio(p) {
+  if (!p) return;
+  setKv('pnl-realized',   p.realizedPnl);
+  setKv('pnl-unrealized', p.unrealizedPnl);
+  setKv('pnl-total',      p.totalPnl);
+  setKv('pnl-position',   p.netPosition);
+  const feesEl = document.getElementById('pnl-fees');
+  if (feesEl) feesEl.textContent = fmt(p.totalFees);
+  const investEl = document.getElementById('pnl-investment');
+  if (investEl) investEl.textContent = fmt(p.netInvestment);
+
+  const tbody = document.getElementById('instruments-body');
+  if (tbody && p.instrumentPnlSnapshotMap) {
+    tbody.innerHTML = '';
+    Object.entries(p.instrumentPnlSnapshotMap).forEach(([instr, snap]) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        `<td>${instr}</td>` +
+        `<td class="${colorClass(snap.realizedPnl)}">${fmt(snap.realizedPnl)}</td>` +
+        `<td class="${colorClass(snap.unrealizedPnl)}">${fmt(snap.unrealizedPnl)}</td>` +
+        `<td class="${colorClass(snap.totalPnl)}">${fmt(snap.totalPnl)}</td>` +
+        `<td>${fmt(snap.netPosition)}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Execution reports / order requests
+// ──────────────────────────────────────────────────────────────────────────────
+function formatER(er, ts) {
+  if (!er) return '';
+  const verb = er.verb || '';
+  return `<td>${fmtTs(ts || er.timestamp)}</td>` +
+    `<td>${er.instrument || ''}</td>` +
+    `<td><span class="badge ${sideClass(verb)}">${verb}</span></td>` +
+    `<td>${fmt(er.quantity)}</td>` +
+    `<td>${fmt(er.price)}</td>` +
+    `<td>${er.executionReportStatus || ''}</td>`;
+}
+
+function formatOR(or, ts) {
+  if (!or) return '';
+  const verb = or.verb || '';
+  return `<td>${fmtTs(ts || or.timestamp)}</td>` +
+    `<td>${or.instrument || ''}</td>` +
+    `<td><span class="badge ${sideClass(verb)}">${verb}</span></td>` +
+    `<td>${fmt(or.quantity)}</td>` +
+    `<td>${fmt(or.price)}</td>` +
+    `<td>${or.orderRequestAction || ''}</td>`;
+}
+
+function prependRow(tbodyId, rowHtml) {
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody || !rowHtml) return;
+  const tr = document.createElement('tr');
+  tr.innerHTML = rowHtml;
+  tbody.insertBefore(tr, tbody.firstChild);
+  while (tbody.children.length > MAX_TABLE_ROWS) tbody.removeChild(tbody.lastChild);
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Parameters
+// ──────────────────────────────────────────────────────────────────────────────
+function updateParams(params) {
+  if (!params) return;
+  const container = document.getElementById('params-container');
+  if (!container) return;
+  container.innerHTML = '';
+  const entries = Object.entries(params);
+  if (entries.length === 0) {
+    container.innerHTML = '<span style="color:var(--muted);font-size:12px">No parameters received yet.</span>';
+    return;
+  }
+  entries.forEach(([k, v]) => {
+    const div = document.createElement('div');
+    div.className = 'param-entry';
+    div.innerHTML = `<div class="param-key">${k}</div><div class="param-val">${v}</div>`;
+    container.appendChild(div);
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Custom metrics
+// ──────────────────────────────────────────────────────────────────────────────
+const customState = {};
+
+function updateCustom(data) {
+  if (!data) return;
+  const key = (data.instrumentPk ? data.instrumentPk + '.' : '') + (data.key || '');
+  customState[key] = data.value;
+
+  const container = document.getElementById('custom-kv');
+  if (!container) return;
+  container.innerHTML = '';
+  const entries = Object.entries(customState);
+  if (entries.length === 0) {
+    container.innerHTML = '<span style="color:var(--muted);font-size:12px">No custom metrics yet.</span>';
+    return;
+  }
+  entries.forEach(([k, v]) => {
+    const div = document.createElement('div');
+    div.className = 'kv';
+    div.innerHTML = `<div class="label">${k}</div><div class="value ${colorClass(v)}">${fmt(v)}</div>`;
+    container.appendChild(div);
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Event log
+// ──────────────────────────────────────────────────────────────────────────────
+function appendLog(type, algo, data) {
+  const container = document.getElementById('log-container');
+  if (!container) return;
+  const div = document.createElement('div');
+  div.className = 'log-entry';
+  const ts = new Date().toLocaleTimeString();
+  const summary = typeof data === 'object'
+    ? JSON.stringify(data).substring(0, 150)
+    : String(data ?? '');
+  div.innerHTML = `<span class="ts">${ts}</span><b>${type}</b>${algo ? ' [' + algo + ']' : ''} ${summary}`;
+  container.insertBefore(div, container.firstChild);
+  while (container.children.length > MAX_LOG_ENTRIES) container.removeChild(container.lastChild);
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Bootstrap
+// ──────────────────────────────────────────────────────────────────────────────
+// Allow ?port=XXXX URL parameter to pre-fill the port input
+const urlPort = new URLSearchParams(location.search).get('port');
+if (urlPort) document.getElementById('port-input').value = urlPort;
+
+connect();
+</script>
+</body>
+</html>
