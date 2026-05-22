@@ -192,7 +192,7 @@ public class LatencyStatistics implements Runnable {
      * - timestampAlgoConnector to timestampStrategy
      * - timestampStrategy to now
      *
-     * @param prefix                   The prefix for the statistics key (e.g., "depth.BTCUSD.algorithmInfo")
+     * @param prefix                   The prefix for the statistics key (e.g., "depth.algorithmInfo.TOTAL , depth.algorithmInfo.toAlgoConnector")
      * @param timestamp                The initial timestamp
      * @param timestampBrokerConnector The broker connector timestamp
      * @param timestampAlgoConnector   The algo connector timestamp
