@@ -48,8 +48,10 @@ public class Instrument {
     //excluding serialization
     private double priceTick = DEFAULT_PRICE_TICK;
     private double quantityTick = DEFAULT_QTY_TICK;
+    private double maxPrice = Double.MAX_VALUE;
+    private double minPrice = Double.MIN_VALUE;
 
-    //// All fees are cumulative!
+    /// / All fees are cumulative!
     private double pctFee = DEFAULT_PCT_FEE;
     private double volumeFeePct = DEFAULT_PCT_FEE;
     private double constantFee = DEFAULT_CONSTANT_FEE;
@@ -194,6 +196,7 @@ public class Instrument {
         int places = getNumberDecimalsPrice();
         return round(price, places + 1);
     }
+
     public double roundPrice(double price) {
         //		return Math.round(price / getPriceTick()) * getPriceTick();
 //		double scale = Math.pow(10, ((double) (getNumberDecimalsPrice())));
