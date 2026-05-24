@@ -348,7 +348,10 @@ public class QuoteSideManager {
         }
 
         if (isActive) {
-            if (!cfTradesClientOrderId.contains(clientOrderIdRecevied)) {
+            if (!cfTradesClientOrderId.contains(clientOrderIdRecevied)
+                    && !cancelConfirmedOriginalClientOrderId.contains(clientOrderIdRecevied)) {
+                // do not resurrect an order that was already confirmed cancelled:
+                // late PartialFilled reports can arrive after the Cancelled ER
                 activeClientOrderId = executionReport.getClientOrderId();
                 if (isDisablePending) {
                     logger.info("receive active to immediately cancel! {}", activeClientOrderId);

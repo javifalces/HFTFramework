@@ -192,7 +192,7 @@ public class LatencyStatistics implements Runnable {
      * - timestampAlgoConnector to timestampStrategy
      * - timestampStrategy to now
      *
-     * @param prefix                   The prefix for the statistics key (e.g., "depth.BTCUSD.algorithmInfo")
+     * @param prefix                   The prefix for the statistics key (e.g., "depth.algorithmInfo.TOTAL , depth.algorithmInfo.toAlgoConnector")
      * @param timestamp                The initial timestamp
      * @param timestampBrokerConnector The broker connector timestamp
      * @param timestampAlgoConnector   The algo connector timestamp
@@ -408,7 +408,8 @@ public class LatencyStatistics implements Runnable {
 
             // Export to Prometheus when enabled
             if (prometheusEnabled) {
-                publishLatencyToPrometheus(topic, counter, mean, percentile50, percentile75,
+                String prometheusTopic = Configuration.formatLog(basePrefix + "." + topic);
+                publishLatencyToPrometheus(prometheusTopic, counter, mean, percentile50, percentile75,
                         percentile90, percentile95, percentile99, maxLatency);
             }
 
