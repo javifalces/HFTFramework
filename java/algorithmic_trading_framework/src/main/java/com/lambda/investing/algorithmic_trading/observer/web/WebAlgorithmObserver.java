@@ -1,5 +1,6 @@
 package com.lambda.investing.algorithmic_trading.observer.web;
 
+import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.AlgorithmObserver;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshot;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioSnapshot;
@@ -51,6 +52,8 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
     private volatile PortfolioSnapshot latestPortfolio;
     private volatile Map<String, Object> latestParams;
     private final Map<String, Double> latestCustomColumns = new ConcurrentHashMap<>();
+    /** Latest L2 depth snapshot per instrument (used to restore orderbook on reconnect). */
+    private final Map<String, Map<String, Object>> latestDepths = new ConcurrentHashMap<>();
 
     /**
      * Creates and starts the web server on the given port.
@@ -60,6 +63,11 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
      */
     public WebAlgorithmObserver(int port) throws InterruptedException {
         this.server = new AlgorithmWebServer(port);
+        // Enable Grafana tab when Prometheus monitoring is configured
+        if (!Configuration.PROMETHEUS_PORT.isEmpty()) {
+            server.setGrafanaUrl(Configuration.GRAFANA_URL);
+            logger.info("Grafana tab enabled at {}", Configuration.GRAFANA_URL);
+        }
         logger.info("Web UI available at http://localhost:{}", port);
         System.out.println("[WebAlgorithmObserver] Web UI available at http://localhost:" + port);
     }
@@ -70,6 +78,9 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
 
     @Override
     public void onUpdateDepth(String algorithmInfo, Depth depth) {
+        if (depth != null && depth.getInstrument() != null) {
+            latestDepths.put(depth.getInstrument(), toDepthSnapshot(depth));
+        }
         String json = buildMessage("DEPTH", algorithmInfo, depth, currentTimeMs());
         server.broadcastUpdate(json);
     }
@@ -174,6 +185,34 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         if (!latestCustomColumns.isEmpty()) {
             state.put("customColumns", latestCustomColumns);
         }
+        if (!latestDepths.isEmpty()) {
+            state.put("depths", latestDepths);
+        }
         server.updateState(toJsonStringGSON(state));
+    }
+
+    /**
+     * Converts a {@link Depth} snapshot into a plain {@code Map} that can be
+     * serialised to JSON.  Only the fields needed by the orderbook frontend are
+     * included; the heavy per-event latency fields are omitted.
+     */
+    private static Map<String, Object> toDepthSnapshot(Depth depth) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("instrument", depth.getInstrument());
+        m.put("timestamp",  depth.getTimestamp());
+        m.put("bids",       depth.getBids());
+        m.put("asks",       depth.getAsks());
+        m.put("bidsQty",    depth.getBidsQuantities());
+        m.put("asksQty",    depth.getAsksQuantities());
+        m.put("bidLevels",  depth.getBidLevels());
+        m.put("askLevels",  depth.getAskLevels());
+        // bidsAlgorithmInfo / asksAlgorithmInfo are only populated during backtests
+        if (depth.getBidsAlgorithmInfo() != null) {
+            m.put("bidsAlgoInfo", depth.getBidsAlgorithmInfo());
+        }
+        if (depth.getAsksAlgorithmInfo() != null) {
+            m.put("asksAlgoInfo", depth.getAsksAlgorithmInfo());
+        }
+        return m;
     }
 }
