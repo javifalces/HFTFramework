@@ -27,6 +27,7 @@ associated risks.**
     * [1. Create algorithm and backtest](#1-create-algorithm-and-backtest)
     * [2. Live trading](#2-live-trading)
       * [Monitoring](java/docs/MONITORING_DOCUMENTATION.md)
+    * [Web Monitoring UI](#web-monitoring-ui)
     * [3. Market Engine](#3-market-engine)
       * [XChangeEngine](#xchangeengine)
       * [MetatraderEngine](#metatraderengine)
@@ -236,6 +237,22 @@ Real-time observability via Grafana dashboards covering application logs, JVM pe
 algorithm execution, portfolio PnL, and throughput.
 
 * [MONITORING_DOCUMENTATION.md](java/docs/MONITORING_DOCUMENTATION.md)
+
+### Web Monitoring UI
+
+An embedded, zero-dependency browser dashboard streams algorithm events in real time over WebSocket.
+Enable it by adding `"uiWebPort": 9001` (or any free port) to a backtest or live-trading JSON config, then
+open `http://localhost:9001`.
+
+Key features:
+
+| Tab | Content |
+|---|---|
+| **Overview** | Portfolio PnL, instrument breakdown, execution reports, order requests, parameters, custom metrics, event log |
+| **Orderbook** | Paginated grid of all active instruments; each card shows the L2 bid/ask ladder with depth bars, algo-resting orders highlighted in gold, spread/mid, and an inline market-trades ticker with toast pop-up notifications |
+| **Grafana** | Embedded Grafana iframe (shown automatically when `PROMETHEUS_PORT` is set) |
+
+* [WEB_UI_DOCUMENTATION.md](docs/web-ui.md)
 
 ### Reference
 
