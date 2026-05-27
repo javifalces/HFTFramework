@@ -76,6 +76,19 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_FEATURE_TOGGLES_ENABLE=traceToMetrics
       - GF_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/home.json
+      # ── Allow the HFT frontend to embed Grafana in an <iframe> ──────────────
+      # Removes the X-Frame-Options: deny header so browsers allow framing.
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      # Disable the Content-Security-Policy frame-ancestors restriction so any
+      # localhost origin (Java backend port) can embed the dashboards.
+      - GF_SECURITY_CONTENT_SECURITY_POLICY=false
+      # Allow anonymous (unauthenticated) viewers so the iframe loads dashboards
+      # without redirecting to the Grafana login page.
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      # SameSite=disabled lets Grafana session cookies work in a cross-origin
+      # iframe context (frontend served on a different port than Grafana).
+      - GF_SECURITY_COOKIE_SAMESITE=disabled
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro

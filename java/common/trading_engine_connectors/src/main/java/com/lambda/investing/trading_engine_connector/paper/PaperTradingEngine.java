@@ -178,6 +178,10 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
         logger.info("creating {} orderbooks: {}", instrumentsList.size(), ArrayUtils.PrintArrayListString(instrumentsList, ","));
         orderbookManagerMap = new HashMap<>(instrumentsList.size());
         for (Instrument instrument : instrumentsList) {
+            if (instrument == null) {
+                logger.warn("PaperTradingEngine instrument is null -> not creating orderbook");
+                continue;
+            }
             Orderbook orderbook = new Orderbook(instrument.getPriceTick());
 
             OrderbookManager orderbookManager = null;

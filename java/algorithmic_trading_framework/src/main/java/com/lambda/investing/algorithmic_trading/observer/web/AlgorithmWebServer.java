@@ -18,7 +18,19 @@ import io.netty.util.concurrent.GlobalEventExecutor;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.NetworkInterface;
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+import com.lambda.investing.Configuration;
+import com.lambda.investing.algorithmic_trading.AlgorithmProvider;
 
 import static io.netty.handler.codec.http.HttpResponseStatus.*;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
@@ -46,6 +58,22 @@ public class AlgorithmWebServer {
     private volatile String currentStateJson = "{}";
     /** Optional Grafana base URL included in STATE messages (empty = Grafana tab hidden). */
     private volatile String grafanaUrl = "";
+    /**
+     * When true the frontend displays a red PAPER TRADING banner.
+     */
+    private volatile boolean paperTrading = false;
+    /**
+     * When true the algorithm is running (start/stop toggle).
+     */
+    private volatile boolean algoRunning = true;
+    /**
+     * Optional AlgorithmProvider for manual start/stop from the web UI.
+     */
+    private volatile AlgorithmProvider algorithmProvider = null;
+    /**
+     * Active session tokens – cleared when credentials are changed.
+     */
+    private final Set<String> validTokens = ConcurrentHashMap.newKeySet();
 
     private final EventLoopGroup bossGroup;
     private final EventLoopGroup workerGroup;
@@ -74,7 +102,8 @@ public class AlgorithmWebServer {
                  .childOption(ChannelOption.TCP_NODELAY, true);
 
         ChannelFuture future = bootstrap.bind(new InetSocketAddress(port)).sync();
-        logger.info("AlgorithmWebServer (Netty) started on port {}", port);
+        logger.info("AlgorithmWebServer (Netty) started on port {} (listening on all interfaces)", port);
+        logNetworkUrls(port);
 
         // Close the server when the JVM exits
         future.channel().closeFuture().addListener(f -> {
@@ -86,6 +115,24 @@ public class AlgorithmWebServer {
     // -----------------------------------------------------------------------
     // Broadcast API (called by WebAlgorithmObserver)
     // -----------------------------------------------------------------------
+
+    private static void logNetworkUrls(int port) {
+        try {
+            logger.info("Dashboard accessible at:");
+            logger.info("  http://localhost:{}/", port);
+            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (!ni.isUp() || ni.isLoopback() || ni.isVirtual()) continue;
+                for (InetAddress addr : Collections.list(ni.getInetAddresses())) {
+                    if (addr.isLoopbackAddress() || addr.isLinkLocalAddress()) continue;
+                    if (addr instanceof java.net.Inet4Address) {
+                        logger.info("  http://{}:{}/ ({})", addr.getHostAddress(), port, ni.getDisplayName());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Could not enumerate network interfaces: {}", e.getMessage());
+        }
+    }
 
     /**
      * Broadcasts a JSON message to all currently connected WebSocket clients.
@@ -115,6 +162,24 @@ public class AlgorithmWebServer {
      */
     public void setGrafanaUrl(String url) {
         this.grafanaUrl = (url == null) ? "" : url;
+    }
+
+    /**
+     * Controls whether the frontend shows a red PAPER TRADING banner at the top.
+     *
+     * @param paperTrading {@code true} to show the banner
+     */
+    public void setPaperTrading(boolean paperTrading) {
+        this.paperTrading = paperTrading;
+    }
+
+    /**
+     * Sets the {@link AlgorithmProvider} used to start/stop the algorithm from the web UI.
+     *
+     * @param provider the algorithm provider; may be {@code null} to disable the controls
+     */
+    public void setAlgorithmProvider(AlgorithmProvider provider) {
+        this.algorithmProvider = provider;
     }
 
     // -----------------------------------------------------------------------
@@ -153,11 +218,28 @@ public class AlgorithmWebServer {
                 return;
             }
 
-            String uri = req.uri().contains("?")
-                    ? req.uri().substring(0, req.uri().indexOf('?'))
-                    : req.uri();
+            String fullUri = req.uri();
+            int qIdx = fullUri.indexOf('?');
+            String uri = qIdx >= 0 ? fullUri.substring(0, qIdx) : fullUri;
+            String query = qIdx >= 0 ? fullUri.substring(qIdx + 1) : "";
 
-            // WebSocket upgrade
+            // CORS pre-flight
+            if (req.method() == HttpMethod.OPTIONS) {
+                FullHttpResponse res = new DefaultFullHttpResponse(HTTP_1_1, OK);
+                res.headers().set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, "*");
+                res.headers().set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS, "GET, POST, OPTIONS");
+                res.headers().set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS, "Content-Type, Authorization");
+                sendHttpResponse(ctx, req, res);
+                return;
+            }
+
+            // POST endpoints (login / change-credentials)
+            if (req.method() == HttpMethod.POST) {
+                handlePostRequest(ctx, req, uri);
+                return;
+            }
+
+            // WebSocket upgrade – always complete the handshake; auth checked inside
             if (WS_PATH.equals(uri)) {
                 String wsUrl = "ws://" + req.headers().get(HttpHeaderNames.HOST) + WS_PATH;
                 WebSocketServerHandshakerFactory wsFactory =
@@ -166,13 +248,22 @@ public class AlgorithmWebServer {
                 if (handshaker == null) {
                     WebSocketServerHandshakerFactory.sendUnsupportedVersionResponse(ctx.channel());
                 } else {
+                    final String token = getQueryParam(query, "token");
                     handshaker.handshake(ctx.channel(), req).addListener(future -> {
                         if (future.isSuccess()) {
+                            if (!isValidToken(token)) {
+                                ctx.channel().writeAndFlush(
+                                                new TextWebSocketFrame("{\"type\":\"AUTH_FAILED\"}"))
+                                        .addListener(f ->
+                                                handshaker.close(ctx.channel(),
+                                                        new CloseWebSocketFrame(4001, "Unauthorized")));
+                                return;
+                            }
                             wsChannels.add(ctx.channel());
                             logger.debug("WebSocket client connected – total: {}", wsChannels.size());
-                            // Send current state (+ grafana URL) to the newly connected client
-                            String stateMsg = "{\"type\":\"STATE\",\"grafanaUrl\":" +
-                                    "\"" + grafanaUrl + "\"" +
+                            String stateMsg = "{\"type\":\"STATE\",\"grafanaUrl\":\"" + grafanaUrl + "\"" +
+                                    ",\"paperTrading\":" + paperTrading +
+                                    ",\"algoRunning\":" + algoRunning +
                                     ",\"data\":" + currentStateJson + "}";
                             ctx.channel().writeAndFlush(new TextWebSocketFrame(stateMsg));
                         }
@@ -188,15 +279,199 @@ public class AlgorithmWebServer {
                         Unpooled.copiedBuffer(DASHBOARD_HTML, CharsetUtil.UTF_8));
                 response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
             } else if ("/api/state".equals(uri)) {
-                response = new DefaultFullHttpResponse(HTTP_1_1, OK,
-                        Unpooled.copiedBuffer(currentStateJson, CharsetUtil.UTF_8));
-                response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                String token = getAuthToken(req, query);
+                if (!isValidToken(token)) {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, UNAUTHORIZED,
+                            Unpooled.copiedBuffer("{\"error\":\"Unauthorized\"}", CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                } else {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                            Unpooled.copiedBuffer(currentStateJson, CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                }
+            } else {
+                // Try to serve as a static asset from the classpath (css/, js/)
+                FullHttpResponse staticResponse = serveStaticAsset(uri);
+                response = (staticResponse != null) ? staticResponse
+                        : new DefaultFullHttpResponse(HTTP_1_1, NOT_FOUND);
+            }
+
+            response.headers().set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, "*");
+            sendHttpResponse(ctx, req, response);
+        }
+
+        /**
+         * Attempts to load a static file (CSS, JS) from the classpath.
+         * Only paths under {@code /css/} and {@code /js/} are permitted.
+         * Path traversal ({@code ..}) is rejected.
+         *
+         * @param uri request URI, e.g. {@code /css/base.css}
+         * @return a 200 response with the correct Content-Type, or {@code null} if not found
+         */
+        private FullHttpResponse serveStaticAsset(String uri) {
+            if (uri == null || uri.isEmpty() || uri.contains("..")) return null;
+            if (!uri.startsWith("/css/") && !uri.startsWith("/js/")) return null;
+            String resource = uri.substring(1); // strip leading '/'
+            try (InputStream is = AlgorithmWebServer.class.getClassLoader().getResourceAsStream(resource)) {
+                if (is == null) return null;
+                byte[] bytes = is.readAllBytes();
+                String contentType = uri.endsWith(".css") ? "text/css; charset=UTF-8"
+                        : uri.endsWith(".js") ? "application/javascript; charset=UTF-8"
+                          : "application/octet-stream";
+                FullHttpResponse res = new DefaultFullHttpResponse(HTTP_1_1, OK, Unpooled.wrappedBuffer(bytes));
+                res.headers().set(HttpHeaderNames.CONTENT_TYPE, contentType);
+                return res;
+            } catch (IOException e) {
+                logger.debug("Could not serve static asset {}: {}", uri, e.getMessage());
+                return null;
+            }
+        }
+
+        private void handlePostRequest(ChannelHandlerContext ctx, FullHttpRequest req, String uri) {
+            String body = req.content().toString(CharsetUtil.UTF_8);
+            FullHttpResponse response;
+
+            if ("/api/login".equals(uri)) {
+                String username = extractJsonField(body, "username");
+                String password = extractJsonField(body, "password");
+                if (Configuration.WEB_UI_LOGIN.equals(username) &&
+                        Configuration.WEB_UI_PASSWORD.equals(password)) {
+                    String token = UUID.randomUUID().toString();
+                    validTokens.add(token);
+                    response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                            Unpooled.copiedBuffer("{\"token\":\"" + token + "\"}", CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                    logger.info("Web UI login successful for user '{}'", username);
+                } else {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, UNAUTHORIZED,
+                            Unpooled.copiedBuffer("{\"error\":\"Invalid credentials\"}", CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                    logger.warn("Web UI login failed for user '{}'", username);
+                }
+            } else if ("/api/change-credentials".equals(uri)) {
+                String token = getAuthToken(req, "");
+                if (!isValidToken(token)) {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, UNAUTHORIZED,
+                            Unpooled.copiedBuffer("{\"error\":\"Unauthorized\"}", CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                } else {
+                    String newUsername = extractJsonField(body, "newUsername");
+                    String newPassword = extractJsonField(body, "newPassword");
+                    if (newUsername != null && !newUsername.isEmpty()) {
+                        Configuration.WEB_UI_LOGIN = newUsername;
+                    }
+                    if (newPassword != null && !newPassword.isEmpty()) {
+                        Configuration.WEB_UI_PASSWORD = newPassword;
+                    }
+                    validTokens.clear(); // force re-login for all sessions
+                    logger.info("Web UI credentials changed – all sessions invalidated");
+                    response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                            Unpooled.copiedBuffer("{\"success\":true}", CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                }
+            } else if ("/api/algo/start".equals(uri) || "/api/algo/stop".equals(uri)) {
+                String token = getAuthToken(req, "");
+                if (!isValidToken(token)) {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, UNAUTHORIZED,
+                            Unpooled.copiedBuffer("{\"error\":\"Unauthorized\"}", CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                } else {
+                    boolean isStart = "/api/algo/start".equals(uri);
+                    if (algorithmProvider != null) {
+                        try {
+                            if (isStart) {
+                                algorithmProvider.startAlgo();
+                                algoRunning = true;
+                                logger.info("Web UI triggered algorithm START");
+                            } else {
+                                algorithmProvider.stopAlgo();
+                                algoRunning = false;
+                                logger.info("Web UI triggered algorithm STOP");
+                            }
+                            response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                                    Unpooled.copiedBuffer("{\"success\":true,\"algoRunning\":" + algoRunning + "}", CharsetUtil.UTF_8));
+                        } catch (Exception ex) {
+                            logger.error("Error executing algo {}: {}", isStart ? "start" : "stop", ex.getMessage(), ex);
+                            response = new DefaultFullHttpResponse(HTTP_1_1, INTERNAL_SERVER_ERROR,
+                                    Unpooled.copiedBuffer("{\"error\":\"" + ex.getMessage() + "\"}", CharsetUtil.UTF_8));
+                        }
+                    } else {
+                        logger.warn("Algo {}/{} requested but no AlgorithmProvider configured", isStart ? "start" : "stop", uri);
+                        response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                                Unpooled.copiedBuffer("{\"success\":true,\"algoRunning\":" + isStart + ",\"warn\":\"no provider\"}", CharsetUtil.UTF_8));
+                        algoRunning = isStart;
+                    }
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                }
+            } else if ("/api/algo/change-parameter".equals(uri)) {
+                String token = getAuthToken(req, "");
+                if (!isValidToken(token)) {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, UNAUTHORIZED,
+                            Unpooled.copiedBuffer("{\"error\":\"Unauthorized\"}", CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                } else {
+                    if (algorithmProvider != null) {
+                        try {
+                            boolean ok = algorithmProvider.changeParameters(body);
+                            logger.info("Web UI change-parameter request: {} -> {}", body, ok);
+                            response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                                    Unpooled.copiedBuffer("{\"success\":" + ok + "}", CharsetUtil.UTF_8));
+                        } catch (Exception ex) {
+                            logger.error("Error changing algorithm parameters: {}", ex.getMessage(), ex);
+                            response = new DefaultFullHttpResponse(HTTP_1_1, INTERNAL_SERVER_ERROR,
+                                    Unpooled.copiedBuffer("{\"success\":false,\"error\":\"" + ex.getMessage() + "\"}", CharsetUtil.UTF_8));
+                        }
+                    } else {
+                        logger.warn("change-parameter requested but no AlgorithmProvider configured");
+                        response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                                Unpooled.copiedBuffer("{\"success\":false,\"error\":\"no provider\"}", CharsetUtil.UTF_8));
+                    }
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                }
             } else {
                 response = new DefaultFullHttpResponse(HTTP_1_1, NOT_FOUND);
             }
 
             response.headers().set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, "*");
             sendHttpResponse(ctx, req, response);
+        }
+
+        // -- Auth helpers --------------------------------------------------
+
+        private boolean isValidToken(String token) {
+            return token != null && validTokens.contains(token);
+        }
+
+        private String getQueryParam(String query, String param) {
+            if (query == null || query.isEmpty()) return null;
+            for (String part : query.split("&")) {
+                String[] kv = part.split("=", 2);
+                if (kv.length == 2 && param.equals(kv[0])) return kv[1];
+            }
+            return null;
+        }
+
+        private String getAuthToken(FullHttpRequest req, String query) {
+            String auth = req.headers().get(HttpHeaderNames.AUTHORIZATION);
+            if (auth != null && auth.startsWith("Bearer ")) return auth.substring(7);
+            return getQueryParam(query, "token");
+        }
+
+        /**
+         * Minimal JSON string-field extractor (no library dependency).
+         * Handles {@code "field":"value"} patterns.
+         */
+        private String extractJsonField(String json, String field) {
+            String key = "\"" + field + "\"";
+            int idx = json.indexOf(key);
+            if (idx < 0) return null;
+            int colon = json.indexOf(':', idx + key.length());
+            if (colon < 0) return null;
+            int start = json.indexOf('"', colon + 1);
+            if (start < 0) return null;
+            int end = json.indexOf('"', start + 1);
+            if (end < 0) return null;
+            return json.substring(start + 1, end);
         }
 
         private void sendHttpResponse(ChannelHandlerContext ctx, FullHttpRequest req, FullHttpResponse res) {
@@ -220,6 +495,8 @@ public class AlgorithmWebServer {
                 String text = ((TextWebSocketFrame) frame).text();
                 if (text.contains("\"type\":\"GET_STATE\"")) {
                     String stateMsg = "{\"type\":\"STATE\",\"grafanaUrl\":\"" + grafanaUrl + "\"" +
+                            ",\"paperTrading\":" + paperTrading +
+                            ",\"algoRunning\":" + algoRunning +
                             ",\"data\":" + currentStateJson + "}";
                     ctx.writeAndFlush(new TextWebSocketFrame(stateMsg));
                 }
@@ -240,839 +517,21 @@ public class AlgorithmWebServer {
     }
 
     // -----------------------------------------------------------------------
-    // Inline HTML dashboard (generated from frontend/index.html)
+    // HTML dashboard loaded from classpath resource dashboard.html
     // -----------------------------------------------------------------------
 
-    static final String DASHBOARD_HTML = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>HFT Framework – Algorithm Monitor</title>
-<style>
-:root {
-  --bg: #0f1117;
-  --surface: #1a1d27;
-  --border: #2e3347;
-  --accent: #4e9af1;
-  --green: #3ecf8e;
-  --red: #f56565;
-  --yellow: #ecc94b;
-  --text: #e2e8f0;
-  --muted: #718096;
-  --font: "Segoe UI", system-ui, sans-serif;
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; min-height: 100vh; }
-
-/* ── Header ──────────────────────────────────────────────────────────────── */
-header {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  padding: 10px 20px;
-  display: flex; align-items: center; justify-content: space-between;
-  position: sticky; top: 0; z-index: 200;
-}
-header h1 { font-size: 17px; font-weight: 600; color: var(--accent); }
-#status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
-#status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); transition: background .3s; }
-#status-dot.connected { background: var(--green); }
-#algo-info { font-size: 12px; color: var(--muted); }
-#port-form { display: flex; align-items: center; gap: 8px; }
-#port-form label { font-size: 12px; color: var(--muted); }
-#port-input {
-  background: var(--bg); border: 1px solid var(--border); color: var(--text);
-  border-radius: 4px; padding: 4px 8px; font-size: 12px; width: 80px;
-}
-#connect-btn {
-  background: var(--accent); color: #fff; border: none; border-radius: 4px;
-  padding: 4px 10px; font-size: 12px; cursor: pointer;
-}
-
-/* ── Tab navigation ─────────────────────────────────────────────────────── */
-.tab-nav { background: var(--surface); border-bottom: 1px solid var(--border); display: flex; padding: 0 20px; }
-.tab-btn {
-  background: none; border: none; color: var(--muted); padding: 10px 16px; font-size: 13px; cursor: pointer;
-  border-bottom: 2px solid transparent; transition: color .2s, border-color .2s;
-}
-.tab-btn:hover { color: var(--text); }
-.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
-.tab-panel { display: none; }
-.tab-panel.active { display: block; }
-
-/* ── Generic cards / grid ────────────────────────────────────────────────── */
-.grid { padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
-.card h2 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 12px; }
-.full-width { grid-column: 1 / -1; }
-.kv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
-.kv { background: var(--bg); border-radius: 6px; padding: 8px 12px; }
-.kv .label { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
-.kv .value { font-size: 15px; font-weight: 600; }
-.positive { color: var(--green); }
-.negative { color: var(--red); }
-.neutral  { color: var(--text); }
-
-/* ── Tables ──────────────────────────────────────────────────────────────── */
-.table-wrap { overflow-x: auto; max-height: 240px; overflow-y: auto; }
-.table-wrap::-webkit-scrollbar { width: 4px; height: 4px; }
-.table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-th {
-  text-align: left; padding: 6px 8px; color: var(--muted); font-weight: 500;
-  border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface);
-}
-td { padding: 5px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-tr:hover td { background: rgba(255,255,255,.03); }
-
-/* ── Log ─────────────────────────────────────────────────────────────────── */
-#log-container { max-height: 220px; overflow-y: auto; }
-#log-container::-webkit-scrollbar { width: 4px; }
-#log-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-.log-entry { font-size: 11px; color: var(--muted); padding: 3px 0; border-bottom: 1px solid var(--border); font-family: monospace; }
-.log-entry .ts { color: var(--accent); margin-right: 6px; }
-
-/* ── Badges ──────────────────────────────────────────────────────────────── */
-.badge { display: inline-block; padding: 1px 6px; border-radius: 10px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
-.badge-buy  { background: rgba(62,207,142,.15); color: var(--green); }
-.badge-sell { background: rgba(245,101,101,.15); color: var(--red); }
-.badge-neutral { background: rgba(113,128,150,.15); color: var(--muted); }
-.badge-algo { background: rgba(236,201,75,.2); color: var(--yellow); font-weight: 700; }
-
-/* ── Params ──────────────────────────────────────────────────────────────── */
-#params-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; }
-.param-entry { background: var(--bg); border-radius: 4px; padding: 6px 10px; font-size: 12px; }
-.param-key { color: var(--muted); font-size: 11px; }
-.param-val { font-weight: 500; word-break: break-all; }
-
-/* ── Orderbook tab page wrapper ──────────────────────────────────────────── */
-#ob-page-wrap { padding: 16px 20px; }
-.ob-toolbar {
-  display: flex; align-items: center; gap: 16px;
-  margin-bottom: 14px; flex-wrap: wrap;
-}
-.ob-toolbar label { font-size: 12px; color: var(--muted); }
-.ob-toolbar input[type=number] {
-  background: var(--bg); border: 1px solid var(--border); color: var(--text);
-  border-radius: 4px; padding: 4px 8px; font-size: 12px; width: 72px;
-}
-.ob-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(540px, 1fr));
-  gap: 16px;
-}
-/* ── Pagination ──────────────────────────────────────────────────────────── */
-.pager {
-  display: flex; align-items: center; gap: 10px; margin-top: 16px;
-  font-size: 12px; color: var(--muted);
-}
-.pager button {
-  background: var(--surface); border: 1px solid var(--border); color: var(--text);
-  border-radius: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer;
-}
-.pager button:disabled { opacity: .35; cursor: not-allowed; }
-
-/* ── Single instrument card (orderbook + ticker) ─────────────────────────── */
-.instr-card {
-  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-  overflow: hidden; display: flex; flex-direction: column;
-}
-.instr-header {
-  padding: 8px 12px; background: rgba(0,0,0,.2);
-  display: flex; align-items: center; justify-content: space-between;
-  border-bottom: 1px solid var(--border);
-}
-.instr-name { font-size: 13px; font-weight: 700; color: var(--accent); }
-.instr-meta { font-size: 11px; color: var(--muted); }
-.instr-body { display: flex; gap: 0; min-height: 300px; }
-
-/* Book side */
-.ob-book-side { flex: 1 1 0; overflow: hidden; display: flex; flex-direction: column; }
-.ob-asks-wrap { flex: 1; overflow-y: auto; display: flex; flex-direction: column-reverse; }
-.ob-bids-wrap { flex: 1; overflow-y: auto; }
-.ob-asks-wrap::-webkit-scrollbar,
-.ob-bids-wrap::-webkit-scrollbar { width: 3px; }
-.ob-asks-wrap::-webkit-scrollbar-thumb,
-.ob-bids-wrap::-webkit-scrollbar-thumb { background: var(--border); }
-.ob-side-label {
-  padding: 3px 10px; font-size: 10px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
-}
-.ob-side-label.asks { color: var(--red); background: rgba(245,101,101,.06); border-bottom: 1px solid var(--border); }
-.ob-side-label.bids { color: var(--green); background: rgba(62,207,142,.06); border-bottom: 1px solid var(--border); }
-.ob-spread-row {
-  padding: 4px 10px; font-size: 11px; color: var(--muted);
-  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-  display: flex; gap: 12px;
-}
-.ob-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-.ob-table td { padding: 3px 10px; border-bottom: 1px solid rgba(255,255,255,.03); }
-.ask-row td { color: var(--red); }
-.bid-row td { color: var(--green); }
-.algo-level td { background: rgba(236,201,75,.1); }
-.algo-level td:last-child { color: var(--yellow); font-size: 10px; font-weight: 700; }
-.ob-bar-cell { width: 60px; }
-.ob-bar { height: 8px; border-radius: 2px; }
-.ask-bar { background: rgba(245,101,101,.4); }
-.bid-bar { background: rgba(62,207,142,.4); }
-
-/* Trades ticker side */
-.ticker-side {
-  width: 210px; flex-shrink: 0;
-  border-left: 1px solid var(--border);
-  display: flex; flex-direction: column;
-  overflow: hidden;
-}
-.ticker-side h3 {
-  padding: 5px 10px; font-size: 10px; font-weight: 700; letter-spacing: .5px;
-  text-transform: uppercase; color: var(--muted);
-  background: rgba(0,0,0,.15); border-bottom: 1px solid var(--border);
-}
-.ticker-list { flex: 1; overflow-y: auto; }
-.ticker-list::-webkit-scrollbar { width: 3px; }
-.ticker-list::-webkit-scrollbar-thumb { background: var(--border); }
-.ticker-row {
-  display: grid; grid-template-columns: 60px 1fr 1fr;
-  align-items: center; padding: 3px 8px;
-  border-bottom: 1px solid rgba(255,255,255,.03);
-  font-size: 11px; animation: fadeIn .3s ease;
-}
-.ticker-row.trade-buy  .ticker-price { color: var(--green); }
-.ticker-row.trade-sell .ticker-price { color: var(--red); }
-.ticker-row.algo-trade { background: rgba(236,201,75,.08); }
-.ticker-row.algo-trade .ticker-price { color: var(--yellow); font-weight: 700; }
-.ticker-ts { color: var(--muted); font-size: 10px; }
-.ticker-qty { text-align: right; color: var(--muted); font-size: 10px; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
-
-/* ── Toast notifications ─────────────────────────────────────────────────── */
-#toast-container {
-  position: fixed; top: 60px; right: 20px; z-index: 9999;
-  display: flex; flex-direction: column; gap: 8px; pointer-events: none;
-}
-.toast {
-  background: var(--surface); border: 1px solid var(--border);
-  border-left: 4px solid var(--yellow);
-  border-radius: 6px; padding: 10px 14px;
-  font-size: 12px; min-width: 220px; max-width: 340px;
-  box-shadow: 0 4px 12px rgba(0,0,0,.4);
-  animation: slideIn .25s ease; pointer-events: auto;
-}
-.toast.algo { border-left-color: var(--yellow); }
-.toast.market { border-left-color: var(--accent); }
-.toast-title { font-weight: 700; color: var(--yellow); margin-bottom: 2px; }
-.toast.market .toast-title { color: var(--accent); }
-.toast-body { color: var(--muted); }
-@keyframes slideIn { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: none; } }
-
-/* ── Grafana iframe ──────────────────────────────────────────────────────── */
-#grafana-frame { width: 100%; border: none; height: calc(100vh - 112px); }
-</style>
-</head>
-<body>
-
-
-<div id="toast-container"></div>
-
-<header>
-  <h1>HFT Framework – Algorithm Monitor</h1>
-  <span id="algo-info"></span>
-  <div id="port-form">
-    <label for="port-input">Port</label>
-    <input id="port-input" type="number" value="9001" min="1" max="65535"/>
-    <button id="connect-btn" onclick="reconnect()">Connect</button>
-  </div>
-  <div id="status">
-    <div id="status-dot"></div>
-    <span id="status-text">Disconnected</span>
-  </div>
-</header>
-
-<nav class="tab-nav">
-  <button class="tab-btn active" onclick="showTab('overview',this)">Overview</button>
-  <button class="tab-btn" onclick="showTab('orderbook',this)">Orderbook</button>
-  <button class="tab-btn" id="tab-btn-grafana" style="display:none" onclick="showTab('grafana',this)">Grafana</button>
-</nav>
-
-
-<div class="tab-panel active" id="tab-overview">
-  <div class="grid">
-    <div class="card">
-      <h2>Portfolio</h2>
-      <div class="kv-grid">
-        <div class="kv"><div class="label">Realized PnL</div><div class="value neutral" id="pnl-realized">–</div></div>
-        <div class="kv"><div class="label">Unrealized PnL</div><div class="value neutral" id="pnl-unrealized">–</div></div>
-        <div class="kv"><div class="label">Total PnL</div><div class="value neutral" id="pnl-total">–</div></div>
-        <div class="kv"><div class="label">Net Position</div><div class="value neutral" id="pnl-position">–</div></div>
-        <div class="kv"><div class="label">Total Fees</div><div class="value neutral" id="pnl-fees">–</div></div>
-        <div class="kv"><div class="label">Net Investment</div><div class="value neutral" id="pnl-investment">–</div></div>
-      </div>
-    </div>
-    <div class="card">
-      <h2>Instruments</h2>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Instrument</th><th>Realized</th><th>Unrealized</th><th>Total</th><th>Position</th></tr></thead>
-          <tbody id="instruments-body"></tbody>
-        </table>
-      </div>
-    </div>
-    <div class="card">
-      <h2>Execution Reports</h2>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Time</th><th>Instrument</th><th>Side</th><th>Qty</th><th>Price</th><th>Status</th></tr></thead>
-          <tbody id="er-body"></tbody>
-        </table>
-      </div>
-    </div>
-    <div class="card">
-      <h2>Order Requests</h2>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Time</th><th>Instrument</th><th>Side</th><th>Qty</th><th>Price</th><th>Type</th></tr></thead>
-          <tbody id="or-body"></tbody>
-        </table>
-      </div>
-    </div>
-    <div class="card">
-      <h2>Parameters</h2>
-      <div id="params-container"><span style="color:var(--muted);font-size:12px">No parameters received yet.</span></div>
-    </div>
-    <div class="card">
-      <h2>Custom Metrics</h2>
-      <div class="kv-grid" id="custom-kv"><span style="color:var(--muted);font-size:12px">No custom metrics yet.</span></div>
-    </div>
-    <div class="card full-width">
-      <h2>Event Log</h2>
-      <div id="log-container"></div>
-    </div>
-  </div>
-</div>
-
-
-<div class="tab-panel" id="tab-orderbook">
-  <div id="ob-page-wrap">
-    <div class="ob-toolbar">
-      <label for="ob-per-page">Instruments per page</label>
-      <input id="ob-per-page" type="number" value="10" min="1" max="100" onchange="renderOBPage()"/>
-      <span id="ob-instr-count" style="color:var(--muted);font-size:12px"></span>
-    </div>
-    <div id="ob-grid" class="ob-grid"></div>
-    <div class="pager">
-      <button id="pg-prev" onclick="obPrevPage()" disabled>← Prev</button>
-      <span id="pg-label">Page 1</span>
-      <button id="pg-next" onclick="obNextPage()" disabled>Next →</button>
-    </div>
-  </div>
-</div>
-
-
-<div class="tab-panel" id="tab-grafana">
-  <iframe id="grafana-frame" src="about:blank"></iframe>
-</div>
-
-<script>
-// ──────────────────────────────────────────────────────────────────────────────
-// Constants
-// ──────────────────────────────────────────────────────────────────────────────
-const MAX_TABLE_ROWS  = 100;
-const MAX_LOG_ENTRIES = 300;
-const MAX_TICKER_ROWS = 80;
-const TOAST_DURATION  = 4000; // ms
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Runtime state
-// ──────────────────────────────────────────────────────────────────────────────
-let ws = null;
-let reconnectTimer = null;
-/** Map<instrument, depthSnapshot> */
-const depthMap   = {};
-/** Map<instrument, Array<tradeRow>> – latest trades per instrument */
-const tickerMap  = {};
-/** Set of instruments in arrival order */
-const instrOrder = [];
-let obPage = 0; // 0-indexed current page
-
-const customState = {};
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Tabs
-// ──────────────────────────────────────────────────────────────────────────────
-function showTab(id, btn) {
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('tab-' + id).classList.add('active');
-  btn.classList.add('active');
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Utilities
-// ──────────────────────────────────────────────────────────────────────────────
-function fmt(n, d) {
-  if (n == null || n === '' || isNaN(+n)) return '–';
-  return Number(n).toLocaleString(undefined, { minimumFractionDigits: d ?? 4, maximumFractionDigits: d ?? 4 });
-}
-function fmtTs(ts) { return ts ? new Date(+ts).toLocaleTimeString() : ''; }
-function colorClass(n) {
-  if (n == null || isNaN(+n) || +n === 0) return 'neutral';
-  return +n > 0 ? 'positive' : 'negative';
-}
-function sideClass(v) {
-  if (!v) return 'badge-neutral';
-  return v.toLowerCase() === 'buy' ? 'badge-buy' : 'badge-sell';
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Toast notifications
-// ──────────────────────────────────────────────────────────────────────────────
-function showToast(title, body, kind) {
-  const c = document.getElementById('toast-container');
-  const t = document.createElement('div');
-  t.className = 'toast ' + (kind || 'market');
-  t.innerHTML = `<div class="toast-title">${title}</div><div class="toast-body">${body}</div>`;
-  c.appendChild(t);
-  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .4s'; setTimeout(() => t.remove(), 400); }, TOAST_DURATION);
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// WebSocket connection
-// ──────────────────────────────────────────────────────────────────────────────
-function getPort() {
-  return new URLSearchParams(location.search).get('port') || document.getElementById('port-input').value || '9001';
-}
-function setStatus(connected, text) {
-  document.getElementById('status-dot').classList.toggle('connected', connected);
-  document.getElementById('status-text').textContent = text;
-}
-function connect() {
-  const port = getPort();
-  const host = location.hostname || 'localhost';
-  setStatus(false, 'Connecting…');
-  if (ws) { ws.onclose = null; ws.onerror = null; try { ws.close(); } catch(e){} ws = null; }
-  ws = new WebSocket('ws://' + host + ':' + port + '/ws');
-  ws.onopen  = () => { setStatus(true, 'Connected'); clearTimeout(reconnectTimer); reconnectTimer = null; };
-  ws.onclose = () => { setStatus(false, 'Disconnected – reconnecting…'); reconnectTimer = setTimeout(connect, 3000); };
-  ws.onerror = () => ws.close();
-  ws.onmessage = e => { try { handleMessage(JSON.parse(e.data)); } catch(err) { console.error(err); } };
-}
-function reconnect() {
-  clearTimeout(reconnectTimer); reconnectTimer = null;
-  connect();
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Message dispatcher
-// ──────────────────────────────────────────────────────────────────────────────
-function handleMessage(msg) {
-  if (msg.algorithmInfo) document.getElementById('algo-info').textContent = msg.algorithmInfo;
-  appendLog(msg.type, msg.algorithmInfo, msg.data);
-
-  switch (msg.type) {
-    case 'STATE':            applyState(msg); break;
-    case 'PORTFOLIO_SNAPSHOT': updatePortfolio(msg.data); break;
-    case 'PNL_SNAPSHOT':     break;
-    case 'EXECUTION_REPORT': prependRow('er-body', formatER(msg.data, msg.timestamp)); break;
-    case 'ORDER_REQUEST':    prependRow('or-body', formatOR(msg.data, msg.timestamp)); break;
-    case 'PARAMS':           updateParams(msg.data); break;
-    case 'CUSTOM_COLUMN':    updateCustom(msg.data); break;
-    case 'MESSAGE':          appendLog('MSG', msg.algorithmInfo, (msg.data?.name||'') + ': ' + (msg.data?.body||'')); break;
-    case 'TRADE':            onTrade(msg); break;
-    case 'DEPTH':            onDepth(msg); break;
-    default: break;
-  }
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// STATE restoration
-// ──────────────────────────────────────────────────────────────────────────────
-function applyState(msg) {
-  const s = msg.data;
-  if (s) {
-    if (s.portfolio)     updatePortfolio(s.portfolio);
-    if (s.params)        updateParams(s.params);
-    if (s.customColumns) Object.entries(s.customColumns).forEach(([k, v]) => {
-      const p = k.split('.'); const key = p.pop();
-      updateCustom({ instrumentPk: p.join('.') || null, key, value: v });
-    });
-    if (s.depths) Object.entries(s.depths).forEach(([instr, d]) => {
-      depthMap[instr] = d;
-      ensureInstrumentKnown(instr);
-    });
-  }
-  if (msg.grafanaUrl) {
-    document.getElementById('tab-btn-grafana').style.display = '';
-    document.getElementById('grafana-frame').src = msg.grafanaUrl;
-  }
-  renderOBPage();
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Portfolio / instruments
-// ──────────────────────────────────────────────────────────────────────────────
-function setKv(id, val) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.textContent = fmt(val);
-  el.className = 'value ' + colorClass(val);
-}
-function updatePortfolio(p) {
-  if (!p) return;
-  setKv('pnl-realized',   p.realizedPnl);
-  setKv('pnl-unrealized', p.unrealizedPnl);
-  setKv('pnl-total',      p.totalPnl);
-  setKv('pnl-position',   p.netPosition);
-  const fe = document.getElementById('pnl-fees'); if (fe) fe.textContent = fmt(p.totalFees);
-  const iv = document.getElementById('pnl-investment'); if (iv) iv.textContent = fmt(p.netInvestment);
-  const tb = document.getElementById('instruments-body');
-  if (tb && p.instrumentPnlSnapshotMap) {
-    tb.innerHTML = '';
-    Object.entries(p.instrumentPnlSnapshotMap).forEach(([i, s]) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${i}</td>` +
-        `<td class="${colorClass(s.realizedPnl)}">${fmt(s.realizedPnl)}</td>` +
-        `<td class="${colorClass(s.unrealizedPnl)}">${fmt(s.unrealizedPnl)}</td>` +
-        `<td class="${colorClass(s.totalPnl)}">${fmt(s.totalPnl)}</td>` +
-        `<td>${fmt(s.netPosition)}</td>`;
-      tb.appendChild(tr);
-    });
-  }
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Execution reports / order requests
-// ──────────────────────────────────────────────────────────────────────────────
-function formatER(er, ts) {
-  if (!er) return '';
-  const v = er.verb || '';
-  return `<td>${fmtTs(ts||er.timestamp)}</td><td>${er.instrument||''}</td>` +
-    `<td><span class="badge ${sideClass(v)}">${v}</span></td>` +
-    `<td>${fmt(er.quantity,6)}</td><td>${fmt(er.price)}</td><td>${er.executionReportStatus||''}</td>`;
-}
-function formatOR(or, ts) {
-  if (!or) return '';
-  const v = or.verb || '';
-  return `<td>${fmtTs(ts||or.timestamp)}</td><td>${or.instrument||''}</td>` +
-    `<td><span class="badge ${sideClass(v)}">${v}</span></td>` +
-    `<td>${fmt(or.quantity,6)}</td><td>${fmt(or.price)}</td><td>${or.orderRequestAction||''}</td>`;
-}
-function prependRow(tbodyId, rowHtml) {
-  const tb = document.getElementById(tbodyId);
-  if (!tb || !rowHtml) return;
-  const tr = document.createElement('tr');
-  tr.innerHTML = rowHtml;
-  tb.insertBefore(tr, tb.firstChild);
-  while (tb.children.length > MAX_TABLE_ROWS) tb.removeChild(tb.lastChild);
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Parameters & custom metrics
-// ──────────────────────────────────────────────────────────────────────────────
-function updateParams(params) {
-  if (!params) return;
-  const c = document.getElementById('params-container');
-  if (!c) return;
-  c.innerHTML = '';
-  const e = Object.entries(params);
-  if (!e.length) { c.innerHTML = '<span style="color:var(--muted);font-size:12px">No parameters yet.</span>'; return; }
-  e.forEach(([k, v]) => {
-    const d = document.createElement('div'); d.className = 'param-entry';
-    d.innerHTML = `<div class="param-key">${k}</div><div class="param-val">${v}</div>`;
-    c.appendChild(d);
-  });
-}
-function updateCustom(data) {
-  if (!data) return;
-  const key = (data.instrumentPk ? data.instrumentPk + '.' : '') + (data.key || '');
-  customState[key] = data.value;
-  const c = document.getElementById('custom-kv');
-  if (!c) return;
-  c.innerHTML = '';
-  const e = Object.entries(customState);
-  if (!e.length) { c.innerHTML = '<span style="color:var(--muted);font-size:12px">No metrics yet.</span>'; return; }
-  e.forEach(([k, v]) => {
-    const d = document.createElement('div'); d.className = 'kv';
-    d.innerHTML = `<div class="label">${k}</div><div class="value ${colorClass(v)}">${fmt(v)}</div>`;
-    c.appendChild(d);
-  });
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Event log
-// ──────────────────────────────────────────────────────────────────────────────
-function appendLog(type, algo, data) {
-  if (type === 'DEPTH') return;
-  const c = document.getElementById('log-container');
-  if (!c) return;
-  const d = document.createElement('div'); d.className = 'log-entry';
-  const ts = new Date().toLocaleTimeString();
-  const s = typeof data === 'object' ? JSON.stringify(data).substring(0,150) : String(data ?? '');
-  d.innerHTML = `<span class="ts">${ts}</span><b>${type}</b>${algo ? ' ['+algo+']' : ''} ${s}`;
-  c.insertBefore(d, c.firstChild);
-  while (c.children.length > MAX_LOG_ENTRIES) c.removeChild(c.lastChild);
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Trade events → ticker + toast
-// ──────────────────────────────────────────────────────────────────────────────
-function onTrade(msg) {
-  const t = msg.data;
-  if (!t || !t.instrument) return;
-  const instr = t.instrument;
-
-  ensureInstrumentKnown(instr);
-  if (!tickerMap[instr]) tickerMap[instr] = [];
-
-  const isAlgo = !!(t.algorithmInfo);
-  const verb = t.verb || '';
-  const entry = {
-    ts: t.timestamp || msg.timestamp,
-    price: t.price,
-    qty: t.quantity,
-    verb,
-    isAlgo,
-    algoInfo: t.algorithmInfo || ''
-  };
-  tickerMap[instr].unshift(entry);
-  if (tickerMap[instr].length > MAX_TICKER_ROWS) tickerMap[instr].pop();
-
-  // Live-update ticker list if the card is currently rendered
-  updateTickerCard(instr, entry);
-
-  // Toast notification for every trade (algo or market)
-  const side = verb || '?';
-  const toastKind = isAlgo ? 'algo' : 'market';
-  const titlePrefix = isAlgo ? `⚡ Algo Trade [${t.algoInfo || ''}]` : '📈 Market Trade';
-  showToast(
-    titlePrefix + ` – ${instr}`,
-    `${side} ${fmt(t.quantity,4)} @ ${fmt(t.price)}`,
-    toastKind
-  );
-}
-
-function updateTickerCard(instr, latestEntry) {
-  const listId = 'ticker-' + safeId(instr);
-  const list = document.getElementById(listId);
-  if (!list) return;
-  // Prepend a new row
-  const row = makeTickerRow(latestEntry);
-  list.insertBefore(row, list.firstChild);
-  while (list.children.length > MAX_TICKER_ROWS) list.removeChild(list.lastChild);
-}
-
-function makeTickerRow(entry) {
-  const div = document.createElement('div');
-  const tradeClass = entry.verb ? ('trade-' + entry.verb.toLowerCase()) : '';
-  div.className = 'ticker-row ' + tradeClass + (entry.isAlgo ? ' algo-trade' : '');
-  div.innerHTML =
-    `<span class="ticker-ts">${fmtTs(entry.ts)}</span>` +
-    `<span class="ticker-price">${fmt(entry.price)}</span>` +
-    `<span class="ticker-qty">${fmt(entry.qty, 4)}</span>`;
-  return div;
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Depth events → orderbook card update
-// ──────────────────────────────────────────────────────────────────────────────
-function onDepth(msg) {
-  const d = msg.data;
-  if (!d || !d.instrument) return;
-  const instr = d.instrument;
-  depthMap[instr] = d;
-  ensureInstrumentKnown(instr);
-  renderOBBook(instr);
-}
-
-function ensureInstrumentKnown(instr) {
-  if (!instrOrder.includes(instr)) {
-    instrOrder.push(instr);
-    const c = document.getElementById('ob-instr-count');
-    if (c) c.textContent = instrOrder.length + ' instrument' + (instrOrder.length > 1 ? 's' : '');
-    renderOBPage(); // may need to add a card to the current page
-  }
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Orderbook pagination
-// ──────────────────────────────────────────────────────────────────────────────
-function getPerPage() {
-  const v = parseInt(document.getElementById('ob-per-page')?.value, 10);
-  return (v > 0) ? v : 10;
-}
-function obPrevPage() { if (obPage > 0) { obPage--; renderOBPage(); } }
-function obNextPage() {
-  const maxPage = Math.max(0, Math.ceil(instrOrder.length / getPerPage()) - 1);
-  if (obPage < maxPage) { obPage++; renderOBPage(); }
-}
-
-function renderOBPage() {
-  const pp = getPerPage();
-  const maxPage = Math.max(0, Math.ceil(instrOrder.length / pp) - 1);
-  obPage = Math.min(obPage, maxPage);
-  const from = obPage * pp;
-  const pageInstrs = instrOrder.slice(from, from + pp);
-
-  const grid = document.getElementById('ob-grid');
-  if (!grid) return;
-  grid.innerHTML = '';
-
-  pageInstrs.forEach(instr => grid.appendChild(buildInstrCard(instr)));
-
-  // Pager controls
-  document.getElementById('pg-label').textContent = 'Page ' + (obPage + 1) + ' / ' + (maxPage + 1);
-  document.getElementById('pg-prev').disabled = obPage === 0;
-  document.getElementById('pg-next').disabled = obPage >= maxPage;
-
-  const c = document.getElementById('ob-instr-count');
-  if (c) c.textContent = instrOrder.length + ' instrument' + (instrOrder.length > 1 ? 's' : '');
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Build instrument card (orderbook + ticker)
-// ──────────────────────────────────────────────────────────────────────────────
-function safeId(s) { return s.replace(/[^a-zA-Z0-9_-]/g, '_'); }
-
-function buildInstrCard(instr) {
-  const sid = safeId(instr);
-  const depth = depthMap[instr];
-  const askLevels = depth ? (depth.askLevels || (depth.asks ? depth.asks.length : 0)) : 0;
-  const bidLevels = depth ? (depth.bidLevels || (depth.bids ? depth.bids.length : 0)) : 0;
-  const bestAsk = depth?.asks?.[0];
-  const bestBid = depth?.bids?.[0];
-  const spread  = (bestAsk != null && bestBid != null) ? (bestAsk - bestBid) : null;
-  const mid     = (bestAsk != null && bestBid != null) ? ((bestAsk + bestBid) / 2) : null;
-
-  const card = document.createElement('div');
-  card.className = 'instr-card';
-  card.id = 'instr-card-' + sid;
-
-  // Header
-  const hdr = document.createElement('div');
-  hdr.className = 'instr-header';
-  hdr.innerHTML =
-    `<span class="instr-name">${instr}</span>` +
-    `<span class="instr-meta" id="instr-meta-${sid}">` +
-    (spread != null ? `Spread: ${fmt(spread)} &nbsp; Mid: ${fmt(mid)}` : '') +
-    `</span>`;
-  card.appendChild(hdr);
-
-  // Body
-  const body = document.createElement('div');
-  body.className = 'instr-body';
-
-  // — Book side —
-  const bookSide = document.createElement('div');
-  bookSide.className = 'ob-book-side';
-  bookSide.innerHTML =
-    `<div class="ob-side-label asks">Asks</div>` +
-    `<div class="ob-asks-wrap"><table class="ob-table" id="ob-asks-${sid}"><tbody id="ob-asks-body-${sid}"></tbody></table></div>` +
-    `<div class="ob-spread-row" id="ob-spread-${sid}">` +
-    `<span>Spread: <b id="ob-sp-v-${sid}">${spread != null ? fmt(spread) : '–'}</b></span>` +
-    `<span>Mid: <b id="ob-mid-v-${sid}">${mid != null ? fmt(mid) : '–'}</b></span></div>` +
-    `<div class="ob-side-label bids">Bids</div>` +
-    `<div class="ob-bids-wrap"><table class="ob-table" id="ob-bids-${sid}"><tbody id="ob-bids-body-${sid}"></tbody></table></div>`;
-  body.appendChild(bookSide);
-
-  // — Ticker side —
-  const tickerSide = document.createElement('div');
-  tickerSide.className = 'ticker-side';
-  tickerSide.innerHTML = `<h3>Trades</h3><div class="ticker-list" id="ticker-${sid}"></div>`;
-  body.appendChild(tickerSide);
-
-  card.appendChild(body);
-
-  // Pre-populate with known data
-  if (depth) populateBook(sid, depth);
-
-  // Pre-populate ticker
-  const existing = tickerMap[instr] || [];
-  const listEl = tickerSide.querySelector('.ticker-list');
-  existing.forEach(e => listEl.appendChild(makeTickerRow(e)));
-
-  return card;
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Populate / refresh one orderbook card
-// ──────────────────────────────────────────────────────────────────────────────
-function renderOBBook(instr) {
-  const sid = safeId(instr);
-  const depth = depthMap[instr];
-  if (!depth) return;
-
-  // If card not in DOM yet skip (will be built on next renderOBPage)
-  if (!document.getElementById('ob-asks-body-' + sid)) return;
-
-  populateBook(sid, depth);
-
-  // Update spread/mid in card header
-  const bestAsk = depth.asks?.[0];
-  const bestBid = depth.bids?.[0];
-  const spread  = (bestAsk != null && bestBid != null) ? (bestAsk - bestBid) : null;
-  const mid     = (bestAsk != null && bestBid != null) ? ((bestAsk + bestBid) / 2) : null;
-  const spEl  = document.getElementById('ob-sp-v-' + sid);  if (spEl)  spEl.textContent  = spread != null ? fmt(spread) : '–';
-  const midEl = document.getElementById('ob-mid-v-' + sid); if (midEl) midEl.textContent = mid    != null ? fmt(mid)    : '–';
-}
-
-function populateBook(sid, depth) {
-  const askLevels = depth.askLevels || (depth.asks ? depth.asks.length : 0);
-  const bidLevels = depth.bidLevels || (depth.bids ? depth.bids.length : 0);
-  const maxAskQty = Math.max(...(depth.asksQty || []).slice(0, askLevels).filter(Number.isFinite), 1);
-  const maxBidQty = Math.max(...(depth.bidsQty || []).slice(0, bidLevels).filter(Number.isFinite), 1);
-
-  const asksBody = document.getElementById('ob-asks-body-' + sid);
-  const bidsBody = document.getElementById('ob-bids-body-' + sid);
-
-  if (asksBody) {
-    asksBody.innerHTML = '';
-    // Display asks worst → best (flexbox reverses to put best near spread)
-    for (let i = askLevels - 1; i >= 0; i--) {
-      const price = depth.asks?.[i];
-      const qty   = depth.asksQty?.[i];
-      if (price == null || !Number.isFinite(price)) continue;
-      const algoList = depth.asksAlgoInfo?.[i];
-      const hasAlgo  = algoList && algoList.length > 0;
-      const barPct   = qty ? Math.round((qty / maxAskQty) * 100) : 0;
-      const tr = document.createElement('tr');
-      tr.className = 'ask-row' + (hasAlgo ? ' algo-level' : '');
-      tr.innerHTML =
-        `<td>${fmt(price)}</td><td>${qty != null ? fmt(qty,4) : '–'}</td>` +
-        `<td class="ob-bar-cell"><div class="ob-bar ask-bar" style="width:${barPct}%"></div></td>` +
-        `<td>${hasAlgo ? algoList.join(', ') : ''}</td>`;
-      asksBody.appendChild(tr);
+    static final String DASHBOARD_HTML = loadDashboardHtml();
+
+    private static String loadDashboardHtml() {
+        try (InputStream is = AlgorithmWebServer.class.getClassLoader()
+                .getResourceAsStream("dashboard.html")) {
+            if (is == null) {
+                throw new IllegalStateException("dashboard.html not found in classpath");
+            }
+            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to load dashboard.html", e);
+        }
     }
-  }
 
-  if (bidsBody) {
-    bidsBody.innerHTML = '';
-    for (let i = 0; i < bidLevels; i++) {
-      const price = depth.bids?.[i];
-      const qty   = depth.bidsQty?.[i];
-      if (price == null || !Number.isFinite(price)) continue;
-      const algoList = depth.bidsAlgoInfo?.[i];
-      const hasAlgo  = algoList && algoList.length > 0;
-      const barPct   = qty ? Math.round((qty / maxBidQty) * 100) : 0;
-      const tr = document.createElement('tr');
-      tr.className = 'bid-row' + (hasAlgo ? ' algo-level' : '');
-      tr.innerHTML =
-        `<td>${fmt(price)}</td><td>${qty != null ? fmt(qty,4) : '–'}</td>` +
-        `<td class="ob-bar-cell"><div class="ob-bar bid-bar" style="width:${barPct}%"></div></td>` +
-        `<td>${hasAlgo ? algoList.join(', ') : ''}</td>`;
-      bidsBody.appendChild(tr);
-    }
-  }
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Bootstrap
-// ──────────────────────────────────────────────────────────────────────────────
-const urlPort = new URLSearchParams(location.search).get('port');
-if (urlPort) document.getElementById('port-input').value = urlPort;
-
-connect();
-</script>
-</body>
-</html>
-        """;
 }

@@ -1,6 +1,5 @@
 package com.lambda.investing.algorithmic_trading;
 
-
 import com.lambda.investing.LambdaThreadFactory;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshot;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioSnapshot;
@@ -10,221 +9,196 @@ import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.OrderRequest;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.*;
 
+/**
+ * Asynchronous notifier for algorithm observers (UI / monitoring).
+ * <p>
+ * Design goals for HFT hot-path safety:
+ * - The caller (trading engine) NEVER blocks — all notifications are fire-and-forget.
+ * - A bounded queue with DiscardPolicy ensures the queue cannot grow unboundedly;
+ * when it is full the notification is silently dropped. UI lag is acceptable;
+ * trading latency is not.
+ * - execute() is used instead of submit() to avoid Future allocation on every call.
+ * - The background thread runs at MIN_PRIORITY so the OS scheduler favours
+ * trading threads over UI notifications.
+ */
 public class AlgorithmNotifier {
 
-    ThreadFactory namedThreadFactory;
-    private ThreadPoolExecutor notifierPool;
-    private int threadsNotifier;
-    private String algorithmInfo;
-    private Algorithm algorithm;
+    /** Max pending UI notifications. Excess tasks are silently dropped. */
+    private static final int NOTIFIER_QUEUE_CAPACITY = 1024;
+
+    private final ThreadPoolExecutor notifierPool;
+    private volatile String algorithmInfo;
+    private final Algorithm algorithm;
 
     private Map<String, Object> lastParams = new HashMap<>();
     private boolean firstParams = true;
+
     public AlgorithmNotifier(Algorithm algorithm, int threadsNotifier) {
-        this.threadsNotifier = threadsNotifier;
         this.algorithmInfo = algorithm.algorithmInfo;
         this.algorithm = algorithm;
-        if (isMultithreaded()) {
-            namedThreadFactory = LambdaThreadFactory.createThreadFactory(this.algorithmInfo + "_notifier", Thread.MIN_PRIORITY);
-            notifierPool = (ThreadPoolExecutor) Executors.newFixedThreadPool(this.threadsNotifier, namedThreadFactory);
-        }
-    }
 
-    private boolean isMultithreaded() {
-        return this.threadsNotifier > 0;
+        // Always async — at least one background thread so the hot path is never blocked.
+        int threads = Math.max(1, threadsNotifier);
+        ThreadFactory namedThreadFactory = LambdaThreadFactory.createThreadFactory(
+                this.algorithmInfo + "_notifier", Thread.MIN_PRIORITY);
+
+        // Bounded queue: when full, DiscardPolicy silently drops the task.
+        BlockingQueue<Runnable> boundedQueue = new ArrayBlockingQueue<>(NOTIFIER_QUEUE_CAPACITY);
+        this.notifierPool = new ThreadPoolExecutor(
+                threads, threads,
+                0L, TimeUnit.MILLISECONDS,
+                boundedQueue,
+                namedThreadFactory,
+                new ThreadPoolExecutor.DiscardPolicy()   // drop UI update, never block caller
+        );
     }
 
     public void setAlgorithmInfo(String algorithmInfo) {
         this.algorithmInfo = algorithmInfo;
     }
 
-    //pnl snapshots
-    private void _notifyObserversOnUpdatePnlSnapshot(PnlSnapshot pnlSnapshot) {
-        for (AlgorithmObserver algorithmObserver : algorithm.getAlgorithmObservers()) {
-            algorithmObserver.onUpdatePnlSnapshot(this.algorithmInfo, pnlSnapshot);
-        }
+    /** Non-blocking fire-and-forget submit. Drops task silently when queue is full. */
+    private void submitTask(Runnable task) {
+        notifierPool.execute(task); // execute() avoids Future allocation unlike submit()
     }
+
+    private boolean hasObservers() {
+        return !algorithm.getAlgorithmObservers().isEmpty();
+    }
+
+    // ── pnl snapshots ────────────────────────────────────────────────────────
 
     public void notifyObserversOnUpdatePnlSnapshot(PnlSnapshot pnlSnapshot) {
-        if (algorithm.getAlgorithmObservers().size() > 0) {
-            if (isMultithreaded()) {
-                notifierPool.submit(() -> {
-                    _notifyObserversOnUpdatePnlSnapshot(pnlSnapshot);
-                });
-            } else {
-                _notifyObserversOnUpdatePnlSnapshot(pnlSnapshot);
+        if (!hasObservers()) return;
+        final String info = algorithmInfo;
+        final List<AlgorithmObserver> observers = algorithm.getAlgorithmObservers();
+        submitTask(() -> {
+            for (AlgorithmObserver obs : observers) {
+                obs.onUpdatePnlSnapshot(info, pnlSnapshot);
             }
-        }
+        });
     }
 
-    //portfolio snapshots
-    private void _notifyObserversOnUpdatePortfolioSnapshot(PortfolioSnapshot portfolioSnapshot) {
-        for (AlgorithmObserver algorithmObserver : algorithm.getAlgorithmObservers()) {
-            algorithmObserver.onUpdatePortfolioSnapshot(this.algorithmInfo, portfolioSnapshot);
-        }
-    }
+    // ── portfolio snapshots ───────────────────────────────────────────────────
 
     public void notifyObserversOnUpdatePortfolioSnapshot(PortfolioSnapshot portfolioSnapshot) {
-        if (algorithm.getAlgorithmObservers().size() > 0) {
-            if (isMultithreaded()) {
-                notifierPool.submit(() -> {
-                    _notifyObserversOnUpdatePortfolioSnapshot(portfolioSnapshot);
-                });
-            } else {
-                _notifyObserversOnUpdatePortfolioSnapshot(portfolioSnapshot);
+        if (!hasObservers()) return;
+        final String info = algorithmInfo;
+        final List<AlgorithmObserver> observers = algorithm.getAlgorithmObservers();
+        submitTask(() -> {
+            for (AlgorithmObserver obs : observers) {
+                obs.onUpdatePortfolioSnapshot(info, portfolioSnapshot);
             }
-        }
+        });
     }
 
+    // ── depth ─────────────────────────────────────────────────────────────────
 
     public void notifyObserversOnUpdateDepth(Depth depth) {
-        if (algorithm.getAlgorithmObservers().size() > 0) {
-            if (isMultithreaded()) {
-                notifierPool.submit(() -> {
-                    _notifyObserversOnUpdateDepth(depth);
-                });
-            } else {
-                _notifyObserversOnUpdateDepth(depth);
+        if (!hasObservers()) return;
+        final String info = algorithmInfo;
+        final List<AlgorithmObserver> observers = algorithm.getAlgorithmObservers();
+        submitTask(() -> {
+            for (AlgorithmObserver obs : observers) {
+                obs.onUpdateDepth(info, depth);
             }
-        }
+        });
     }
 
-
-    //depth
-    private void _notifyObserversOnUpdateDepth(Depth depth) {
-        for (AlgorithmObserver algorithmObserver : algorithm.getAlgorithmObservers()) {
-            algorithmObserver.onUpdateDepth(this.algorithmInfo, depth);
-        }
-    }
-
-
-    //lastClose
-    private void _notifyObserversOnUpdatePnlSnapshot(Trade trade) {
-        for (AlgorithmObserver algorithmObserver : algorithm.getAlgorithmObservers()) {
-            algorithmObserver.onUpdateTrade(this.algorithmInfo, trade);
-        }
-    }
+    // ── trade ─────────────────────────────────────────────────────────────────
 
     public void notifyObserversOnUpdatePnlSnapshot(Trade trade) {
-        if (algorithm.getAlgorithmObservers().size() > 0) {
-            if (isMultithreaded()) {
-                notifierPool.submit(() -> {
-                    _notifyObserversOnUpdatePnlSnapshot(trade);
-                });
-            } else {
-                _notifyObserversOnUpdatePnlSnapshot(trade);
+        if (!hasObservers()) return;
+        final String info = algorithmInfo;
+        final List<AlgorithmObserver> observers = algorithm.getAlgorithmObservers();
+        submitTask(() -> {
+            for (AlgorithmObserver obs : observers) {
+                obs.onUpdateTrade(info, trade);
             }
-        }
+        });
     }
 
-    //params
-    private void _notifyObserversOnUpdateParams(Map<String, Object> params) {
-        for (AlgorithmObserver algorithmObserver : algorithm.getAlgorithmObservers()) {
-            algorithmObserver.onUpdateParams(this.algorithmInfo, params);
-        }
-    }
+    // ── params ────────────────────────────────────────────────────────────────
 
     public void notifyObserversOnUpdateParams(Map<String, Object> params) {
-        if (!firstParams && lastParams.equals(params)) {
+        // Cheap deduplication on the caller thread; Map#equals is avoided when
+        // the reference is identical (same object) — the most common case.
+        if (!firstParams && (lastParams == params || lastParams.equals(params))) {
             return;
         }
         firstParams = false;
-
-        if (algorithm.getAlgorithmObservers().size() > 0) {
-            if (isMultithreaded()) {
-                notifierPool.submit(() -> {
-                    _notifyObserversOnUpdateParams(params);
-                });
-            } else {
-                _notifyObserversOnUpdateParams(params);
-            }
-        }
         lastParams = params;
 
-    }
-
-    private void _notifyObserversCustomColumns(long timestamp, String instrumentPk, String key, Double value) {
-        for (AlgorithmObserver algorithmObserver : algorithm.getAlgorithmObservers()) {
-            algorithmObserver.onCustomColumns(timestamp, this.algorithmInfo, instrumentPk, key, value);
-        }
-    }
-
-    public void notifyObserversCustomColumns(long timestamp, String instrumentPk, String key, Double value) {
-        if (algorithm.getAlgorithmObservers().size() > 0) {
-            if (isMultithreaded()) {
-                notifierPool.submit(() -> {
-                    _notifyObserversCustomColumns(timestamp, instrumentPk, key, value);
-                });
-            } else {
-                _notifyObserversCustomColumns(timestamp, instrumentPk, key, value);
+        if (!hasObservers()) return;
+        final String info = algorithmInfo;
+        final List<AlgorithmObserver> observers = algorithm.getAlgorithmObservers();
+        submitTask(() -> {
+            for (AlgorithmObserver obs : observers) {
+                obs.onUpdateParams(info, params);
             }
-        }
+        });
     }
 
     public void notifyLastParams() {
-        if (lastParams.size() > 0) {
+        if (!lastParams.isEmpty()) {
             firstParams = true;
             notifyObserversOnUpdateParams(lastParams);
         }
     }
 
-    //message
-    private void _notifyObserversOnUpdateMessage(String name, String body) {
-        for (AlgorithmObserver algorithmObserver : algorithm.getAlgorithmObservers()) {
-            algorithmObserver.onUpdateMessage(this.algorithmInfo, name, body);
-        }
+    // ── custom columns ────────────────────────────────────────────────────────
+
+    public void notifyObserversCustomColumns(long timestamp, String instrumentPk, String key, Double value) {
+        if (!hasObservers()) return;
+        final String info = algorithmInfo;
+        final List<AlgorithmObserver> observers = algorithm.getAlgorithmObservers();
+        submitTask(() -> {
+            for (AlgorithmObserver obs : observers) {
+                obs.onCustomColumns(timestamp, info, instrumentPk, key, value);
+            }
+        });
     }
+
+    // ── message ───────────────────────────────────────────────────────────────
 
     public void notifyObserversOnUpdateMessage(String name, String body) {
-        if (algorithm.getAlgorithmObservers().size() > 0) {
-            if (isMultithreaded()) {
-                notifierPool.submit(() -> {
-                    _notifyObserversOnUpdateMessage(name, body);
-                });
-            } else {
-                _notifyObserversOnUpdateMessage(name, body);
+        if (!hasObservers()) return;
+        final String info = algorithmInfo;
+        final List<AlgorithmObserver> observers = algorithm.getAlgorithmObservers();
+        submitTask(() -> {
+            for (AlgorithmObserver obs : observers) {
+                obs.onUpdateMessage(info, name, body);
             }
-        }
+        });
     }
+
+    // ── order request ─────────────────────────────────────────────────────────
 
     public void notifyObserversOnOrderRequest(OrderRequest orderRequest) {
-        if (algorithm.getAlgorithmObservers().size() > 0) {
-            if (isMultithreaded()) {
-                notifierPool.submit(() -> {
-                    _notifyObserversOnOrderRequest(orderRequest);
-                });
-            } else {
-                _notifyObserversOnOrderRequest(orderRequest);
+        if (!hasObservers()) return;
+        final String info = algorithmInfo;
+        final List<AlgorithmObserver> observers = algorithm.getAlgorithmObservers();
+        submitTask(() -> {
+            for (AlgorithmObserver obs : observers) {
+                obs.onOrderRequest(info, orderRequest);
             }
-        }
+        });
     }
 
-    private void _notifyObserversOnOrderRequest(OrderRequest orderRequest) {
-        for (AlgorithmObserver algorithmObserver : algorithm.getAlgorithmObservers()) {
-            algorithmObserver.onOrderRequest(this.algorithmInfo, orderRequest);
-        }
-    }
+    // ── execution report ──────────────────────────────────────────────────────
 
     public void notifyObserversOnExecutionReportUpdate(ExecutionReport executionReport) {
-        if (algorithm.getAlgorithmObservers().size() > 0) {
-            if (isMultithreaded()) {
-                notifierPool.submit(() -> {
-                    _notifyObserversonExecutionReportUpdate(executionReport);
-                });
-            } else {
-                _notifyObserversonExecutionReportUpdate(executionReport);
+        if (!hasObservers()) return;
+        final String info = algorithmInfo;
+        final List<AlgorithmObserver> observers = algorithm.getAlgorithmObservers();
+        submitTask(() -> {
+            for (AlgorithmObserver obs : observers) {
+                obs.onExecutionReportUpdate(info, executionReport);
             }
-        }
-    }
-
-    private void _notifyObserversonExecutionReportUpdate(ExecutionReport executionReport) {
-        for (AlgorithmObserver algorithmObserver : algorithm.getAlgorithmObservers()) {
-            algorithmObserver.onExecutionReportUpdate(this.algorithmInfo, executionReport);
-        }
+        });
     }
 }

@@ -154,16 +154,17 @@ public class App {
             }
 
             // Start web monitoring UI if uiWebPort is configured
-            int uiWebPort = inputConfiguration.getUiWebPort();
-            if (uiWebPort > 0) {
-                try {
-                    WebAlgorithmObserver webObserver = new WebAlgorithmObserver(uiWebPort);
-                    backtestConfiguration.getAlgorithm().register(webObserver);
-                    logger.info("Web monitoring UI registered on port {}", uiWebPort);
-                } catch (Exception e) {
-                    logger.error("Failed to start web monitoring UI on port {}: {}", uiWebPort, e.getMessage());
-                }
-            }
+//              no sense in backtest
+//            int uiWebPort = inputConfiguration.getUiWebPort();
+//            if (uiWebPort > 0) {
+//                try {
+//                    WebAlgorithmObserver webObserver = new WebAlgorithmObserver(uiWebPort);
+//                    backtestConfiguration.getAlgorithm().register(webObserver);
+//                    logger.info("Web monitoring UI registered on port {}", uiWebPort);
+//                } catch (Exception e) {
+//                    logger.error("Failed to start web monitoring UI on port {}: {}", uiWebPort, e.getMessage());
+//                }
+//            }
 
             OrdinaryBacktest ordinaryBacktest = new OrdinaryBacktest(backtestConfiguration);
             ordinaryBacktest.start();

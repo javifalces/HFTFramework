@@ -4,6 +4,7 @@ import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.Algorithm;
 import com.lambda.investing.algorithmic_trading.AlgorithmObserver;
 import com.lambda.investing.algorithmic_trading.AlgorithmParameters;
+import com.lambda.investing.algorithmic_trading.AlgorithmProviderImpl;
 import com.lambda.investing.algorithmic_trading.observer.push.pushbullet.PushbulletAlgorithmObserver;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshot;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioSnapshot;
@@ -58,6 +59,7 @@ public abstract class PushService implements AlgorithmObserver {
 
     protected static final Logger logger = LogManager.getLogger(PushService.class);
     private static List<PushService> activePushServices = new ConcurrentArrayList<>();
+    private static AlgorithmProviderImpl provider;
 
     public static void createPushServices(Algorithm algorithm) {
         if (!PUSHBULLET_TOKEN.isBlank()) {
@@ -65,6 +67,7 @@ public abstract class PushService implements AlgorithmObserver {
                 PushbulletAlgorithmObserver pushbulletAlgorithmObserver = new PushbulletAlgorithmObserver(algorithm, PUSHBULLET_TOKEN);
                 algorithm.register(pushbulletAlgorithmObserver);
                 activePushServices.add(pushbulletAlgorithmObserver);
+                provider = AlgorithmProviderImpl.getInstanceOrCreate(algorithm);
                 logger.info("PushbulletAlgorithmObserver registered successfully");
             } catch (Exception e) {
                 logger.error("error registering createPushServices PushbulletAlgorithmObserver ", e);
@@ -153,7 +156,7 @@ public abstract class PushService implements AlgorithmObserver {
         if (STOP_COMMANDS.stream().anyMatch(cmd -> combined.equalsIgnoreCase(cmd))) {
             logger.info("Received stop command via push – stopping algorithm");
             System.out.println(Configuration.formatLog("Received stop command via push – stopping algorithm"));
-            algorithm.manualStop();
+            provider.stopAlgo();
             try {
                 sendMessage(algorithm.getAlgorithmInfo() + " stopped",
                         "Received stop command via push – stopping algorithm");
@@ -167,7 +170,7 @@ public abstract class PushService implements AlgorithmObserver {
         if (START_COMMANDS.stream().anyMatch(cmd -> combined.equalsIgnoreCase(cmd))) {
             logger.info("Received start command via push – starting algorithm");
             System.out.println(Configuration.formatLog("Received start command via push – starting algorithm"));
-            algorithm.manualStart();
+            provider.startAlgo();
             try {
                 sendMessage(algorithm.getAlgorithmInfo() + " started",
                         "Received start command via push – starting algorithm");

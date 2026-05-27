@@ -7,6 +7,7 @@ import com.lambda.investing.algo_trading.AlgorithmInstanceConfiguration;
 import com.lambda.investing.algo_trading.ZeroMqTradingConfiguration;
 import com.lambda.investing.algorithmic_trading.Algorithm;
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
+import com.lambda.investing.algorithmic_trading.AlgorithmProviderImpl;
 import com.lambda.investing.algorithmic_trading.observer.web.WebAlgorithmObserver;
 import com.lambda.investing.ArrayUtils;
 import com.lambda.investing.algorithmic_trading.hedging.synthetic_portfolio.SyntheticInstrument;
@@ -421,6 +422,7 @@ public class App {
             try {
                 WebAlgorithmObserver webObserver = new WebAlgorithmObserver(uiWebPort);
                 algorithm.register(webObserver);
+                webObserver.setProvider(AlgorithmProviderImpl.getInstanceOrCreate(algorithm));//add provider
                 logger.info("Web monitoring UI registered on port {}", uiWebPort);
             } catch (Exception e) {
                 logger.error("Failed to start web monitoring UI on port {}: {}", uiWebPort, e.getMessage());

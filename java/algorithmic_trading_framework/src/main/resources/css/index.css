@@ -1,0 +1,342 @@
+/* ── Book sides – bids left, asks right (index layout) ───────────────────── */
+.ob-bids-side {
+    flex: 1 1 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+}
+
+.ob-asks-side {
+    flex: 1 1 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.ob-bids-wrap {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.ob-asks-wrap {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.ob-asks-wrap::-webkit-scrollbar,
+.ob-bids-wrap::-webkit-scrollbar {
+    width: 3px;
+}
+
+.ob-asks-wrap::-webkit-scrollbar-thumb,
+.ob-bids-wrap::-webkit-scrollbar-thumb {
+    background: var(--border);
+}
+
+/* ── Paper Trading banner ────────────────────────────────────────────────── */
+#paper-trading-bar {
+    display: none;
+    background: #c53030;
+    color: #fff;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    padding: 6px 0;
+    text-transform: uppercase;
+    position: sticky;
+    top: 0;
+    z-index: 300;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .4);
+}
+
+#paper-trading-bar.visible {
+    display: block;
+}
+
+/* ── Login overlay ───────────────────────────────────────────────────────── */
+#login-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 20000;
+    background: rgba(0, 0, 0, .75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#login-overlay.hidden {
+    display: none;
+}
+
+.login-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 32px 36px;
+    width: 320px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, .6);
+    text-align: center;
+}
+
+.login-box h3 {
+    font-size: 17px;
+    color: var(--text);
+    margin-bottom: 6px;
+}
+
+.login-box p {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 20px;
+}
+
+.login-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    text-align: left;
+    margin-bottom: 12px;
+}
+
+.login-field label {
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.login-field input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    padding: 7px 10px;
+    font-size: 13px;
+}
+
+.login-field input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+#login-error {
+    color: var(--red);
+    font-size: 12px;
+    margin-bottom: 10px;
+    min-height: 16px;
+}
+
+#login-submit-btn {
+    width: 100%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 10px;
+    font-size: 13px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+#login-submit-btn:hover {
+    opacity: .85;
+}
+
+/* ── Mobile / small-screen overrides ────────────────────────────────────── */
+@media (max-width: 600px) {
+    /* Header */
+    header {
+        padding: 8px 12px;
+        gap: 6px;
+    }
+
+    header h1 {
+        font-size: 13px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 45vw;
+    }
+
+    #algo-info {
+        display: none;
+    }
+
+    /* Keep power icon, hide text label to save space */
+    #algo-toggle-label {
+        display: none;
+    }
+
+    #algo-toggle-btn {
+        padding: 8px 10px;
+        border-radius: 50%;
+        min-width: 36px;
+        min-height: 36px;
+        justify-content: center;
+    }
+
+    /* Tab nav */
+    .tab-btn {
+        padding: 10px 12px;
+        font-size: 12px;
+    }
+
+    /* Grid / cards */
+    .grid {
+        padding: 10px;
+        gap: 10px;
+    }
+
+    .card {
+        padding: 12px;
+    }
+
+    .kv-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 6px;
+    }
+
+    .kv .value {
+        font-size: 13px;
+    }
+
+    #params-container {
+        gap: 4px;
+    }
+
+    .param-key {
+        min-width: 100px;
+    }
+
+    /* Tables */
+    .table-wrap {
+        max-height: 190px;
+    }
+
+    td, th {
+        padding: 4px 5px;
+        font-size: 11px;
+    }
+
+    /* Bottom bar */
+    #bottom-bar {
+        gap: 8px;
+        padding: 0 10px;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    #port-form label {
+        display: none;
+    }
+
+    #port-input {
+        width: 52px;
+    }
+
+    /* Prevent iOS auto-zoom on input focus (font-size must be >= 16px) */
+    #port-input, #ob-per-page {
+        font-size: 16px;
+        width: 60px;
+    }
+
+    /* Orderbook page */
+    #ob-page-wrap {
+        padding: 10px;
+    }
+
+    .ob-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .ob-toolbar {
+        gap: 10px;
+    }
+
+    /* Instrument card: stack book + ticker vertically on mobile */
+    .instr-body {
+        flex-direction: column;
+        min-height: unset;
+    }
+
+    .ob-bids-side {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .ob-bids-wrap {
+        max-height: 110px;
+    }
+
+    .ob-asks-wrap {
+        max-height: 110px;
+    }
+
+    .ticker-side {
+        width: 100%;
+        border-left: none;
+        border-top: 1px solid var(--border);
+        max-height: 130px;
+    }
+
+    .ticker-list {
+        max-height: 100px;
+    }
+
+    /* Toast */
+    #toast-container {
+        top: 48px;
+        right: 8px;
+        left: 8px;
+    }
+
+    .toast {
+        min-width: unset;
+        max-width: 100%;
+        font-size: 11px;
+        padding: 8px 10px;
+    }
+
+    /* Confirm modal */
+    .confirm-box {
+        width: 92vw;
+        padding: 24px 16px;
+    }
+
+    .confirm-actions {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .btn-confirm-yes, .btn-confirm-no {
+        width: 100%;
+        padding: 12px;
+    }
+
+    /* Buttons – ensure 44px touch target */
+    .pager button {
+        padding: 8px 14px;
+    }
+
+    #connect-btn {
+        padding: 6px 10px;
+        min-height: 28px;
+    }
+}
+
+/* ── Extra-narrow (≤ 380px, e.g. iPhone SE) ─────────────────────────────── */
+@media (max-width: 380px) {
+    header h1 {
+        max-width: 38vw;
+        font-size: 12px;
+    }
+
+    .tab-btn {
+        padding: 10px 8px;
+        font-size: 11px;
+    }
+
+    .kv-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+

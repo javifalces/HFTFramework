@@ -2,18 +2,23 @@ package com.lambda.investing.algorithmic_trading.observer.web;
 
 import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.AlgorithmObserver;
+import com.lambda.investing.algorithmic_trading.AlgorithmProvider;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshot;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioSnapshot;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.trading.ExecutionReport;
+import com.lambda.investing.model.trading.ExecutionReportStatus;
 import com.lambda.investing.model.trading.OrderRequest;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 
 import static com.lambda.investing.model.Util.GSON;
 import static com.lambda.investing.model.Util.toJsonStringGSON;
@@ -54,6 +59,13 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
     private final Map<String, Double> latestCustomColumns = new ConcurrentHashMap<>();
     /** Latest L2 depth snapshot per instrument (used to restore orderbook on reconnect). */
     private final Map<String, Map<String, Object>> latestDepths = new ConcurrentHashMap<>();
+    /**
+     * Active (live) execution reports per instrument, keyed by clientOrderId.
+     * Populated on Active/PartialFilled, removed on CompletelyFilled/Cancelled/Rejected/CancelRejected.
+     * Used to overlay own orders on the orderbook regardless of whether algo-info is available in depth.
+     */
+    private final Map<String, ConcurrentHashMap<String, Map<String, Object>>> activeOrdersByInstrument =
+            new ConcurrentHashMap<>();
 
     /**
      * Creates and starts the web server on the given port.
@@ -69,7 +81,25 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
             logger.info("Grafana tab enabled at {}", Configuration.GRAFANA_URL);
         }
         logger.info("Web UI available at http://localhost:{}", port);
-        System.out.println("[WebAlgorithmObserver] Web UI available at http://localhost:" + port);
+        System.out.println("[WebAlgorithmObserver] Web UI available at http://localhost:" + port
+                + "  |  login: " + Configuration.WEB_UI_LOGIN
+                + "  password: " + Configuration.WEB_UI_PASSWORD);
+
+
+    }
+
+    /**
+     * Controls the PAPER TRADING banner shown in the frontend.
+     * Call this with {@code true} when the algorithm is running in paper-trading mode.
+     *
+     * @param paperTrading {@code true} to show the banner
+     */
+    public void setPaperTrading(boolean paperTrading) {
+        server.setPaperTrading(paperTrading);
+    }
+
+    public void setProvider(AlgorithmProvider provider) {
+        server.setAlgorithmProvider(provider);
     }
 
     // -----------------------------------------------------------------------
@@ -78,10 +108,15 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
 
     @Override
     public void onUpdateDepth(String algorithmInfo, Depth depth) {
+        Map<String, Object> snapshot = null;
         if (depth != null && depth.getInstrument() != null) {
-            latestDepths.put(depth.getInstrument(), toDepthSnapshot(depth));
+            snapshot = toDepthSnapshot(depth);
+            latestDepths.put(depth.getInstrument(), snapshot);
         }
-        String json = buildMessage("DEPTH", algorithmInfo, depth, currentTimeMs());
+        // Broadcast the snapshot (with frontend-expected field names: bidsQty, asksQty,
+        // bidsAlgoInfo, asksAlgoInfo) instead of the raw Depth object whose GSON field
+        // names differ (bidsQuantities, asksQuantities, bidsAlgorithmInfo, asksAlgorithmInfo).
+        String json = buildMessage("DEPTH", algorithmInfo, snapshot != null ? snapshot : depth, currentTimeMs());
         server.broadcastUpdate(json);
     }
 
@@ -95,7 +130,9 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
     @Override
     public void onUpdatePortfolioSnapshot(String algorithmInfo, PortfolioSnapshot portfolioSnapshot) {
         this.latestPortfolio = portfolioSnapshot;
-        String json = buildMessage("PORTFOLIO_SNAPSHOT", algorithmInfo, portfolioSnapshot, currentTimeMs());
+        // Use a lightweight DTO – the full PortfolioSnapshot carries huge historical
+        // maps inside every PnlSnapshot which would produce megabyte-sized JSON messages.
+        String json = buildMessage("PORTFOLIO_SNAPSHOT", algorithmInfo, toPortfolioDto(portfolioSnapshot), currentTimeMs());
         server.broadcastUpdate(json);
         refreshState();
     }
@@ -131,8 +168,53 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
 
     @Override
     public void onExecutionReportUpdate(String algorithmInfo, ExecutionReport executionReport) {
+        updateActiveOrders(executionReport);
         String json = buildMessage("EXECUTION_REPORT", algorithmInfo, executionReport, currentTimeMs());
         server.broadcastUpdate(json);
+    }
+
+    /**
+     * Maintains the {@link #activeOrdersByInstrument} map from incoming execution reports.
+     * <ul>
+     *   <li>Active / PartialFilled → add / update the order entry.</li>
+     *   <li>CompletelyFilled / Cancelled / Rejected / CancelRejected → remove the entry.</li>
+     * </ul>
+     * Also removes the old entry keyed by {@code origClientOrderId} on modify-confirm flows.
+     */
+    private void updateActiveOrders(ExecutionReport er) {
+        if (er == null || er.getInstrument() == null || er.getClientOrderId() == null) return;
+        ExecutionReportStatus status = er.getExecutionReportStatus();
+        if (status == null) return;
+
+        String instrument = er.getInstrument();
+        String clientOrderId = er.getClientOrderId();
+
+        ConcurrentHashMap<String, Map<String, Object>> instrOrders =
+                activeOrdersByInstrument.computeIfAbsent(instrument, k -> new ConcurrentHashMap<>());
+
+        if (ExecutionReport.isLiveStatus(er)) {
+            Map<String, Object> orderInfo = new LinkedHashMap<>();
+            orderInfo.put("clientOrderId", clientOrderId);
+            orderInfo.put("verb", er.getVerb() != null ? er.getVerb().name() : null);
+            orderInfo.put("price", er.getPrice());
+            orderInfo.put("quantity", er.getQuantity());
+            orderInfo.put("quantityFill", er.getQuantityFill());
+            instrOrders.put(clientOrderId, orderInfo);
+            // On modify, remove the superseded original order
+            if (er.getOrigClientOrderId() != null && !er.getOrigClientOrderId().isEmpty()
+                    && !er.getOrigClientOrderId().equals(clientOrderId)) {
+                instrOrders.remove(er.getOrigClientOrderId());
+            }
+            refreshState();
+        } else if (ExecutionReport.isRemovedStatus(er)
+                || status == ExecutionReportStatus.Rejected
+                || status == ExecutionReportStatus.CancelRejected) {
+            instrOrders.remove(clientOrderId);
+            if (er.getOrigClientOrderId() != null && !er.getOrigClientOrderId().isEmpty()) {
+                instrOrders.remove(er.getOrigClientOrderId());
+            }
+            refreshState();
+        }
     }
 
     @Override
@@ -156,8 +238,22 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
     }
 
     /**
+     * Replaces GSON-written {@code NaN} / {@code Infinity} / {@code -Infinity} tokens
+     * (which are not valid JSON) with {@code null} so that {@code JSON.parse()} in the
+     * browser does not throw.  The negative look-behind/ahead for {@code "} ensures we
+     * do not corrupt legitimate string values that happen to contain those words.
+     */
+    private static final Pattern NAN_PATTERN =
+            Pattern.compile("(?<![\"\\w])(NaN|-?Infinity)(?![\"\\w])");
+
+    private static String sanitizeJson(String json) {
+        return NAN_PATTERN.matcher(json).replaceAll("null");
+    }
+
+    /**
      * Serialises an update to the typed JSON envelope format expected by the
-     * dashboard frontend.
+     * dashboard frontend.  All NaN / Infinity values are replaced with {@code null}
+     * to produce valid JSON.
      */
     private static String buildMessage(String type, String algorithmInfo, Object data, long timestamp) {
         StringBuilder sb = new StringBuilder();
@@ -168,7 +264,37 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         }
         sb.append(",\"data\":").append(toJsonStringGSON(data));
         sb.append("}");
-        return sb.toString();
+        return sanitizeJson(sb.toString());
+    }
+
+    /**
+     * Creates a lightweight portfolio map containing only the fields the dashboard
+     * frontend needs.  Avoids serialising the enormous per-instrument historical maps
+     * stored inside each {@link PnlSnapshot}.
+     */
+    private static Map<String, Object> toPortfolioDto(PortfolioSnapshot ps) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("realizedPnl", ps.realizedPnl);
+        m.put("unrealizedPnl", ps.unrealizedPnl);
+        m.put("totalPnl", ps.totalPnl);
+        m.put("netPosition", ps.netPosition);
+        m.put("totalFees", ps.totalFees);
+        m.put("netInvestment", ps.netInvestment);
+
+        Map<String, Object> instrMap = new LinkedHashMap<>();
+        if (ps.getInstrumentPnlSnapshotMap() != null) {
+            for (Map.Entry<String, PnlSnapshot> e : ps.getInstrumentPnlSnapshotMap().entrySet()) {
+                PnlSnapshot s = e.getValue();
+                Map<String, Object> sm = new LinkedHashMap<>();
+                sm.put("realizedPnl", s.realizedPnl);
+                sm.put("unrealizedPnl", s.unrealizedPnl);
+                sm.put("totalPnl", s.totalPnl);
+                sm.put("netPosition", s.netPosition);
+                instrMap.put(e.getKey(), sm);
+            }
+        }
+        m.put("instrumentPnlSnapshotMap", instrMap);
+        return m;
     }
 
     /**
@@ -177,7 +303,7 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
     private void refreshState() {
         Map<String, Object> state = new HashMap<>();
         if (latestPortfolio != null) {
-            state.put("portfolio", latestPortfolio);
+            state.put("portfolio", toPortfolioDto(latestPortfolio));
         }
         if (latestParams != null) {
             state.put("params", latestParams);
@@ -188,7 +314,18 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         if (!latestDepths.isEmpty()) {
             state.put("depths", latestDepths);
         }
-        server.updateState(toJsonStringGSON(state));
+        // Active orders per instrument – used by the frontend to overlay own orders on the book
+        Map<String, Object> activeOrdersDto = new LinkedHashMap<>();
+        for (Map.Entry<String, ConcurrentHashMap<String, Map<String, Object>>> e :
+                activeOrdersByInstrument.entrySet()) {
+            if (!e.getValue().isEmpty()) {
+                activeOrdersDto.put(e.getKey(), new ArrayList<>(e.getValue().values()));
+            }
+        }
+        if (!activeOrdersDto.isEmpty()) {
+            state.put("activeOrders", activeOrdersDto);
+        }
+        server.updateState(sanitizeJson(toJsonStringGSON(state)));
     }
 
     /**
