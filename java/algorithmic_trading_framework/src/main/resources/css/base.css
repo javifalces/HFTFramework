@@ -462,6 +462,12 @@ tr:hover td {
     width: 72px;
 }
 
+.ob-toolbar-sep {
+    color: var(--border);
+    font-size: 14px;
+    user-select: none;
+}
+
 .ob-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(540px, 1fr));
@@ -526,7 +532,7 @@ tr:hover td {
 .instr-body {
     display: flex;
     gap: 0;
-    min-height: 300px;
+    /* no min-height — card trims to content height */
 }
 
 /* ── Orderbook table (shared) ────────────────────────────────────────────── */
@@ -552,6 +558,7 @@ tr:hover td {
 
 .ob-table {
     width: 100%;
+    table-layout: auto; /* columns auto-size to fit their content */
     border-collapse: collapse;
     font-size: 11px;
 }
@@ -559,6 +566,7 @@ tr:hover td {
 .ob-table td {
     padding: 3px 10px;
     border-bottom: 1px solid rgba(255, 255, 255, .03);
+    white-space: nowrap; /* keeps numbers on one line, drives auto column width */
 }
 
 .ask-row td {
@@ -603,7 +611,7 @@ tr:hover td {
     border-left: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: visible; /* allow scrollbar thumb to be visible */
 }
 
 .ticker-side h3 {
@@ -618,16 +626,22 @@ tr:hover td {
 }
 
 .ticker-list {
-    flex: 1;
-    overflow-y: auto;
+    max-height: 120px; /* ~5 trade rows visible; scrolls for more */
+    overflow-y: scroll; /* always show vertical scrollbar */
+    overflow-x: hidden;
 }
 
 .ticker-list::-webkit-scrollbar {
-    width: 3px;
+    width: 4px;
+}
+
+.ticker-list::-webkit-scrollbar-track {
+    background: var(--bg);
 }
 
 .ticker-list::-webkit-scrollbar-thumb {
     background: var(--border);
+    border-radius: 2px;
 }
 
 .ticker-row {
@@ -713,6 +727,16 @@ tr:hover td {
     border-left-color: var(--accent);
 }
 
+.toast.buy {
+    border-left-color: var(--green);
+    background: color-mix(in srgb, var(--surface) 90%, var(--green) 10%);
+}
+
+.toast.sell {
+    border-left-color: var(--red);
+    background: color-mix(in srgb, var(--surface) 90%, var(--red) 10%);
+}
+
 .toast-title {
     font-weight: 700;
     color: var(--yellow);
@@ -721,6 +745,14 @@ tr:hover td {
 
 .toast.market .toast-title {
     color: var(--accent);
+}
+
+.toast.buy .toast-title {
+    color: var(--green);
+}
+
+.toast.sell .toast-title {
+    color: var(--red);
 }
 
 .toast-body {

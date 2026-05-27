@@ -76,6 +76,9 @@
             <span class="algo-power-icon">⏻</span>
             <span id="algo-toggle-label">Running</span>
         </button>
+      <button id="bell-btn" class="header-btn bell-btn" onclick="toggleBell()"
+              title="Trade sound notifications (disabled)">🔕
+      </button>
         <button class="header-btn" onclick="openSettings()">⚙ Settings</button>
         <button class="header-btn" onclick="doLogout()">Logout</button>
     </div>
@@ -105,7 +108,16 @@
 <div class="tab-panel active" id="tab-overview">
     <div class="grid">
         <div class="card">
-            <h2>Portfolio</h2>
+          <h2 style="display:flex;align-items:center;justify-content:space-between">
+            Portfolio
+            <span style="font-size:11px;color:var(--muted);text-transform:none;letter-spacing:0;font-weight:400;display:flex;align-items:center;gap:6px">
+                    Sample every
+                    <input id="pnl-interval" type="number" value="10" min="1" max="3600"
+                           style="width:52px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:3px;padding:2px 4px;font-size:11px"
+                           onchange="onPnlIntervalChange()"/>
+                    s &nbsp;|&nbsp; <span id="pnl-chart-count" style="color:var(--muted)">0 samples</span>
+                </span>
+          </h2>
             <div class="kv-grid">
                 <div class="kv">
                     <div class="label">Realized PnL</div>
@@ -120,10 +132,6 @@
                     <div class="value neutral" id="pnl-total">–</div>
                 </div>
                 <div class="kv">
-                    <div class="label">Net Position</div>
-                    <div class="value neutral" id="pnl-position">–</div>
-                </div>
-                <div class="kv">
                     <div class="label">Total Fees</div>
                     <div class="value neutral" id="pnl-fees">–</div>
                 </div>
@@ -132,6 +140,7 @@
                     <div class="value neutral" id="pnl-investment">–</div>
                 </div>
             </div>
+          <canvas id="pnl-chart" class="pnl-canvas" style="margin-top:14px"></canvas>
         </div>
         <div class="card">
             <h2>Instruments</h2>

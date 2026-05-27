@@ -56,6 +56,10 @@ public class AlgorithmWebServer {
     /** All active WebSocket channels – writes are fan-out broadcast. */
     private final ChannelGroup wsChannels = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
     private volatile String currentStateJson = "{}";
+    /**
+     * Persisted PnL timeline history – returned to clients on demand via GET /api/pnl-history.
+     */
+    private volatile String pnlHistoryJson = "[]";
     /** Optional Grafana base URL included in STATE messages (empty = Grafana tab hidden). */
     private volatile String grafanaUrl = "";
     /**
@@ -152,6 +156,16 @@ public class AlgorithmWebServer {
      */
     public void updateState(String stateJson) {
         this.currentStateJson = stateJson;
+    }
+
+    /**
+     * Replaces the persisted PnL history returned by {@code GET /api/pnl-history}.
+     * Called by {@link WebAlgorithmObserver} whenever a new sample is appended.
+     *
+     * @param historyJson JSON array of {@code {ts, realized, unrealized, total}} objects
+     */
+    public void updatePnlHistory(String historyJson) {
+        this.pnlHistoryJson = (historyJson != null) ? historyJson : "[]";
     }
 
     /**
@@ -287,6 +301,17 @@ public class AlgorithmWebServer {
                 } else {
                     response = new DefaultFullHttpResponse(HTTP_1_1, OK,
                             Unpooled.copiedBuffer(currentStateJson, CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                }
+            } else if ("/api/pnl-history".equals(uri)) {
+                String token = getAuthToken(req, query);
+                if (!isValidToken(token)) {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, UNAUTHORIZED,
+                            Unpooled.copiedBuffer("{\"error\":\"Unauthorized\"}", CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                } else {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                            Unpooled.copiedBuffer(pnlHistoryJson, CharsetUtil.UTF_8));
                     response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
                 }
             } else {

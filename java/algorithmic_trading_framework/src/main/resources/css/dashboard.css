@@ -1,21 +1,62 @@
-/* ── Book side – asks (reversed) above spread above bids (dashboard layout) ── */
+/* ── Bell notification button ────────────────────────────────────────────── */
+.bell-btn {
+  font-size: 15px;
+  padding: 4px 8px;
+  transition: color .2s, border-color .2s, background .2s;
+}
+
+.bell-btn.bell-active {
+  color: var(--yellow);
+  border-color: var(--yellow);
+  background: rgba(236, 201, 75, .12);
+}
+
+.bell-btn.bell-active:hover {
+  background: rgba(236, 201, 75, .25);
+}
+
+/* ── PnL Timeline chart ───────────────────────────────────────────────────── */
+.pnl-canvas {
+  display: block;
+  width: 100%;
+  height: 200px;
+  border-radius: 4px;
+  background: var(--bg);
+}
+
+/* ── Book side – bids on the left, asks on the right ─────────────────────── */
 .ob-book-side {
+  flex: 1 1 auto; /* grow with content, don't clip */
+  display: flex;
+  flex-direction: row;
+}
+
+.ob-half {
     flex: 1 1 0;
-    overflow: hidden;
     display: flex;
     flex-direction: column;
+  min-width: 0; /* prevent flex blowout, horizontal clipping handled by .instr-card */
 }
 
-.ob-asks-wrap {
-    flex: 1;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column-reverse;
+.ob-bids-half {
+  border-right: 1px solid var(--border);
 }
 
+/* Bids side: right-align all cells so price sits flush against the asks side */
+.ob-bids-half .ob-table td {
+  text-align: right;
+}
+
+/* Bid bar grows right-to-left (away from the spread) */
+.ob-bids-half .ob-bar-cell {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.ob-asks-wrap,
 .ob-bids-wrap {
-    flex: 1;
-    overflow-y: auto;
+  /* natural block — no overflow/flex constraints so all rows are visible */
 }
 
 .ob-asks-wrap::-webkit-scrollbar,
@@ -26,6 +67,7 @@
 .ob-asks-wrap::-webkit-scrollbar-thumb,
 .ob-bids-wrap::-webkit-scrollbar-thumb {
     background: var(--border);
+  border-radius: 2px;
 }
 
 .ob-spread-row {
@@ -310,12 +352,12 @@
         min-height: unset;
     }
 
-    .ob-asks-wrap {
-        max-height: 110px;
+  .ob-book-side {
+    flex-direction: row;
     }
 
-    .ob-bids-wrap {
-        max-height: 110px;
+  .ob-half {
+    /* no fixed heights on mobile either — trim to content */
     }
 
     .ticker-side {

@@ -14,10 +14,12 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.regex.Pattern;
 
 import static com.lambda.investing.model.Util.GSON;
@@ -59,6 +61,34 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
     private final Map<String, Double> latestCustomColumns = new ConcurrentHashMap<>();
     /** Latest L2 depth snapshot per instrument (used to restore orderbook on reconnect). */
     private final Map<String, Map<String, Object>> latestDepths = new ConcurrentHashMap<>();
+
+    // ── PnL history (persisted on the backend, queried by the frontend on reconnect) ──
+    /**
+     * Circular buffer of sampled PnL entries: {@code {ts, realized, unrealized, total}}.
+     */
+    private final Deque<Map<String, Object>> pnlHistory = new ConcurrentLinkedDeque<>();
+    /**
+     * Maximum number of PnL samples to retain in memory.
+     */
+    private static final int MAX_PNL_HISTORY = 10_000;
+    /**
+     * Minimum milliseconds between consecutive samples (default 10 s, overridable via {@link #setPnlSampleIntervalMs}).
+     */
+    private volatile long pnlSampleIntervalMs = 10_000;
+    /**
+     * Timestamp of the last recorded PnL sample.
+     */
+    private volatile long lastPnlSampleTs = 0;
+
+    /**
+     * Overrides the minimum interval between backend PnL samples.
+     * Call before the algorithm starts producing data. Default is 10 000 ms (10 s).
+     *
+     * @param intervalMs interval in milliseconds; must be &gt; 0
+     */
+    public void setPnlSampleIntervalMs(long intervalMs) {
+        if (intervalMs > 0) this.pnlSampleIntervalMs = intervalMs;
+    }
     /**
      * Active (live) execution reports per instrument, keyed by clientOrderId.
      * Populated on Active/PartialFilled, removed on CompletelyFilled/Cancelled/Rejected/CancelRejected.
@@ -130,6 +160,19 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
     @Override
     public void onUpdatePortfolioSnapshot(String algorithmInfo, PortfolioSnapshot portfolioSnapshot) {
         this.latestPortfolio = portfolioSnapshot;
+        // Record a PnL sample for the persistent history (rate-limited)
+        long now = currentTimeMs();
+        if (now - lastPnlSampleTs >= pnlSampleIntervalMs) {
+            lastPnlSampleTs = now;
+            Map<String, Object> sample = new LinkedHashMap<>();
+            sample.put("ts", now);
+            sample.put("realized", portfolioSnapshot.realizedPnl);
+            sample.put("unrealized", portfolioSnapshot.unrealizedPnl);
+            sample.put("total", portfolioSnapshot.totalPnl);
+            pnlHistory.addLast(sample);
+            while (pnlHistory.size() > MAX_PNL_HISTORY) pnlHistory.pollFirst();
+            server.updatePnlHistory(sanitizeJson(toJsonStringGSON(new ArrayList<>(pnlHistory))));
+        }
         // Use a lightweight DTO – the full PortfolioSnapshot carries huge historical
         // maps inside every PnlSnapshot which would produce megabyte-sized JSON messages.
         String json = buildMessage("PORTFOLIO_SNAPSHOT", algorithmInfo, toPortfolioDto(portfolioSnapshot), currentTimeMs());

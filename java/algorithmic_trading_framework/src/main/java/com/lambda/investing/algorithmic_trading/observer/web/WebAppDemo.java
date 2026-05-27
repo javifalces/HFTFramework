@@ -50,6 +50,12 @@ public class WebAppDemo {
     private static final long TICK_INTERVAL_MS = 500;
 
     /**
+     * PnL sampling interval sent to the backend history store (milliseconds).
+     * Kept short in the demo so the timeline chart fills up quickly.
+     */
+    private static final long PNL_SAMPLE_INTERVAL_MS = 2_000;
+
+    /**
      * Number of order-book levels to generate.
      */
     private static final int BOOK_LEVELS = 5;
@@ -82,6 +88,8 @@ public class WebAppDemo {
     public WebAppDemo() throws InterruptedException {
         this.observer = new WebAlgorithmObserver(PORT);
         this.observer.setPaperTrading(true);
+        // Use a shorter PnL sample interval so the timeline chart fills up quickly in the demo
+        this.observer.setPnlSampleIntervalMs(PNL_SAMPLE_INTERVAL_MS);
     }
 
     // -----------------------------------------------------------------------
@@ -92,8 +100,10 @@ public class WebAppDemo {
         System.out.println("╔══════════════════════════════════════════════════════╗");
         System.out.println("║         WebAppDemo  –  frontend stress-test          ║");
         System.out.println("╠══════════════════════════════════════════════════════╣");
-        System.out.println("║  Dashboard → http://localhost:" + PORT + "                  ║");
-        System.out.println("║  Login     → admin / admin                           ║");
+        System.out.println("║  Dashboard   → http://localhost:" + PORT + "                  ║");
+        System.out.println("║  PnL history → http://localhost:" + PORT + "/api/pnl-history  ║");
+        System.out.println("║  Login       → admin / admin                         ║");
+        System.out.println("║  PnL sample interval: " + PNL_SAMPLE_INTERVAL_MS + " ms                     ║");
         System.out.println("╚══════════════════════════════════════════════════════╝");
 
         WebAppDemo demo = new WebAppDemo();

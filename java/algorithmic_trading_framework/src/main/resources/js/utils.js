@@ -31,6 +31,17 @@ function sideClass(v) {
     return v.toLowerCase() === 'buy' ? 'badge-buy' : 'badge-sell';
 }
 
+/** Format a number compactly for axis labels (K / M suffixes). */
+function fmtCompact(v) {
+    if (v == null || !Number.isFinite(+v)) return '–';
+    const n = +v;
+    const abs = Math.abs(n);
+    if (abs >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+    if (abs >= 1e3) return (n / 1e3).toFixed(2) + 'K';
+    if (abs >= 10) return n.toFixed(2);
+    return n.toFixed(4);
+}
+
 // ── DOM id helpers ────────────────────────────────────────────────────────────
 /** Sanitise an arbitrary string so it can be used as a DOM id. */
 function safeId(s) {

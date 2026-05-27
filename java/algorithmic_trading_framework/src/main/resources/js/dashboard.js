@@ -1,3 +1,41 @@
+// ── Trade sound notifications ─────────────────────────────────────────────────
+let bellEnabled = false;
+
+function toggleBell() {
+    bellEnabled = !bellEnabled;
+    const btn = document.getElementById('bell-btn');
+    if (!btn) return;
+    if (bellEnabled) {
+        btn.textContent = '🔔';
+        btn.classList.add('bell-active');
+        btn.title = 'Trade sound notifications (enabled) – click to disable';
+    } else {
+        btn.textContent = '🔕';
+        btn.classList.remove('bell-active');
+        btn.title = 'Trade sound notifications (disabled) – click to enable';
+    }
+}
+
+function playTradeSound() {
+    if (!bellEnabled) return;
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1047, ctx.currentTime);         // C6
+        osc.frequency.exponentialRampToValueAtTime(523, ctx.currentTime + 0.25); // C5
+        gain.gain.setValueAtTime(0.25, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.45);
+        osc.onended = () => ctx.close();
+    } catch (e) { /* AudioContext not supported */
+    }
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 const TOKEN_KEY = 'hft_auth_token';
 let authFailed = false;
@@ -119,6 +157,201 @@ async function doChangeCredentials() {
         msg.style.color = 'var(--red)';
         msg.textContent = 'Error: ' + e.message;
     }
+}
+
+// ── PnL Timeline ──────────────────────────────────────────────────────────────
+/** Array of { ts, realized, unrealized, total } sampled snapshots */
+const pnlHistory = [];
+/** Most-recent PnL values (updated on every portfolio snapshot) */
+const lastPnl = {realized: null, unrealized: null, total: null};
+/** Timestamp of the last entry appended to local pnlHistory from a live WS update. */
+let lastLivePnlTs = 0;
+/** Minimum ms between live appends during the current session (mirrors backend default). */
+let pnlSampleIntervalMs = 10_000;
+
+/**
+ * Fetches the full PnL history stored on the backend and populates pnlHistory.
+ * Called whenever a STATE message is received (connect / reconnect).
+ */
+async function fetchPnlHistory() {
+    const token = getToken();
+    if (!token) return;
+    try {
+        const res = await fetch(getApiBase() + '/api/pnl-history', {
+            headers: {'Authorization': 'Bearer ' + token}
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!Array.isArray(data)) return;
+        // Merge: replace history with backend data, keep any local entries that are newer
+        const lastBackendTs = data.length > 0 ? (data[data.length - 1].ts || 0) : 0;
+        const localNewer = pnlHistory.filter(p => p.ts > lastBackendTs);
+        pnlHistory.length = 0;
+        data.forEach(p => pnlHistory.push(p));
+        localNewer.forEach(p => pnlHistory.push(p));
+        updatePnlCounter();
+        renderPnlChart();
+    } catch (e) {
+        console.debug('fetchPnlHistory error:', e);
+    }
+}
+
+function updatePnlCounter() {
+    const counter = document.getElementById('pnl-chart-count');
+    if (counter) counter.textContent = pnlHistory.length + ' sample' + (pnlHistory.length !== 1 ? 's' : '');
+}
+
+/**
+ * Appends a live PnL entry during the current session (rate-limited to pnlSampleIntervalMs).
+ * Keeps the chart growing in real-time between page refreshes.
+ */
+function recordLivePnlSample() {
+    if (lastPnl.realized === null && lastPnl.unrealized === null && lastPnl.total === null) return;
+    const now = Date.now();
+    if (now - lastLivePnlTs < pnlSampleIntervalMs) return;
+    lastLivePnlTs = now;
+    pnlHistory.push({ts: now, realized: lastPnl.realized, unrealized: lastPnl.unrealized, total: lastPnl.total});
+    updatePnlCounter();
+    renderPnlChart();
+}
+
+function onPnlIntervalChange() {
+    const v = parseInt(document.getElementById('pnl-interval')?.value, 10);
+    if (v > 0) pnlSampleIntervalMs = v * 1000;
+}
+
+function renderPnlChart() {
+    const canvas = document.getElementById('pnl-chart');
+    if (!canvas) return;
+    const W = canvas.clientWidth || canvas.offsetWidth || 800;
+    const H = canvas.clientHeight || canvas.offsetHeight || 200;
+    if (W === 0 || H === 0) return;
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+
+    const PAD = {top: 20, right: 20, bottom: 40, left: 72};
+    const cW = W - PAD.left - PAD.right;
+    const cH = H - PAD.top - PAD.bottom;
+
+    if (pnlHistory.length < 1) {
+        ctx.fillStyle = '#718096';
+        ctx.font = '12px Segoe UI, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Waiting for data…', W / 2, H / 2);
+        return;
+    }
+
+    const first = pnlHistory[0].ts;
+    const last = pnlHistory[pnlHistory.length - 1].ts;
+    const tRange = last - first || 1;
+
+    // Y extent across all three series
+    const allVals = pnlHistory.flatMap(p => [p.realized, p.unrealized, p.total]).filter(v => v != null && Number.isFinite(+v)).map(Number);
+    let minY = Math.min(...allVals, 0);
+    let maxY = Math.max(...allVals, 0);
+    if (minY === maxY) {
+        minY -= 1;
+        maxY += 1;
+    }
+    const yPadding = (maxY - minY) * 0.1 || 0.5;
+    minY -= yPadding;
+    maxY += yPadding;
+    const yRange = maxY - minY;
+
+    const xOf = ts => PAD.left + ((ts - first) / tRange) * cW;
+    const yOf = v => PAD.top + (1 - (v - minY) / yRange) * cH;
+
+    // Horizontal grid lines + Y labels
+    const Y_STEPS = 5;
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= Y_STEPS; i++) {
+        const v = minY + (yRange / Y_STEPS) * i;
+        const y = yOf(v);
+        ctx.strokeStyle = '#2e3347';
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(PAD.left, y);
+        ctx.lineTo(PAD.left + cW, y);
+        ctx.stroke();
+        ctx.fillStyle = '#718096';
+        ctx.font = '10px Segoe UI, system-ui, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(fmtCompact(v), PAD.left - 6, y);
+    }
+
+    // Zero line (dashed, more visible)
+    if (minY <= 0 && maxY >= 0) {
+        const y0 = yOf(0);
+        ctx.strokeStyle = '#4a5568';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(PAD.left, y0);
+        ctx.lineTo(PAD.left + cW, y0);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    // X axis time labels
+    const maxXLabels = Math.min(pnlHistory.length, Math.floor(cW / 80));
+    const xSteps = Math.max(1, maxXLabels);
+    for (let i = 0; i <= xSteps; i++) {
+        const ts = first + (tRange / xSteps) * i;
+        const x = xOf(ts);
+        ctx.fillStyle = '#718096';
+        ctx.font = '10px Segoe UI, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(fmtTs(ts), x, PAD.top + cH + 6);
+    }
+
+    // Draw each series
+    const SERIES = [
+        {key: 'realized', color: '#4e9af1', label: 'Realized PnL'},
+        {key: 'unrealized', color: '#ecc94b', label: 'Unrealized PnL'},
+        {key: 'total', color: '#3ecf8e', label: 'Total PnL'},
+    ];
+    SERIES.forEach(({key, color}) => {
+        const pts = pnlHistory.filter(p => p[key] != null && Number.isFinite(+p[key]));
+        if (pts.length < 1) return;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.lineJoin = 'round';
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        pts.forEach((p, i) => {
+            const x = xOf(p.ts);
+            const y = yOf(+p[key]);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        // Draw dot at last point
+        if (pts.length > 0) {
+            const lp = pts[pts.length - 1];
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(xOf(lp.ts), yOf(+lp[key]), 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    });
+
+    // Legend (top-left inside chart area)
+    let lx = PAD.left + 8;
+    const ly = PAD.top + 6;
+    ctx.font = '10px Segoe UI, system-ui, sans-serif';
+    ctx.textBaseline = 'middle';
+    SERIES.forEach(({color, label}) => {
+        ctx.fillStyle = color;
+        ctx.fillRect(lx, ly - 2, 14, 3);
+        ctx.fillStyle = '#a0aec0';
+        ctx.textAlign = 'left';
+        ctx.fillText(label, lx + 18, ly);
+        lx += 18 + ctx.measureText(label).width + 16;
+    });
 }
 
 // ── Runtime state ─────────────────────────────────────────────────────────────
@@ -377,6 +610,8 @@ function applyState(msg) {
         document.getElementById('grafana-frame').src = msg.grafanaUrl;
     }
     renderOBPage();
+    // Fetch persisted PnL history from the backend so the chart survives page refreshes
+    fetchPnlHistory();
 }
 
 // ── Portfolio / instruments ───────────────────────────────────────────────────
@@ -392,11 +627,16 @@ function updatePortfolio(p) {
     setKv('pnl-realized', p.realizedPnl);
     setKv('pnl-unrealized', p.unrealizedPnl);
     setKv('pnl-total', p.totalPnl);
-    setKv('pnl-position', p.netPosition);
     const fe = document.getElementById('pnl-fees');
     if (fe) fe.textContent = fmt(p.totalFees);
     const iv = document.getElementById('pnl-investment');
     if (iv) iv.textContent = fmt(p.netInvestment);
+    // Track latest values for PnL timeline and try to append a live sample
+    if (p.realizedPnl != null) lastPnl.realized = +p.realizedPnl;
+    if (p.unrealizedPnl != null) lastPnl.unrealized = +p.unrealizedPnl;
+    if (p.totalPnl != null) lastPnl.total = +p.totalPnl;
+    recordLivePnlSample();
+    renderPnlChart();
     const tb = document.getElementById('instruments-body');
     if (tb && p.instrumentPnlSnapshotMap) {
         tb.innerHTML = '';
@@ -731,13 +971,16 @@ function onTrade(msg) {
     updateTickerCard(instr, entry);
 
     const side = verb || '?';
-    const toastKind = isAlgo ? 'algo' : 'market';
-    const titlePrefix = isAlgo ? `⚡ Algo Trade [${t.algoInfo || ''}]` : '📈 Market Trade';
+    const isBuy = side.toLowerCase() === 'buy';
+    const isSell = side.toLowerCase() === 'sell';
+    const sideEmoji = isBuy ? '▲' : isSell ? '▼' : '●';
+    const toastKind = isBuy ? 'buy' : isSell ? 'sell' : 'market';
     showToast(
-        titlePrefix + ` – ${instr}`,
-        `${side} ${fmt(t.quantity, 4)} @ ${fmt(t.price)}`,
+        `${sideEmoji} ${side.toUpperCase()}  ${instr}`,
+        `Price: ${fmt(t.price)} &nbsp; Qty: ${fmt(t.quantity, 4)}`,
         toastKind
     );
+    playTradeSound();
 }
 
 function updateTickerCard(instr, latestEntry) {
@@ -746,7 +989,8 @@ function updateTickerCard(instr, latestEntry) {
     if (!list) return;
     const row = makeTickerRow(latestEntry);
     list.insertBefore(row, list.firstChild);
-    while (list.children.length > MAX_TICKER_ROWS) list.removeChild(list.lastChild);
+    const limit = getObTradesShown();
+    while (list.children.length > limit) list.removeChild(list.lastChild);
 }
 
 function makeTickerRow(entry) {
@@ -783,6 +1027,13 @@ function ensureInstrumentKnown(instr) {
 function getPerPage() {
     const v = parseInt(document.getElementById('ob-per-page')?.value, 10);
     return (v > 0) ? v : 10;
+}
+
+function getObTradesShown() {
+    return MAX_TICKER_ROWS; // all stored trades rendered; visible rows capped by CSS
+}
+
+function onObTradesShownChange() { /* no-op – control removed */
 }
 
 function obPrevPage() {
@@ -848,17 +1099,18 @@ function buildInstrCard(instr) {
     const body = document.createElement('div');
     body.className = 'instr-body';
 
-    // Book side (asks reversed on top, spread row, bids below)
+    // Book side (bids on the left, asks on the right)
     const bookSide = document.createElement('div');
     bookSide.className = 'ob-book-side';
     bookSide.innerHTML =
+        `<div class="ob-half ob-bids-half">` +
+        `<div class="ob-side-label bids">Bids</div>` +
+        `<div class="ob-bids-wrap"><table class="ob-table" id="ob-bids-${sid}"><tbody id="ob-bids-body-${sid}"></tbody></table></div>` +
+        `</div>` +
+        `<div class="ob-half ob-asks-half">` +
         `<div class="ob-side-label asks">Asks</div>` +
         `<div class="ob-asks-wrap"><table class="ob-table" id="ob-asks-${sid}"><tbody id="ob-asks-body-${sid}"></tbody></table></div>` +
-        `<div class="ob-spread-row" id="ob-spread-${sid}">` +
-        `<span>Spread: <b id="ob-sp-v-${sid}">${spread != null ? fmt(spread) : '–'}</b></span>` +
-        `<span>Mid: <b id="ob-mid-v-${sid}">${mid != null ? fmt(mid) : '–'}</b></span></div>` +
-        `<div class="ob-side-label bids">Bids</div>` +
-        `<div class="ob-bids-wrap"><table class="ob-table" id="ob-bids-${sid}"><tbody id="ob-bids-body-${sid}"></tbody></table></div>`;
+        `</div>`;
     body.appendChild(bookSide);
 
     // Ticker side
@@ -873,7 +1125,8 @@ function buildInstrCard(instr) {
 
     const existing = tickerMap[instr] || [];
     const listEl = tickerSide.querySelector('.ticker-list');
-    existing.forEach(e => listEl.appendChild(makeTickerRow(e)));
+    const tradesLimit = getObTradesShown();
+    existing.slice(0, tradesLimit).forEach(e => listEl.appendChild(makeTickerRow(e)));
 
     return card;
 }
@@ -892,10 +1145,8 @@ function renderOBBook(instr) {
     const bestBid = depth.bids?.[0];
     const spread = (bestAsk != null && bestBid != null) ? (bestAsk - bestBid) : null;
     const mid = (bestAsk != null && bestBid != null) ? ((bestAsk + bestBid) / 2) : null;
-    const spEl = document.getElementById('ob-sp-v-' + sid);
-    if (spEl) spEl.textContent = spread != null ? fmt(spread) : '–';
-    const midEl = document.getElementById('ob-mid-v-' + sid);
-    if (midEl) midEl.textContent = mid != null ? fmt(mid) : '–';
+    const metaEl = document.getElementById('instr-meta-' + sid);
+    if (metaEl) metaEl.innerHTML = spread != null ? `Spread: ${fmt(spread)} &nbsp; Mid: ${fmt(mid)}` : '';
 }
 
 function populateBook(sid, depth, instr) {
@@ -927,8 +1178,8 @@ function populateBook(sid, depth, instr) {
 
     if (asksBody) {
         asksBody.innerHTML = '';
-        // Display asks worst → best (flexbox column-reverse puts best near the spread)
-        for (let i = askLevels - 1; i >= 0; i--) {
+        // Display asks best → worst (best ask at top, matching bids layout)
+        for (let i = 0; i < askLevels; i++) {
             const price = depth.asks?.[i];
             const qty = depth.asksQty?.[i];
             if (price == null || !Number.isFinite(price)) continue;
@@ -1001,10 +1252,12 @@ function populateBook(sid, depth, instr) {
             tr.className = 'bid-row' +
                 ((hasAlgo || hasMyOrder) ? ' algo-level' : '') +
                 (hasMyOrder ? ' my-order' : '');
+            // Reversed columns: label | bar | qty | price (price closest to asks/center)
             tr.innerHTML =
-                `<td>${fmt(price)}</td><td>${qty != null ? fmt(qty, 4) : '–'}</td>` +
+                `<td>${labelParts.join(', ')}</td>` +
                 `<td class="ob-bar-cell"><div class="ob-bar bid-bar" style="width:${barPct}%"></div></td>` +
-                `<td>${labelParts.join(', ')}</td>`;
+                `<td>${qty != null ? fmt(qty, 4) : '–'}</td>` +
+                `<td>${fmt(price)}</td>`;
             bidsBody.appendChild(tr);
         }
         // Off-book own bid orders
@@ -1020,9 +1273,12 @@ function populateBook(sid, depth, instr) {
                 const rem = o.quantity - (o.quantityFill || 0);
                 const tr = document.createElement('tr');
                 tr.className = 'bid-row my-order off-book';
+                // Reversed columns: label | bar | qty | price
                 tr.innerHTML =
-                    `<td>${fmt(o.price)}</td><td>–</td>` +
-                    `<td class="ob-bar-cell"></td><td>● MY ${fmt(rem, 4)}</td>`;
+                    `<td>● MY ${fmt(rem, 4)}</td>` +
+                    `<td class="ob-bar-cell"></td>` +
+                    `<td>–</td>` +
+                    `<td>${fmt(o.price)}</td>`;
                 bidsBody.appendChild(tr);
             });
         }
@@ -1044,4 +1300,14 @@ if (getToken()) {
     connect();
 }
 // else: login overlay remains visible until the user signs in
+
+// Re-render PnL chart when the card / window is resized
+(function () {
+    const canvas = document.getElementById('pnl-chart');
+    if (canvas && typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(() => renderPnlChart()).observe(canvas);
+    } else {
+        window.addEventListener('resize', renderPnlChart);
+    }
+})();
 
