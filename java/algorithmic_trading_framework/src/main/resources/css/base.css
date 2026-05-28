@@ -558,6 +558,7 @@ tr:hover td {
 
 .ob-table {
     width: 100%;
+    max-width: 100%; /* never wider than the half that contains it */
     table-layout: auto; /* columns auto-size to fit their content */
     border-collapse: collapse;
     font-size: 11px;

@@ -26,16 +26,18 @@
 
 /* ── Book side – bids on the left, asks on the right ─────────────────────── */
 .ob-book-side {
-  flex: 1 1 auto; /* grow with content, don't clip */
-  display: flex;
-  flex-direction: row;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch; /* both halves always share the same height */
 }
 
 .ob-half {
-    flex: 1 1 0;
+    flex: 1 1 50%; /* reliable 50/50 split */
+    min-width: 0; /* allow shrinking below content size */
+    overflow: hidden; /* clip horizontal bleed so bids never overlap asks */
     display: flex;
     flex-direction: column;
-  min-width: 0; /* prevent flex blowout, horizontal clipping handled by .instr-card */
 }
 
 .ob-bids-half {
