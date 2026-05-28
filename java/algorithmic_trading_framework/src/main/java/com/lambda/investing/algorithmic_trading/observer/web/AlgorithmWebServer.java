@@ -41,9 +41,14 @@ import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
  *
  * <p>Endpoints:
  * <ul>
- *   <li>{@code GET /}          – serves the single-page dashboard HTML</li>
- *   <li>{@code GET /api/state} – returns the current algorithm state snapshot as JSON</li>
- *   <li>{@code GET /ws}        – WebSocket upgrade; pushes typed JSON update envelopes</li>
+ *   <li>{@code GET /}                        – serves the single-page dashboard HTML</li>
+ *   <li>{@code GET /api/state}               – returns the current algorithm state snapshot as JSON</li>
+ *   <li>{@code GET /api/pnl-history}         – returns the persisted PnL timeline as a JSON array</li>
+ *   <li>{@code GET /api/pnl-snapshots}       – returns the last N per-instrument PnL snapshots</li>
+ *   <li>{@code GET /api/execution-reports}   – returns the last N execution reports as a JSON array</li>
+ *   <li>{@code GET /api/order-requests}      – returns the last N order requests as a JSON array</li>
+ *   <li>{@code GET /api/portfolio-snapshot}  – returns the latest portfolio snapshot as JSON</li>
+ *   <li>{@code GET /ws}                      – WebSocket upgrade; pushes typed JSON update envelopes</li>
  * </ul>
  */
 public class AlgorithmWebServer {
@@ -60,6 +65,22 @@ public class AlgorithmWebServer {
      * Persisted PnL timeline history – returned to clients on demand via GET /api/pnl-history.
      */
     private volatile String pnlHistoryJson = "[]";
+    /**
+     * Persisted per-instrument PnlSnapshot history – returned via GET /api/pnl-snapshots.
+     */
+    private volatile String pnlSnapshotHistoryJson = "[]";
+    /**
+     * Persisted execution-report history – returned via GET /api/execution-reports.
+     */
+    private volatile String erHistoryJson = "[]";
+    /**
+     * Persisted order-request history – returned via GET /api/order-requests.
+     */
+    private volatile String orHistoryJson = "[]";
+    /**
+     * Latest portfolio snapshot – returned via GET /api/portfolio-snapshot.
+     */
+    private volatile String portfolioSnapshotJson = "{}";
     /** Optional Grafana base URL included in STATE messages (empty = Grafana tab hidden). */
     private volatile String grafanaUrl = "";
     /**
@@ -166,6 +187,42 @@ public class AlgorithmWebServer {
      */
     public void updatePnlHistory(String historyJson) {
         this.pnlHistoryJson = (historyJson != null) ? historyJson : "[]";
+    }
+
+    /**
+     * Replaces the persisted per-instrument PnlSnapshot history returned by {@code GET /api/pnl-snapshots}.
+     *
+     * @param historyJson JSON array of {@code {ts, algorithmInfo, data}} objects
+     */
+    public void updatePnlSnapshotHistory(String historyJson) {
+        this.pnlSnapshotHistoryJson = (historyJson != null) ? historyJson : "[]";
+    }
+
+    /**
+     * Replaces the persisted execution-report history returned by {@code GET /api/execution-reports}.
+     *
+     * @param historyJson JSON array of {@code {ts, algorithmInfo, data}} objects
+     */
+    public void updateErHistory(String historyJson) {
+        this.erHistoryJson = (historyJson != null) ? historyJson : "[]";
+    }
+
+    /**
+     * Replaces the persisted order-request history returned by {@code GET /api/order-requests}.
+     *
+     * @param historyJson JSON array of {@code {ts, algorithmInfo, data}} objects
+     */
+    public void updateOrHistory(String historyJson) {
+        this.orHistoryJson = (historyJson != null) ? historyJson : "[]";
+    }
+
+    /**
+     * Replaces the latest portfolio snapshot returned by {@code GET /api/portfolio-snapshot}.
+     *
+     * @param snapshotJson JSON object with {@code portfolio} or {@code portfoliosByAlgo} keys
+     */
+    public void updatePortfolioSnapshot(String snapshotJson) {
+        this.portfolioSnapshotJson = (snapshotJson != null) ? snapshotJson : "{}";
     }
 
     /**
@@ -312,6 +369,50 @@ public class AlgorithmWebServer {
                 } else {
                     response = new DefaultFullHttpResponse(HTTP_1_1, OK,
                             Unpooled.copiedBuffer(pnlHistoryJson, CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                }
+            } else if ("/api/pnl-snapshots".equals(uri)) {
+                String token = getAuthToken(req, query);
+                if (!isValidToken(token)) {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, UNAUTHORIZED,
+                            Unpooled.copiedBuffer("{\"error\":\"Unauthorized\"}", CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                } else {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                            Unpooled.copiedBuffer(pnlSnapshotHistoryJson, CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                }
+            } else if ("/api/execution-reports".equals(uri)) {
+                String token = getAuthToken(req, query);
+                if (!isValidToken(token)) {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, UNAUTHORIZED,
+                            Unpooled.copiedBuffer("{\"error\":\"Unauthorized\"}", CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                } else {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                            Unpooled.copiedBuffer(erHistoryJson, CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                }
+            } else if ("/api/order-requests".equals(uri)) {
+                String token = getAuthToken(req, query);
+                if (!isValidToken(token)) {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, UNAUTHORIZED,
+                            Unpooled.copiedBuffer("{\"error\":\"Unauthorized\"}", CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                } else {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                            Unpooled.copiedBuffer(orHistoryJson, CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                }
+            } else if ("/api/portfolio-snapshot".equals(uri)) {
+                String token = getAuthToken(req, query);
+                if (!isValidToken(token)) {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, UNAUTHORIZED,
+                            Unpooled.copiedBuffer("{\"error\":\"Unauthorized\"}", CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                } else {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                            Unpooled.copiedBuffer(portfolioSnapshotJson, CharsetUtil.UTF_8));
                     response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
                 }
             } else {

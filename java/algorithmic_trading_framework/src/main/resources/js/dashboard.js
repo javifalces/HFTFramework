@@ -202,6 +202,117 @@ function updatePnlCounter() {
 }
 
 /**
+ * Fetches the persisted per-instrument PnlSnapshot history from the backend and restores the table.
+ * Called whenever a STATE message is received (connect / reconnect).
+ */
+async function fetchPnlSnapshots() {
+    const token = getToken();
+    if (!token) return;
+    try {
+        const res = await fetch(getApiBase() + '/api/pnl-snapshots', {
+            headers: {'Authorization': 'Bearer ' + token}
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!Array.isArray(data) || data.length === 0) return;
+        const lastBackendTs = data[data.length - 1].ts || 0;
+        const localNewer = pnlSnapshotRows_raw.filter(e => e.ts > lastBackendTs);
+        pnlSnapshotRows_raw.length = 0;
+        for (let i = data.length - 1; i >= 0; i--) pnlSnapshotRows_raw.push(data[i]);
+        localNewer.forEach(e => pnlSnapshotRows_raw.unshift(e));
+        if (pnlSnapshotRows_raw.length > MAX_TABLE_ROWS) pnlSnapshotRows_raw.length = MAX_TABLE_ROWS;
+        pnlSnapshotRows.length = 0;
+        pnlSnapshotRows_raw.forEach(e => pnlSnapshotRows.push(formatPnlSnapshot(e.data, e.ts)));
+        pnlSnapshotPage = 0;
+        renderPnlSnapshotPage();
+    } catch (e) {
+        console.debug('fetchPnlSnapshots error:', e);
+    }
+}
+
+/**
+ * Fetches the persisted execution-report history from the backend and restores the ER table.
+ * Called whenever a STATE message is received (connect / reconnect).
+ */
+async function fetchExecutionReports() {
+    const token = getToken();
+    if (!token) return;
+    try {
+        const res = await fetch(getApiBase() + '/api/execution-reports', {
+            headers: {'Authorization': 'Bearer ' + token}
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!Array.isArray(data) || data.length === 0) return;
+        const lastBackendTs = data[data.length - 1].ts || 0;
+        const localNewer = erRows_raw.filter(e => e.ts > lastBackendTs);
+        erRows_raw.length = 0;
+        for (let i = data.length - 1; i >= 0; i--) erRows_raw.push(data[i]);
+        localNewer.forEach(e => erRows_raw.unshift(e));
+        if (erRows_raw.length > MAX_TABLE_ROWS) erRows_raw.length = MAX_TABLE_ROWS;
+        erRows.length = 0;
+        erRows_raw.forEach(e => erRows.push(formatER(e.data, e.ts)));
+        erPage = 0;
+        renderERPage();
+    } catch (e) {
+        console.debug('fetchExecutionReports error:', e);
+    }
+}
+
+/**
+ * Fetches the persisted order-request history from the backend and restores the OR table.
+ * Called whenever a STATE message is received (connect / reconnect).
+ */
+async function fetchOrderRequests() {
+    const token = getToken();
+    if (!token) return;
+    try {
+        const res = await fetch(getApiBase() + '/api/order-requests', {
+            headers: {'Authorization': 'Bearer ' + token}
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!Array.isArray(data) || data.length === 0) return;
+        const lastBackendTs = data[data.length - 1].ts || 0;
+        const localNewer = orRows_raw.filter(e => e.ts > lastBackendTs);
+        orRows_raw.length = 0;
+        for (let i = data.length - 1; i >= 0; i--) orRows_raw.push(data[i]);
+        localNewer.forEach(e => orRows_raw.unshift(e));
+        if (orRows_raw.length > MAX_TABLE_ROWS) orRows_raw.length = MAX_TABLE_ROWS;
+        orRows.length = 0;
+        orRows_raw.forEach(e => orRows.push(formatOR(e.data, e.ts)));
+        orPage = 0;
+        renderORPage();
+    } catch (e) {
+        console.debug('fetchOrderRequests error:', e);
+    }
+}
+
+/**
+ * Fetches the latest portfolio snapshot from the backend and updates the Portfolio card.
+ */
+async function fetchPortfolioSnapshot() {
+    const token = getToken();
+    if (!token) return;
+    try {
+        const res = await fetch(getApiBase() + '/api/portfolio-snapshot', {
+            headers: {'Authorization': 'Bearer ' + token}
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data) return;
+        if (data.portfoliosByAlgo) {
+            Object.keys(portfolioByAlgo).forEach(k => delete portfolioByAlgo[k]);
+            Object.entries(data.portfoliosByAlgo).forEach(([algoName, p]) => updatePortfolio(p, algoName));
+        } else if (data.portfolio) {
+            updatePortfolio(data.portfolio);
+        }
+    } catch (e) {
+        console.debug('fetchPortfolioSnapshot error:', e);
+    }
+}
+
+/**
  * Appends a live PnL entry during the current session (rate-limited to pnlSampleIntervalMs).
  * Keeps the chart growing in real-time between page refreshes.
  */
@@ -379,10 +490,19 @@ const portfolioByAlgo = {};
 // ── Table pagination state ────────────────────────────────────────────────────
 /** All execution-report rows stored latest-first as innerHTML strings */
 const erRows = [];
+/** Raw execution-report envelope objects {ts, algorithmInfo, data} – used for merge on reconnect */
+const erRows_raw = [];
 /** All order-request rows stored latest-first as innerHTML strings */
 const orRows = [];
+/** Raw order-request envelope objects {ts, algorithmInfo, data} – used for merge on reconnect */
+const orRows_raw = [];
+/** All PnL-snapshot rows stored latest-first as innerHTML strings */
+const pnlSnapshotRows = [];
+/** Raw PnlSnapshot envelope objects {ts, algorithmInfo, data} – used for merge on reconnect */
+const pnlSnapshotRows_raw = [];
 let erPage = 0;
 let orPage = 0;
+let pnlSnapshotPage = 0;
 
 // ── Algo start / stop toggle ──────────────────────────────────────────────────
 let algoRunning = true;
@@ -555,11 +675,14 @@ function handleMessage(msg) {
             updatePortfolio(msg.data, msg.algorithmInfo);
             break;
         case 'PNL_SNAPSHOT':
+            onPnlSnapshot(msg);
             break;
         case 'EXECUTION_REPORT':
             onExecutionReport(msg);
             break;
         case 'ORDER_REQUEST':
+            orRows_raw.unshift({ts: msg.timestamp, algorithmInfo: msg.algorithmInfo, data: msg.data});
+            if (orRows_raw.length > MAX_TABLE_ROWS) orRows_raw.length = MAX_TABLE_ROWS;
             orRows.unshift(formatOR(msg.data, msg.timestamp));
             if (orRows.length > MAX_TABLE_ROWS) orRows.length = MAX_TABLE_ROWS;
             renderORPage();
@@ -623,8 +746,12 @@ function applyState(msg) {
         document.getElementById('grafana-frame').src = msg.grafanaUrl;
     }
     renderOBPage();
-    // Fetch persisted PnL history from the backend so the chart survives page refreshes
+    // Fetch persisted history from the backend so tables survive page refreshes
     fetchPnlHistory();
+    fetchPnlSnapshots();
+    fetchExecutionReports();
+    fetchOrderRequests();
+    fetchPortfolioSnapshot();
 }
 
 // ── Portfolio / instruments ───────────────────────────────────────────────────
@@ -706,6 +833,66 @@ function updatePortfolio(p, algorithmInfo) {
     }
 }
 
+// ── PnL Snapshot events ───────────────────────────────────────────────────────
+function formatPnlSnapshot(s, ts) {
+    if (!s) return '';
+    return `<td>${fmtTs(ts || s.lastTimestampUpdate)}</td>` +
+        `<td>${s.instrumentPk || ''}</td>` +
+        `<td class="${colorClass(s.realizedPnl)}">${fmt(s.realizedPnl)}</td>` +
+        `<td class="${colorClass(s.unrealizedPnl)}">${fmt(s.unrealizedPnl)}</td>` +
+        `<td class="${colorClass(s.totalPnl)}">${fmt(s.totalPnl)}</td>` +
+        `<td>${fmt(s.netPosition, 6)}</td>` +
+        `<td>${fmt(s.totalFees)}</td>`;
+}
+
+function onPnlSnapshot(msg) {
+    pnlSnapshotRows_raw.unshift({ts: msg.timestamp, algorithmInfo: msg.algorithmInfo, data: msg.data});
+    if (pnlSnapshotRows_raw.length > MAX_TABLE_ROWS) pnlSnapshotRows_raw.length = MAX_TABLE_ROWS;
+    pnlSnapshotRows.unshift(formatPnlSnapshot(msg.data, msg.timestamp));
+    if (pnlSnapshotRows.length > MAX_TABLE_ROWS) pnlSnapshotRows.length = MAX_TABLE_ROWS;
+    renderPnlSnapshotPage();
+}
+
+// ── PnL Snapshot pagination ───────────────────────────────────────────────────
+function pnlSnapshotPrevPage() {
+    if (pnlSnapshotPage > 0) {
+        pnlSnapshotPage--;
+        renderPnlSnapshotPage();
+    }
+}
+
+function pnlSnapshotNextPage() {
+    const maxPage = Math.max(0, Math.ceil(pnlSnapshotRows.length / getTablePageSize()) - 1);
+    if (pnlSnapshotPage < maxPage) {
+        pnlSnapshotPage++;
+        renderPnlSnapshotPage();
+    }
+}
+
+function renderPnlSnapshotPage() {
+    const pp = getTablePageSize();
+    const maxPage = Math.max(0, Math.ceil(pnlSnapshotRows.length / pp) - 1);
+    pnlSnapshotPage = Math.min(pnlSnapshotPage, maxPage);
+    const from = pnlSnapshotPage * pp;
+    const tb = document.getElementById('ps-body');
+    if (tb) {
+        tb.innerHTML = '';
+        pnlSnapshotRows.slice(from, from + pp).forEach(html => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = html;
+            tb.appendChild(tr);
+        });
+    }
+    const lbl = document.getElementById('ps-label');
+    if (lbl) lbl.textContent = 'Page ' + (pnlSnapshotPage + 1) + ' / ' + (maxPage + 1);
+    const tot = document.getElementById('ps-total');
+    if (tot) tot.textContent = pnlSnapshotRows.length ? '(' + pnlSnapshotRows.length + ' total)' : '';
+    const prev = document.getElementById('ps-prev');
+    if (prev) prev.disabled = pnlSnapshotPage === 0;
+    const next = document.getElementById('ps-next');
+    if (next) next.disabled = pnlSnapshotPage >= maxPage;
+}
+
 // ── Execution reports / order requests ───────────────────────────────────────
 function formatER(er, ts) {
     if (!er) return '';
@@ -732,8 +919,10 @@ function getTablePageSize() {
 function onTablePageSizeChange() {
     erPage = 0;
     orPage = 0;
+    pnlSnapshotPage = 0;
     renderERPage();
     renderORPage();
+    renderPnlSnapshotPage();
 }
 
 function erPrevPage() {
@@ -831,6 +1020,8 @@ const REMOVED_ER_STATUSES = new Set(['CompletelyFilled', 'Cancelled', 'Rejected'
 const TRADE_ER_STATUSES = new Set(['CompletelyFilled', 'PartialFilled']);
 
 function onExecutionReport(msg) {
+    erRows_raw.unshift({ts: msg.timestamp, algorithmInfo: msg.algorithmInfo, data: msg.data});
+    if (erRows_raw.length > MAX_TABLE_ROWS) erRows_raw.length = MAX_TABLE_ROWS;
     erRows.unshift(formatER(msg.data, msg.timestamp));
     if (erRows.length > MAX_TABLE_ROWS) erRows.length = MAX_TABLE_ROWS;
     renderERPage();
