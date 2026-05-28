@@ -588,6 +588,23 @@ tr:hover td {
     font-weight: 700;
 }
 
+/* ── My active order – yellow price highlight ─────────────────────────────── */
+/* ask-row: columns are  price | qty | bar | label  → price is td:first-child */
+.ask-row.my-order td:first-child {
+    color: var(--yellow) !important;
+    font-weight: 700;
+    background: rgba(236, 201, 75, .28);
+    box-shadow: inset 2px 0 0 var(--yellow);
+}
+
+/* bid-row: columns are  label | bar | qty | price  → price is td:last-child  */
+.bid-row.my-order td:last-child {
+    color: var(--yellow) !important;
+    font-weight: 700;
+    background: rgba(236, 201, 75, .28);
+    box-shadow: inset -2px 0 0 var(--yellow);
+}
+
 .ob-bar-cell {
     width: 60px;
 }
