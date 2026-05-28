@@ -485,15 +485,6 @@ function onTrade(msg) {
     if (tickerMap[instr].length > MAX_TICKER_ROWS) tickerMap[instr].pop();
 
     updateTickerCard(instr, entry);
-
-    const side = verb || '?';
-    const toastKind = isAlgo ? 'algo' : 'market';
-    const titlePrefix = isAlgo ? `⚡ Algo Trade [${t.algoInfo || ''}]` : '📈 Market Trade';
-    showToast(
-        titlePrefix + ` – ${instr}`,
-        `${side} ${fmt(t.quantity, 4)} @ ${fmt(t.price)}`,
-        toastKind
-    );
 }
 
 function updateTickerCard(instr, latestEntry) {

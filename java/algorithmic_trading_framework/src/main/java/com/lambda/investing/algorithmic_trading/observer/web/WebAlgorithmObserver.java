@@ -14,6 +14,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -55,8 +56,11 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
 
     private final AlgorithmWebServer server;
 
-    // Mutable current-state snapshot kept for newly connecting clients
-    private volatile PortfolioSnapshot latestPortfolio;
+    // Mutable current-state snapshot kept for newly connecting clients.
+    // Keyed by algorithmInfo (empty-string for unnamed single-algo).
+    // Using a ConcurrentHashMap allows safe multi-algo (MultiAlgorithm) tracking
+    // where each child algorithm fires its own portfolio snapshot independently.
+    private final Map<String, PortfolioSnapshot> latestPortfolioByAlgo = new ConcurrentHashMap<>();
     private volatile Map<String, Object> latestParams;
     private final Map<String, Double> latestCustomColumns = new ConcurrentHashMap<>();
     /** Latest L2 depth snapshot per instrument (used to restore orderbook on reconnect). */
@@ -159,16 +163,27 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
 
     @Override
     public void onUpdatePortfolioSnapshot(String algorithmInfo, PortfolioSnapshot portfolioSnapshot) {
-        this.latestPortfolio = portfolioSnapshot;
-        // Record a PnL sample for the persistent history (rate-limited)
+        // Store per-algo so MultiAlgorithm setups (each child fires its own snapshot) are
+        // all tracked and can be sent as a full set to reconnecting clients via STATE.
+        String key = algorithmInfo != null ? algorithmInfo : "";
+        latestPortfolioByAlgo.put(key, portfolioSnapshot);
+
+        // Record a PnL sample for the persistent history (rate-limited).
+        // Aggregate across all known child algorithms so the chart reflects the total portfolio.
         long now = currentTimeMs();
         if (now - lastPnlSampleTs >= pnlSampleIntervalMs) {
             lastPnlSampleTs = now;
+            double aggRealized = 0, aggUnrealized = 0, aggTotal = 0;
+            for (PortfolioSnapshot ps : latestPortfolioByAlgo.values()) {
+                aggRealized += ps.realizedPnl;
+                aggUnrealized += ps.unrealizedPnl;
+                aggTotal += ps.totalPnl;
+            }
             Map<String, Object> sample = new LinkedHashMap<>();
             sample.put("ts", now);
-            sample.put("realized", portfolioSnapshot.realizedPnl);
-            sample.put("unrealized", portfolioSnapshot.unrealizedPnl);
-            sample.put("total", portfolioSnapshot.totalPnl);
+            sample.put("realized", aggRealized);
+            sample.put("unrealized", aggUnrealized);
+            sample.put("total", aggTotal);
             pnlHistory.addLast(sample);
             while (pnlHistory.size() > MAX_PNL_HISTORY) pnlHistory.pollFirst();
             server.updatePnlHistory(sanitizeJson(toJsonStringGSON(new ArrayList<>(pnlHistory))));
@@ -345,8 +360,25 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
      */
     private void refreshState() {
         Map<String, Object> state = new HashMap<>();
-        if (latestPortfolio != null) {
-            state.put("portfolio", toPortfolioDto(latestPortfolio));
+        if (!latestPortfolioByAlgo.isEmpty()) {
+            if (latestPortfolioByAlgo.size() == 1) {
+                Map.Entry<String, PortfolioSnapshot> entry = latestPortfolioByAlgo.entrySet().iterator().next();
+                if (entry.getKey().isEmpty()) {
+                    // Unnamed single-algo: use the classic "portfolio" key for backward compat
+                    state.put("portfolio", toPortfolioDto(entry.getValue()));
+                } else {
+                    // Named single-algo (e.g. a lone child inside a MultiAlgorithm): use
+                    // portfoliosByAlgo so the frontend always takes the multi-algo path.
+                    state.put("portfoliosByAlgo", Collections.singletonMap(entry.getKey(), toPortfolioDto(entry.getValue())));
+                }
+            } else {
+                // Multiple algos: send all snapshots keyed by algorithmInfo
+                Map<String, Object> byAlgo = new LinkedHashMap<>();
+                for (Map.Entry<String, PortfolioSnapshot> e : latestPortfolioByAlgo.entrySet()) {
+                    byAlgo.put(e.getKey(), toPortfolioDto(e.getValue()));
+                }
+                state.put("portfoliosByAlgo", byAlgo);
+            }
         }
         if (latestParams != null) {
             state.put("params", latestParams);

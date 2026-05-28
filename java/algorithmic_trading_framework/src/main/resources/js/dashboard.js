@@ -369,6 +369,12 @@ const customState = {};
 const paramsState = {};
 /** Map<instrument, Map<clientOrderId, {verb,price,quantity,quantityFill}>> */
 const activeOrdersMap = {};
+/**
+ * Per-algorithm portfolio snapshots keyed by algorithmInfo.
+ * Aggregated to produce the Portfolio card totals and the Instruments table in a
+ * MultiAlgorithm setup where each child emits only its own single-instrument snapshot.
+ */
+const portfolioByAlgo = {};
 
 // ── Table pagination state ────────────────────────────────────────────────────
 /** All execution-report rows stored latest-first as innerHTML strings */
@@ -546,7 +552,7 @@ function handleMessage(msg) {
             applyState(msg);
             break;
         case 'PORTFOLIO_SNAPSHOT':
-            updatePortfolio(msg.data);
+            updatePortfolio(msg.data, msg.algorithmInfo);
             break;
         case 'PNL_SNAPSHOT':
             break;
@@ -586,7 +592,14 @@ function applyState(msg) {
     }
     const s = msg.data;
     if (s) {
-        if (s.portfolio) updatePortfolio(s.portfolio);
+        if (s.portfoliosByAlgo) {
+            // Multi-algo STATE restore: clear any stale accumulated data first, then
+            // replay each per-algo snapshot so the aggregate is rebuilt correctly.
+            Object.keys(portfolioByAlgo).forEach(k => delete portfolioByAlgo[k]);
+            Object.entries(s.portfoliosByAlgo).forEach(([algoName, p]) => updatePortfolio(p, algoName));
+        } else if (s.portfolio) {
+            updatePortfolio(s.portfolio);
+        }
         if (s.params) updateParams(s.params);
         if (s.customColumns) Object.entries(s.customColumns).forEach(([k, v]) => {
             const p = k.split('.');
@@ -622,27 +635,68 @@ function setKv(id, val) {
     el.className = 'value ' + colorClass(val);
 }
 
-function updatePortfolio(p) {
+function updatePortfolio(p, algorithmInfo) {
     if (!p) return;
-    setKv('pnl-realized', p.realizedPnl);
-    setKv('pnl-unrealized', p.unrealizedPnl);
-    setKv('pnl-total', p.totalPnl);
+
+    // --- Resolve the values to display ---
+    let realizedPnl, unrealizedPnl, totalPnl, totalFees, netInvestment;
+    let instruments;
+
+    if (algorithmInfo) {
+        // Multi-algo path: store this snapshot and show the aggregate across all
+        // known child algorithms.  Each child emits its own single-instrument
+        // portfolio, so we must merge them rather than replacing the whole view.
+        portfolioByAlgo[algorithmInfo] = p;
+        realizedPnl = 0;
+        unrealizedPnl = 0;
+        totalPnl = 0;
+        totalFees = 0;
+        netInvestment = 0;
+        instruments = {};
+        for (const ap of Object.values(portfolioByAlgo)) {
+            realizedPnl += +(ap.realizedPnl) || 0;
+            unrealizedPnl += +(ap.unrealizedPnl) || 0;
+            totalPnl += +(ap.totalPnl) || 0;
+            totalFees += +(ap.totalFees) || 0;
+            netInvestment += +(ap.netInvestment) || 0;
+            if (ap.instrumentPnlSnapshotMap) Object.assign(instruments, ap.instrumentPnlSnapshotMap);
+        }
+    } else {
+        // Single-algo / STATE-restore path: display the snapshot directly and
+        // reset accumulated per-algo data so subsequent real messages start fresh.
+        Object.keys(portfolioByAlgo).forEach(k => delete portfolioByAlgo[k]);
+        realizedPnl = p.realizedPnl;
+        unrealizedPnl = p.unrealizedPnl;
+        totalPnl = p.totalPnl;
+        totalFees = p.totalFees;
+        netInvestment = p.netInvestment;
+        instruments = p.instrumentPnlSnapshotMap || {};
+    }
+
+    // --- Render ---
+    setKv('pnl-realized', realizedPnl);
+    setKv('pnl-unrealized', unrealizedPnl);
+    setKv('pnl-total', totalPnl);
     const fe = document.getElementById('pnl-fees');
-    if (fe) fe.textContent = fmt(p.totalFees);
+    if (fe) fe.textContent = fmt(totalFees);
     const iv = document.getElementById('pnl-investment');
-    if (iv) iv.textContent = fmt(p.netInvestment);
-    // Track latest values for PnL timeline and try to append a live sample
-    if (p.realizedPnl != null) lastPnl.realized = +p.realizedPnl;
-    if (p.unrealizedPnl != null) lastPnl.unrealized = +p.unrealizedPnl;
-    if (p.totalPnl != null) lastPnl.total = +p.totalPnl;
+    if (iv) iv.textContent = fmt(netInvestment);
+
+    // Track latest values for the PnL timeline
+    if (realizedPnl != null) lastPnl.realized = +realizedPnl;
+    if (unrealizedPnl != null) lastPnl.unrealized = +unrealizedPnl;
+    if (totalPnl != null) lastPnl.total = +totalPnl;
     recordLivePnlSample();
     renderPnlChart();
+
+    // Instruments table
     const tb = document.getElementById('instruments-body');
-    if (tb && p.instrumentPnlSnapshotMap) {
+    if (tb) {
         tb.innerHTML = '';
-        Object.entries(p.instrumentPnlSnapshotMap).forEach(([i, s]) => {
+        Object.entries(instruments).forEach(([instr, s]) => {
+            if (!s) return;
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${i}</td>` +
+            tr.innerHTML = `<td>${instr}</td>` +
                 `<td class="${colorClass(s.realizedPnl)}">${fmt(s.realizedPnl)}</td>` +
                 `<td class="${colorClass(s.unrealizedPnl)}">${fmt(s.unrealizedPnl)}</td>` +
                 `<td class="${colorClass(s.totalPnl)}">${fmt(s.totalPnl)}</td>` +
@@ -773,6 +827,8 @@ function prependRow(tbodyId, rowHtml) {
 // ── Active-order tracking from execution reports ──────────────────────────────
 const LIVE_ER_STATUSES = new Set(['Active', 'PartialFilled']);
 const REMOVED_ER_STATUSES = new Set(['CompletelyFilled', 'Cancelled', 'Rejected', 'CancelRejected']);
+/** Mirrors ExecutionReport.tradeStatus: statuses that represent an actual fill of our order. */
+const TRADE_ER_STATUSES = new Set(['CompletelyFilled', 'PartialFilled']);
 
 function onExecutionReport(msg) {
     erRows.unshift(formatER(msg.data, msg.timestamp));
@@ -781,6 +837,24 @@ function onExecutionReport(msg) {
     const er = msg.data;
     if (!er || !er.instrument) return;
     updateActiveOrdersFromER(er);
+
+    // Toast + sound only for our own fills (CompletelyFilled / PartialFilled).
+    // Market-data TRADE messages are not used so we never spam popups for
+    // other participants' trades on the venue.
+    if (TRADE_ER_STATUSES.has(er.executionReportStatus)) {
+        const verb = er.verb || '';
+        const isBuy = verb.toLowerCase() === 'buy';
+        const isSell = verb.toLowerCase() === 'sell';
+        const sideEmoji = isBuy ? '▲' : isSell ? '▼' : '●';
+        const toastKind = isBuy ? 'buy' : isSell ? 'sell' : 'market';
+        const fillQty = er.lastQuantity || er.quantityFill || er.quantity;
+        showToast(
+            `${sideEmoji} FILL ${verb.toUpperCase()}  ${er.instrument}`,
+            `Price: ${fmt(er.price)} &nbsp; Qty: ${fmt(fillQty, 4)} &nbsp; ${er.executionReportStatus}`,
+            toastKind
+        );
+        playTradeSound();
+    }
 }
 
 /**
@@ -946,7 +1020,7 @@ function appendLog(type, algo, data) {
     while (c.children.length > MAX_LOG_ENTRIES) c.removeChild(c.lastChild);
 }
 
-// ── Trade events → ticker + toast ────────────────────────────────────────────
+// ── Trade events → ticker update only ────────────────────────────────────────
 function onTrade(msg) {
     const t = msg.data;
     if (!t || !t.instrument) return;
@@ -969,18 +1043,10 @@ function onTrade(msg) {
     if (tickerMap[instr].length > MAX_TICKER_ROWS) tickerMap[instr].pop();
 
     updateTickerCard(instr, entry);
-
-    const side = verb || '?';
-    const isBuy = side.toLowerCase() === 'buy';
-    const isSell = side.toLowerCase() === 'sell';
-    const sideEmoji = isBuy ? '▲' : isSell ? '▼' : '●';
-    const toastKind = isBuy ? 'buy' : isSell ? 'sell' : 'market';
-    showToast(
-        `${sideEmoji} ${side.toUpperCase()}  ${instr}`,
-        `Price: ${fmt(t.price)} &nbsp; Qty: ${fmt(t.quantity, 4)}`,
-        toastKind
-    );
-    playTradeSound();
+    // Toast / sound notifications are intentionally NOT fired here.
+    // Market-data TRADE messages represent ALL participants' trades on the venue.
+    // Own-trade notifications are raised by onExecutionReport() when the status
+    // is CompletelyFilled or PartialFilled (ExecutionReport.isTradeStatus).
 }
 
 function updateTickerCard(instr, latestEntry) {
