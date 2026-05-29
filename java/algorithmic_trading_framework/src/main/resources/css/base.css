@@ -1,0 +1,922 @@
+/* ── CSS Custom Properties ───────────────────────────────────────────────── */
+:root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2e3347;
+    --accent: #4e9af1;
+    --green: #3ecf8e;
+    --red: #f56565;
+    --yellow: #ecc94b;
+    --text: #e2e8f0;
+    --muted: #718096;
+    --font: "Segoe UI", system-ui, sans-serif;
+}
+
+/* ── Reset ───────────────────────────────────────────────────────────────── */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 14px;
+    min-height: 100vh;
+    padding-bottom: calc(36px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Prevent tap highlight flash on touch devices */
+button, input {
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 200;
+}
+
+header h1 {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--accent);
+}
+
+#algo-info {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+/* ── Bottom status bar ───────────────────────────────────────────────────── */
+#bottom-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 0 16px;
+    font-size: 11px;
+    color: var(--muted);
+    height: calc(36px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+#bottom-bar .sep {
+    width: 1px;
+    height: 16px;
+    background: var(--border);
+    flex-shrink: 0;
+}
+
+#status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--red);
+    transition: background .3s;
+    flex-shrink: 0;
+}
+
+#status-dot.connected {
+    background: var(--green);
+}
+
+#port-form {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#port-form label {
+    color: var(--muted);
+}
+
+#port-input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 3px;
+    padding: 2px 6px;
+    font-size: 11px;
+    width: 64px;
+}
+
+#port-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+#connect-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 3px;
+    padding: 2px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+}
+
+#connect-btn:hover {
+    color: var(--text);
+    border-color: var(--accent);
+}
+
+/* ── Tab navigation ─────────────────────────────────────────────────────── */
+.tab-nav {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    padding: 0 20px;
+}
+
+.tab-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    padding: 10px 16px;
+    font-size: 13px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color .2s, border-color .2s;
+}
+
+.tab-btn:hover {
+    color: var(--text);
+}
+
+.tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+.tab-panel {
+    display: none;
+}
+
+.tab-panel.active {
+    display: block;
+}
+
+/* ── Generic cards / grid ────────────────────────────────────────────────── */
+.grid {
+    padding: 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+@media (max-width: 900px) {
+    .grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.card h2 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-bottom: 12px;
+}
+
+.full-width {
+    grid-column: 1 / -1;
+}
+
+.kv-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 8px;
+}
+
+.kv {
+    background: var(--bg);
+    border-radius: 6px;
+    padding: 8px 12px;
+}
+
+.kv .label {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 2px;
+}
+
+.kv .value {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.positive {
+    color: var(--green);
+}
+
+.negative {
+    color: var(--red);
+}
+
+.neutral {
+    color: var(--text);
+}
+
+/* ── Tables ──────────────────────────────────────────────────────────────── */
+.table-wrap {
+    overflow-x: auto;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.table-wrap::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+
+.table-wrap::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+th {
+    text-align: left;
+    padding: 6px 8px;
+    color: var(--muted);
+    font-weight: 500;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+}
+
+td {
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}
+
+tr:hover td {
+    background: rgba(255, 255, 255, .03);
+}
+
+/* ── Log ─────────────────────────────────────────────────────────────────── */
+#log-container {
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+#log-container::-webkit-scrollbar {
+    width: 4px;
+}
+
+#log-container::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+}
+
+.log-entry {
+    font-size: 11px;
+    color: var(--muted);
+    padding: 3px 0;
+    border-bottom: 1px solid var(--border);
+    font-family: monospace;
+}
+
+.log-entry .ts {
+    color: var(--accent);
+    margin-right: 6px;
+}
+
+/* ── Badges ──────────────────────────────────────────────────────────────── */
+.badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.badge-buy {
+    background: rgba(62, 207, 142, .15);
+    color: var(--green);
+}
+
+.badge-sell {
+    background: rgba(245, 101, 101, .15);
+    color: var(--red);
+}
+
+.badge-neutral {
+    background: rgba(113, 128, 150, .15);
+    color: var(--muted);
+}
+
+.badge-algo {
+    background: rgba(236, 201, 75, .2);
+    color: var(--yellow);
+    font-weight: 700;
+}
+
+/* ── Params ──────────────────────────────────────────────────────────────── */
+#params-container {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.param-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg);
+    border-radius: 4px;
+    padding: 6px 10px;
+}
+
+.param-key {
+    color: var(--muted);
+    font-size: 11px;
+    min-width: 140px;
+    flex-shrink: 0;
+    font-weight: 500;
+    word-break: break-all;
+}
+
+.param-input {
+    flex: 1;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text);
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: var(--font);
+    transition: border-color .2s;
+}
+
+.param-input:focus {
+    border-color: var(--accent);
+    outline: none;
+    background: var(--surface);
+}
+
+.param-input.dirty {
+    border-color: var(--yellow);
+}
+
+.param-update-btn {
+    display: none;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 3px;
+    padding: 2px 10px;
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color .15s, border-color .15s, background .15s;
+}
+
+.param-update-btn.visible {
+    display: inline-block;
+}
+
+.param-update-btn:hover:not(.success):not(.error) {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.param-update-btn.success {
+    background: var(--green);
+    border-color: var(--green);
+    color: #000;
+    cursor: default;
+}
+
+.param-update-btn.error {
+    background: var(--red);
+    border-color: var(--red);
+    color: #fff;
+    cursor: not-allowed;
+}
+
+/* ── Orderbook tab page wrapper ──────────────────────────────────────────── */
+#ob-page-wrap {
+    padding: 16px 20px;
+}
+
+.ob-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+
+.ob-toolbar label {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.ob-toolbar input[type=number] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 12px;
+    width: 72px;
+}
+
+.ob-toolbar-sep {
+    color: var(--border);
+    font-size: 14px;
+    user-select: none;
+}
+
+.ob-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(540px, 1fr));
+    gap: 16px;
+}
+
+/* ── Pagination ──────────────────────────────────────────────────────────── */
+.pager {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.pager button {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.pager button:disabled {
+    opacity: .35;
+    cursor: not-allowed;
+}
+
+/* ── Single instrument card (shared) ─────────────────────────────────────── */
+.instr-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.instr-header {
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, .2);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+}
+
+.instr-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.instr-meta {
+    font-size: 11px;
+    color: var(--muted);
+}
+
+/* Last-update timestamp shown in the instrument card header */
+.ob-last-update {
+    color: var(--muted);
+    font-size: 10px;
+}
+
+/* Turns yellow when the last depth update is more than 2 minutes old */
+.ob-last-update.ob-update-stale {
+    color: var(--yellow);
+    font-weight: 600;
+}
+
+.instr-body {
+    display: flex;
+    gap: 0;
+    /* no min-height — card trims to content height */
+}
+
+/* ── Orderbook table (shared) ────────────────────────────────────────────── */
+.ob-side-label {
+    padding: 3px 10px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+}
+
+.ob-side-label.asks {
+    color: var(--red);
+    background: rgba(245, 101, 101, .06);
+    border-bottom: 1px solid var(--border);
+}
+
+.ob-side-label.bids {
+    color: var(--green);
+    background: rgba(62, 207, 142, .06);
+    border-bottom: 1px solid var(--border);
+}
+
+.ob-table {
+    width: 100%;
+    max-width: 100%; /* never wider than the half that contains it */
+    table-layout: auto; /* columns auto-size to fit their content */
+    border-collapse: collapse;
+    font-size: 11px;
+}
+
+.ob-table td {
+    padding: 3px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, .03);
+    white-space: nowrap; /* keeps numbers on one line, drives auto column width */
+}
+
+.ask-row td {
+    color: var(--red);
+}
+
+.bid-row td {
+    color: var(--green);
+}
+
+.algo-level td {
+    background: rgba(236, 201, 75, .1);
+}
+
+.algo-level td:last-child {
+    color: var(--yellow);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+/* ── My active order – yellow price highlight ─────────────────────────────── */
+/* ask-row: columns are  price | qty | bar | label  → price is td:first-child */
+.ask-row.my-order td:first-child {
+    color: var(--yellow) !important;
+    font-weight: 700;
+    background: rgba(236, 201, 75, .28);
+    box-shadow: inset 2px 0 0 var(--yellow);
+}
+
+/* bid-row: columns are  label | bar | qty | price  → price is td:last-child  */
+.bid-row.my-order td:last-child {
+    color: var(--yellow) !important;
+    font-weight: 700;
+    background: rgba(236, 201, 75, .28);
+    box-shadow: inset -2px 0 0 var(--yellow);
+}
+
+.ob-bar-cell {
+    width: 60px;
+}
+
+.ob-bar {
+    height: 8px;
+    border-radius: 2px;
+}
+
+.ask-bar {
+    background: rgba(245, 101, 101, .4);
+}
+
+.bid-bar {
+    background: rgba(62, 207, 142, .4);
+}
+
+/* ── Trades ticker side ──────────────────────────────────────────────────── */
+.ticker-side {
+    width: 210px;
+    flex-shrink: 0;
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: visible; /* allow scrollbar thumb to be visible */
+}
+
+.ticker-side h3 {
+    padding: 5px 10px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: rgba(0, 0, 0, .15);
+    border-bottom: 1px solid var(--border);
+}
+
+.ticker-list {
+    max-height: 120px; /* ~5 trade rows visible; scrolls for more */
+    overflow-y: scroll; /* always show vertical scrollbar */
+    overflow-x: hidden;
+}
+
+.ticker-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.ticker-list::-webkit-scrollbar-track {
+    background: var(--bg);
+}
+
+.ticker-list::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 2px;
+}
+
+.ticker-row {
+    display: grid;
+    grid-template-columns: 60px 1fr 1fr;
+    align-items: center;
+    padding: 3px 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, .03);
+    font-size: 11px;
+    animation: fadeIn .3s ease;
+}
+
+.ticker-row.trade-buy .ticker-price {
+    color: var(--green);
+}
+
+.ticker-row.trade-sell .ticker-price {
+    color: var(--red);
+}
+
+.ticker-row.algo-trade {
+    background: rgba(236, 201, 75, .08);
+}
+
+.ticker-row.algo-trade .ticker-price {
+    color: var(--yellow);
+    font-weight: 700;
+}
+
+.ticker-ts {
+    color: var(--muted);
+    font-size: 10px;
+}
+
+.ticker-qty {
+    text-align: right;
+    color: var(--muted);
+    font-size: 10px;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* ── Toast notifications ─────────────────────────────────────────────────── */
+#toast-container {
+    position: fixed;
+    top: 60px;
+    right: 20px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.toast {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--yellow);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 12px;
+    min-width: 220px;
+    max-width: 340px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, .4);
+    animation: slideIn .25s ease;
+    pointer-events: auto;
+}
+
+.toast.algo {
+    border-left-color: var(--yellow);
+}
+
+.toast.market {
+    border-left-color: var(--accent);
+}
+
+.toast.buy {
+    border-left-color: var(--green);
+    background: color-mix(in srgb, var(--surface) 90%, var(--green) 10%);
+}
+
+.toast.sell {
+    border-left-color: var(--red);
+    background: color-mix(in srgb, var(--surface) 90%, var(--red) 10%);
+}
+
+.toast-title {
+    font-weight: 700;
+    color: var(--yellow);
+    margin-bottom: 2px;
+}
+
+.toast.market .toast-title {
+    color: var(--accent);
+}
+
+.toast.buy .toast-title {
+    color: var(--green);
+}
+
+.toast.sell .toast-title {
+    color: var(--red);
+}
+
+.toast-body {
+    color: var(--muted);
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(30px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* ── Grafana iframe ──────────────────────────────────────────────────────── */
+#grafana-frame {
+    width: 100%;
+    border: none;
+    height: calc(100vh - 112px);
+}
+
+/* ── Algo toggle button ───────────────────────────────────────────────────── */
+#algo-toggle-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(62, 207, 142, .12);
+    border: 1.5px solid var(--green);
+    color: var(--green);
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background .2s, color .2s, border-color .2s;
+    font-weight: 600;
+}
+
+#algo-toggle-btn:hover {
+    background: rgba(62, 207, 142, .25);
+}
+
+#algo-toggle-btn.stopped {
+    background: rgba(245, 101, 101, .12);
+    border-color: var(--red);
+    color: var(--red);
+}
+
+#algo-toggle-btn.stopped:hover {
+    background: rgba(245, 101, 101, .25);
+}
+
+.algo-power-icon {
+    font-size: 15px;
+    line-height: 1;
+}
+
+/* ── Confirm action modal ─────────────────────────────────────────────────── */
+#confirm-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10002;
+    background: rgba(0, 0, 0, .65);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#confirm-overlay.hidden {
+    display: none;
+}
+
+.confirm-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 32px 36px;
+    width: 360px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, .6);
+    text-align: center;
+}
+
+.confirm-box h3 {
+    font-size: 17px;
+    color: var(--text);
+    margin-bottom: 10px;
+}
+
+.confirm-box p {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 26px;
+    line-height: 1.5;
+}
+
+.confirm-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.btn-confirm-yes {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 9px 22px;
+    font-size: 13px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.btn-confirm-yes.danger {
+    background: var(--red);
+}
+
+.btn-confirm-yes:hover {
+    opacity: .85;
+}
+
+.btn-confirm-no {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 4px;
+    padding: 9px 22px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.btn-confirm-no:hover {
+    border-color: var(--accent);
+    color: var(--text);
+}
+

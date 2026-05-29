@@ -1,6 +1,7 @@
 package com.lambda.investing.backtest.core;
 
 import com.lambda.investing.Configuration;
+import com.lambda.investing.algorithmic_trading.observer.web.WebAlgorithmObserver;
 import com.lambda.investing.backtest.InputConfiguration;
 import com.lambda.investing.backtest_engine.BacktestConfiguration;
 import com.lambda.investing.backtest_engine.ordinary.OrdinaryBacktest;
@@ -151,6 +152,20 @@ public class App {
             if (dummyRlAgent.isDummyAgent()) {
                 new Thread(dummyRlAgent, "dummyRlAgent").start();
             }
+
+            // Start web monitoring UI if uiWebPort is configured
+//              no sense in backtest
+//            int uiWebPort = inputConfiguration.getUiWebPort();
+//            if (uiWebPort > 0) {
+//                try {
+//                    WebAlgorithmObserver webObserver = new WebAlgorithmObserver(uiWebPort);
+//                    backtestConfiguration.getAlgorithm().register(webObserver);
+//                    logger.info("Web monitoring UI registered on port {}", uiWebPort);
+//                } catch (Exception e) {
+//                    logger.error("Failed to start web monitoring UI on port {}: {}", uiWebPort, e.getMessage());
+//                }
+//            }
+
             OrdinaryBacktest ordinaryBacktest = new OrdinaryBacktest(backtestConfiguration);
             ordinaryBacktest.start();
 

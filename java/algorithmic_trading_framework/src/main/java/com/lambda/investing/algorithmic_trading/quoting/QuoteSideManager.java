@@ -45,6 +45,12 @@ public class QuoteSideManager {
     private volatile String clOrdIdPending = null;
     private Queue<String> lastClOrdIdSent;
     private long timestampError = Long.MIN_VALUE;
+    /**
+     * Timestamp (ms) when {@code clientOrderIdSent} was last set.
+     * Used to detect orders whose ER was never received so we can recover
+     * after {@link #MAX_TIME_ERROR_MS} without being permanently stuck.
+     */
+    private long clientOrderIdSentTimestamp = Long.MIN_VALUE;
     private Date sleepUntil = null;
 
     private boolean isResetting = false;
@@ -82,6 +88,7 @@ public class QuoteSideManager {
         isResetting = false;
 
         clientOrderIdSent = null;
+        clientOrderIdSentTimestamp = Long.MIN_VALUE;
         activeClientOrderId = null;
         lastQuoteSent = null;
         lastPrice = null;
@@ -142,7 +149,23 @@ public class QuoteSideManager {
         //				throw new LambdaTradingException("cant quote with algo not started");
         //			}
         if (clientOrderIdSent != null) {
-            return;
+            // Safety net: if we have been waiting for an ER longer than MAX_TIME_ERROR_MS,
+            // the ER was probably lost in transit.  Clear the stuck state so quoting can
+            // resume; the active order on the exchange (if any) will be re-synced on the
+            // next depth update cycle.
+            long now = algorithm.getCurrentTimestamp();
+            if (clientOrderIdSentTimestamp != Long.MIN_VALUE
+                    && now - clientOrderIdSentTimestamp > MAX_TIME_ERROR_MS) {
+                logger.warn("[{}] {} clientOrderIdSent={} stuck for >{}ms without ER — clearing stuck state",
+                        new Date(now), verb, clientOrderIdSent, MAX_TIME_ERROR_MS);
+                clientOrderIdSent = null;
+                clientOrderIdSentTimestamp = Long.MIN_VALUE;
+                clOrdIdPending = null;
+                // Do NOT clear activeClientOrderId: the order may still be live on the
+                // exchange; the next quoteRequest will issue a Modify against it.
+            } else {
+                return;
+            }
             //				throw new LambdaTradingException("cant quote " + verb + " waiting to ER of " + clientOrderIdSent);
         }
 
@@ -196,6 +219,7 @@ public class QuoteSideManager {
 
         lastQuoteSent = quoteRequest;
         clientOrderIdSent = orderRequest.getClientOrderId();
+        clientOrderIdSentTimestamp = algorithm.getCurrentTimestamp();
 
         lastQuantity = quantity;
         lastPrice = price;
@@ -262,8 +286,19 @@ public class QuoteSideManager {
             return;
         }
         if (clOrdIdPending != null) {
-            //reject this update
-            return;
+            // If the pending order ER was lost, don't block unquote indefinitely.
+            long now = algorithm.getCurrentTimestamp();
+            if (clientOrderIdSentTimestamp != Long.MIN_VALUE
+                    && now - clientOrderIdSentTimestamp > MAX_TIME_ERROR_MS) {
+                logger.warn("[{}] {} clOrdIdPending={} stuck for >{}ms without ER — clearing to allow unquote",
+                        new Date(now), verb, clOrdIdPending, MAX_TIME_ERROR_MS);
+                clOrdIdPending = null;
+                clientOrderIdSent = null;
+                clientOrderIdSentTimestamp = Long.MIN_VALUE;
+            } else {
+                //reject this update
+                return;
+            }
         }
         if (lastQuote != null) {
             if (verb.equals(Verb.Buy)) {
@@ -345,6 +380,7 @@ public class QuoteSideManager {
         if (clientOrderId.equalsIgnoreCase(clientOrderIdSent)) {
             //remove the client
             clientOrderIdSent = null;
+            clientOrderIdSentTimestamp = Long.MIN_VALUE;
         }
 
         if (isActive) {

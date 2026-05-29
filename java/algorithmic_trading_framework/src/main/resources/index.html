@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+    <title>HFT Framework – Algorithm Monitor</title>
+    <link rel="stylesheet" href="css/base.css"/>
+    <link rel="stylesheet" href="css/index.css"/>
+</head>
+<body>
+
+<!-- Login overlay -->
+<div id="login-overlay">
+    <div class="login-box">
+        <h3>🔐 HFT Framework</h3>
+        <p>Enter your credentials to connect</p>
+        <div class="login-field">
+            <label for="login-user">Username</label>
+            <input id="login-user" type="text" value="admin" autocomplete="username"
+                   onkeydown="if(event.key==='Enter')doLogin()"/>
+        </div>
+        <div class="login-field">
+            <label for="login-pass">Password</label>
+            <input id="login-pass" type="password" value="admin" autocomplete="current-password"
+                   onkeydown="if(event.key==='Enter')doLogin()"/>
+        </div>
+        <div id="login-error"></div>
+        <button id="login-submit-btn" onclick="doLogin()">Connect</button>
+    </div>
+</div>
+
+<!-- Paper Trading banner -->
+<div id="paper-trading-bar">⚠ PAPER TRADING ⚠</div>
+
+<!-- Toast container (shared, always on top) -->
+<div id="toast-container"></div>
+
+<!-- Algo start/stop confirm modal -->
+<div id="confirm-overlay" class="hidden">
+    <div class="confirm-box">
+        <h3 id="confirm-title">Confirm Action</h3>
+        <p id="confirm-body">Are you sure?</p>
+        <div class="confirm-actions">
+            <button class="btn-confirm-no" onclick="closeConfirm()">Cancel</button>
+            <button class="btn-confirm-yes" id="confirm-yes-btn" onclick="doConfirmAlgoAction()">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<header>
+    <h1>HFT Framework – Algorithm Monitor</h1>
+    <span id="algo-info"></span>
+    <div style="display:flex;align-items:center;gap:8px">
+        <button id="algo-toggle-btn" onclick="onAlgoToggleClick()" title="Start / Stop algorithm">
+            <span class="algo-power-icon">⏻</span>
+            <span id="algo-toggle-label">Running</span>
+        </button>
+    </div>
+</header>
+
+<!-- Bottom status bar -->
+<div id="bottom-bar">
+    <div id="status">
+        <div id="status-dot"></div>
+        <span id="status-text">Disconnected</span>
+    </div>
+    <div class="sep"></div>
+    <div id="port-form">
+        <label for="port-input">Port</label>
+        <input id="port-input" type="number" value="8080" min="1" max="65535"
+               onkeydown="if(event.key==='Enter')reconnect()"/>
+        <button id="connect-btn" onclick="reconnect()">Connect</button>
+    </div>
+</div>
+
+<nav class="tab-nav">
+    <button class="tab-btn active" onclick="showTab('overview',this)">Overview</button>
+    <button class="tab-btn" onclick="showTab('orderbook',this)">Orderbook</button>
+    <button class="tab-btn" id="tab-btn-grafana" style="display:none" onclick="showTab('grafana',this)">Grafana</button>
+</nav>
+
+<!-- ═══════════════════ OVERVIEW TAB ═══════════════════════════════════════ -->
+<div class="tab-panel active" id="tab-overview">
+    <div class="grid">
+        <div class="card">
+            <h2>Portfolio</h2>
+            <div class="kv-grid">
+                <div class="kv">
+                    <div class="label">Realized PnL</div>
+                    <div class="value neutral" id="pnl-realized">–</div>
+                </div>
+                <div class="kv">
+                    <div class="label">Unrealized PnL</div>
+                    <div class="value neutral" id="pnl-unrealized">–</div>
+                </div>
+                <div class="kv">
+                    <div class="label">Total PnL</div>
+                    <div class="value neutral" id="pnl-total">–</div>
+                </div>
+                <div class="kv">
+                    <div class="label">Net Position</div>
+                    <div class="value neutral" id="pnl-position">–</div>
+                </div>
+                <div class="kv">
+                    <div class="label">Total Fees</div>
+                    <div class="value neutral" id="pnl-fees">–</div>
+                </div>
+                <div class="kv">
+                    <div class="label">Net Investment</div>
+                    <div class="value neutral" id="pnl-investment">–</div>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Instruments</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Instrument</th>
+                        <th>Realized</th>
+                        <th>Unrealized</th>
+                        <th>Total</th>
+                        <th>Position</th>
+                    </tr>
+                    </thead>
+                    <tbody id="instruments-body"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Execution Reports</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Instrument</th>
+                        <th>Side</th>
+                        <th>Qty</th>
+                        <th>Price</th>
+                        <th>Status</th>
+                    </tr>
+                    </thead>
+                    <tbody id="er-body"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Order Requests</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Instrument</th>
+                        <th>Side</th>
+                        <th>Qty</th>
+                        <th>Price</th>
+                        <th>Type</th>
+                    </tr>
+                    </thead>
+                    <tbody id="or-body"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Parameters</h2>
+            <div id="params-container"><span
+                    style="color:var(--muted);font-size:12px">No parameters received yet.</span></div>
+        </div>
+        <div class="card">
+            <h2>Custom Metrics</h2>
+            <div class="kv-grid" id="custom-kv"><span
+                    style="color:var(--muted);font-size:12px">No custom metrics yet.</span></div>
+        </div>
+        <div class="card full-width">
+            <h2>Event Log</h2>
+            <div id="log-container"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════ ORDERBOOK TAB ══════════════════════════════════════ -->
+<div class="tab-panel" id="tab-orderbook">
+    <div id="ob-page-wrap">
+        <div class="ob-toolbar">
+            <label for="ob-per-page">Instruments per page</label>
+            <input id="ob-per-page" type="number" value="10" min="1" max="100" onchange="renderOBPage()"/>
+            <span id="ob-instr-count" style="color:var(--muted);font-size:12px"></span>
+        </div>
+        <div id="ob-grid" class="ob-grid"></div>
+        <div class="pager">
+            <button id="pg-prev" onclick="obPrevPage()" disabled>← Prev</button>
+            <span id="pg-label">Page 1</span>
+            <button id="pg-next" onclick="obNextPage()" disabled>Next →</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════ GRAFANA TAB ════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-grafana">
+    <iframe id="grafana-frame" src="about:blank"></iframe>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/index.js"></script>
+</body>
+</html>

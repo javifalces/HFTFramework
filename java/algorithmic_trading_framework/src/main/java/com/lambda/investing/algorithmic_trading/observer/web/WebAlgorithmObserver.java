@@ -1,0 +1,453 @@
+package com.lambda.investing.algorithmic_trading.observer.web;
+
+import com.lambda.investing.Configuration;
+import com.lambda.investing.algorithmic_trading.AlgorithmObserver;
+import com.lambda.investing.algorithmic_trading.AlgorithmProvider;
+import com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshot;
+import com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioSnapshot;
+import com.lambda.investing.model.market_data.Depth;
+import com.lambda.investing.model.market_data.Trade;
+import com.lambda.investing.model.trading.ExecutionReport;
+import com.lambda.investing.model.trading.ExecutionReportStatus;
+import com.lambda.investing.model.trading.OrderRequest;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.regex.Pattern;
+
+import static com.lambda.investing.model.Util.GSON;
+import static com.lambda.investing.model.Util.toJsonStringGSON;
+
+/**
+ * {@link AlgorithmObserver} implementation that starts an embedded HTTP + WebSocket
+ * server and streams every algorithm update to connected browser clients.
+ *
+ * <p>To enable the web UI add {@code "uiWebPort": 9001} (or any free port) to the
+ * JSON configuration of a backtest or a live-trading session.  Once the process is
+ * running, open {@code http://localhost:9001} in a browser to see the real-time
+ * dashboard.
+ *
+ * <p>Each update is serialised as a JSON object and pushed over WebSocket:
+ * <pre>{@code
+ * {
+ *   "type": "PORTFOLIO_SNAPSHOT",
+ *   "timestamp": 1234567890,
+ *   "algorithmInfo": "AvellanedaStoikov",
+ *   "data": { ... }
+ * }
+ * }</pre>
+ *
+ * <p>Supported message types: {@code STATE}, {@code PORTFOLIO_SNAPSHOT},
+ * {@code PNL_SNAPSHOT}, {@code TRADE}, {@code EXECUTION_REPORT},
+ * {@code ORDER_REQUEST}, {@code PARAMS}, {@code CUSTOM_COLUMN}, {@code MESSAGE},
+ * {@code DEPTH}.
+ */
+public class WebAlgorithmObserver implements AlgorithmObserver {
+
+    private static final Logger logger = LogManager.getLogger(WebAlgorithmObserver.class);
+
+    private final AlgorithmWebServer server;
+
+    // Mutable current-state snapshot kept for newly connecting clients.
+    // Keyed by algorithmInfo (empty-string for unnamed single-algo).
+    // Using a ConcurrentHashMap allows safe multi-algo (MultiAlgorithm) tracking
+    // where each child algorithm fires its own portfolio snapshot independently.
+    private final Map<String, PortfolioSnapshot> latestPortfolioByAlgo = new ConcurrentHashMap<>();
+    private volatile Map<String, Object> latestParams;
+    private final Map<String, Double> latestCustomColumns = new ConcurrentHashMap<>();
+    /** Latest L2 depth snapshot per instrument (used to restore orderbook on reconnect). */
+    private final Map<String, Map<String, Object>> latestDepths = new ConcurrentHashMap<>();
+
+    // ── PnL history (persisted on the backend, queried by the frontend on reconnect) ──
+    /**
+     * Circular buffer of sampled PnL entries: {@code {ts, realized, unrealized, total}}.
+     */
+    private final Deque<Map<String, Object>> pnlHistory = new ConcurrentLinkedDeque<>();
+    /**
+     * Maximum number of PnL samples to retain in memory.
+     */
+    private static final int MAX_PNL_HISTORY = 10_000;
+    /**
+     * Minimum milliseconds between consecutive samples (default 10 s, overridable via {@link #setPnlSampleIntervalMs}).
+     */
+    private volatile long pnlSampleIntervalMs = 10_000;
+    /**
+     * Timestamp of the last recorded PnL sample.
+     */
+    private volatile long lastPnlSampleTs = 0;
+
+    /**
+     * Overrides the minimum interval between backend PnL samples.
+     * Call before the algorithm starts producing data. Default is 10 000 ms (10 s).
+     *
+     * @param intervalMs interval in milliseconds; must be &gt; 0
+     */
+    public void setPnlSampleIntervalMs(long intervalMs) {
+        if (intervalMs > 0) this.pnlSampleIntervalMs = intervalMs;
+    }
+    /**
+     * Active (live) execution reports per instrument, keyed by clientOrderId.
+     * Populated on Active/PartialFilled, removed on CompletelyFilled/Cancelled/Rejected/CancelRejected.
+     * Used to overlay own orders on the orderbook regardless of whether algo-info is available in depth.
+     */
+    private final Map<String, ConcurrentHashMap<String, Map<String, Object>>> activeOrdersByInstrument =
+            new ConcurrentHashMap<>();
+
+    /**
+     * Creates and starts the web server on the given port.
+     *
+     * @param port TCP port to listen on (e.g. 9001)
+     * @throws InterruptedException if the thread is interrupted while the server binds
+     */
+    public WebAlgorithmObserver(int port) throws InterruptedException {
+        this.server = new AlgorithmWebServer(port);
+        // Enable Grafana tab when Prometheus monitoring is configured
+        if (!Configuration.PROMETHEUS_PORT.isEmpty()) {
+            server.setGrafanaUrl(Configuration.GRAFANA_URL);
+            logger.info("Grafana tab enabled at {}", Configuration.GRAFANA_URL);
+        }
+        logger.info("Web UI available at http://localhost:{}", port);
+        System.out.println("[WebAlgorithmObserver] Web UI available at http://localhost:" + port
+                + "  |  login: " + Configuration.WEB_UI_LOGIN
+                + "  password: " + Configuration.WEB_UI_PASSWORD);
+
+
+    }
+
+    /**
+     * Controls the PAPER TRADING banner shown in the frontend.
+     * Call this with {@code true} when the algorithm is running in paper-trading mode.
+     *
+     * @param paperTrading {@code true} to show the banner
+     */
+    public void setPaperTrading(boolean paperTrading) {
+        server.setPaperTrading(paperTrading);
+    }
+
+    public void setProvider(AlgorithmProvider provider) {
+        server.setAlgorithmProvider(provider);
+    }
+
+    // -----------------------------------------------------------------------
+    // AlgorithmObserver implementation
+    // -----------------------------------------------------------------------
+
+    @Override
+    public void onUpdateDepth(String algorithmInfo, Depth depth) {
+        Map<String, Object> snapshot = null;
+        if (depth != null && depth.getInstrument() != null) {
+            snapshot = toDepthSnapshot(depth);
+            latestDepths.put(depth.getInstrument(), snapshot);
+        }
+        // Broadcast the snapshot (with frontend-expected field names: bidsQty, asksQty,
+        // bidsAlgoInfo, asksAlgoInfo) instead of the raw Depth object whose GSON field
+        // names differ (bidsQuantities, asksQuantities, bidsAlgorithmInfo, asksAlgorithmInfo).
+        String json = buildMessage("DEPTH", algorithmInfo, snapshot != null ? snapshot : depth, currentTimeMs());
+        server.broadcastUpdate(json);
+    }
+
+    @Override
+    public void onUpdatePnlSnapshot(String algorithmInfo, PnlSnapshot pnlSnapshot) {
+        String json = buildMessage("PNL_SNAPSHOT", algorithmInfo, toPnlDto(pnlSnapshot), currentTimeMs());
+        server.broadcastUpdate(json);
+        refreshState();
+    }
+
+    @Override
+    public void onUpdatePortfolioSnapshot(String algorithmInfo, PortfolioSnapshot portfolioSnapshot) {
+        // Store per-algo so MultiAlgorithm setups (each child fires its own snapshot) are
+        // all tracked and can be sent as a full set to reconnecting clients via STATE.
+        String key = algorithmInfo != null ? algorithmInfo : "";
+        latestPortfolioByAlgo.put(key, portfolioSnapshot);
+
+        // Record a PnL sample for the persistent history (rate-limited).
+        // Aggregate across all known child algorithms so the chart reflects the total portfolio.
+        long now = currentTimeMs();
+        if (now - lastPnlSampleTs >= pnlSampleIntervalMs) {
+            lastPnlSampleTs = now;
+            double aggRealized = 0, aggUnrealized = 0, aggTotal = 0;
+            for (PortfolioSnapshot ps : latestPortfolioByAlgo.values()) {
+                aggRealized += ps.realizedPnl;
+                aggUnrealized += ps.unrealizedPnl;
+                aggTotal += ps.totalPnl;
+            }
+            Map<String, Object> sample = new LinkedHashMap<>();
+            sample.put("ts", now);
+            sample.put("realized", aggRealized);
+            sample.put("unrealized", aggUnrealized);
+            sample.put("total", aggTotal);
+            pnlHistory.addLast(sample);
+            while (pnlHistory.size() > MAX_PNL_HISTORY) pnlHistory.pollFirst();
+            server.updatePnlHistory(sanitizeJson(toJsonStringGSON(new ArrayList<>(pnlHistory))));
+        }
+        // Use a lightweight DTO – the full PortfolioSnapshot carries huge historical
+        // maps inside every PnlSnapshot which would produce megabyte-sized JSON messages.
+        String json = buildMessage("PORTFOLIO_SNAPSHOT", algorithmInfo, toPortfolioDto(portfolioSnapshot), currentTimeMs());
+        server.broadcastUpdate(json);
+        refreshState();
+    }
+
+    @Override
+    public void onUpdateTrade(String algorithmInfo, Trade trade) {
+        String json = buildMessage("TRADE", algorithmInfo, trade, currentTimeMs());
+        server.broadcastUpdate(json);
+    }
+
+    @Override
+    public void onUpdateParams(String algorithmInfo, Map<String, Object> newParams) {
+        this.latestParams = newParams;
+        String json = buildMessage("PARAMS", algorithmInfo, newParams, currentTimeMs());
+        server.broadcastUpdate(json);
+        refreshState();
+    }
+
+    @Override
+    public void onUpdateMessage(String algorithmInfo, String name, String body) {
+        Map<String, String> data = new HashMap<>();
+        data.put("name", name);
+        data.put("body", body);
+        String json = buildMessage("MESSAGE", algorithmInfo, data, currentTimeMs());
+        server.broadcastUpdate(json);
+    }
+
+    @Override
+    public void onOrderRequest(String algorithmInfo, OrderRequest orderRequest) {
+        String json = buildMessage("ORDER_REQUEST", algorithmInfo, orderRequest, currentTimeMs());
+        server.broadcastUpdate(json);
+    }
+
+    @Override
+    public void onExecutionReportUpdate(String algorithmInfo, ExecutionReport executionReport) {
+        updateActiveOrders(executionReport);
+        String json = buildMessage("EXECUTION_REPORT", algorithmInfo, executionReport, currentTimeMs());
+        server.broadcastUpdate(json);
+    }
+
+    /**
+     * Maintains the {@link #activeOrdersByInstrument} map from incoming execution reports.
+     * <ul>
+     *   <li>Active / PartialFilled → add / update the order entry.</li>
+     *   <li>CompletelyFilled / Cancelled / Rejected / CancelRejected → remove the entry.</li>
+     * </ul>
+     * Also removes the old entry keyed by {@code origClientOrderId} on modify-confirm flows.
+     */
+    private void updateActiveOrders(ExecutionReport er) {
+        if (er == null || er.getInstrument() == null || er.getClientOrderId() == null) return;
+        ExecutionReportStatus status = er.getExecutionReportStatus();
+        if (status == null) return;
+
+        String instrument = er.getInstrument();
+        String clientOrderId = er.getClientOrderId();
+
+        ConcurrentHashMap<String, Map<String, Object>> instrOrders =
+                activeOrdersByInstrument.computeIfAbsent(instrument, k -> new ConcurrentHashMap<>());
+
+        if (ExecutionReport.isLiveStatus(er)) {
+            Map<String, Object> orderInfo = new LinkedHashMap<>();
+            orderInfo.put("clientOrderId", clientOrderId);
+            orderInfo.put("verb", er.getVerb() != null ? er.getVerb().name() : null);
+            orderInfo.put("price", er.getPrice());
+            orderInfo.put("quantity", er.getQuantity());
+            orderInfo.put("quantityFill", er.getQuantityFill());
+            instrOrders.put(clientOrderId, orderInfo);
+            // On modify, remove the superseded original order
+            if (er.getOrigClientOrderId() != null && !er.getOrigClientOrderId().isEmpty()
+                    && !er.getOrigClientOrderId().equals(clientOrderId)) {
+                instrOrders.remove(er.getOrigClientOrderId());
+            }
+            refreshState();
+        } else if (ExecutionReport.isRemovedStatus(er)
+                || status == ExecutionReportStatus.Rejected
+                || status == ExecutionReportStatus.CancelRejected) {
+            instrOrders.remove(clientOrderId);
+            if (er.getOrigClientOrderId() != null && !er.getOrigClientOrderId().isEmpty()) {
+                instrOrders.remove(er.getOrigClientOrderId());
+            }
+            refreshState();
+        }
+    }
+
+    @Override
+    public void onCustomColumns(long timestamp, String algorithmInfo, String instrumentPk, String key, Double value) {
+        latestCustomColumns.put((instrumentPk != null ? instrumentPk + "." : "") + key, value);
+        Map<String, Object> data = new HashMap<>();
+        data.put("instrumentPk", instrumentPk);
+        data.put("key", key);
+        data.put("value", value);
+        String json = buildMessage("CUSTOM_COLUMN", algorithmInfo, data, timestamp);
+        server.broadcastUpdate(json);
+        refreshState();
+    }
+
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
+
+    private static long currentTimeMs() {
+        return System.currentTimeMillis();
+    }
+
+    /**
+     * Replaces GSON-written {@code NaN} / {@code Infinity} / {@code -Infinity} tokens
+     * (which are not valid JSON) with {@code null} so that {@code JSON.parse()} in the
+     * browser does not throw.  The negative look-behind/ahead for {@code "} ensures we
+     * do not corrupt legitimate string values that happen to contain those words.
+     */
+    private static final Pattern NAN_PATTERN =
+            Pattern.compile("(?<![\"\\w])(NaN|-?Infinity)(?![\"\\w])");
+
+    private static String sanitizeJson(String json) {
+        return NAN_PATTERN.matcher(json).replaceAll("null");
+    }
+
+    /**
+     * Serialises an update to the typed JSON envelope format expected by the
+     * dashboard frontend.  All NaN / Infinity values are replaced with {@code null}
+     * to produce valid JSON.
+     */
+    private static String buildMessage(String type, String algorithmInfo, Object data, long timestamp) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"type\":\"").append(type).append("\"");
+        sb.append(",\"timestamp\":").append(timestamp);
+        if (algorithmInfo != null) {
+            sb.append(",\"algorithmInfo\":").append(GSON.toJson(algorithmInfo));
+        }
+        sb.append(",\"data\":").append(toJsonStringGSON(data));
+        sb.append("}");
+        return sanitizeJson(sb.toString());
+    }
+
+    /**
+     * Creates a lightweight PnL map containing only the scalar fields needed by the
+     * dashboard frontend.  Avoids serialising the enormous historical maps, Logger
+     * references and other non-serialisable state stored inside a {@link PnlSnapshot}.
+     */
+    private static Map<String, Object> toPnlDto(PnlSnapshot s) {
+        if (s == null) return Collections.emptyMap();
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("instrumentPk", s.getInstrumentPk());
+        m.put("algorithmInfo", s.getAlgorithmInfo());
+        m.put("realizedPnl", s.realizedPnl);
+        m.put("unrealizedPnl", s.unrealizedPnl);
+        m.put("totalPnl", s.totalPnl);
+        m.put("netPosition", s.netPosition);
+        m.put("avgOpenPrice", s.avgOpenPrice);
+        m.put("netInvestment", s.netInvestment);
+        m.put("totalFees", s.totalFees);
+        m.put("numberOfTrades", s.numberOfTrades != null ? s.numberOfTrades.get() : 0);
+        m.put("lastVerb", s.lastVerb);
+        return m;
+    }
+
+    /**
+     * Creates a lightweight portfolio map containing only the fields the dashboard
+     * frontend needs.  Avoids serialising the enormous per-instrument historical maps
+     * stored inside each {@link PnlSnapshot}.
+     */
+    private static Map<String, Object> toPortfolioDto(PortfolioSnapshot ps) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("realizedPnl", ps.realizedPnl);
+        m.put("unrealizedPnl", ps.unrealizedPnl);
+        m.put("totalPnl", ps.totalPnl);
+        m.put("netPosition", ps.netPosition);
+        m.put("totalFees", ps.totalFees);
+        m.put("netInvestment", ps.netInvestment);
+
+        Map<String, Object> instrMap = new LinkedHashMap<>();
+        if (ps.getInstrumentPnlSnapshotMap() != null) {
+            for (Map.Entry<String, PnlSnapshot> e : ps.getInstrumentPnlSnapshotMap().entrySet()) {
+                PnlSnapshot s = e.getValue();
+                Map<String, Object> sm = new LinkedHashMap<>();
+                sm.put("realizedPnl", s.realizedPnl);
+                sm.put("unrealizedPnl", s.unrealizedPnl);
+                sm.put("totalPnl", s.totalPnl);
+                sm.put("netPosition", s.netPosition);
+                instrMap.put(e.getKey(), sm);
+            }
+        }
+        m.put("instrumentPnlSnapshotMap", instrMap);
+        return m;
+    }
+
+    /**
+     * Rebuilds the REST state snapshot from the latest known values.
+     */
+    private void refreshState() {
+        Map<String, Object> state = new HashMap<>();
+        if (!latestPortfolioByAlgo.isEmpty()) {
+            if (latestPortfolioByAlgo.size() == 1) {
+                Map.Entry<String, PortfolioSnapshot> entry = latestPortfolioByAlgo.entrySet().iterator().next();
+                if (entry.getKey().isEmpty()) {
+                    // Unnamed single-algo: use the classic "portfolio" key for backward compat
+                    state.put("portfolio", toPortfolioDto(entry.getValue()));
+                } else {
+                    // Named single-algo (e.g. a lone child inside a MultiAlgorithm): use
+                    // portfoliosByAlgo so the frontend always takes the multi-algo path.
+                    state.put("portfoliosByAlgo", Collections.singletonMap(entry.getKey(), toPortfolioDto(entry.getValue())));
+                }
+            } else {
+                // Multiple algos: send all snapshots keyed by algorithmInfo
+                Map<String, Object> byAlgo = new LinkedHashMap<>();
+                for (Map.Entry<String, PortfolioSnapshot> e : latestPortfolioByAlgo.entrySet()) {
+                    byAlgo.put(e.getKey(), toPortfolioDto(e.getValue()));
+                }
+                state.put("portfoliosByAlgo", byAlgo);
+            }
+        }
+        if (latestParams != null) {
+            state.put("params", latestParams);
+        }
+        if (!latestCustomColumns.isEmpty()) {
+            state.put("customColumns", latestCustomColumns);
+        }
+        if (!latestDepths.isEmpty()) {
+            state.put("depths", latestDepths);
+        }
+        // Active orders per instrument – used by the frontend to overlay own orders on the book
+        Map<String, Object> activeOrdersDto = new LinkedHashMap<>();
+        for (Map.Entry<String, ConcurrentHashMap<String, Map<String, Object>>> e :
+                activeOrdersByInstrument.entrySet()) {
+            if (!e.getValue().isEmpty()) {
+                activeOrdersDto.put(e.getKey(), new ArrayList<>(e.getValue().values()));
+            }
+        }
+        if (!activeOrdersDto.isEmpty()) {
+            state.put("activeOrders", activeOrdersDto);
+        }
+        server.updateState(sanitizeJson(toJsonStringGSON(state)));
+    }
+
+    /**
+     * Converts a {@link Depth} snapshot into a plain {@code Map} that can be
+     * serialised to JSON.  Only the fields needed by the orderbook frontend are
+     * included; the heavy per-event latency fields are omitted.
+     */
+    private static Map<String, Object> toDepthSnapshot(Depth depth) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("instrument", depth.getInstrument());
+        m.put("timestamp",  depth.getTimestamp());
+        m.put("receivedAt", System.currentTimeMillis());
+        m.put("bids",       depth.getBids());
+        m.put("asks",       depth.getAsks());
+        m.put("bidsQty",    depth.getBidsQuantities());
+        m.put("asksQty",    depth.getAsksQuantities());
+        m.put("bidLevels",  depth.getBidLevels());
+        m.put("askLevels",  depth.getAskLevels());
+        // bidsAlgorithmInfo / asksAlgorithmInfo are only populated during backtests
+        if (depth.getBidsAlgorithmInfo() != null) {
+            m.put("bidsAlgoInfo", depth.getBidsAlgorithmInfo());
+        }
+        if (depth.getAsksAlgorithmInfo() != null) {
+            m.put("asksAlgoInfo", depth.getAsksAlgorithmInfo());
+        }
+        return m;
+    }
+}

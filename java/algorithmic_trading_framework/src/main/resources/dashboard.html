@@ -1,0 +1,248 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+    <title>HFT Framework – Algorithm Monitor</title>
+    <link rel="stylesheet" href="css/base.css"/>
+    <link rel="stylesheet" href="css/dashboard.css"/>
+</head>
+<body>
+
+<!-- ── Login overlay ─────────────────────────────────────────────────────── -->
+<div id="login-overlay">
+    <div class="login-box">
+        <h2>🔐 HFT Framework</h2>
+        <div class="form-group">
+            <label for="l-user">Username</label>
+            <input id="l-user" type="text" value="admin" autocomplete="username"
+                   onkeydown="if(event.key==='Enter')doLogin()"/>
+        </div>
+        <div class="form-group">
+            <label for="l-pass">Password</label>
+            <input id="l-pass" type="password" autocomplete="current-password"
+                   onkeydown="if(event.key==='Enter')doLogin()"/>
+        </div>
+        <label class="remember-row">
+            <input id="l-remember" type="checkbox" checked/>
+            Remember me
+        </label>
+        <button class="btn-primary" onclick="doLogin()">Sign In</button>
+        <div id="login-error"></div>
+    </div>
+</div>
+
+<!-- ── Settings modal ────────────────────────────────────────────────────── -->
+<div id="settings-overlay" class="hidden">
+    <div class="settings-box">
+        <button class="modal-close" onclick="closeSettings()">✕</button>
+        <h2>⚙ Change Credentials</h2>
+        <div class="form-group">
+            <label for="s-user">New Username <span style="color:var(--muted)">(leave blank to keep)</span></label>
+            <input id="s-user" type="text" autocomplete="username" placeholder="current username"/>
+        </div>
+        <div class="form-group">
+            <label for="s-pass">New Password</label>
+            <input id="s-pass" type="password" autocomplete="new-password" placeholder="new password"/>
+        </div>
+        <div class="form-group">
+            <label for="s-pass2">Confirm Password</label>
+            <input id="s-pass2" type="password" autocomplete="new-password" placeholder="repeat password"/>
+        </div>
+        <button class="btn-primary" onclick="doChangeCredentials()">Update Credentials</button>
+        <div id="settings-msg"></div>
+    </div>
+</div>
+
+<div id="toast-container"></div>
+
+<!-- ── Algo start/stop confirm modal ─────────────────────────────────────── -->
+<div id="confirm-overlay" class="hidden">
+    <div class="confirm-box">
+        <h3 id="confirm-title">Confirm Action</h3>
+        <p id="confirm-body">Are you sure?</p>
+        <div class="confirm-actions">
+            <button class="btn-confirm-no" onclick="closeConfirm()">Cancel</button>
+            <button class="btn-confirm-yes" id="confirm-yes-btn" onclick="doConfirmAlgoAction()">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<header>
+    <h1>HFT Framework – Algorithm Monitor</h1>
+    <span id="algo-info"></span>
+    <div style="display:flex;align-items:center;gap:8px">
+        <button id="algo-toggle-btn" onclick="onAlgoToggleClick()" title="Start / Stop algorithm">
+            <span class="algo-power-icon">⏻</span>
+            <span id="algo-toggle-label">Running</span>
+        </button>
+      <button id="bell-btn" class="header-btn bell-btn" onclick="toggleBell()"
+              title="Trade sound notifications (disabled)">🔕
+      </button>
+        <button class="header-btn" onclick="openSettings()">⚙ Settings</button>
+        <button class="header-btn" onclick="doLogout()">Logout</button>
+    </div>
+</header>
+
+<!-- ── Bottom status bar ──────────────────────────────────────────────────── -->
+<div id="bottom-bar">
+    <div id="status">
+        <div id="status-dot"></div>
+        <span id="status-text">Disconnected</span>
+    </div>
+    <div class="sep"></div>
+    <div id="port-form">
+        <label for="port-input">Port</label>
+        <input id="port-input" type="number" value="9001" min="1" max="65535"
+               onkeydown="if(event.key==='Enter')reconnect()"/>
+        <button id="connect-btn" onclick="reconnect()">Connect</button>
+    </div>
+</div>
+
+<nav class="tab-nav">
+    <button class="tab-btn active" onclick="showTab('overview',this)">Overview</button>
+    <button class="tab-btn" onclick="showTab('orderbook',this)">Orderbook</button>
+    <button class="tab-btn" id="tab-btn-grafana" style="display:none" onclick="showTab('grafana',this)">Grafana</button>
+</nav>
+
+<div class="tab-panel active" id="tab-overview">
+    <div class="grid">
+        <div class="card">
+          <h2 style="display:flex;align-items:center;justify-content:space-between">
+            Portfolio
+            <span style="font-size:11px;color:var(--muted);text-transform:none;letter-spacing:0;font-weight:400;display:flex;align-items:center;gap:6px">
+                    Sample every
+                    <input id="pnl-interval" type="number" value="10" min="1" max="3600"
+                           style="width:52px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:3px;padding:2px 4px;font-size:11px"
+                           onchange="onPnlIntervalChange()"/>
+                    s &nbsp;|&nbsp; <span id="pnl-chart-count" style="color:var(--muted)">0 samples</span>
+                </span>
+          </h2>
+            <div class="kv-grid">
+                <div class="kv">
+                    <div class="label">Realized PnL</div>
+                    <div class="value neutral" id="pnl-realized">–</div>
+                </div>
+                <div class="kv">
+                    <div class="label">Unrealized PnL</div>
+                    <div class="value neutral" id="pnl-unrealized">–</div>
+                </div>
+                <div class="kv">
+                    <div class="label">Total PnL</div>
+                    <div class="value neutral" id="pnl-total">–</div>
+                </div>
+                <div class="kv">
+                    <div class="label">Total Fees</div>
+                    <div class="value neutral" id="pnl-fees">–</div>
+                </div>
+                <div class="kv">
+                    <div class="label">Net Investment</div>
+                    <div class="value neutral" id="pnl-investment">–</div>
+                </div>
+            </div>
+          <canvas id="pnl-chart" class="pnl-canvas" style="margin-top:14px"></canvas>
+        </div>
+        <div class="card">
+            <h2>Instruments</h2>
+            <div id="instruments-cards" class="instruments-cards-grid">
+                <span style="color:var(--muted);font-size:12px">No instrument data yet.</span>
+            </div>
+        </div>
+        <div class="card">
+            <h2 style="display:flex;align-items:center;justify-content:space-between">
+                Execution Reports
+                <span style="font-size:11px;color:var(--muted);text-transform:none;letter-spacing:0;font-weight:400;display:flex;align-items:center;gap:6px">
+          Rows/page:
+          <input id="tbl-per-page" type="number" value="25" min="5" max="500"
+                 style="width:52px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:3px;padding:2px 4px;font-size:11px"
+                 onchange="onTablePageSizeChange()"/>
+        </span>
+            </h2>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Instrument</th>
+                        <th>Side</th>
+                        <th>Qty</th>
+                        <th>Price</th>
+                        <th>Status</th>
+                    </tr>
+                    </thead>
+                    <tbody id="er-body"></tbody>
+                </table>
+            </div>
+            <div class="pager">
+                <button id="er-prev" onclick="erPrevPage()" disabled>← Prev</button>
+                <span id="er-label">Page 1 / 1</span>
+                <button id="er-next" onclick="erNextPage()" disabled>Next →</button>
+                <span id="er-total" style="margin-left:4px;color:var(--muted)"></span>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Order Requests</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Instrument</th>
+                        <th>Side</th>
+                        <th>Qty</th>
+                        <th>Price</th>
+                        <th>Type</th>
+                    </tr>
+                    </thead>
+                    <tbody id="or-body"></tbody>
+                </table>
+            </div>
+            <div class="pager">
+                <button id="or-prev" onclick="orPrevPage()" disabled>← Prev</button>
+                <span id="or-label">Page 1 / 1</span>
+                <button id="or-next" onclick="orNextPage()" disabled>Next →</button>
+                <span id="or-total" style="margin-left:4px;color:var(--muted)"></span>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Parameters</h2>
+            <div id="params-container"><span
+                    style="color:var(--muted);font-size:12px">No parameters received yet.</span></div>
+        </div>
+        <div class="card">
+            <h2>Custom Metrics</h2>
+            <div class="kv-grid" id="custom-kv"><span
+                    style="color:var(--muted);font-size:12px">No custom metrics yet.</span></div>
+        </div>
+        <div class="card full-width">
+            <h2>Event Log</h2>
+            <div id="log-container"></div>
+        </div>
+    </div>
+</div>
+
+<div class="tab-panel" id="tab-orderbook">
+    <div id="ob-page-wrap">
+        <div class="ob-toolbar">
+            <label for="ob-per-page">Instruments per page</label>
+            <input id="ob-per-page" type="number" value="10" min="1" max="100" onchange="renderOBPage()"/>
+            <span id="ob-instr-count" style="color:var(--muted);font-size:12px"></span>
+        </div>
+        <div id="ob-grid" class="ob-grid"></div>
+        <div class="pager">
+            <button id="pg-prev" onclick="obPrevPage()" disabled>← Prev</button>
+            <span id="pg-label">Page 1</span>
+            <button id="pg-next" onclick="obNextPage()" disabled>Next →</button>
+        </div>
+    </div>
+</div>
+
+<div class="tab-panel" id="tab-grafana">
+    <iframe id="grafana-frame" src="about:blank"></iframe>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/dashboard.js"></script>
+</body>
+</html>

@@ -110,6 +110,30 @@ public class Configuration {
      */
     public static String PROMETHEUS_PORT = getSysPropOrEnvOrDefault("prometheus.port", "PROMETHEUS_PORT", "");
 
+    /**
+     * Base URL for the Grafana instance used by the web monitoring UI dashboard.
+     * When {@code PROMETHEUS_PORT} is set and this URL is non-empty the dashboard
+     * renders an embedded Grafana tab at this address.
+     * Resolution order: JVM system property {@code grafana.url} → env var {@code GRAFANA_URL}
+     * → default {@code http://localhost:3000}.
+     */
+    public static String GRAFANA_URL = getSysPropOrEnvOrDefault("grafana.url", "GRAFANA_URL", "http://localhost:3000");
+
+    // ── Web UI authentication ─────────────────────────────────────────────────
+    /**
+     * Username for the web monitoring dashboard login.
+     * Resolution order: JVM system property {@code web.ui.login} → env var {@code WEB_UI_LOGIN}
+     * → default {@code admin}.
+     */
+    public static String WEB_UI_LOGIN = getSysPropOrEnvOrDefault("web.ui.login", "WEB_UI_LOGIN", "admin");
+
+    /**
+     * Password for the web monitoring dashboard login.
+     * Resolution order: JVM system property {@code web.ui.password} → env var {@code WEB_UI_PASSWORD}
+     * → default {@code admin}.
+     */
+    public static String WEB_UI_PASSWORD = getSysPropOrEnvOrDefault("web.ui.password", "WEB_UI_PASSWORD", "admin");
+
     public static int[] GET_AFFINITY_CPUS() throws LambdaConfigurationException {
         if (!USE_THREAD_AFFINITY) {
             throw new LambdaConfigurationException("USE_AFFINITY disabled.");

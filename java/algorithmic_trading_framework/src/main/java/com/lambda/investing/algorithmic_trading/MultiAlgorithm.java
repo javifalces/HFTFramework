@@ -24,12 +24,27 @@ public class MultiAlgorithm extends Algorithm {
         super(algorithmConnectorConfiguration, "MultiAlgorithm", new HashMap<>());
         this.algorithms = new ArrayList<>(algorithms);
         rebuildInstrumentCache();
+        propagateConstructorObservers();
     }
 
     public MultiAlgorithm(String algorithmInfo, List<Algorithm> algorithms) {
         super(algorithmInfo, new HashMap<>());
         this.algorithms = new ArrayList<>(algorithms);
         rebuildInstrumentCache();
+        propagateConstructorObservers();
+    }
+
+    /**
+     * Propagates observers that were registered during {@code super()} (before
+     * {@link #algorithms} was assigned) to every child algorithm.
+     * Called once at the end of each constructor, after {@code this.algorithms} is ready.
+     */
+    private void propagateConstructorObservers() {
+        for (AlgorithmObserver obs : getAlgorithmObservers()) {
+            for (Algorithm algorithm : algorithms) {
+                algorithm.register(obs);
+            }
+        }
     }
 
     private void rebuildInstrumentCache() {
@@ -96,6 +111,35 @@ public class MultiAlgorithm extends Algorithm {
     @Override
     public String printAlgo() {
         return "MultiAlgorithm[" + algorithms.stream().map(Algorithm::getAlgorithmInfo).collect(Collectors.joining(",")) + "]";
+    }
+
+    /**
+     * Registers the observer on this MultiAlgorithm AND on every child algorithm so that
+     * updates fired by each child's own {@link AlgorithmNotifier} are delivered to the observer.
+     * Without this override only the MultiAlgorithm's (silent) notifier would be targeted and
+     * the observer would never receive any data while algorithms are operating normally.
+     */
+    @Override
+    public void register(AlgorithmObserver algorithmObserver) {
+        super.register(algorithmObserver);
+        // algorithms is null during super() constructor chain – skip propagation in that case;
+        // the real registrations happen after construction is complete.
+        if (algorithms == null) return;
+        for (Algorithm algorithm : algorithms) {
+            algorithm.register(algorithmObserver);
+        }
+    }
+
+    /**
+     * Deregisters the observer from this MultiAlgorithm AND from every child algorithm.
+     */
+    @Override
+    public void deregister(AlgorithmObserver algorithmObserver) {
+        super.deregister(algorithmObserver);
+        if (algorithms == null) return;
+        for (Algorithm algorithm : algorithms) {
+            algorithm.deregister(algorithmObserver);
+        }
     }
 
     @Override
