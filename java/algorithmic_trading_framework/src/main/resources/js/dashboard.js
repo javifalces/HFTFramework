@@ -482,10 +482,16 @@ const paramsState = {};
 const activeOrdersMap = {};
 /**
  * Per-algorithm portfolio snapshots keyed by algorithmInfo.
- * Aggregated to produce the Portfolio card totals and the Instruments table in a
+ * Aggregated to produce the Portfolio card totals and the Instruments cards in a
  * MultiAlgorithm setup where each child emits only its own single-instrument snapshot.
  */
 const portfolioByAlgo = {};
+/**
+ * Latest per-instrument PnL snapshot keyed by instrumentPk.
+ * Updated from both PORTFOLIO_SNAPSHOT (instrumentPnlSnapshotMap) and PNL_SNAPSHOT messages.
+ * Used to render the Instruments card mini-cards and to aggregate portfolio totals.
+ */
+const latestInstrumentSnapshotMap = {};
 
 // ── Table pagination state ────────────────────────────────────────────────────
 /** All execution-report rows stored latest-first as innerHTML strings */
@@ -762,75 +768,108 @@ function setKv(id, val) {
     el.className = 'value ' + colorClass(val);
 }
 
+/**
+ * Renders the Instruments card as a grid of per-instrument snapshot mini-cards
+ * and updates the Portfolio card totals by aggregating across all known instruments.
+ */
+function renderInstrumentCards() {
+    const container = document.getElementById('instruments-cards');
+    if (!container) return;
+
+    const entries = Object.entries(latestInstrumentSnapshotMap);
+    if (entries.length === 0) {
+        container.innerHTML = '<span style="color:var(--muted);font-size:12px">No instrument data yet.</span>';
+        return;
+    }
+
+    // Aggregate portfolio totals from all latest instrument snapshots
+    let totalRealized = 0, totalUnrealized = 0, totalPnl = 0, totalFees = 0;
+    entries.forEach(([, s]) => {
+        totalRealized += +(s.realizedPnl) || 0;
+        totalUnrealized += +(s.unrealizedPnl) || 0;
+        totalPnl += +(s.totalPnl) || 0;
+        totalFees += +(s.totalFees) || 0;
+    });
+
+    // Update Portfolio card from aggregated instrument data
+    setKv('pnl-realized', totalRealized);
+    setKv('pnl-unrealized', totalUnrealized);
+    setKv('pnl-total', totalPnl);
+    const fe = document.getElementById('pnl-fees');
+    if (fe) fe.textContent = fmt(totalFees);
+
+    // Track latest values for the PnL timeline
+    lastPnl.realized = totalRealized;
+    lastPnl.unrealized = totalUnrealized;
+    lastPnl.total = totalPnl;
+    recordLivePnlSample();
+    renderPnlChart();
+
+    // Render instrument mini-cards (rebuild on every update – dataset is small)
+    container.innerHTML = '';
+    entries.forEach(([instr, s]) => {
+        const card = document.createElement('div');
+        card.className = 'instr-snapshot-card';
+        card.id = 'instr-snap-' + safeId(instr);
+
+        const ts = s.lastTimestampUpdate || s.timestamp || null;
+        const instrName = s.instrumentPk || instr;
+
+        card.innerHTML =
+            `<div class="instr-snap-header">` +
+            `<span class="instr-snap-name">${instrName}</span>` +
+            (ts ? `<span class="instr-snap-ts">${fmtTs(ts)}</span>` : '') +
+            `</div>` +
+            `<div class="instr-snap-kv-grid">` +
+            `<div class="instr-snap-kv"><div class="label">Realized PnL</div>` +
+            `<div class="value ${colorClass(s.realizedPnl)}">${fmt(s.realizedPnl)}</div></div>` +
+            `<div class="instr-snap-kv"><div class="label">Unrealized PnL</div>` +
+            `<div class="value ${colorClass(s.unrealizedPnl)}">${fmt(s.unrealizedPnl)}</div></div>` +
+            `<div class="instr-snap-kv"><div class="label">Total PnL</div>` +
+            `<div class="value ${colorClass(s.totalPnl)}">${fmt(s.totalPnl)}</div></div>` +
+            `<div class="instr-snap-kv"><div class="label">Position</div>` +
+            `<div class="value">${fmt(s.netPosition, 6)}</div></div>` +
+            `<div class="instr-snap-kv"><div class="label">Total Fees</div>` +
+            `<div class="value">${fmt(s.totalFees)}</div></div>` +
+            `<div class="instr-snap-kv"><div class="label">Net Investment</div>` +
+            `<div class="value">${fmt(s.netInvestment)}</div></div>` +
+            `</div>`;
+
+        container.appendChild(card);
+    });
+}
+
 function updatePortfolio(p, algorithmInfo) {
     if (!p) return;
 
-    // --- Resolve the values to display ---
-    let realizedPnl, unrealizedPnl, totalPnl, totalFees, netInvestment;
+    let netInvestment;
     let instruments;
 
     if (algorithmInfo) {
-        // Multi-algo path: store this snapshot and show the aggregate across all
-        // known child algorithms.  Each child emits its own single-instrument
-        // portfolio, so we must merge them rather than replacing the whole view.
+        // Multi-algo path: accumulate per-algo snapshots and merge instruments.
         portfolioByAlgo[algorithmInfo] = p;
-        realizedPnl = 0;
-        unrealizedPnl = 0;
-        totalPnl = 0;
-        totalFees = 0;
         netInvestment = 0;
         instruments = {};
         for (const ap of Object.values(portfolioByAlgo)) {
-            realizedPnl += +(ap.realizedPnl) || 0;
-            unrealizedPnl += +(ap.unrealizedPnl) || 0;
-            totalPnl += +(ap.totalPnl) || 0;
-            totalFees += +(ap.totalFees) || 0;
             netInvestment += +(ap.netInvestment) || 0;
             if (ap.instrumentPnlSnapshotMap) Object.assign(instruments, ap.instrumentPnlSnapshotMap);
         }
     } else {
-        // Single-algo / STATE-restore path: display the snapshot directly and
-        // reset accumulated per-algo data so subsequent real messages start fresh.
+        // Single-algo / STATE-restore path: use snapshot directly.
         Object.keys(portfolioByAlgo).forEach(k => delete portfolioByAlgo[k]);
-        realizedPnl = p.realizedPnl;
-        unrealizedPnl = p.unrealizedPnl;
-        totalPnl = p.totalPnl;
-        totalFees = p.totalFees;
         netInvestment = p.netInvestment;
         instruments = p.instrumentPnlSnapshotMap || {};
     }
 
-    // --- Render ---
-    setKv('pnl-realized', realizedPnl);
-    setKv('pnl-unrealized', unrealizedPnl);
-    setKv('pnl-total', totalPnl);
-    const fe = document.getElementById('pnl-fees');
-    if (fe) fe.textContent = fmt(totalFees);
+    // Net investment is a portfolio-level field not derivable from instrument snapshots
     const iv = document.getElementById('pnl-investment');
     if (iv) iv.textContent = fmt(netInvestment);
 
-    // Track latest values for the PnL timeline
-    if (realizedPnl != null) lastPnl.realized = +realizedPnl;
-    if (unrealizedPnl != null) lastPnl.unrealized = +unrealizedPnl;
-    if (totalPnl != null) lastPnl.total = +totalPnl;
-    recordLivePnlSample();
-    renderPnlChart();
-
-    // Instruments table
-    const tb = document.getElementById('instruments-body');
-    if (tb) {
-        tb.innerHTML = '';
-        Object.entries(instruments).forEach(([instr, s]) => {
-            if (!s) return;
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${instr}</td>` +
-                `<td class="${colorClass(s.realizedPnl)}">${fmt(s.realizedPnl)}</td>` +
-                `<td class="${colorClass(s.unrealizedPnl)}">${fmt(s.unrealizedPnl)}</td>` +
-                `<td class="${colorClass(s.totalPnl)}">${fmt(s.totalPnl)}</td>` +
-                `<td>${fmt(s.netPosition)}</td>`;
-            tb.appendChild(tr);
-        });
-    }
+    // Merge instrument snapshots into the latest map, then re-render cards + portfolio totals
+    Object.entries(instruments).forEach(([instr, s]) => {
+        if (s) latestInstrumentSnapshotMap[instr] = s;
+    });
+    renderInstrumentCards();
 }
 
 // ── PnL Snapshot events ───────────────────────────────────────────────────────
@@ -851,6 +890,13 @@ function onPnlSnapshot(msg) {
     pnlSnapshotRows.unshift(formatPnlSnapshot(msg.data, msg.timestamp));
     if (pnlSnapshotRows.length > MAX_TABLE_ROWS) pnlSnapshotRows.length = MAX_TABLE_ROWS;
     renderPnlSnapshotPage();
+
+    // Update the latest instrument snapshot and re-render the Instruments card
+    const s = msg.data;
+    if (s && s.instrumentPk) {
+        latestInstrumentSnapshotMap[s.instrumentPk] = s;
+        renderInstrumentCards();
+    }
 }
 
 // ── PnL Snapshot pagination ───────────────────────────────────────────────────
@@ -1321,6 +1367,10 @@ function renderOBPage() {
 
     pageInstrs.forEach(instr => grid.appendChild(buildInstrCard(instr)));
 
+    // Cards are now in the DOM – populate each book so document.getElementById
+    // inside populateBook can resolve the tbody elements.
+    pageInstrs.forEach(instr => renderOBBook(instr));
+
     document.getElementById('pg-label').textContent = 'Page ' + (obPage + 1) + ' / ' + (maxPage + 1);
     document.getElementById('pg-prev').disabled = obPage === 0;
     document.getElementById('pg-next').disabled = obPage >= maxPage;
@@ -1378,7 +1428,9 @@ function buildInstrCard(instr) {
 
     card.appendChild(body);
 
-    if (depth) populateBook(sid, depth, instr);
+    // NOTE: populateBook is NOT called here because the card is not yet in the
+    // document at this point.  renderOBPage() calls renderOBBook() for every
+    // card after they have all been appended to the grid.
 
     const existing = tickerMap[instr] || [];
     const listEl = tickerSide.querySelector('.ticker-list');
@@ -1541,6 +1593,38 @@ function populateBook(sid, depth, instr) {
         }
     }
 }
+
+// ── Stale-depth pruning ───────────────────────────────────────────────────────
+/**
+ * Removes instruments from depthMap / instrOrder that have not received a depth
+ * update within DEPTH_TTL_MS (5 minutes) and re-renders the orderbook page.
+ * Mirrors the backend cleanup so the frontend stays consistent.
+ */
+function pruneStaleDepths() {
+    const now = Date.now();
+    const toRemove = instrOrder.filter(instr => {
+        const d = depthMap[instr];
+        if (!d) return true; // orphan entry – no depth at all
+        const ra = d.receivedAt;
+        return ra != null && (now - ra) > DEPTH_TTL_MS;
+    });
+    if (toRemove.length === 0) return;
+    toRemove.forEach(instr => {
+        delete depthMap[instr];
+        delete tickerMap[instr];
+        delete activeOrdersMap[instr];
+        const idx = instrOrder.indexOf(instr);
+        if (idx >= 0) instrOrder.splice(idx, 1);
+    });
+    // Reset page if current page is now out of range
+    const pp = getPerPage();
+    const maxPage = Math.max(0, Math.ceil(instrOrder.length / pp) - 1);
+    if (obPage > maxPage) obPage = maxPage;
+    renderOBPage();
+}
+
+// Run stale-depth pruning every 60 seconds
+setInterval(pruneStaleDepths, 60_000);
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 const urlPort = new URLSearchParams(location.search).get('port');

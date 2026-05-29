@@ -301,6 +301,10 @@
         gap: 6px;
     }
 
+    .instruments-cards-grid {
+        grid-template-columns: 1fr;
+    }
+
     .kv .value {
         font-size: 13px;
     }
@@ -409,6 +413,69 @@
         padding: 6px 10px;
         min-height: 28px;
     }
+}
+
+/* ── Instrument snapshot cards grid ──────────────────────────────────────── */
+.instruments-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px;
+}
+
+.instr-snapshot-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    transition: border-color .2s;
+}
+
+.instr-snapshot-card:hover {
+    border-color: var(--accent);
+}
+
+.instr-snap-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+}
+
+.instr-snap-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.instr-snap-ts {
+    font-size: 10px;
+    color: var(--muted);
+    flex-shrink: 0;
+    margin-left: 6px;
+}
+
+.instr-snap-kv-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 10px;
+}
+
+.instr-snap-kv .label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 1px;
+}
+
+.instr-snap-kv .value {
+    font-size: 12px;
+    font-weight: 600;
 }
 
 /* ── Extra-narrow (≤ 380px) ──────────────────────────────────────────────── */

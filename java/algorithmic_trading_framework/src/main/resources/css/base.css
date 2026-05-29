@@ -529,6 +529,18 @@ tr:hover td {
     color: var(--muted);
 }
 
+/* Last-update timestamp shown in the instrument card header */
+.ob-last-update {
+    color: var(--muted);
+    font-size: 10px;
+}
+
+/* Turns yellow when the last depth update is more than 2 minutes old */
+.ob-last-update.ob-update-stale {
+    color: var(--yellow);
+    font-weight: 600;
+}
+
 .instr-body {
     display: flex;
     gap: 0;

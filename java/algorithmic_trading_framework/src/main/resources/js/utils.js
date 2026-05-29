@@ -3,6 +3,8 @@ const MAX_TABLE_ROWS = 100;
 const MAX_LOG_ENTRIES = 300;
 const MAX_TICKER_ROWS = 80;
 const TOAST_DURATION = 4000; // ms
+/** Milliseconds of inactivity after which a depth entry is considered stale (5 minutes). */
+const DEPTH_TTL_MS = 5 * 60 * 1000;
 
 // ── Formatting utilities ──────────────────────────────────────────────────────
 /**
