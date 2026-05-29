@@ -412,6 +412,7 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         Map<String, Object> m = new HashMap<>();
         m.put("instrument", depth.getInstrument());
         m.put("timestamp",  depth.getTimestamp());
+        m.put("receivedAt", System.currentTimeMillis());
         m.put("bids",       depth.getBids());
         m.put("asks",       depth.getAsks());
         m.put("bidsQty",    depth.getBidsQuantities());
