@@ -87,6 +87,8 @@ public class AlgorithmWebServer {
      * When true the frontend displays a red PAPER TRADING banner.
      */
     private volatile boolean paperTrading = false;
+
+    private volatile boolean backtest = false;
     /**
      * When true the algorithm is running (start/stop toggle).
      */
@@ -244,6 +246,10 @@ public class AlgorithmWebServer {
         this.paperTrading = paperTrading;
     }
 
+    public void setBacktest(boolean backtest) {
+        this.backtest = backtest;
+    }
+
     /**
      * Sets the {@link AlgorithmProvider} used to start/stop the algorithm from the web UI.
      *
@@ -334,6 +340,7 @@ public class AlgorithmWebServer {
                             logger.debug("WebSocket client connected – total: {}", wsChannels.size());
                             String stateMsg = "{\"type\":\"STATE\",\"grafanaUrl\":\"" + grafanaUrl + "\"" +
                                     ",\"paperTrading\":" + paperTrading +
+                                    ",\"backtest\":" + backtest +
                                     ",\"algoRunning\":" + algoRunning +
                                     ",\"data\":" + currentStateJson + "}";
                             ctx.channel().writeAndFlush(new TextWebSocketFrame(stateMsg));
@@ -349,6 +356,14 @@ public class AlgorithmWebServer {
                 response = new DefaultFullHttpResponse(HTTP_1_1, OK,
                         Unpooled.copiedBuffer(DASHBOARD_HTML, CharsetUtil.UTF_8));
                 response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+            } else if ("/api/mode".equals(uri)) {
+                // Unauthenticated – returns the current operating mode so the frontend
+                // can decide whether to show the login overlay or connect directly.
+                response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                        Unpooled.copiedBuffer(
+                                "{\"backtest\":" + backtest + ",\"paperTrading\":" + paperTrading + "}",
+                                CharsetUtil.UTF_8));
+                response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
             } else if ("/api/state".equals(uri)) {
                 String token = getAuthToken(req, query);
                 if (!isValidToken(token)) {
@@ -460,14 +475,18 @@ public class AlgorithmWebServer {
             if ("/api/login".equals(uri)) {
                 String username = extractJsonField(body, "username");
                 String password = extractJsonField(body, "password");
-                if (Configuration.WEB_UI_LOGIN.equals(username) &&
-                        Configuration.WEB_UI_PASSWORD.equals(password)) {
+                // In backtest mode authentication is disabled – any credentials are accepted.
+                boolean credentialsOk = backtest ||
+                        (Configuration.WEB_UI_LOGIN.equals(username) &&
+                                Configuration.WEB_UI_PASSWORD.equals(password));
+                if (credentialsOk) {
                     String token = UUID.randomUUID().toString();
                     validTokens.add(token);
                     response = new DefaultFullHttpResponse(HTTP_1_1, OK,
                             Unpooled.copiedBuffer("{\"token\":\"" + token + "\"}", CharsetUtil.UTF_8));
                     response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
-                    logger.info("Web UI login successful for user '{}'", username);
+                    logger.info("Web UI login successful for user '{}'{}", username,
+                            backtest ? " (backtest mode – auth bypassed)" : "");
                 } else {
                     response = new DefaultFullHttpResponse(HTTP_1_1, UNAUTHORIZED,
                             Unpooled.copiedBuffer("{\"error\":\"Invalid credentials\"}", CharsetUtil.UTF_8));
@@ -554,6 +573,38 @@ public class AlgorithmWebServer {
                     }
                     response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
                 }
+            } else if ("/api/algo/change-backtest-speed".equals(uri)) {
+                String token = getAuthToken(req, "");
+                if (!isValidToken(token)) {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, UNAUTHORIZED,
+                            Unpooled.copiedBuffer("{\"error\":\"Unauthorized\"}", CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                } else {
+                    if (algorithmProvider != null) {
+                        try {
+                            String speedStr = extractJsonField(body, "speed");
+                            if (speedStr == null) {
+                                response = new DefaultFullHttpResponse(HTTP_1_1, BAD_REQUEST,
+                                        Unpooled.copiedBuffer("{\"success\":false,\"error\":\"Missing speed parameter\"}", CharsetUtil.UTF_8));
+                            } else {
+                                int speed = Math.max(0, Math.min(100, (int) Math.round(Double.parseDouble(speedStr) * 100)));
+                                boolean ok = algorithmProvider.changeBacktestSpeed(speed);
+                                logger.info("Web UI change-backtest-speed request: {} -> {}", speed, ok);
+                                response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                                        Unpooled.copiedBuffer("{\"success\":" + ok + "}", CharsetUtil.UTF_8));
+                            }
+                        } catch (Exception ex) {
+                            logger.error("Error changing backtest speed: {}", ex.getMessage(), ex);
+                            response = new DefaultFullHttpResponse(HTTP_1_1, INTERNAL_SERVER_ERROR,
+                                    Unpooled.copiedBuffer("{\"success\":false,\"error\":\"" + ex.getMessage() + "\"}", CharsetUtil.UTF_8));
+                        }
+                    } else {
+                        logger.warn("change-backtest-speed requested but no AlgorithmProvider configured");
+                        response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                                Unpooled.copiedBuffer("{\"success\":false,\"error\":\"no provider\"}", CharsetUtil.UTF_8));
+                    }
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                }
             } else {
                 response = new DefaultFullHttpResponse(HTTP_1_1, NOT_FOUND);
             }
@@ -564,7 +615,12 @@ public class AlgorithmWebServer {
 
         // -- Auth helpers --------------------------------------------------
 
+        /**
+         * Returns {@code true} when the token is valid <em>or</em> when the server is
+         * running in backtest mode (no authentication required in that case).
+         */
         private boolean isValidToken(String token) {
+            if (backtest) return true;
             return token != null && validTokens.contains(token);
         }
 
@@ -622,6 +678,7 @@ public class AlgorithmWebServer {
                 if (text.contains("\"type\":\"GET_STATE\"")) {
                     String stateMsg = "{\"type\":\"STATE\",\"grafanaUrl\":\"" + grafanaUrl + "\"" +
                             ",\"paperTrading\":" + paperTrading +
+                            ",\"backtest\":" + backtest +
                             ",\"algoRunning\":" + algoRunning +
                             ",\"data\":" + currentStateJson + "}";
                     ctx.writeAndFlush(new TextWebSocketFrame(stateMsg));

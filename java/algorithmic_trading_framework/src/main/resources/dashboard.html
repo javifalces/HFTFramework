@@ -56,6 +56,9 @@
 
 <div id="toast-container"></div>
 
+<!-- ── Mode banner (Backtest / Paper Trading) ────────────────────────────── -->
+<div id="mode-banner" class="hidden"></div>
+
 <!-- ── Algo start/stop confirm modal ─────────────────────────────────────── -->
 <div id="confirm-overlay" class="hidden">
     <div class="confirm-box">
@@ -72,6 +75,15 @@
     <h1>HFT Framework – Algorithm Monitor</h1>
     <span id="algo-info"></span>
     <div style="display:flex;align-items:center;gap:8px">
+        <!-- Backtest speed control (only visible in backtest mode) -->
+        <div id="backtest-speed-control" class="hidden"
+             style="display:flex;align-items:center;gap:8px;margin-right:8px">
+            <label for="backtest-speed-slider"
+                   style="font-size:11px;color:var(--muted);white-space:nowrap">Speed:</label>
+            <input type="range" id="backtest-speed-slider" min="0" max="1" step="0.01" value="0.5"
+                   style="width:120px" oninput="onBacktestSpeedChange(this.value)"/>
+            <span id="backtest-speed-label" style="font-size:11px;color:var(--text);min-width:60px">50%</span>
+        </div>
         <button id="algo-toggle-btn" onclick="onAlgoToggleClick()" title="Start / Stop algorithm">
             <span class="algo-power-icon">⏻</span>
             <span id="algo-toggle-label">Running</span>

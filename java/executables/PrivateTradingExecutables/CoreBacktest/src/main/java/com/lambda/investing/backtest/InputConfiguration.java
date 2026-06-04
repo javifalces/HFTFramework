@@ -62,15 +62,6 @@ public class InputConfiguration implements Cloneable {
     @Getter
     private List<Algorithm> algorithms;
 
-    /**
-     * Optional port for the web monitoring UI.
-     * When set to a value > 0, an embedded HTTP + WebSocket server is started
-     * on this port and the real-time dashboard is available at
-     * {@code http://localhost:<uiWebPort>}.
-     */
-    @Getter
-    @Setter
-    private int uiWebPort = 0;
 
     public InputConfiguration() {
     }
@@ -169,6 +160,7 @@ public class InputConfiguration implements Cloneable {
         private String multithreadConfiguration = null;
         private int initialSleepSeconds = 3;
         private boolean searchMatchMarketTrades = false;//we are already synchronizing PersistorMarketDataConnector InstrumentCache
+        private int uiWebPort;
 
         public Backtest() {
         }
@@ -263,6 +255,7 @@ public class InputConfiguration implements Cloneable {
             backtestConfiguration.setInitialSleepSeconds(initialSleepSeconds);
             backtestConfiguration.setLatencyEngineType(latencyEngineType);
 
+
             backtestConfiguration.setFeesCommissionsIncluded(feesCommissionsIncluded);
             if (seed != 0) {
                 backtestConfiguration.setSeed(seed);
@@ -320,7 +313,6 @@ public class InputConfiguration implements Cloneable {
         output.setBacktest(this.backtest);
         output.setAlgorithm(this.algorithm);
         output.setAlgorithms(this.algorithms);
-        output.setUiWebPort(this.uiWebPort);
         return output;
     }
 

@@ -2,9 +2,11 @@ package com.lambda.investing.algorithmic_trading;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
+import com.lambda.investing.market_data_connector.parquet_file_reader.ParquetMarketDataConnectorPublisher;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import javax.swing.event.ChangeEvent;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -132,6 +134,35 @@ public class AlgorithmProviderImpl implements AlgorithmProvider {
         }
 
         return allOk;
+    }
+
+    /**
+     * Speed backtest between 0 and 100, where 0 is paused and 100 is max speed.
+     *
+     * @param speed
+     * @return
+     */
+    public boolean changeBacktestSpeed(int speed) {
+        String messagePrint = "Speed: " + speed;
+        if (speed == 0) {
+            messagePrint += " (Paused)";
+            ParquetMarketDataConnectorPublisher.setPauseTradingEngine(true);
+        } else {
+            ParquetMarketDataConnectorPublisher.setPauseTradingEngine(false);
+        }
+
+        if (speed >= 100) {
+            messagePrint = "Speed: max";
+            ParquetMarketDataConnectorPublisher.setSpeed(-1);
+        }
+        if (speed > 0 && speed < 100) {
+            int newSpeed = (int) Math.round(Math.exp(speed / 10.0));
+            messagePrint = "Speed: " + newSpeed;
+            ParquetMarketDataConnectorPublisher.setSpeed(newSpeed);
+        }
+        logger.info("changeSpeed: {}", messagePrint);
+        System.out.println(messagePrint);
+        return true;
     }
 
     // -------------------------------------------------------------------------

@@ -132,6 +132,10 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         server.setPaperTrading(paperTrading);
     }
 
+    public void setBacktest(boolean backtest) {
+        server.setBacktest(backtest);
+    }
+
     public void setProvider(AlgorithmProvider provider) {
         server.setAlgorithmProvider(provider);
     }

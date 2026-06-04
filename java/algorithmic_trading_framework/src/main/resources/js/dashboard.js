@@ -36,6 +36,73 @@ function playTradeSound() {
     }
 }
 
+// ── Mode banner (Backtest / Paper Trading) ────────────────────────────────────
+function updateModeBanner(isBacktest, isPaperTrading) {
+    const banner = document.getElementById('mode-banner');
+    if (!banner) return;
+
+    const speedControl = document.getElementById('backtest-speed-control');
+
+    if (isBacktest) {
+        banner.textContent = '⚠ BACKTEST MODE ⚠';
+        banner.className = 'backtest-mode';
+        document.body.classList.add('has-mode-banner');
+        // Show backtest speed slider
+        if (speedControl) speedControl.classList.remove('hidden');
+    } else if (isPaperTrading) {
+        banner.textContent = '📄 PAPER TRADING MODE';
+        banner.className = 'paper-trading-mode';
+        document.body.classList.add('has-mode-banner');
+        // Hide backtest speed slider
+        if (speedControl) speedControl.classList.add('hidden');
+    } else {
+        banner.className = 'hidden';
+        document.body.classList.remove('has-mode-banner');
+        // Hide backtest speed slider
+        if (speedControl) speedControl.classList.add('hidden');
+    }
+}
+
+// ── Backtest speed control ────────────────────────────────────────────────────
+async function onBacktestSpeedChange(value) {
+    const speedValue = parseFloat(value);
+    const speedLabel = document.getElementById('backtest-speed-label');
+
+    // Update label
+    if (speedLabel) {
+        if (speedValue === 0) {
+            speedLabel.textContent = 'Paused';
+            speedLabel.style.color = 'var(--red)';
+        } else if (speedValue >= 1) {
+            speedLabel.textContent = 'Max';
+            speedLabel.style.color = 'var(--green)';
+        } else {
+            speedLabel.textContent = Math.round(speedValue * 100) + '%';
+            speedLabel.style.color = 'var(--text)';
+        }
+    }
+
+    const token = getToken();
+    if (!token) {
+        doLogout();
+        return;
+    }
+
+    try {
+        const res = await fetch(getApiBase() + '/api/algo/change-backtest-speed', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+            body: JSON.stringify({speed: speedValue})
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!data.success) {
+            logger.warn('Failed to change backtest speed:', data.error);
+        }
+    } catch (e) {
+        logger.warn('Error changing backtest speed:', e.message);
+    }
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 const TOKEN_KEY = 'hft_auth_token';
 let authFailed = false;
@@ -108,7 +175,8 @@ function doLogout() {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
     setStatus(false, 'Disconnected');
-    showLoginOverlay('');
+    // In backtest mode skip the login overlay and reconnect automatically
+    checkModeAndConnect();
 }
 
 function openSettings() {
@@ -719,6 +787,8 @@ function applyState(msg) {
         algoRunning = msg.algoRunning;
         updateAlgoToggleBtn();
     }
+    // Update mode banner
+    updateModeBanner(msg.backtest, msg.paperTrading);
     const s = msg.data;
     if (s) {
         if (s.portfoliosByAlgo) {
@@ -1635,12 +1705,37 @@ if (urlPort) {
     document.getElementById('port-input').value = window.location.port;
 }
 
-// Auto-connect if a saved token exists, otherwise stay on the login overlay
-if (getToken()) {
-    hideLoginOverlay();
-    connect();
+/**
+ * Checks /api/mode (unauthenticated) to detect backtest mode.
+ * In backtest mode no credentials are required, so the login overlay is
+ * bypassed and a synthetic token is stored so all API calls succeed.
+ */
+async function checkModeAndConnect() {
+    try {
+        const res = await fetch(getApiBase() + '/api/mode');
+        if (res.ok) {
+            const mode = await res.json();
+            if (mode.backtest) {
+                // Backtest mode – skip login, use a synthetic token (server accepts any)
+                setToken('backtest-mode', true);
+                hideLoginOverlay();
+                connect();
+                return;
+            }
+        }
+    } catch (e) {
+        // Server not reachable yet – fall through to normal login flow
+    }
+
+    // Non-backtest: auto-connect if a saved token exists, otherwise show login overlay
+    if (getToken()) {
+        hideLoginOverlay();
+        connect();
+    }
+    // else: login overlay remains visible until the user signs in
 }
-// else: login overlay remains visible until the user signs in
+
+checkModeAndConnect();
 
 // Re-render PnL chart when the card / window is resized
 (function () {

@@ -5,5 +5,6 @@ public interface AlgorithmProvider {
 
     void startAlgo();
 
+    boolean changeBacktestSpeed(int speed);
     boolean changeParameters(String jsonInput);
 }

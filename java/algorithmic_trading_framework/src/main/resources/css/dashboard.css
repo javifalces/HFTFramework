@@ -1,3 +1,107 @@
+/* ── Mode banner (Backtest / Paper Trading) ────────────────────────────── */
+#mode-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 500;
+    padding: 8px 20px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border-bottom: 2px solid;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .3);
+}
+
+#mode-banner.hidden {
+    display: none;
+}
+
+#mode-banner.backtest-mode {
+    background: linear-gradient(135deg, #f56565 0%, #c53030 100%);
+    color: #fff;
+    border-bottom-color: #c53030;
+}
+
+#mode-banner.paper-trading-mode {
+    background: linear-gradient(135deg, #ecc94b 0%, #d69e2e 100%);
+    color: #000;
+    border-bottom-color: #d69e2e;
+}
+
+/* Adjust header position when banner is visible */
+body.has-mode-banner header {
+    top: 40px;
+}
+
+body.has-mode-banner .tab-nav {
+    margin-top: 40px;
+}
+
+/* ── Backtest speed slider ────────────────────────────────────────────────── */
+#backtest-speed-control {
+    background: rgba(245, 101, 101, .1);
+    border: 1px solid rgba(245, 101, 101, .3);
+    border-radius: 6px;
+    padding: 4px 10px;
+}
+
+#backtest-speed-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+}
+
+#backtest-speed-slider::-webkit-slider-track {
+    background: linear-gradient(to right,
+    var(--red) 0%,
+    var(--yellow) 50%,
+    var(--green) 100%);
+    height: 6px;
+    border-radius: 3px;
+}
+
+#backtest-speed-slider::-moz-range-track {
+    background: linear-gradient(to right,
+    var(--red) 0%,
+    var(--yellow) 50%,
+    var(--green) 100%);
+    height: 6px;
+    border-radius: 3px;
+}
+
+#backtest-speed-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--text);
+    border: 2px solid var(--border);
+    margin-top: -5px;
+}
+
+#backtest-speed-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--text);
+    border: 2px solid var(--border);
+}
+
+#backtest-speed-slider:hover::-webkit-slider-thumb {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+#backtest-speed-slider:hover::-moz-range-thumb {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
 /* ── Bell notification button ────────────────────────────────────────────── */
 .bell-btn {
   font-size: 15px;
@@ -275,6 +379,23 @@
         min-width: 36px;
         min-height: 36px;
         justify-content: center;
+    }
+
+    #backtest-speed-control label {
+        display: none;
+    }
+
+    #backtest-speed-control {
+        padding: 4px 6px;
+    }
+
+    #backtest-speed-slider {
+        width: 80px;
+    }
+
+    #backtest-speed-label {
+        min-width: 45px;
+        font-size: 10px;
     }
 
     .header-btn {
