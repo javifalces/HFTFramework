@@ -1,6 +1,7 @@
 package com.lambda.investing.backtest.core;
 
 import com.lambda.investing.Configuration;
+import com.lambda.investing.algorithmic_trading.AlgorithmProviderImpl;
 import com.lambda.investing.algorithmic_trading.observer.web.WebAlgorithmObserver;
 import com.lambda.investing.backtest.InputConfiguration;
 import com.lambda.investing.backtest_engine.BacktestConfiguration;
@@ -159,6 +160,7 @@ public class App {
                 try {
                     WebAlgorithmObserver webObserver = new WebAlgorithmObserver(uiWebPort);
                     backtestConfiguration.getAlgorithm().register(webObserver);
+                    webObserver.setProvider(AlgorithmProviderImpl.getInstanceOrCreate(backtestConfiguration.getAlgorithm()));
                     logger.info("Web monitoring UI registered on port {}", uiWebPort);
                 } catch (Exception e) {
                     logger.error("Failed to start web monitoring UI on port {}: {}", uiWebPort, e.getMessage());

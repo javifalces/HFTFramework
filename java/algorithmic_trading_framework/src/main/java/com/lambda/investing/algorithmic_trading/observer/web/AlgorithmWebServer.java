@@ -640,8 +640,8 @@ public class AlgorithmWebServer {
         }
 
         /**
-         * Minimal JSON string-field extractor (no library dependency).
-         * Handles {@code "field":"value"} patterns.
+         * Minimal JSON field extractor (no library dependency).
+         * Handles both {@code "field":"value"} (string) and {@code "field":123.4} (number/boolean) patterns.
          */
         private String extractJsonField(String json, String field) {
             String key = "\"" + field + "\"";
@@ -649,11 +649,22 @@ public class AlgorithmWebServer {
             if (idx < 0) return null;
             int colon = json.indexOf(':', idx + key.length());
             if (colon < 0) return null;
-            int start = json.indexOf('"', colon + 1);
-            if (start < 0) return null;
-            int end = json.indexOf('"', start + 1);
-            if (end < 0) return null;
-            return json.substring(start + 1, end);
+            // Skip whitespace after colon
+            int pos = colon + 1;
+            while (pos < json.length() && Character.isWhitespace(json.charAt(pos))) pos++;
+            if (pos >= json.length()) return null;
+            if (json.charAt(pos) == '"') {
+                // Quoted string value
+                int end = json.indexOf('"', pos + 1);
+                if (end < 0) return null;
+                return json.substring(pos + 1, end);
+            } else {
+                // Unquoted value (number, boolean, null) – read until delimiter
+                int end = pos;
+                while (end < json.length() && ",}] \t\r\n".indexOf(json.charAt(end)) < 0) end++;
+                String val = json.substring(pos, end).trim();
+                return val.isEmpty() ? null : val;
+            }
         }
 
         private void sendHttpResponse(ChannelHandlerContext ctx, FullHttpRequest req, FullHttpResponse res) {

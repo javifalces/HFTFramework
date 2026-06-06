@@ -156,9 +156,8 @@ public class AlgorithmProviderImpl implements AlgorithmProvider {
             ParquetMarketDataConnectorPublisher.setSpeed(-1);
         }
         if (speed > 0 && speed < 100) {
-            int newSpeed = (int) Math.round(Math.exp(speed / 10.0));
-            messagePrint = "Speed: " + newSpeed;
-            ParquetMarketDataConnectorPublisher.setSpeed(newSpeed);
+            messagePrint = "Speed: " + speed;
+            ParquetMarketDataConnectorPublisher.setSpeed(speed);
         }
         logger.info("changeSpeed: {}", messagePrint);
         System.out.println(messagePrint);

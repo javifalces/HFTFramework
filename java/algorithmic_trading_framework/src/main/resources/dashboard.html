@@ -80,9 +80,9 @@
              style="display:flex;align-items:center;gap:8px;margin-right:8px">
             <label for="backtest-speed-slider"
                    style="font-size:11px;color:var(--muted);white-space:nowrap">Speed:</label>
-            <input type="range" id="backtest-speed-slider" min="0" max="1" step="0.01" value="0.5"
+            <input type="range" id="backtest-speed-slider" min="0" max="1" step="0.01" value="1"
                    style="width:120px" oninput="onBacktestSpeedChange(this.value)"/>
-            <span id="backtest-speed-label" style="font-size:11px;color:var(--text);min-width:60px">50%</span>
+            <span id="backtest-speed-label" style="font-size:11px;color:var(--green);min-width:60px">Max</span>
         </div>
         <button id="algo-toggle-btn" onclick="onAlgoToggleClick()" title="Start / Stop algorithm">
             <span class="algo-power-icon">⏻</span>
