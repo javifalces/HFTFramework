@@ -162,13 +162,37 @@
         </div>
         <div class="card">
             <h2 style="display:flex;align-items:center;justify-content:space-between">
-                Execution Reports
+                Live Orders
+                <span id="live-orders-count"
+                      style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0"></span>
+            </h2>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Instrument</th>
+                        <th>clOrdId</th>
+                        <th>Side</th>
+                        <th>Price</th>
+                        <th>Qty</th>
+                        <th>Filled</th>
+                        <th>Remaining</th>
+                    </tr>
+                    </thead>
+                    <tbody id="live-orders-body"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card">
+            <h2 style="display:flex;align-items:center;justify-content:space-between">
+                Trades
                 <span style="font-size:11px;color:var(--muted);text-transform:none;letter-spacing:0;font-weight:400;display:flex;align-items:center;gap:6px">
-          Rows/page:
-          <input id="tbl-per-page" type="number" value="25" min="5" max="500"
-                 style="width:52px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:3px;padding:2px 4px;font-size:11px"
-                 onchange="onTablePageSizeChange()"/>
-        </span>
+                    Rows/page:
+                    <input id="tbl-per-page" type="number" value="25" min="5" max="500"
+                           style="width:52px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:3px;padding:2px 4px;font-size:11px"
+                           onchange="onTablePageSizeChange()"/>
+                </span>
             </h2>
             <div class="table-wrap">
                 <table>
@@ -177,33 +201,9 @@
                         <th>Time</th>
                         <th>Instrument</th>
                         <th>Side</th>
-                        <th>Qty</th>
+                        <th>Last Qty</th>
                         <th>Price</th>
                         <th>Status</th>
-                    </tr>
-                    </thead>
-                    <tbody id="er-body"></tbody>
-                </table>
-            </div>
-            <div class="pager">
-                <button id="er-prev" onclick="erPrevPage()" disabled>← Prev</button>
-                <span id="er-label">Page 1 / 1</span>
-                <button id="er-next" onclick="erNextPage()" disabled>Next →</button>
-                <span id="er-total" style="margin-left:4px;color:var(--muted)"></span>
-            </div>
-        </div>
-        <div class="card">
-            <h2>Order Requests</h2>
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                    <tr>
-                        <th>Time</th>
-                        <th>Instrument</th>
-                        <th>Side</th>
-                        <th>Qty</th>
-                        <th>Price</th>
-                        <th>Type</th>
                     </tr>
                     </thead>
                     <tbody id="or-body"></tbody>

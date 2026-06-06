@@ -587,6 +587,43 @@
     font-weight: 600;
 }
 
+/* ── Live Orders card – status badges ──────────────────────────────────────── */
+.er-status {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.er-status-active {
+    background: rgba(62, 207, 142, .18);
+    color: var(--green);
+    border: 1px solid rgba(62, 207, 142, .4);
+}
+
+.er-status-partialfilled {
+    background: rgba(236, 201, 75, .18);
+    color: var(--yellow);
+    border: 1px solid rgba(236, 201, 75, .4);
+}
+
+.er-status-completelyfilled {
+    background: rgba(78, 154, 241, .18);
+    color: var(--blue);
+    border: 1px solid rgba(78, 154, 241, .4);
+}
+
+.er-status-cancelled,
+.er-status-cancelrejected,
+.er-status-rejected {
+    background: rgba(245, 101, 101, .15);
+    color: var(--red);
+    border: 1px solid rgba(245, 101, 101, .35);
+}
+
 /* ── Extra-narrow (≤ 380px) ──────────────────────────────────────────────── */
 @media (max-width: 380px) {
     header h1 {
@@ -603,4 +640,3 @@
         grid-template-columns: 1fr 1fr;
     }
 }
-

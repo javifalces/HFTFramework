@@ -81,6 +81,12 @@ public class AlgorithmWebServer {
      * Latest portfolio snapshot – returned via GET /api/portfolio-snapshot.
      */
     private volatile String portfolioSnapshotJson = "{}";
+    /**
+     * Flat list of currently active (live) orders across all instruments –
+     * returned via GET /api/active-orders.  Maintained by WebAlgorithmObserver
+     * in response to incoming execution reports.
+     */
+    private volatile String activeOrdersJson = "[]";
     /** Optional Grafana base URL included in STATE messages (empty = Grafana tab hidden). */
     private volatile String grafanaUrl = "";
     /**
@@ -225,6 +231,16 @@ public class AlgorithmWebServer {
      */
     public void updatePortfolioSnapshot(String snapshotJson) {
         this.portfolioSnapshotJson = (snapshotJson != null) ? snapshotJson : "{}";
+    }
+
+    /**
+     * Replaces the flat list of currently active orders returned by {@code GET /api/active-orders}.
+     * Called by {@link WebAlgorithmObserver} whenever the active-order map changes.
+     *
+     * @param ordersJson JSON array of active order objects
+     */
+    public void updateActiveOrders(String ordersJson) {
+        this.activeOrdersJson = (ordersJson != null) ? ordersJson : "[]";
     }
 
     /**
@@ -428,6 +444,17 @@ public class AlgorithmWebServer {
                 } else {
                     response = new DefaultFullHttpResponse(HTTP_1_1, OK,
                             Unpooled.copiedBuffer(portfolioSnapshotJson, CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                }
+            } else if ("/api/active-orders".equals(uri)) {
+                String token = getAuthToken(req, query);
+                if (!isValidToken(token)) {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, UNAUTHORIZED,
+                            Unpooled.copiedBuffer("{\"error\":\"Unauthorized\"}", CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                } else {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                            Unpooled.copiedBuffer(activeOrdersJson, CharsetUtil.UTF_8));
                     response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
                 }
             } else {

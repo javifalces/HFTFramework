@@ -66,6 +66,17 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
     /** Latest L2 depth snapshot per instrument (used to restore orderbook on reconnect). */
     private final Map<String, Map<String, Object>> latestDepths = new ConcurrentHashMap<>();
 
+    // ── Execution-report trade history (persisted on backend, queried by frontend on reconnect) ──
+    /**
+     * Circular buffer of trade-status execution reports: {@code {ts, algorithmInfo, data}}.
+     * Only {@code CompletelyFilled} and {@code PartialFilled} reports are stored.
+     */
+    private final Deque<Map<String, Object>> erHistory = new ConcurrentLinkedDeque<>();
+    /**
+     * Maximum number of trade execution-report samples to retain in memory.
+     */
+    private static final int MAX_ER_HISTORY = 1_000;
+
     // ── PnL history (persisted on the backend, queried by the frontend on reconnect) ──
     /**
      * Circular buffer of sampled PnL entries: {@code {ts, realized, unrealized, total}}.
@@ -231,8 +242,39 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
     @Override
     public void onExecutionReportUpdate(String algorithmInfo, ExecutionReport executionReport) {
         updateActiveOrders(executionReport);
+        if (ExecutionReport.isTradeStatus(executionReport)) {
+            addToErHistory(algorithmInfo, executionReport);
+        }
         String json = buildMessage("EXECUTION_REPORT", algorithmInfo, executionReport, currentTimeMs());
         server.broadcastUpdate(json);
+    }
+
+    /**
+     * Appends a trade-status execution report to the in-memory history buffer and
+     * pushes the updated list to the REST endpoint cache via
+     * {@link AlgorithmWebServer#updateErHistory}.
+     *
+     * @param algorithmInfo the algorithm that produced the fill
+     * @param er            the execution report (must be {@code CompletelyFilled} or {@code PartialFilled})
+     */
+    private void addToErHistory(String algorithmInfo, ExecutionReport er) {
+        long ts = er.getTimestampCreation() > 0 ? er.getTimestampCreation() : currentTimeMs();
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("instrument", er.getInstrument());
+        data.put("verb", er.getVerb() != null ? er.getVerb().name() : null);
+        data.put("lastQuantity", er.getLastQuantity());
+        data.put("price", er.getPrice());
+        data.put("executionReportStatus", er.getExecutionReportStatus() != null ? er.getExecutionReportStatus().name() : null);
+        data.put("timestampCreation", ts);
+
+        Map<String, Object> entry = new LinkedHashMap<>();
+        entry.put("ts", ts);
+        entry.put("algorithmInfo", algorithmInfo);
+        entry.put("data", data);
+
+        erHistory.addLast(entry);
+        while (erHistory.size() > MAX_ER_HISTORY) erHistory.pollFirst();
+        server.updateErHistory(sanitizeJson(toJsonStringGSON(new ArrayList<>(erHistory))));
     }
 
     /**
@@ -242,6 +284,8 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
      *   <li>CompletelyFilled / Cancelled / Rejected / CancelRejected → remove the entry.</li>
      * </ul>
      * Also removes the old entry keyed by {@code origClientOrderId} on modify-confirm flows.
+     * After every mutation the flat active-order list is pushed to the server and broadcast
+     * to all connected WebSocket clients so the Live Orders card updates in real-time.
      */
     private void updateActiveOrders(ExecutionReport er) {
         if (er == null || er.getInstrument() == null || er.getClientOrderId() == null) return;
@@ -257,16 +301,21 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         if (ExecutionReport.isLiveStatus(er)) {
             Map<String, Object> orderInfo = new LinkedHashMap<>();
             orderInfo.put("clientOrderId", clientOrderId);
+            orderInfo.put("instrument", instrument);
             orderInfo.put("verb", er.getVerb() != null ? er.getVerb().name() : null);
             orderInfo.put("price", er.getPrice());
             orderInfo.put("quantity", er.getQuantity());
             orderInfo.put("quantityFill", er.getQuantityFill());
+            orderInfo.put("status", status.name());
+            long ts = er.getTimestampCreation() > 0 ? er.getTimestampCreation() : currentTimeMs();
+            orderInfo.put("timestampCreation", ts);
             instrOrders.put(clientOrderId, orderInfo);
             // On modify, remove the superseded original order
             if (er.getOrigClientOrderId() != null && !er.getOrigClientOrderId().isEmpty()
                     && !er.getOrigClientOrderId().equals(clientOrderId)) {
                 instrOrders.remove(er.getOrigClientOrderId());
             }
+            syncActiveOrdersToServer();
             refreshState();
         } else if (ExecutionReport.isRemovedStatus(er)
                 || status == ExecutionReportStatus.Rejected
@@ -275,8 +324,28 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
             if (er.getOrigClientOrderId() != null && !er.getOrigClientOrderId().isEmpty()) {
                 instrOrders.remove(er.getOrigClientOrderId());
             }
+            syncActiveOrdersToServer();
             refreshState();
         }
+    }
+
+    /**
+     * Serialises the current {@link #activeOrdersByInstrument} map into a flat JSON array,
+     * pushes it to the REST endpoint cache via {@link AlgorithmWebServer#updateActiveOrders},
+     * and broadcasts an {@code ACTIVE_ORDERS} WebSocket message to all connected clients.
+     */
+    private void syncActiveOrdersToServer() {
+        java.util.List<Map<String, Object>> allOrders = new ArrayList<>();
+        for (Map.Entry<String, ConcurrentHashMap<String, Map<String, Object>>> entry :
+                activeOrdersByInstrument.entrySet()) {
+            for (Map<String, Object> order : entry.getValue().values()) {
+                // Each order already carries the instrument field (added in updateActiveOrders)
+                allOrders.add(order);
+            }
+        }
+        String json = sanitizeJson(toJsonStringGSON(allOrders));
+        server.updateActiveOrders(json);
+        server.broadcastUpdate(buildMessage("ACTIVE_ORDERS", null, allOrders, currentTimeMs()));
     }
 
     @Override

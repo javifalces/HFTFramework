@@ -351,6 +351,16 @@ tr:hover td {
     font-weight: 700;
 }
 
+.badge-filled {
+    background: rgba(78, 154, 241, .18);
+    color: var(--blue);
+}
+
+.badge-partial {
+    background: rgba(236, 201, 75, .18);
+    color: var(--yellow);
+}
+
 /* ── Params ──────────────────────────────────────────────────────────────── */
 #params-container {
     display: flex;

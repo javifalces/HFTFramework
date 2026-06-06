@@ -296,8 +296,37 @@ async function fetchPnlSnapshots() {
 }
 
 /**
- * Fetches the persisted execution-report history from the backend and restores the ER table.
+ * Fetches the current list of live (active) orders from the backend and
+ * repopulates both {@link activeOrdersMap} and the Live Orders card.
  * Called whenever a STATE message is received (connect / reconnect).
+ */
+async function fetchActiveOrders() {
+    const token = getToken();
+    if (!token) return;
+    try {
+        const res = await fetch(getApiBase() + '/api/active-orders', {
+            headers: {'Authorization': 'Bearer ' + token}
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!Array.isArray(data)) return;
+        // Rebuild activeOrdersMap from the backend snapshot
+        // (keeps any locally-tracked orders that arrived after the snapshot)
+        data.forEach(o => {
+            if (!o.instrument || !o.clientOrderId) return;
+            if (!activeOrdersMap[o.instrument]) activeOrdersMap[o.instrument] = {};
+            activeOrdersMap[o.instrument][o.clientOrderId] = o;
+        });
+        renderLiveOrders();
+    } catch (e) {
+        console.debug('fetchActiveOrders error:', e);
+    }
+}
+
+/**
+ * Fetches the persisted trade execution-report history from the backend and restores the ER table.
+ * Called whenever a STATE message is received (connect / reconnect).
+ * Only CompletelyFilled and PartialFilled reports are stored by the backend.
  */
 async function fetchExecutionReports() {
     const token = getToken();
@@ -310,46 +339,17 @@ async function fetchExecutionReports() {
         const data = await res.json();
         if (!Array.isArray(data) || data.length === 0) return;
         const lastBackendTs = data[data.length - 1].ts || 0;
-        const localNewer = erRows_raw.filter(e => e.ts > lastBackendTs);
-        erRows_raw.length = 0;
-        for (let i = data.length - 1; i >= 0; i--) erRows_raw.push(data[i]);
-        localNewer.forEach(e => erRows_raw.unshift(e));
-        if (erRows_raw.length > MAX_TABLE_ROWS) erRows_raw.length = MAX_TABLE_ROWS;
-        erRows.length = 0;
-        erRows_raw.forEach(e => erRows.push(formatER(e.data, e.ts)));
-        erPage = 0;
-        renderERPage();
-    } catch (e) {
-        console.debug('fetchExecutionReports error:', e);
-    }
-}
-
-/**
- * Fetches the persisted order-request history from the backend and restores the OR table.
- * Called whenever a STATE message is received (connect / reconnect).
- */
-async function fetchOrderRequests() {
-    const token = getToken();
-    if (!token) return;
-    try {
-        const res = await fetch(getApiBase() + '/api/order-requests', {
-            headers: {'Authorization': 'Bearer ' + token}
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!Array.isArray(data) || data.length === 0) return;
-        const lastBackendTs = data[data.length - 1].ts || 0;
         const localNewer = orRows_raw.filter(e => e.ts > lastBackendTs);
         orRows_raw.length = 0;
         for (let i = data.length - 1; i >= 0; i--) orRows_raw.push(data[i]);
         localNewer.forEach(e => orRows_raw.unshift(e));
         if (orRows_raw.length > MAX_TABLE_ROWS) orRows_raw.length = MAX_TABLE_ROWS;
         orRows.length = 0;
-        orRows_raw.forEach(e => orRows.push(formatOR(e.data, e.ts)));
+        orRows_raw.forEach(e => orRows.push(formatTradeER(e.data, e.ts)));
         orPage = 0;
         renderORPage();
     } catch (e) {
-        console.debug('fetchOrderRequests error:', e);
+        console.debug('fetchExecutionReports error:', e);
     }
 }
 
@@ -559,19 +559,14 @@ const portfolioByAlgo = {};
 const latestInstrumentSnapshotMap = {};
 
 // ── Table pagination state ────────────────────────────────────────────────────
-/** All execution-report rows stored latest-first as innerHTML strings */
-const erRows = [];
-/** Raw execution-report envelope objects {ts, algorithmInfo, data} – used for merge on reconnect */
-const erRows_raw = [];
 /** All order-request rows stored latest-first as innerHTML strings */
 const orRows = [];
-/** Raw order-request envelope objects {ts, algorithmInfo, data} – used for merge on reconnect */
+/** Raw trade execution-report envelope objects {ts, algorithmInfo, data} – used for merge on reconnect */
 const orRows_raw = [];
 /** All PnL-snapshot rows stored latest-first as innerHTML strings */
 const pnlSnapshotRows = [];
 /** Raw PnlSnapshot envelope objects {ts, algorithmInfo, data} – used for merge on reconnect */
 const pnlSnapshotRows_raw = [];
-let erPage = 0;
 let orPage = 0;
 let pnlSnapshotPage = 0;
 
@@ -750,13 +745,21 @@ function handleMessage(msg) {
             break;
         case 'EXECUTION_REPORT':
             onExecutionReport(msg);
+            // Also append trade-status fills to the Last Execution Reports table
+            if (msg.data && TRADE_ER_STATUSES.has(msg.data.executionReportStatus)) {
+                const erTs = msg.data.timestampCreation || msg.timestamp;
+                orRows_raw.unshift({ts: erTs, algorithmInfo: msg.algorithmInfo, data: msg.data});
+                if (orRows_raw.length > MAX_TABLE_ROWS) orRows_raw.length = MAX_TABLE_ROWS;
+                orRows.unshift(formatTradeER(msg.data, erTs));
+                if (orRows.length > MAX_TABLE_ROWS) orRows.length = MAX_TABLE_ROWS;
+                renderORPage();
+            }
+            break;
+        case 'ACTIVE_ORDERS':
+            onActiveOrdersUpdate(msg);
             break;
         case 'ORDER_REQUEST':
-            orRows_raw.unshift({ts: msg.timestamp, algorithmInfo: msg.algorithmInfo, data: msg.data});
-            if (orRows_raw.length > MAX_TABLE_ROWS) orRows_raw.length = MAX_TABLE_ROWS;
-            orRows.unshift(formatOR(msg.data, msg.timestamp));
-            if (orRows.length > MAX_TABLE_ROWS) orRows.length = MAX_TABLE_ROWS;
-            renderORPage();
+            // Order requests are no longer displayed; silently ignored
             break;
         case 'PARAMS':
             updateParams(msg.data);
@@ -822,8 +825,8 @@ function applyState(msg) {
     // Fetch persisted history from the backend so tables survive page refreshes
     fetchPnlHistory();
     fetchPnlSnapshots();
+    fetchActiveOrders();
     fetchExecutionReports();
-    fetchOrderRequests();
     fetchPortfolioSnapshot();
 }
 
@@ -1006,21 +1009,22 @@ function renderPnlSnapshotPage() {
     if (next) next.disabled = pnlSnapshotPage >= maxPage;
 }
 
-// ── Execution reports / order requests ───────────────────────────────────────
-function formatER(er, ts) {
+// ── Execution reports / last trades table ─────────────────────────────────────
+
+/**
+ * Formats a trade-status execution report row for the Last Execution Reports table.
+ * Shows: time, instrument, side, lastQuantity, price, executionReportStatus.
+ */
+function formatTradeER(er, ts) {
     if (!er) return '';
     const v = er.verb || '';
-    return `<td>${fmtTs(ts || er.timestamp)}</td><td>${er.instrument || ''}</td>` +
+    const status = er.executionReportStatus || '';
+    const statusClass = status === 'CompletelyFilled' ? 'badge-filled' : status === 'PartialFilled' ? 'badge-partial' : '';
+    const lastQty = er.lastQuantity != null ? er.lastQuantity : (er.quantityFill != null ? er.quantityFill : '');
+    return `<td>${fmtTs(ts || er.timestampCreation)}</td><td>${er.instrument || ''}</td>` +
         `<td><span class="badge ${sideClass(v)}">${v}</span></td>` +
-        `<td>${fmt(er.quantity, 6)}</td><td>${fmt(er.price)}</td><td>${er.executionReportStatus || ''}</td>`;
-}
-
-function formatOR(or, ts) {
-    if (!or) return '';
-    const v = or.verb || '';
-    return `<td>${fmtTs(ts || or.timestamp)}</td><td>${or.instrument || ''}</td>` +
-        `<td><span class="badge ${sideClass(v)}">${v}</span></td>` +
-        `<td>${fmt(or.quantity, 6)}</td><td>${fmt(or.price)}</td><td>${or.orderRequestAction || ''}</td>`;
+        `<td>${fmt(lastQty, 6)}</td><td>${fmt(er.price)}</td>` +
+        `<td><span class="badge ${statusClass}">${status}</span></td>`;
 }
 
 // ── Table pagination helpers ──────────────────────────────────────────────────
@@ -1030,28 +1034,12 @@ function getTablePageSize() {
 }
 
 function onTablePageSizeChange() {
-    erPage = 0;
     orPage = 0;
     pnlSnapshotPage = 0;
-    renderERPage();
     renderORPage();
     renderPnlSnapshotPage();
 }
 
-function erPrevPage() {
-    if (erPage > 0) {
-        erPage--;
-        renderERPage();
-    }
-}
-
-function erNextPage() {
-    const maxPage = Math.max(0, Math.ceil(erRows.length / getTablePageSize()) - 1);
-    if (erPage < maxPage) {
-        erPage++;
-        renderERPage();
-    }
-}
 
 function orPrevPage() {
     if (orPage > 0) {
@@ -1068,29 +1056,6 @@ function orNextPage() {
     }
 }
 
-function renderERPage() {
-    const pp = getTablePageSize();
-    const maxPage = Math.max(0, Math.ceil(erRows.length / pp) - 1);
-    erPage = Math.min(erPage, maxPage);
-    const from = erPage * pp;
-    const tb = document.getElementById('er-body');
-    if (tb) {
-        tb.innerHTML = '';
-        erRows.slice(from, from + pp).forEach(html => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = html;
-            tb.appendChild(tr);
-        });
-    }
-    const lbl = document.getElementById('er-label');
-    if (lbl) lbl.textContent = 'Page ' + (erPage + 1) + ' / ' + (maxPage + 1);
-    const tot = document.getElementById('er-total');
-    if (tot) tot.textContent = erRows.length ? '(' + erRows.length + ' total)' : '';
-    const prev = document.getElementById('er-prev');
-    if (prev) prev.disabled = erPage === 0;
-    const next = document.getElementById('er-next');
-    if (next) next.disabled = erPage >= maxPage;
-}
 
 function renderORPage() {
     const pp = getTablePageSize();
@@ -1133,18 +1098,11 @@ const REMOVED_ER_STATUSES = new Set(['CompletelyFilled', 'Cancelled', 'Rejected'
 const TRADE_ER_STATUSES = new Set(['CompletelyFilled', 'PartialFilled']);
 
 function onExecutionReport(msg) {
-    erRows_raw.unshift({ts: msg.timestamp, algorithmInfo: msg.algorithmInfo, data: msg.data});
-    if (erRows_raw.length > MAX_TABLE_ROWS) erRows_raw.length = MAX_TABLE_ROWS;
-    erRows.unshift(formatER(msg.data, msg.timestamp));
-    if (erRows.length > MAX_TABLE_ROWS) erRows.length = MAX_TABLE_ROWS;
-    renderERPage();
     const er = msg.data;
     if (!er || !er.instrument) return;
     updateActiveOrdersFromER(er);
 
     // Toast + sound only for our own fills (CompletelyFilled / PartialFilled).
-    // Market-data TRADE messages are not used so we never spam popups for
-    // other participants' trades on the venue.
     if (TRADE_ER_STATUSES.has(er.executionReportStatus)) {
         const verb = er.verb || '';
         const isBuy = verb.toLowerCase() === 'buy';
@@ -1159,6 +1117,84 @@ function onExecutionReport(msg) {
         );
         playTradeSound();
     }
+}
+
+/**
+ * Handles a backend-authoritative ACTIVE_ORDERS message: replaces the entire
+ * activeOrdersMap for every instrument mentioned in the payload and re-renders.
+ */
+function onActiveOrdersUpdate(msg) {
+    const orders = msg.data;
+    if (!Array.isArray(orders)) return;
+    // Clear the map first, then repopulate from the authoritative backend list
+    Object.keys(activeOrdersMap).forEach(k => delete activeOrdersMap[k]);
+    orders.forEach(o => {
+        if (!o.instrument || !o.clientOrderId) return;
+        if (!activeOrdersMap[o.instrument]) activeOrdersMap[o.instrument] = {};
+        activeOrdersMap[o.instrument][o.clientOrderId] = o;
+    });
+    renderLiveOrders();
+    // Refresh OB overlays for all visible instruments
+    instrOrder.forEach(instr => renderOBBook(instr));
+}
+
+/**
+ * Renders the Live Orders card table from the current {@link activeOrdersMap}.
+ * Called after every change to the map (ER events, ACTIVE_ORDERS WS, STATE restore).
+ */
+function renderLiveOrders() {
+    const tbody = document.getElementById('live-orders-body');
+    const countEl = document.getElementById('live-orders-count');
+    if (!tbody) return;
+
+    // Flatten all active orders across instruments
+    const allOrders = [];
+    for (const [instr, orders] of Object.entries(activeOrdersMap)) {
+        for (const order of Object.values(orders)) {
+            allOrders.push(Object.assign({}, order, {instrument: order.instrument || instr}));
+        }
+    }
+
+    if (countEl) {
+        countEl.textContent = allOrders.length > 0
+            ? '(' + allOrders.length + ' active)'
+            : '(none)';
+    }
+
+    tbody.innerHTML = '';
+    if (allOrders.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="8" style="color:var(--muted);text-align:center;padding:12px">No active orders</td>';
+        tbody.appendChild(tr);
+        return;
+    }
+
+    // Sort: most recent order first (timestampCreation descending)
+    allOrders.sort((a, b) => (b.timestampCreation || 0) - (a.timestampCreation || 0));
+
+    allOrders.forEach(o => {
+        const verb = o.verb || '';
+        const qty = +(o.quantity) || 0;
+        const filled = +(o.quantityFill) || 0;
+        const remaining = Math.max(0, qty - filled);
+        const ts = o.timestampCreation || null;
+        const clOrdId = o.clientOrderId || '';
+        // Truncate long clOrdId for display
+        const clOrdIdDisplay = clOrdId.length > 16 ? clOrdId.substring(0, 14) + '…' : clOrdId;
+        const tr = document.createElement('tr');
+        tr.className = 'live-order-row';
+        tr.title = clOrdId; // full id on hover
+        tr.innerHTML =
+            `<td>${ts ? fmtTs(ts) : '–'}</td>` +
+            `<td>${o.instrument || ''}</td>` +
+            `<td style="font-size:11px;font-family:monospace">${clOrdIdDisplay}</td>` +
+            `<td><span class="badge ${sideClass(verb)}">${verb}</span></td>` +
+            `<td>${fmt(o.price)}</td>` +
+            `<td>${fmt(qty, 6)}</td>` +
+            `<td>${fmt(filled, 6)}</td>` +
+            `<td>${fmt(remaining, 6)}</td>`;
+        tbody.appendChild(tr);
+    });
 }
 
 /**
@@ -1179,19 +1215,24 @@ function updateActiveOrdersFromER(er) {
     if (LIVE_ER_STATUSES.has(status)) {
         activeOrdersMap[instr][clientOrderId] = {
             clientOrderId,
+            instrument: instr,
             verb: er.verb,
             price: er.price,
             quantity: er.quantity,
-            quantityFill: er.quantityFill || 0
+            quantityFill: er.quantityFill || 0,
+            status,
+            timestampCreation: er.timestampCreation || Date.now()
         };
         // On modify-confirm, origClientOrderId refers to the superseded order
         if (origClientOrderId && origClientOrderId !== clientOrderId) {
             delete activeOrdersMap[instr][origClientOrderId];
         }
+        renderLiveOrders();
         renderOBBook(instr);
     } else if (REMOVED_ER_STATUSES.has(status)) {
         delete activeOrdersMap[instr][clientOrderId];
         if (origClientOrderId) delete activeOrdersMap[instr][origClientOrderId];
+        renderLiveOrders();
         renderOBBook(instr);
     }
 }
@@ -1567,7 +1608,6 @@ function populateBook(sid, depth, instr) {
             const barPct = qty ? Math.round((qty / maxAskQty) * 100) : 0;
 
             const labelParts = [];
-            if (hasAlgo) labelParts.push(...algoList);
             if (hasMyOrder) myOrders.forEach(o => {
                 const rem = o.quantity - (o.quantityFill || 0);
                 labelParts.push(`● MY ${fmt(rem, 4)}`);
@@ -1575,8 +1615,7 @@ function populateBook(sid, depth, instr) {
 
             const tr = document.createElement('tr');
             tr.className = 'ask-row' +
-                ((hasAlgo || hasMyOrder) ? ' algo-level' : '') +
-                (hasMyOrder ? ' my-order' : '');
+                (hasMyOrder ? ' algo-level my-order' : '');
             tr.innerHTML =
                 `<td>${fmt(price)}</td><td>${qty != null ? fmt(qty, 4) : '–'}</td>` +
                 `<td class="ob-bar-cell"><div class="ob-bar ask-bar" style="width:${barPct}%"></div></td>` +
@@ -1618,7 +1657,6 @@ function populateBook(sid, depth, instr) {
             const barPct = qty ? Math.round((qty / maxBidQty) * 100) : 0;
 
             const labelParts = [];
-            if (hasAlgo) labelParts.push(...algoList);
             if (hasMyOrder) myOrders.forEach(o => {
                 const rem = o.quantity - (o.quantityFill || 0);
                 labelParts.push(`● MY ${fmt(rem, 4)}`);
@@ -1626,8 +1664,7 @@ function populateBook(sid, depth, instr) {
 
             const tr = document.createElement('tr');
             tr.className = 'bid-row' +
-                ((hasAlgo || hasMyOrder) ? ' algo-level' : '') +
-                (hasMyOrder ? ' my-order' : '');
+                (hasMyOrder ? ' algo-level my-order' : '');
             // Reversed columns: label | bar | qty | price (price closest to asks/center)
             tr.innerHTML =
                 `<td>${labelParts.join(', ')}</td>` +

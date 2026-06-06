@@ -1,5 +1,7 @@
 // ── Auth / Login ──────────────────────────────────────────────────────────────
 let authToken = sessionStorage.getItem('hft_token') || null;
+/** Set to true when the server reports it is running a backtest (login is skipped). */
+let backtestMode = false;
 
 function showLoginOverlay(errorMsg) {
     document.getElementById('login-overlay').classList.remove('hidden');
@@ -137,7 +139,7 @@ function setStatus(connected, text) {
 function connect() {
     const port = getPort();
     const host = location.hostname || 'localhost';
-    if (!authToken) {
+    if (!backtestMode && !authToken) {
         showLoginOverlay();
         return;
     }
@@ -151,7 +153,7 @@ function connect() {
         }
         ws = null;
     }
-    ws = new WebSocket('ws://' + host + ':' + port + '/ws?token=' + encodeURIComponent(authToken));
+    ws = new WebSocket('ws://' + host + ':' + port + '/ws?token=' + encodeURIComponent(backtestMode ? 'backtest' : authToken));
     ws.onopen = () => {
         setStatus(true, 'Connected on port ' + port);
         clearTimeout(reconnectTimer);
@@ -180,7 +182,7 @@ function connect() {
 function reconnect() {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
-    if (!authToken) {
+    if (!backtestMode && !authToken) {
         showLoginOverlay();
         return;
     }
@@ -247,6 +249,10 @@ function handleMessage(msg) {
 
 // ── STATE restoration ─────────────────────────────────────────────────────────
 function applyState(msg) {
+    if (msg.backtest === true) {
+        backtestMode = true;
+        hideLoginOverlay();
+    }
     if (typeof msg.algoRunning === 'boolean') {
         algoRunning = msg.algoRunning;
         updateAlgoToggleBtn();
@@ -702,8 +708,24 @@ function populateBook(sid, depth) {
 const urlPort = new URLSearchParams(location.search).get('port');
 if (urlPort) document.getElementById('port-input').value = urlPort;
 
-// Start hidden if we already have a token; otherwise the overlay is already visible
-if (authToken) hideLoginOverlay();
-
-connect();
+// Probe /api/mode (unauthenticated) to detect backtest before showing login.
+(async () => {
+    const port = getPort();
+    const host = location.hostname || 'localhost';
+    try {
+        const res = await fetch(`http://${host}:${port}/api/mode`);
+        if (res.ok) {
+            const mode = await res.json().catch(() => ({}));
+            if (mode.backtest === true) {
+                backtestMode = true;
+                hideLoginOverlay();
+            }
+        }
+    } catch (e) {
+        // Server not yet reachable – fall through to normal login flow
+    }
+    // Start hidden if we already have a token or backtest mode; otherwise the overlay is already visible
+    if (authToken || backtestMode) hideLoginOverlay();
+    connect();
+})();
 
