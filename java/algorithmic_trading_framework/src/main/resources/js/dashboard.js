@@ -46,18 +46,15 @@ function updateModeBanner(isBacktest, isPaperTrading) {
     if (isBacktest) {
         banner.textContent = '⚠ BACKTEST MODE ⚠';
         banner.className = 'backtest-mode';
-        document.body.classList.add('has-mode-banner');
         // Show backtest speed slider
         if (speedControl) speedControl.classList.remove('hidden');
     } else if (isPaperTrading) {
-        banner.textContent = '📄 PAPER TRADING MODE';
+        banner.textContent = '📄 PAPER TRADING';
         banner.className = 'paper-trading-mode';
-        document.body.classList.add('has-mode-banner');
         // Hide backtest speed slider
         if (speedControl) speedControl.classList.add('hidden');
     } else {
         banner.className = 'hidden';
-        document.body.classList.remove('has-mode-banner');
         // Hide backtest speed slider
         if (speedControl) speedControl.classList.add('hidden');
     }
@@ -1706,9 +1703,11 @@ if (urlPort) {
 }
 
 /**
- * Checks /api/mode (unauthenticated) to detect backtest mode.
+ * Checks /api/mode (unauthenticated) to detect backtest / paper-trading mode.
  * In backtest mode no credentials are required, so the login overlay is
  * bypassed and a synthetic token is stored so all API calls succeed.
+ * The mode banner is shown immediately upon detection so it appears
+ * even before the first WebSocket STATE message arrives.
  */
 async function checkModeAndConnect() {
     try {
@@ -1716,11 +1715,16 @@ async function checkModeAndConnect() {
         if (res.ok) {
             const mode = await res.json();
             if (mode.backtest) {
-                // Backtest mode – skip login, use a synthetic token (server accepts any)
+                // Backtest mode – show banner immediately, skip login
+                updateModeBanner(true, false);
                 setToken('backtest-mode', true);
                 hideLoginOverlay();
                 connect();
                 return;
+            }
+            if (mode.paperTrading) {
+                // Paper-trading mode – show banner immediately before login/connect
+                updateModeBanner(false, true);
             }
         }
     } catch (e) {
@@ -1729,10 +1733,10 @@ async function checkModeAndConnect() {
 
     // Non-backtest: auto-connect if a saved token exists, otherwise show login overlay
     if (getToken()) {
-        hideLoginOverlay();
         connect();
+    } else {
+        showLoginOverlay('');
     }
-    // else: login overlay remains visible until the user signs in
 }
 
 checkModeAndConnect();

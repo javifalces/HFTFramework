@@ -47,6 +47,16 @@ public class ParquetMarketDataConnectorPublisher extends AbstractMarketDataConne
 
     private static long TIMEOUT_WAIT_PAUSE_MS = 60000L * 5;
     private static boolean TIMEOUT_CLOSE_PROCESS = true;
+
+    /**
+     * Disables the automatic process kill that fires when the backtest pause-timeout is
+     * reached.  Call this before starting the backtest when a live monitoring UI (e.g.
+     * {@code WebAlgorithmObserver}) is active so that the user can still interact with
+     * the dashboard after the run finishes.
+     */
+    public static void setTimeoutCloseProcess(boolean timeoutCloseProcess) {
+        TIMEOUT_CLOSE_PROCESS = timeoutCloseProcess;
+    }
     private ParquetFileConfiguration parquetFileConfiguration;
     protected Logger logger = LogManager.getLogger(ParquetMarketDataConnectorPublisher.class);
     private Thread readingThread;

@@ -5,6 +5,7 @@ import com.lambda.investing.algorithmic_trading.AlgorithmProviderImpl;
 import com.lambda.investing.algorithmic_trading.observer.web.WebAlgorithmObserver;
 import com.lambda.investing.backtest.InputConfiguration;
 import com.lambda.investing.backtest_engine.BacktestConfiguration;
+import com.lambda.investing.market_data_connector.parquet_file_reader.ParquetMarketDataConnectorPublisher;
 import com.lambda.investing.backtest_engine.ordinary.OrdinaryBacktest;
 import com.lambda.investing.gym.DummyRlAgent;
 import org.apache.hadoop.fs.Path;
@@ -161,7 +162,11 @@ public class App {
                     WebAlgorithmObserver webObserver = new WebAlgorithmObserver(uiWebPort);
                     backtestConfiguration.getAlgorithm().register(webObserver);
                     webObserver.setProvider(AlgorithmProviderImpl.getInstanceOrCreate(backtestConfiguration.getAlgorithm()));
-                    logger.info("Web monitoring UI registered on port {}", uiWebPort);
+                    // Keep the process alive after the backtest ends so the user can still
+                    // interact with the web dashboard.
+                    ParquetMarketDataConnectorPublisher.setTimeoutCloseProcess(false);
+                    backtestConfiguration.getAlgorithm().setExitOnStop(false);
+                    logger.info("Web monitoring UI registered on port {} – TIMEOUT_CLOSE_PROCESS and exitOnStop disabled", uiWebPort);
                 } catch (Exception e) {
                     logger.error("Failed to start web monitoring UI on port {}: {}", uiWebPort, e.getMessage());
                 }

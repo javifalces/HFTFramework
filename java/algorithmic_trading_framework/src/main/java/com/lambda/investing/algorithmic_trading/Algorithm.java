@@ -362,10 +362,10 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     }
 
     public void setExitOnStop(boolean exitOnStop) {
-//        if (isVerbose()) {
-//            logger.info("Set {} exitOnStop to {}", algorithmInfo, exitOnStop);
-//        }
-//        this.exitOnStop = exitOnStop;
+        if (isVerbose()) {
+            logger.info("Set {} exitOnStop to {}", algorithmInfo, exitOnStop);
+        }
+        this.exitOnStop = exitOnStop;
     }
 
     public InstrumentManager getInstrumentManager(String instrumentPk) {

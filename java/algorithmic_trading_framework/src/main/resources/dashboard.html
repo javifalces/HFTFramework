@@ -10,7 +10,7 @@
 <body>
 
 <!-- ── Login overlay ─────────────────────────────────────────────────────── -->
-<div id="login-overlay">
+<div id="login-overlay" class="hidden">
     <div class="login-box">
         <h2>🔐 HFT Framework</h2>
         <div class="form-group">
@@ -56,8 +56,6 @@
 
 <div id="toast-container"></div>
 
-<!-- ── Mode banner (Backtest / Paper Trading) ────────────────────────────── -->
-<div id="mode-banner" class="hidden"></div>
 
 <!-- ── Algo start/stop confirm modal ─────────────────────────────────────── -->
 <div id="confirm-overlay" class="hidden">
@@ -109,6 +107,8 @@
                onkeydown="if(event.key==='Enter')reconnect()"/>
         <button id="connect-btn" onclick="reconnect()">Connect</button>
     </div>
+    <!-- ── Mode banner (Backtest / Paper Trading) ───────────────────────── -->
+    <div id="mode-banner" class="hidden"></div>
 </div>
 
 <nav class="tab-nav">

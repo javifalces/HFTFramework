@@ -147,6 +147,7 @@ public class AlgorithmProviderImpl implements AlgorithmProvider {
         if (speed == 0) {
             messagePrint += " (Paused)";
             ParquetMarketDataConnectorPublisher.setPauseTradingEngine(true);
+            ParquetMarketDataConnectorPublisher.setSpeed(speed);
         } else {
             ParquetMarketDataConnectorPublisher.setPauseTradingEngine(false);
         }
