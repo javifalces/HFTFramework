@@ -107,6 +107,10 @@ public class MultiAlgoPortfolioAggregator {
                 agg.realizedFees += s.realizedFees;
                 agg.unrealizedFees += s.unrealizedFees;
 
+                agg.numberOfAggressedTrades.set(agg.numberOfAggressedTrades.addAndGet(s.numberOfAggressedTrades.get()));
+                agg.numberOfAggressorTrades.set(agg.numberOfAggressorTrades.addAndGet(s.numberOfAggressorTrades.get()));
+                agg.numberOfTrades.set(agg.numberOfTrades.addAndGet(s.numberOfTrades.get()));
+
                 // Track the maximum timestamp across all algorithms for the same instrument
                 long aggTs = agg.getLastTimestampUpdate();
                 long sTs = s.getLastTimestampUpdate();

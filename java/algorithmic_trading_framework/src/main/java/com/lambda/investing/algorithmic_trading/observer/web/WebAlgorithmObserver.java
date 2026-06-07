@@ -183,9 +183,6 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
 
     @Override
     public void onUpdatePnlSnapshot(String algorithmInfo, PnlSnapshot pnlSnapshot) {
-        String json = buildMessage("PNL_SNAPSHOT", algorithmInfo, toPnlDto(pnlSnapshot), currentTimeMs());
-        server.broadcastUpdate(json);
-        refreshState();
     }
 
     @Override
@@ -480,6 +477,11 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
                 sm.put("unrealizedPnl", s.unrealizedPnl);
                 sm.put("totalPnl", s.totalPnl);
                 sm.put("netPosition", s.netPosition);
+                sm.put("totalFees", s.totalFees);
+                sm.put("netInvestment", s.netInvestment);
+                sm.put("numberOfTrades", s.numberOfTrades.get());
+                sm.put("numberOfAggressorTrades", s.numberOfAggressorTrades.get());
+                sm.put("numberOfAggressedTrades", s.numberOfAggressedTrades.get());
                 instrMap.put(e.getKey(), sm);
             }
         }

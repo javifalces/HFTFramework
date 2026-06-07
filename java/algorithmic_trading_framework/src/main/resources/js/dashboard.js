@@ -1023,6 +1023,12 @@ function renderInstrumentCards() {
             `<div class="value">${fmt(s.totalFees)}</div></div>` +
             `<div class="instr-snap-kv"><div class="label">Net Investment</div>` +
             `<div class="value">${fmt(s.netInvestment)}</div></div>` +
+            `<div class="instr-snap-kv"><div class="label">Total Trades</div>` +
+            `<div class="value">${+(s.numberOfTrades) || 0}</div></div>` +
+            `<div class="instr-snap-kv"><div class="label">Aggressor Trades</div>` +
+            `<div class="value">${+(s.numberOfAggressorTrades) || 0}</div></div>` +
+            `<div class="instr-snap-kv"><div class="label">Aggressed Trades</div>` +
+            `<div class="value">${+(s.numberOfAggressedTrades) || 0}</div></div>` +
             `</div>`;
 
         container.appendChild(card);
