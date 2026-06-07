@@ -570,6 +570,70 @@ const pnlSnapshotRows_raw = [];
 let orPage = 0;
 let pnlSnapshotPage = 0;
 
+// ── Order / trade / position actions ─────────────────────────────────────────
+async function cancelOrderAction(clientOrderId) {
+    const token = getToken();
+    if (!token) {
+        doLogout();
+        return;
+    }
+    try {
+        const res = await fetch(getApiBase() + '/api/algo/cancel-order', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+            body: JSON.stringify({clientOrderId})
+        });
+        const data = await res.json().catch(() => ({}));
+        if (data.success === false) {
+            alert('⚠ Order could not be cancelled.');
+        }
+    } catch (e) {
+        alert('⚠ Error cancelling order: ' + e.message);
+    }
+}
+
+async function closeTradeAction(instrumentPk, verb, quantity) {
+    const token = getToken();
+    if (!token) {
+        doLogout();
+        return;
+    }
+    try {
+        const res = await fetch(getApiBase() + '/api/algo/close-trade', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+            body: JSON.stringify({instrumentPk, verb, quantity})
+        });
+        const data = await res.json().catch(() => ({}));
+        if (data.success === false) {
+            alert('⚠ Trade could not be closed.');
+        }
+    } catch (e) {
+        alert('⚠ Error closing trade: ' + e.message);
+    }
+}
+
+async function closePositionAction(instrumentPk, position) {
+    const token = getToken();
+    if (!token) {
+        doLogout();
+        return;
+    }
+    try {
+        const res = await fetch(getApiBase() + '/api/algo/close-position', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+            body: JSON.stringify({instrumentPk, position})
+        });
+        const data = await res.json().catch(() => ({}));
+        if (data.success === false) {
+            alert('⚠ Position could not be closed.');
+        }
+    } catch (e) {
+        alert('⚠ Error closing position: ' + e.message);
+    }
+}
+
 // ── Algo start / stop toggle ──────────────────────────────────────────────────
 let algoRunning = true;
 let pendingAlgoAction = null; // 'start' | 'stop'
@@ -888,6 +952,7 @@ function renderInstrumentCards() {
         card.innerHTML =
             `<div class="instr-snap-header">` +
             `<span class="instr-snap-name">${instrName}</span>` +
+            `<button class="btn-action btn-close-pos" onclick="closePositionAction(${JSON.stringify(instr)},${+(s.netPosition) || 0})" title="Close position for ${instrName}">× Close Position</button>` +
             (ts ? `<span class="instr-snap-ts">${fmtTs(ts)}</span>` : '') +
             `</div>` +
             `<div class="instr-snap-kv-grid">` +
@@ -1021,10 +1086,14 @@ function formatTradeER(er, ts) {
     const status = er.executionReportStatus || '';
     const statusClass = status === 'CompletelyFilled' ? 'badge-filled' : status === 'PartialFilled' ? 'badge-partial' : '';
     const lastQty = er.lastQuantity != null ? er.lastQuantity : (er.quantityFill != null ? er.quantityFill : '');
+    const instrJson = JSON.stringify(er.instrument || '');
+    const verbJson = JSON.stringify(v);
+    const qtyVal = lastQty !== '' ? lastQty : 0;
     return `<td>${fmtTs(ts || er.timestampCreation)}</td><td>${er.instrument || ''}</td>` +
         `<td><span class="badge ${sideClass(v)}">${v}</span></td>` +
         `<td>${fmt(lastQty, 6)}</td><td>${fmt(er.price)}</td>` +
-        `<td><span class="badge ${statusClass}">${status}</span></td>`;
+        `<td><span class="badge ${statusClass}">${status}</span></td>` +
+        `<td><button class="btn-action btn-close-trade" onclick="closeTradeAction(${instrJson},${verbJson},${qtyVal})">× Close</button></td>`;
 }
 
 // ── Table pagination helpers ──────────────────────────────────────────────────
@@ -1164,7 +1233,7 @@ function renderLiveOrders() {
     tbody.innerHTML = '';
     if (allOrders.length === 0) {
         const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="8" style="color:var(--muted);text-align:center;padding:12px">No active orders</td>';
+        tr.innerHTML = '<td colspan="9" style="color:var(--muted);text-align:center;padding:12px">No active orders</td>';
         tbody.appendChild(tr);
         return;
     }
@@ -1192,7 +1261,8 @@ function renderLiveOrders() {
             `<td>${fmt(o.price)}</td>` +
             `<td>${fmt(qty, 6)}</td>` +
             `<td>${fmt(filled, 6)}</td>` +
-            `<td>${fmt(remaining, 6)}</td>`;
+            `<td>${fmt(remaining, 6)}</td>` +
+            `<td><button class="btn-action btn-cancel" onclick="cancelOrderAction(${JSON.stringify(clOrdId)})">✕ Cancel</button></td>`;
         tbody.appendChild(tr);
     });
 }
@@ -1770,6 +1840,7 @@ async function checkModeAndConnect() {
 
     // Non-backtest: auto-connect if a saved token exists, otherwise show login overlay
     if (getToken()) {
+        hideLoginOverlay();   // clear any overlay shown while server was unreachable
         connect();
     } else {
         showLoginOverlay('');
@@ -1777,6 +1848,24 @@ async function checkModeAndConnect() {
 }
 
 checkModeAndConnect();
+
+// ── Periodic / visibility-based reconnect ─────────────────────────────────────
+// Re-run checkModeAndConnect whenever the tab becomes visible and the WebSocket
+// is not already open (e.g. user returns to the tab after the server restarted).
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' &&
+        (!ws || ws.readyState !== WebSocket.OPEN)) {
+        checkModeAndConnect();
+    }
+});
+
+// Also poll every 5 seconds while disconnected so a freshly-started server
+// is detected without requiring a manual page reload.
+setInterval(() => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        checkModeAndConnect();
+    }
+}, 5000);
 
 // Re-render PnL chart when the card / window is resized
 (function () {

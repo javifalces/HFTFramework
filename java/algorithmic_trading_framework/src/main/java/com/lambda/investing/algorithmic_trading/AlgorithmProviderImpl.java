@@ -3,10 +3,12 @@ package com.lambda.investing.algorithmic_trading;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.lambda.investing.market_data_connector.parquet_file_reader.ParquetMarketDataConnectorPublisher;
+import com.lambda.investing.model.asset.Instrument;
+import com.lambda.investing.model.trading.OrderRequest;
+import com.lambda.investing.model.trading.Verb;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import javax.swing.event.ChangeEvent;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -134,6 +136,76 @@ public class AlgorithmProviderImpl implements AlgorithmProvider {
         }
 
         return allOk;
+    }
+
+    @Override
+    public boolean cancelOrder(String clientOrderId) {
+        System.out.println("cancelOrder: clientOrderId = " + clientOrderId);
+        OrderRequest cancelOrderRequest = algorithm.createActiveCancel(clientOrderId);
+        try {
+            algorithm.sendOrderRequest(cancelOrderRequest);
+            return true;
+        } catch (Exception e) {
+            String msg = String.format(
+                    "cancelOrder: failed to cancel request for clientOrderId '%s' – %s",
+                    clientOrderId, e.getMessage());
+            System.out.println("WARNING: " + msg);
+            logger.warn(msg);
+            return false;
+        }
+    }
+
+    @Override
+    public boolean closeTrade(String instrumentPk, Verb verb, double quantity) {
+        System.out.println(String.format("closeTrade: instrumentPk='%s', verb='%s', quantity=%.6f", instrumentPk, verb, quantity));
+        Instrument instrument = Instrument.getInstrument(instrumentPk);
+        if (instrument == null) {
+            String msg = String.format(
+                    "cancelTrade: instrument '%s' not found", instrumentPk);
+            System.out.println("WARNING: " + msg);
+            logger.warn(msg);
+            return false;
+        }
+        Verb oppositeVerb = Verb.OtherSideVerb(verb);
+        if (oppositeVerb == null || oppositeVerb == Verb.NotSet) {
+            String msg = String.format(
+                    "cancelTrade: cannot determine opposite verb for '%s'", verb);
+            System.out.println("WARNING: " + msg);
+            logger.warn(msg);
+            return false;
+        }
+
+        quantity = instrument.roundQty(quantity);
+        OrderRequest marketOrder = algorithm.createMarketOrderRequest(instrument, oppositeVerb, quantity);
+        try {
+            algorithm.sendOrderRequest(marketOrder);
+            logger.info("cancelTrade: sent market {} order for {} qty={} (algo: {})",
+                    oppositeVerb, instrumentPk, quantity, algorithm.getAlgorithmInfo());
+            return true;
+        } catch (Exception e) {
+            String msg = String.format(
+                    "cancelTrade: failed to send market order for instrument '%s' verb '%s' qty %.6f – %s",
+                    instrumentPk, oppositeVerb, quantity, e.getMessage());
+            System.out.println("WARNING: " + msg);
+            logger.warn(msg);
+            return false;
+        }
+    }
+
+    @Override
+    public boolean closePosition(String instrumentPk, double position) {
+        Instrument instrument = Instrument.getInstrument(instrumentPk);
+        if (instrument == null) {
+            String msg = String.format(
+                    "cancelTrade: instrument '%s' not found", instrumentPk);
+            System.out.println("WARNING: " + msg);
+            logger.warn(msg);
+            return false;
+        }
+
+        double quantity = Math.abs(position);
+        Verb verb = position > 0 ? Verb.Sell : Verb.Buy;
+        return closeTrade(instrumentPk, verb, quantity);
     }
 
     /**

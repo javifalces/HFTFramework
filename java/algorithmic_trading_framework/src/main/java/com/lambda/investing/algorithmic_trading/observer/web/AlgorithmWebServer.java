@@ -31,6 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.AlgorithmProvider;
+import com.lambda.investing.model.trading.Verb;
 
 import static io.netty.handler.codec.http.HttpResponseStatus.*;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
@@ -627,6 +628,105 @@ public class AlgorithmWebServer {
                         }
                     } else {
                         logger.warn("change-backtest-speed requested but no AlgorithmProvider configured");
+                        response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                                Unpooled.copiedBuffer("{\"success\":false,\"error\":\"no provider\"}", CharsetUtil.UTF_8));
+                    }
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                }
+            } else if ("/api/algo/cancel-order".equals(uri)) {
+                String token = getAuthToken(req, "");
+                if (!isValidToken(token)) {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, UNAUTHORIZED,
+                            Unpooled.copiedBuffer("{\"error\":\"Unauthorized\"}", CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                } else {
+                    if (algorithmProvider != null) {
+                        try {
+                            String clientOrderId = extractJsonField(body, "clientOrderId");
+                            if (clientOrderId == null) {
+                                response = new DefaultFullHttpResponse(HTTP_1_1, BAD_REQUEST,
+                                        Unpooled.copiedBuffer("{\"success\":false,\"error\":\"Missing clientOrderId\"}", CharsetUtil.UTF_8));
+                            } else {
+                                boolean ok = algorithmProvider.cancelOrder(clientOrderId);
+                                logger.info("Web UI cancel-order request: {} -> {}", clientOrderId, ok);
+                                response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                                        Unpooled.copiedBuffer("{\"success\":" + ok + "}", CharsetUtil.UTF_8));
+                            }
+                        } catch (Exception ex) {
+                            logger.error("Error cancelling order: {}", ex.getMessage(), ex);
+                            response = new DefaultFullHttpResponse(HTTP_1_1, INTERNAL_SERVER_ERROR,
+                                    Unpooled.copiedBuffer("{\"success\":false,\"error\":\"" + ex.getMessage() + "\"}", CharsetUtil.UTF_8));
+                        }
+                    } else {
+                        logger.warn("cancel-order requested but no AlgorithmProvider configured");
+                        response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                                Unpooled.copiedBuffer("{\"success\":false,\"error\":\"no provider\"}", CharsetUtil.UTF_8));
+                    }
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                }
+            } else if ("/api/algo/close-trade".equals(uri)) {
+                String token = getAuthToken(req, "");
+                if (!isValidToken(token)) {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, UNAUTHORIZED,
+                            Unpooled.copiedBuffer("{\"error\":\"Unauthorized\"}", CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                } else {
+                    if (algorithmProvider != null) {
+                        try {
+                            String instrumentPk = extractJsonField(body, "instrumentPk");
+                            String verbStr = extractJsonField(body, "verb");
+                            String qtyStr = extractJsonField(body, "quantity");
+                            if (instrumentPk == null || verbStr == null) {
+                                response = new DefaultFullHttpResponse(HTTP_1_1, BAD_REQUEST,
+                                        Unpooled.copiedBuffer("{\"success\":false,\"error\":\"Missing instrumentPk or verb\"}", CharsetUtil.UTF_8));
+                            } else {
+                                Verb verb = Verb.valueOf(verbStr);
+                                double qty = qtyStr != null ? Double.parseDouble(qtyStr) : 0.0;
+                                boolean ok = algorithmProvider.closeTrade(instrumentPk, verb, qty);
+                                logger.info("Web UI close-trade request: {} {} {} -> {}", instrumentPk, verbStr, qty, ok);
+                                response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                                        Unpooled.copiedBuffer("{\"success\":" + ok + "}", CharsetUtil.UTF_8));
+                            }
+                        } catch (Exception ex) {
+                            logger.error("Error closing trade: {}", ex.getMessage(), ex);
+                            response = new DefaultFullHttpResponse(HTTP_1_1, INTERNAL_SERVER_ERROR,
+                                    Unpooled.copiedBuffer("{\"success\":false,\"error\":\"" + ex.getMessage() + "\"}", CharsetUtil.UTF_8));
+                        }
+                    } else {
+                        logger.warn("close-trade requested but no AlgorithmProvider configured");
+                        response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                                Unpooled.copiedBuffer("{\"success\":false,\"error\":\"no provider\"}", CharsetUtil.UTF_8));
+                    }
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                }
+            } else if ("/api/algo/close-position".equals(uri)) {
+                String token = getAuthToken(req, "");
+                if (!isValidToken(token)) {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, UNAUTHORIZED,
+                            Unpooled.copiedBuffer("{\"error\":\"Unauthorized\"}", CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                } else {
+                    if (algorithmProvider != null) {
+                        try {
+                            String instrumentPk = extractJsonField(body, "instrumentPk");
+                            String posStr = extractJsonField(body, "position");
+                            if (instrumentPk == null) {
+                                response = new DefaultFullHttpResponse(HTTP_1_1, BAD_REQUEST,
+                                        Unpooled.copiedBuffer("{\"success\":false,\"error\":\"Missing instrumentPk\"}", CharsetUtil.UTF_8));
+                            } else {
+                                double position = posStr != null ? Double.parseDouble(posStr) : 0.0;
+                                boolean ok = algorithmProvider.closePosition(instrumentPk, position);
+                                logger.info("Web UI close-position request: {} {} -> {}", instrumentPk, position, ok);
+                                response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                                        Unpooled.copiedBuffer("{\"success\":" + ok + "}", CharsetUtil.UTF_8));
+                            }
+                        } catch (Exception ex) {
+                            logger.error("Error closing position: {}", ex.getMessage(), ex);
+                            response = new DefaultFullHttpResponse(HTTP_1_1, INTERNAL_SERVER_ERROR,
+                                    Unpooled.copiedBuffer("{\"success\":false,\"error\":\"" + ex.getMessage() + "\"}", CharsetUtil.UTF_8));
+                        }
+                    } else {
+                        logger.warn("close-position requested but no AlgorithmProvider configured");
                         response = new DefaultFullHttpResponse(HTTP_1_1, OK,
                                 Unpooled.copiedBuffer("{\"success\":false,\"error\":\"no provider\"}", CharsetUtil.UTF_8));
                     }

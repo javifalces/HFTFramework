@@ -640,3 +640,71 @@
         grid-template-columns: 1fr 1fr;
     }
 }
+
+/* ── Action buttons (cancel order / close trade / close position) ─────────── */
+.btn-action {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .15s, color .15s, opacity .15s;
+    line-height: 1.6;
+}
+
+.btn-cancel {
+    background: rgba(245, 101, 101, .12);
+    color: #f56565;
+    border-color: rgba(245, 101, 101, .45);
+}
+
+.btn-cancel:hover {
+    background: rgba(245, 101, 101, .28);
+    border-color: #f56565;
+}
+
+.btn-close-trade {
+    background: rgba(236, 201, 75, .12);
+    color: #ecc94b;
+    border-color: rgba(236, 201, 75, .45);
+}
+
+.btn-close-trade:hover {
+    background: rgba(236, 201, 75, .28);
+    border-color: #ecc94b;
+}
+
+.btn-close-pos {
+    background: rgba(78, 154, 241, .12);
+    color: #4e9af1;
+    border-color: rgba(78, 154, 241, .45);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .15s, color .15s;
+    line-height: 1.6;
+    margin-left: 8px;
+}
+
+.btn-close-pos:hover {
+    background: rgba(78, 154, 241, .28);
+    border-color: #4e9af1;
+}
+
+/* Keep the instrument snapshot header flex so the close-pos button aligns right */
+.instr-snap-header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.instr-snap-header .instr-snap-ts {
+    margin-left: auto;
+}
+

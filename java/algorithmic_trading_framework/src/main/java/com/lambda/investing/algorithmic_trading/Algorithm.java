@@ -667,6 +667,16 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         algorithmConnectorConfiguration.getTradingEngineConnector().requestInfo(info);
     }
 
+    public OrderRequest createActiveCancel(String origClientOrderId) {
+        for (InstrumentManager instrumentManager : instrumentToManager.values()) {
+            Map<String, ExecutionReport> activeOrders = instrumentManager.getAllActiveOrders();
+            if (activeOrders.containsKey(origClientOrderId)) {
+                return createCancel(instrumentManager.getInstrument(), origClientOrderId);
+            }
+        }
+        logger.warn("createActiveCancel: origClientOrderId {} not found in active orders", origClientOrderId);
+        return null;
+    }
     public OrderRequest createCancel(Instrument instrument, String origClientOrderId) {
         OrderRequest cancelOrderRequest = new OrderRequest();
         cancelOrderRequest.setOrderRequestAction(OrderRequestAction.Cancel);
