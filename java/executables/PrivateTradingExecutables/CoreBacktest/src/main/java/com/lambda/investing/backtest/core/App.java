@@ -165,6 +165,7 @@ public class App {
                     // Keep the process alive after the backtest ends so the user can still
                     // interact with the web dashboard.
                     ParquetMarketDataConnectorPublisher.setTimeoutCloseProcess(false);
+                    ParquetMarketDataConnectorPublisher.setSpeed(50);
                     backtestConfiguration.getAlgorithm().setExitOnStop(false);
                     logger.info("Web monitoring UI registered on port {} – TIMEOUT_CLOSE_PROCESS and exitOnStop disabled", uiWebPort);
                 } catch (Exception e) {

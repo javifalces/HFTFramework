@@ -45,7 +45,6 @@ import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
  *   <li>{@code GET /}                        – serves the single-page dashboard HTML</li>
  *   <li>{@code GET /api/state}               – returns the current algorithm state snapshot as JSON</li>
  *   <li>{@code GET /api/pnl-history}         – returns the persisted PnL timeline as a JSON array</li>
- *   <li>{@code GET /api/pnl-snapshots}       – returns the last N per-instrument PnL snapshots</li>
  *   <li>{@code GET /api/execution-reports}   – returns the last N execution reports as a JSON array</li>
  *   <li>{@code GET /api/order-requests}      – returns the last N order requests as a JSON array</li>
  *   <li>{@code GET /api/portfolio-snapshot}  – returns the latest portfolio snapshot as JSON</li>
@@ -66,10 +65,6 @@ public class AlgorithmWebServer {
      * Persisted PnL timeline history – returned to clients on demand via GET /api/pnl-history.
      */
     private volatile String pnlHistoryJson = "[]";
-    /**
-     * Persisted per-instrument PnlSnapshot history – returned via GET /api/pnl-snapshots.
-     */
-    private volatile String pnlSnapshotHistoryJson = "[]";
     /**
      * Persisted execution-report history – returned via GET /api/execution-reports.
      */
@@ -198,14 +193,6 @@ public class AlgorithmWebServer {
         this.pnlHistoryJson = (historyJson != null) ? historyJson : "[]";
     }
 
-    /**
-     * Replaces the persisted per-instrument PnlSnapshot history returned by {@code GET /api/pnl-snapshots}.
-     *
-     * @param historyJson JSON array of {@code {ts, algorithmInfo, data}} objects
-     */
-    public void updatePnlSnapshotHistory(String historyJson) {
-        this.pnlSnapshotHistoryJson = (historyJson != null) ? historyJson : "[]";
-    }
 
     /**
      * Replaces the persisted execution-report history returned by {@code GET /api/execution-reports}.
@@ -401,17 +388,6 @@ public class AlgorithmWebServer {
                 } else {
                     response = new DefaultFullHttpResponse(HTTP_1_1, OK,
                             Unpooled.copiedBuffer(pnlHistoryJson, CharsetUtil.UTF_8));
-                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
-                }
-            } else if ("/api/pnl-snapshots".equals(uri)) {
-                String token = getAuthToken(req, query);
-                if (!isValidToken(token)) {
-                    response = new DefaultFullHttpResponse(HTTP_1_1, UNAUTHORIZED,
-                            Unpooled.copiedBuffer("{\"error\":\"Unauthorized\"}", CharsetUtil.UTF_8));
-                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
-                } else {
-                    response = new DefaultFullHttpResponse(HTTP_1_1, OK,
-                            Unpooled.copiedBuffer(pnlSnapshotHistoryJson, CharsetUtil.UTF_8));
                     response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
                 }
             } else if ("/api/execution-reports".equals(uri)) {

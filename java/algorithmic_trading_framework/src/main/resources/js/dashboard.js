@@ -267,27 +267,37 @@ function updatePnlCounter() {
 }
 
 /**
- * Fetches the persisted per-instrument PnlSnapshot history from the backend and restores the table.
+ * Fetches the aggregated portfolio snapshot from the backend and builds a PnL snapshot history.
  * Called whenever a STATE message is received (connect / reconnect).
+ * Transforms the portfolio-snapshot endpoint data into per-instrument PnL snapshots for the table.
  */
 async function fetchPnlSnapshots() {
     const token = getToken();
     if (!token) return;
     try {
-        const res = await fetch(getApiBase() + '/api/pnl-snapshots', {
+        const res = await fetch(getApiBase() + '/api/portfolio-snapshot', {
             headers: {'Authorization': 'Bearer ' + token}
         });
         if (!res.ok) return;
         const data = await res.json();
-        if (!Array.isArray(data) || data.length === 0) return;
-        const lastBackendTs = data[data.length - 1].ts || 0;
-        const localNewer = pnlSnapshotRows_raw.filter(e => e.ts > lastBackendTs);
+        if (!data) return;
+
+        // Extract individual instrument snapshots from the portfolio data
+        const instruments = data.instrumentPnlSnapshotMap || {};
+        const timestamp = data.lastTimestampUpdate || Date.now();
+
+        // Clear existing snapshots and rebuild from portfolio snapshot
         pnlSnapshotRows_raw.length = 0;
-        for (let i = data.length - 1; i >= 0; i--) pnlSnapshotRows_raw.push(data[i]);
-        localNewer.forEach(e => pnlSnapshotRows_raw.unshift(e));
-        if (pnlSnapshotRows_raw.length > MAX_TABLE_ROWS) pnlSnapshotRows_raw.length = MAX_TABLE_ROWS;
         pnlSnapshotRows.length = 0;
-        pnlSnapshotRows_raw.forEach(e => pnlSnapshotRows.push(formatPnlSnapshot(e.data, e.ts)));
+
+        // Transform each instrument snapshot into a row
+        Object.entries(instruments).forEach(([instr, s]) => {
+            if (s) {
+                pnlSnapshotRows_raw.push({ts: timestamp, algorithmInfo: 'AGGREGATED', data: s});
+                pnlSnapshotRows.push(formatPnlSnapshot(s, timestamp));
+            }
+        });
+
         pnlSnapshotPage = 0;
         renderPnlSnapshotPage();
     } catch (e) {
@@ -299,6 +309,7 @@ async function fetchPnlSnapshots() {
  * Fetches the current list of live (active) orders from the backend and
  * repopulates both {@link activeOrdersMap} and the Live Orders card.
  * Called whenever a STATE message is received (connect / reconnect).
+ * Removes any local orders that don't exist in the backend response.
  */
 async function fetchActiveOrders() {
     const token = getToken();
@@ -310,8 +321,30 @@ async function fetchActiveOrders() {
         if (!res.ok) return;
         const data = await res.json();
         if (!Array.isArray(data)) return;
+
+        // Build a set of all current order IDs from the backend for validation
+        const backendOrderIds = new Set();
+        data.forEach(o => {
+            if (o.clientOrderId && o.instrument) {
+                backendOrderIds.add(o.instrument + ':' + o.clientOrderId);
+            }
+        });
+
+        // Remove orders from frontend that don't exist in backend
+        for (const instr of Object.keys(activeOrdersMap)) {
+            for (const orderId of Object.keys(activeOrdersMap[instr])) {
+                const key = instr + ':' + orderId;
+                if (!backendOrderIds.has(key)) {
+                    delete activeOrdersMap[instr][orderId];
+                }
+            }
+            // Clean up empty instrument maps
+            if (Object.keys(activeOrdersMap[instr]).length === 0) {
+                delete activeOrdersMap[instr];
+            }
+        }
+
         // Rebuild activeOrdersMap from the backend snapshot
-        // (keeps any locally-tracked orders that arrived after the snapshot)
         data.forEach(o => {
             if (!o.instrument || !o.clientOrderId) return;
             if (!activeOrdersMap[o.instrument]) activeOrdersMap[o.instrument] = {};
@@ -366,10 +399,21 @@ async function fetchPortfolioSnapshot() {
         if (!res.ok) return;
         const data = await res.json();
         if (!data) return;
-        if (data.portfoliosByAlgo) {
+
+        // The endpoint now returns the aggregated portfolio snapshot directly
+        // with cross-algorithm totals and per-instrument breakdowns
+        const now = Date.now();
+
+        // Check if this is an aggregated snapshot (has the portfolio totals)
+        if (data.realizedPnl !== undefined || data.totalPnl !== undefined) {
+            // Direct aggregated portfolio snapshot from /api/portfolio-snapshot endpoint
+            onAggregatedPortfolioUpdate(data, now);
+        } else if (data.portfoliosByAlgo) {
+            // Legacy: multi-algo structure
             Object.keys(portfolioByAlgo).forEach(k => delete portfolioByAlgo[k]);
             Object.entries(data.portfoliosByAlgo).forEach(([algoName, p]) => updatePortfolio(p, algoName));
         } else if (data.portfolio) {
+            // Legacy: single-algo structure
             updatePortfolio(data.portfolio);
         }
     } catch (e) {
@@ -802,7 +846,12 @@ function handleMessage(msg) {
             applyState(msg);
             break;
         case 'PORTFOLIO_SNAPSHOT':
-            updatePortfolio(msg.data, msg.algorithmInfo);
+            // Handle aggregated portfolio snapshot separately
+            if (msg.algorithmInfo === "AGGREGATED") {
+                onAggregatedPortfolioUpdate(msg.data, msg.timestamp);
+            } else {
+                updatePortfolio(msg.data, msg.algorithmInfo);
+            }
             break;
         case 'PNL_SNAPSHOT':
             onPnlSnapshot(msg);
@@ -873,13 +922,19 @@ function applyState(msg) {
             depthMap[instr] = d;
             ensureInstrumentKnown(instr);
         });
-        if (s.activeOrders) Object.entries(s.activeOrders).forEach(([instr, orders]) => {
-            activeOrdersMap[instr] = {};
-            const list = Array.isArray(orders) ? orders : Object.values(orders);
-            list.forEach(o => {
-                if (o.clientOrderId) activeOrdersMap[instr][o.clientOrderId] = o;
+        if (s.activeOrders) {
+            // Clear any stale activeOrdersMap and repopulate from STATE
+            Object.keys(activeOrdersMap).forEach(k => delete activeOrdersMap[k]);
+            Object.entries(s.activeOrders).forEach(([instr, orders]) => {
+                activeOrdersMap[instr] = {};
+                const list = Array.isArray(orders) ? orders : Object.values(orders);
+                list.forEach(o => {
+                    if (o.clientOrderId) activeOrdersMap[instr][o.clientOrderId] = o;
+                });
             });
-        });
+            // Re-render live orders to show restored orders
+            renderLiveOrders();
+        }
     }
     if (msg.grafanaUrl) {
         document.getElementById('tab-btn-grafana').style.display = '';
@@ -1004,6 +1059,57 @@ function updatePortfolio(p, algorithmInfo) {
     Object.entries(instruments).forEach(([instr, s]) => {
         if (s) latestInstrumentSnapshotMap[instr] = s;
     });
+    renderInstrumentCards();
+}
+
+/**
+ * Handles aggregated portfolio snapshot (algorithmInfo = "AGGREGATED").
+ * This message contains the complete cross-algorithm portfolio view with aggregated
+ * instrument data, portfolio totals, and per-instrument breakdowns.
+ *
+ * Updates:
+ * - Portfolio card totals (realizedPnl, unrealizedPnl, totalPnl, netInvestment, totalFees)
+ * - Instrument cards with aggregated PnL data
+ * - PnL chart with the new aggregated totals
+ */
+function onAggregatedPortfolioUpdate(aggregatedData, timestamp) {
+    if (!aggregatedData) return;
+
+    // Extract the aggregated instrument map (already summed across all algorithms by backend)
+    const instruments = aggregatedData.instrumentPnlSnapshotMap || {};
+
+    // Update the latest instrument snapshot map with aggregated data
+    Object.entries(instruments).forEach(([instr, s]) => {
+        if (s) latestInstrumentSnapshotMap[instr] = s;
+    });
+
+    // Update portfolio card with direct values from the aggregated snapshot
+    const netInvestment = aggregatedData.netInvestment || 0;
+    const realizedPnl = aggregatedData.realizedPnl || 0;
+    const unrealizedPnl = aggregatedData.unrealizedPnl || 0;
+    const totalPnl = aggregatedData.totalPnl || 0;
+    const totalFees = aggregatedData.totalFees || 0;
+
+    // Update Portfolio card totals
+    const iv = document.getElementById('pnl-investment');
+    if (iv) iv.textContent = fmt(netInvestment);
+
+    setKv('pnl-realized', realizedPnl);
+    setKv('pnl-unrealized', unrealizedPnl);
+    setKv('pnl-total', totalPnl);
+    const fe = document.getElementById('pnl-fees');
+    if (fe) fe.textContent = fmt(totalFees);
+
+    // Track latest values for the PnL timeline (uses the aggregated totals)
+    lastPnl.realized = realizedPnl;
+    lastPnl.unrealized = unrealizedPnl;
+    lastPnl.total = totalPnl;
+
+    // Record the aggregated PnL sample for the chart
+    recordLivePnlSample();
+    renderPnlChart();
+
+    // Render all instrument cards with the updated aggregated data
     renderInstrumentCards();
 }
 
@@ -1191,17 +1297,43 @@ function onExecutionReport(msg) {
 /**
  * Handles a backend-authoritative ACTIVE_ORDERS message: replaces the entire
  * activeOrdersMap for every instrument mentioned in the payload and re-renders.
+ * Also removes any orders that no longer exist in activeOrdersByInstrument from the frontend.
  */
 function onActiveOrdersUpdate(msg) {
     const orders = msg.data;
     if (!Array.isArray(orders)) return;
-    // Clear the map first, then repopulate from the authoritative backend list
+
+    // Build a set of all current order IDs from the backend for validation
+    const backendOrderIds = new Set();
+    orders.forEach(o => {
+        if (o.clientOrderId && o.instrument) {
+            backendOrderIds.add(o.instrument + ':' + o.clientOrderId);
+        }
+    });
+
+    // Remove orders from frontend that don't exist in backend update
+    // This ensures removed orders don't linger in the UI
+    for (const instr of Object.keys(activeOrdersMap)) {
+        for (const orderId of Object.keys(activeOrdersMap[instr])) {
+            const key = instr + ':' + orderId;
+            if (!backendOrderIds.has(key)) {
+                delete activeOrdersMap[instr][orderId];
+            }
+        }
+        // Clean up empty instrument maps
+        if (Object.keys(activeOrdersMap[instr]).length === 0) {
+            delete activeOrdersMap[instr];
+        }
+    }
+
+    // Clear the map and repopulate from the authoritative backend list
     Object.keys(activeOrdersMap).forEach(k => delete activeOrdersMap[k]);
     orders.forEach(o => {
         if (!o.instrument || !o.clientOrderId) return;
         if (!activeOrdersMap[o.instrument]) activeOrdersMap[o.instrument] = {};
         activeOrdersMap[o.instrument][o.clientOrderId] = o;
     });
+
     renderLiveOrders();
     // Refresh OB overlays for all visible instruments
     instrOrder.forEach(instr => renderOBBook(instr));
@@ -1210,6 +1342,7 @@ function onActiveOrdersUpdate(msg) {
 /**
  * Renders the Live Orders card table from the current {@link activeOrdersMap}.
  * Called after every change to the map (ER events, ACTIVE_ORDERS WS, STATE restore).
+ * Removes rows for orders that no longer exist in the active orders map.
  */
 function renderLiveOrders() {
     const tbody = document.getElementById('live-orders-body');
@@ -1230,6 +1363,7 @@ function renderLiveOrders() {
             : '(none)';
     }
 
+    // Clear and rebuild the table to remove stale rows
     tbody.innerHTML = '';
     if (allOrders.length === 0) {
         const tr = document.createElement('tr');
@@ -1252,6 +1386,7 @@ function renderLiveOrders() {
         const clOrdIdDisplay = clOrdId.length > 16 ? clOrdId.substring(0, 14) + '…' : clOrdId;
         const tr = document.createElement('tr');
         tr.className = 'live-order-row';
+        tr.id = 'live-order-' + safeId(clOrdId); // Add unique ID for row tracking
         tr.title = clOrdId; // full id on hover
         tr.innerHTML =
             `<td>${ts ? fmtTs(ts) : '–'}</td>` +
@@ -1270,7 +1405,7 @@ function renderLiveOrders() {
 /**
  * Updates activeOrdersMap from a single execution-report object.
  * Active/PartialFilled → add/update tracking.
- * Terminal statuses    → remove tracking.
+ * Terminal statuses    → remove tracking and delete the row from the table.
  * Triggers a book re-render so the overlay is always fresh.
  */
 function updateActiveOrdersFromER(er) {
@@ -1300,8 +1435,16 @@ function updateActiveOrdersFromER(er) {
         renderLiveOrders();
         renderOBBook(instr);
     } else if (REMOVED_ER_STATUSES.has(status)) {
+        // Remove the order from the active orders map
         delete activeOrdersMap[instr][clientOrderId];
         if (origClientOrderId) delete activeOrdersMap[instr][origClientOrderId];
+
+        // Clean up empty instrument maps
+        if (Object.keys(activeOrdersMap[instr]).length === 0) {
+            delete activeOrdersMap[instr];
+        }
+
+        // Re-render to remove the row from the table
         renderLiveOrders();
         renderOBBook(instr);
     }

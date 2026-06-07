@@ -3,6 +3,7 @@ package com.lambda.investing.algorithmic_trading.observer.web;
 import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.AlgorithmObserver;
 import com.lambda.investing.algorithmic_trading.AlgorithmProvider;
+import com.lambda.investing.algorithmic_trading.pnl_calculation.MultiAlgoPortfolioAggregator;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshot;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioSnapshot;
 import com.lambda.investing.model.market_data.Depth;
@@ -61,6 +62,17 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
     // Using a ConcurrentHashMap allows safe multi-algo (MultiAlgorithm) tracking
     // where each child algorithm fires its own portfolio snapshot independently.
     private final Map<String, PortfolioSnapshot> latestPortfolioByAlgo = new ConcurrentHashMap<>();
+
+    /**
+     * Aggregates per-algorithm {@link PortfolioSnapshot} objects and provides a summed,
+     * per-instrument view used to populate the Instruments tab on the dashboard.
+     * On every {@link #onUpdatePortfolioSnapshot} call the aggregator is updated so that the
+     * aggregated snapshot embedded in every outgoing portfolio message always
+     * reflects the full cross-algorithm picture.
+     *
+     * @see MultiAlgoPortfolioAggregator
+     */
+    private final MultiAlgoPortfolioAggregator portfolioAggregator = new MultiAlgoPortfolioAggregator();
     private volatile Map<String, Object> latestParams;
     private final Map<String, Double> latestCustomColumns = new ConcurrentHashMap<>();
     /** Latest L2 depth snapshot per instrument (used to restore orderbook on reconnect). */
@@ -182,6 +194,9 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         // all tracked and can be sent as a full set to reconnecting clients via STATE.
         String key = algorithmInfo != null ? algorithmInfo : "";
         latestPortfolioByAlgo.put(key, portfolioSnapshot);
+        // Update the cross-algorithm aggregator.  This keeps the per-instrument totals
+        // correct even when different child algorithms trade overlapping instruments.
+        portfolioAggregator.update(algorithmInfo, portfolioSnapshot);
 
         // Record a PnL sample for the persistent history (rate-limited).
         // Aggregate across all known child algorithms so the chart reflects the total portfolio.
@@ -207,6 +222,15 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         // maps inside every PnlSnapshot which would produce megabyte-sized JSON messages.
         String json = buildMessage("PORTFOLIO_SNAPSHOT", algorithmInfo, toPortfolioDto(portfolioSnapshot), currentTimeMs());
         server.broadcastUpdate(json);
+
+        // Also broadcast the complete aggregated portfolio snapshot (all algorithms combined)
+        // This provides clients with a cross-algorithm portfolio view in a single object.
+        // Use algorithmInfo = "AGGREGATED" to distinguish it from per-algorithm snapshots.
+        PortfolioSnapshot aggregatedSnapshot = portfolioAggregator.getAggregatedPortfolioSnapshot();
+        String aggregatedJson = buildMessage("PORTFOLIO_SNAPSHOT", "AGGREGATED",
+                toPortfolioDto(aggregatedSnapshot), currentTimeMs());
+        server.broadcastUpdate(aggregatedJson);
+
         refreshState();
     }
 
@@ -330,11 +354,24 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
     }
 
     /**
+     * Removes stale orders that no longer exist in activeOrdersByInstrument.
+     * Called by the frontend to clean up order rows when an order is removed.
+     */
+    private void cleanupStaleLiveOrders() {
+        // Iterate through all instruments and remove any empty order maps
+        activeOrdersByInstrument.entrySet().removeIf(e -> e.getValue().isEmpty());
+    }
+
+    /**
      * Serialises the current {@link #activeOrdersByInstrument} map into a flat JSON array,
      * pushes it to the REST endpoint cache via {@link AlgorithmWebServer#updateActiveOrders},
      * and broadcasts an {@code ACTIVE_ORDERS} WebSocket message to all connected clients.
+     * Also cleans up any stale orders before syncing.
      */
     private void syncActiveOrdersToServer() {
+        // First, clean up any stale orders (empty maps get removed)
+        cleanupStaleLiveOrders();
+
         java.util.List<Map<String, Object>> allOrders = new ArrayList<>();
         for (Map.Entry<String, ConcurrentHashMap<String, Map<String, Object>>> entry :
                 activeOrdersByInstrument.entrySet()) {
@@ -454,6 +491,9 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
      * Rebuilds the REST state snapshot from the latest known values.
      */
     private void refreshState() {
+        // Clean up any stale orders before building state
+        cleanupStaleLiveOrders();
+
         Map<String, Object> state = new HashMap<>();
         if (!latestPortfolioByAlgo.isEmpty()) {
             if (latestPortfolioByAlgo.size() == 1) {
@@ -496,6 +536,21 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
             state.put("activeOrders", activeOrdersDto);
         }
         server.updateState(sanitizeJson(toJsonStringGSON(state)));
+
+        // Update the /api/portfolio-snapshot endpoint with the latest aggregated portfolio snapshot
+        updatePortfolioSnapshotEndpoint();
+    }
+
+    /**
+     * Updates the {@code GET /api/portfolio-snapshot} REST endpoint with the latest
+     * aggregated portfolio snapshot from all algorithms.
+     * The endpoint returns a complete cross-algorithm portfolio view ready for
+     * display on the dashboard.
+     */
+    private void updatePortfolioSnapshotEndpoint() {
+        PortfolioSnapshot aggregatedSnapshot = portfolioAggregator.getAggregatedPortfolioSnapshot();
+        String snapshotJson = sanitizeJson(toJsonStringGSON(toPortfolioDto(aggregatedSnapshot)));
+        server.updatePortfolioSnapshot(snapshotJson);
     }
 
     /**

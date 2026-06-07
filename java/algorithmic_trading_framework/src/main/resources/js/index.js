@@ -708,8 +708,13 @@ function populateBook(sid, depth) {
 const urlPort = new URLSearchParams(location.search).get('port');
 if (urlPort) document.getElementById('port-input').value = urlPort;
 
-// Probe /api/mode (unauthenticated) to detect backtest before showing login.
-(async () => {
+/**
+ * Checks /api/mode (unauthenticated) to detect backtest mode.
+ * In backtest mode no credentials are required, so the login overlay is
+ * bypassed immediately and the WebSocket connection is started.
+ * Otherwise the overlay is shown (or hidden when a saved token exists).
+ */
+async function checkModeAndConnect() {
     const port = getPort();
     const host = location.hostname || 'localhost';
     try {
@@ -719,13 +724,38 @@ if (urlPort) document.getElementById('port-input').value = urlPort;
             if (mode.backtest === true) {
                 backtestMode = true;
                 hideLoginOverlay();
+                connect();
+                return;
             }
         }
     } catch (e) {
         // Server not yet reachable – fall through to normal login flow
     }
-    // Start hidden if we already have a token or backtest mode; otherwise the overlay is already visible
-    if (authToken || backtestMode) hideLoginOverlay();
-    connect();
-})();
+    // Non-backtest: auto-connect if a saved token exists, otherwise show login overlay
+    if (authToken) {
+        hideLoginOverlay();
+        connect();
+    } else {
+        showLoginOverlay('');
+    }
+}
+
+checkModeAndConnect();
+
+// Re-run checkModeAndConnect whenever the tab becomes visible and the WebSocket
+// is not already open (e.g. user returns to the tab after the server restarted).
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' &&
+        (!ws || ws.readyState !== WebSocket.OPEN)) {
+        checkModeAndConnect();
+    }
+});
+
+// Also poll every 5 seconds while disconnected so a freshly-started server
+// is detected without requiring a manual page reload.
+setInterval(() => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        checkModeAndConnect();
+    }
+}, 5000);
 
