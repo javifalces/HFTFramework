@@ -423,6 +423,7 @@ public class App {
                 WebAlgorithmObserver webObserver = new WebAlgorithmObserver(uiWebPort);
                 algorithm.register(webObserver);
                 webObserver.setProvider(AlgorithmProviderImpl.getInstanceOrCreate(algorithm));//add provider
+                webObserver.setPaperTrading(zeroMqTradingConfiguration.isPaperTrading());
                 logger.info("Web monitoring UI registered on port {}", uiWebPort);
             } catch (Exception e) {
                 logger.error("Failed to start web monitoring UI on port {}: {}", uiWebPort, e.getMessage());

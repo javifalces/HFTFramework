@@ -162,6 +162,7 @@ public class App {
                     WebAlgorithmObserver webObserver = new WebAlgorithmObserver(uiWebPort);
                     backtestConfiguration.getAlgorithm().register(webObserver);
                     webObserver.setProvider(AlgorithmProviderImpl.getInstanceOrCreate(backtestConfiguration.getAlgorithm()));
+                    webObserver.setBacktest(true);
                     // Keep the process alive after the backtest ends so the user can still
                     // interact with the web dashboard.
                     ParquetMarketDataConnectorPublisher.setTimeoutCloseProcess(false);
