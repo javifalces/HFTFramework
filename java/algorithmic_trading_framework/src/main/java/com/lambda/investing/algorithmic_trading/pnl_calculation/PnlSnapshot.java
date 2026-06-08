@@ -633,6 +633,24 @@ public class PnlSnapshot {
     }
 
 
+    //clone object
+    public PnlSnapshot clone() {
+        PnlSnapshot clone = new PnlSnapshot(this.instrumentPk);
+        clone.netPosition = this.netPosition;
+        clone.avgOpenPrice = this.avgOpenPrice;
+        clone.netInvestment = this.netInvestment;
+        clone.realizedPnl = this.realizedPnl;
+        clone.unrealizedPnl = this.unrealizedPnl;
+        clone.totalPnl = this.totalPnl;
+        clone.totalFees = this.totalFees;
+        clone.lastPriceForUnrealized = this.lastPriceForUnrealized;
+        clone.spread = this.spread;
+        clone.realizedFees = this.realizedFees;
+        clone.unrealizedFees = this.unrealizedFees;
+        clone.algorithmInfo = this.algorithmInfo;
+        //historical data is not cloned because we are going to sum it later
+        return clone;
+    }
 
     @Override
     public String toString() {

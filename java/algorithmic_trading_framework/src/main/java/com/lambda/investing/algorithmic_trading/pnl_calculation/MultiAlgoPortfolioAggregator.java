@@ -95,8 +95,13 @@ public class MultiAlgoPortfolioAggregator {
                 if (s == null) continue;
 
                 // Create or retrieve the aggregated snapshot for this instrument
-                PnlSnapshot agg = aggregatedInstruments.computeIfAbsent(instr, k -> new PnlSnapshot(k));
+                if (!aggregatedInstruments.containsKey(instr)) {
+                    // If already exists, sum the fields
+                    aggregatedInstruments.put(instr, s.clone());
+                    continue;
+                }
 
+                PnlSnapshot agg = aggregatedInstruments.get(instr);
                 // Sum the PnL scalar fields
                 agg.realizedPnl += s.realizedPnl;
                 agg.unrealizedPnl += s.unrealizedPnl;

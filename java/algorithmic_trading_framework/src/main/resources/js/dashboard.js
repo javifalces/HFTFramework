@@ -269,7 +269,8 @@ function updatePnlCounter() {
 /**
  * Fetches the aggregated portfolio snapshot from the backend and builds a PnL snapshot history.
  * Called whenever a STATE message is received (connect / reconnect).
- * Transforms the portfolio-snapshot endpoint data into per-instrument PnL snapshots for the table.
+ * Transforms the portfolio-snapshot endpoint data into per-instrument PnL snapshots for the table
+ * and updates the instrument cards from the portfolio's instrumentPnlSnapshotMap.
  */
 async function fetchPnlSnapshots() {
     const token = getToken();
@@ -286,12 +287,17 @@ async function fetchPnlSnapshots() {
         const instruments = data.instrumentPnlSnapshotMap || {};
         const timestamp = data.lastTimestampUpdate || Date.now();
 
+        // Update the latest instrument snapshot map for instrument cards
+        Object.entries(instruments).forEach(([instr, s]) => {
+            if (s) latestInstrumentSnapshotMap[instr] = s;
+        });
+
         // Clear existing snapshots and rebuild from portfolio snapshot
         pnlSnapshotRows_raw.length = 0;
         pnlSnapshotRows.length = 0;
 
         // Transform each instrument snapshot into a row
-        Object.entries(instruments).forEach(([instr, s]) => {
+        Object.entries(instruments).forEach(([_, s]) => {
             if (s) {
                 pnlSnapshotRows_raw.push({ts: timestamp, algorithmInfo: 'AGGREGATED', data: s});
                 pnlSnapshotRows.push(formatPnlSnapshot(s, timestamp));
@@ -300,6 +306,8 @@ async function fetchPnlSnapshots() {
 
         pnlSnapshotPage = 0;
         renderPnlSnapshotPage();
+        // Also render the instrument cards to keep them in sync with PnL data
+        scheduleInstrumentCardsRender();
     } catch (e) {
         console.debug('fetchPnlSnapshots error:', e);
     }
@@ -601,6 +609,10 @@ const portfolioByAlgo = {};
  * Used to render the Instruments card mini-cards and to aggregate portfolio totals.
  */
 const latestInstrumentSnapshotMap = {};
+/**
+ * Debounce timer for renderInstrumentCards to prevent blinking from rapid updates.
+ */
+let renderInstrumentCardsTimer = null;
 
 // ── Table pagination state ────────────────────────────────────────────────────
 /** All order-request rows stored latest-first as innerHTML strings */
@@ -847,14 +859,7 @@ function handleMessage(msg) {
             break;
         case 'PORTFOLIO_SNAPSHOT':
             // Handle aggregated portfolio snapshot separately
-            if (msg.algorithmInfo === "AGGREGATED") {
-                onAggregatedPortfolioUpdate(msg.data, msg.timestamp);
-            } else {
-                updatePortfolio(msg.data, msg.algorithmInfo);
-            }
-            break;
-        case 'PNL_SNAPSHOT':
-            onPnlSnapshot(msg);
+            onAggregatedPortfolioUpdate(msg.data, msg.timestamp);
             break;
         case 'EXECUTION_REPORT':
             onExecutionReport(msg);
@@ -955,6 +960,18 @@ function setKv(id, val) {
     if (!el) return;
     el.textContent = fmt(val);
     el.className = 'value ' + colorClass(val);
+}
+
+/**
+ * Debounced version of renderInstrumentCards to prevent blinking from rapid updates.
+ * Multiple updates within 100ms are batched into a single render.
+ */
+function scheduleInstrumentCardsRender() {
+    if (renderInstrumentCardsTimer) clearTimeout(renderInstrumentCardsTimer);
+    renderInstrumentCardsTimer = setTimeout(() => {
+        renderInstrumentCards();
+        renderInstrumentCardsTimer = null;
+    }, 100);
 }
 
 /**
@@ -1065,7 +1082,7 @@ function updatePortfolio(p, algorithmInfo) {
     Object.entries(instruments).forEach(([instr, s]) => {
         if (s) latestInstrumentSnapshotMap[instr] = s;
     });
-    renderInstrumentCards();
+    scheduleInstrumentCardsRender();
 }
 
 /**
@@ -1116,7 +1133,7 @@ function onAggregatedPortfolioUpdate(aggregatedData, timestamp) {
     renderPnlChart();
 
     // Render all instrument cards with the updated aggregated data
-    renderInstrumentCards();
+    scheduleInstrumentCardsRender();
 }
 
 // ── PnL Snapshot events ───────────────────────────────────────────────────────
@@ -1131,36 +1148,6 @@ function formatPnlSnapshot(s, ts) {
         `<td>${fmt(s.totalFees)}</td>`;
 }
 
-function onPnlSnapshot(msg) {
-    pnlSnapshotRows_raw.unshift({ts: msg.timestamp, algorithmInfo: msg.algorithmInfo, data: msg.data});
-    if (pnlSnapshotRows_raw.length > MAX_TABLE_ROWS) pnlSnapshotRows_raw.length = MAX_TABLE_ROWS;
-    pnlSnapshotRows.unshift(formatPnlSnapshot(msg.data, msg.timestamp));
-    if (pnlSnapshotRows.length > MAX_TABLE_ROWS) pnlSnapshotRows.length = MAX_TABLE_ROWS;
-    renderPnlSnapshotPage();
-
-    // Update the latest instrument snapshot and re-render the Instruments card
-    const s = msg.data;
-    if (s && s.instrumentPk) {
-        latestInstrumentSnapshotMap[s.instrumentPk] = s;
-        renderInstrumentCards();
-    }
-}
-
-// ── PnL Snapshot pagination ───────────────────────────────────────────────────
-function pnlSnapshotPrevPage() {
-    if (pnlSnapshotPage > 0) {
-        pnlSnapshotPage--;
-        renderPnlSnapshotPage();
-    }
-}
-
-function pnlSnapshotNextPage() {
-    const maxPage = Math.max(0, Math.ceil(pnlSnapshotRows.length / getTablePageSize()) - 1);
-    if (pnlSnapshotPage < maxPage) {
-        pnlSnapshotPage++;
-        renderPnlSnapshotPage();
-    }
-}
 
 function renderPnlSnapshotPage() {
     const pp = getTablePageSize();

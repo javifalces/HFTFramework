@@ -57,11 +57,7 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
 
     private final AlgorithmWebServer server;
 
-    // Mutable current-state snapshot kept for newly connecting clients.
-    // Keyed by algorithmInfo (empty-string for unnamed single-algo).
-    // Using a ConcurrentHashMap allows safe multi-algo (MultiAlgorithm) tracking
-    // where each child algorithm fires its own portfolio snapshot independently.
-    private final Map<String, PortfolioSnapshot> latestPortfolioByAlgo = new ConcurrentHashMap<>();
+
 
     /**
      * Aggregates per-algorithm {@link PortfolioSnapshot} objects and provides a summed,
@@ -106,6 +102,8 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
      * Timestamp of the last recorded PnL sample.
      */
     private volatile long lastPnlSampleTs = 0;
+
+    private PortfolioSnapshot lastPortfolioSnapshot;
 
     /**
      * Overrides the minimum interval between backend PnL samples.
@@ -189,44 +187,28 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
     public void onUpdatePortfolioSnapshot(String algorithmInfo, PortfolioSnapshot portfolioSnapshot) {
         // Store per-algo so MultiAlgorithm setups (each child fires its own snapshot) are
         // all tracked and can be sent as a full set to reconnecting clients via STATE.
-        String key = algorithmInfo != null ? algorithmInfo : "";
-        latestPortfolioByAlgo.put(key, portfolioSnapshot);
+
         // Update the cross-algorithm aggregator.  This keeps the per-instrument totals
         // correct even when different child algorithms trade overlapping instruments.
         portfolioAggregator.update(algorithmInfo, portfolioSnapshot);
-
+        lastPortfolioSnapshot = portfolioAggregator.getAggregatedPortfolioSnapshot();
         // Record a PnL sample for the persistent history (rate-limited).
         // Aggregate across all known child algorithms so the chart reflects the total portfolio.
         long now = currentTimeMs();
         if (now - lastPnlSampleTs >= pnlSampleIntervalMs) {
             lastPnlSampleTs = now;
-            double aggRealized = 0, aggUnrealized = 0, aggTotal = 0;
-            for (PortfolioSnapshot ps : latestPortfolioByAlgo.values()) {
-                aggRealized += ps.realizedPnl;
-                aggUnrealized += ps.unrealizedPnl;
-                aggTotal += ps.totalPnl;
-            }
             Map<String, Object> sample = new LinkedHashMap<>();
             sample.put("ts", now);
-            sample.put("realized", aggRealized);
-            sample.put("unrealized", aggUnrealized);
-            sample.put("total", aggTotal);
+            sample.put("realized", lastPortfolioSnapshot.realizedPnl);
+            sample.put("unrealized", lastPortfolioSnapshot.unrealizedPnl);
+            sample.put("total", lastPortfolioSnapshot.totalPnl);
             pnlHistory.addLast(sample);
             while (pnlHistory.size() > MAX_PNL_HISTORY) pnlHistory.pollFirst();
             server.updatePnlHistory(sanitizeJson(toJsonStringGSON(new ArrayList<>(pnlHistory))));
         }
-        // Use a lightweight DTO – the full PortfolioSnapshot carries huge historical
-        // maps inside every PnlSnapshot which would produce megabyte-sized JSON messages.
-        String json = buildMessage("PORTFOLIO_SNAPSHOT", algorithmInfo, toPortfolioDto(portfolioSnapshot), currentTimeMs());
-        server.broadcastUpdate(json);
 
-        // Also broadcast the complete aggregated portfolio snapshot (all algorithms combined)
-        // This provides clients with a cross-algorithm portfolio view in a single object.
-        // Use algorithmInfo = "AGGREGATED" to distinguish it from per-algorithm snapshots.
-        PortfolioSnapshot aggregatedSnapshot = portfolioAggregator.getAggregatedPortfolioSnapshot();
-        String aggregatedJson = buildMessage("PORTFOLIO_SNAPSHOT", "AGGREGATED",
-                toPortfolioDto(aggregatedSnapshot), currentTimeMs());
-        server.broadcastUpdate(aggregatedJson);
+        String json = buildMessage("PORTFOLIO_SNAPSHOT", "AGGREGATED", toPortfolioDto(lastPortfolioSnapshot), currentTimeMs());
+        server.broadcastUpdate(json);
 
         refreshState();
     }
@@ -473,6 +455,8 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
             for (Map.Entry<String, PnlSnapshot> e : ps.getInstrumentPnlSnapshotMap().entrySet()) {
                 PnlSnapshot s = e.getValue();
                 Map<String, Object> sm = new LinkedHashMap<>();
+                // Include all fields from the PnL snapshot for instrument cards
+                sm.put("instrumentPk", s.getInstrumentPk());
                 sm.put("realizedPnl", s.realizedPnl);
                 sm.put("unrealizedPnl", s.unrealizedPnl);
                 sm.put("totalPnl", s.totalPnl);
@@ -497,25 +481,8 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         cleanupStaleLiveOrders();
 
         Map<String, Object> state = new HashMap<>();
-        if (!latestPortfolioByAlgo.isEmpty()) {
-            if (latestPortfolioByAlgo.size() == 1) {
-                Map.Entry<String, PortfolioSnapshot> entry = latestPortfolioByAlgo.entrySet().iterator().next();
-                if (entry.getKey().isEmpty()) {
-                    // Unnamed single-algo: use the classic "portfolio" key for backward compat
-                    state.put("portfolio", toPortfolioDto(entry.getValue()));
-                } else {
-                    // Named single-algo (e.g. a lone child inside a MultiAlgorithm): use
-                    // portfoliosByAlgo so the frontend always takes the multi-algo path.
-                    state.put("portfoliosByAlgo", Collections.singletonMap(entry.getKey(), toPortfolioDto(entry.getValue())));
-                }
-            } else {
-                // Multiple algos: send all snapshots keyed by algorithmInfo
-                Map<String, Object> byAlgo = new LinkedHashMap<>();
-                for (Map.Entry<String, PortfolioSnapshot> e : latestPortfolioByAlgo.entrySet()) {
-                    byAlgo.put(e.getKey(), toPortfolioDto(e.getValue()));
-                }
-                state.put("portfoliosByAlgo", byAlgo);
-            }
+        if (lastPortfolioSnapshot != null) {
+            state.put("portfolio", toPortfolioDto(lastPortfolioSnapshot));
         }
         if (latestParams != null) {
             state.put("params", latestParams);
