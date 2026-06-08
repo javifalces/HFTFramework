@@ -1958,6 +1958,13 @@ if (urlPort) {
     document.getElementById('port-input').value = window.location.port;
 }
 
+// Initialize backtest speed label to reflect initial slider value (0.5 = 50%)
+const backTestSpeedLabel = document.getElementById('backtest-speed-label');
+if (backTestSpeedLabel) {
+    backTestSpeedLabel.textContent = '50%';
+    backTestSpeedLabel.style.color = 'var(--text)';
+}
+
 /**
  * Checks /api/mode (unauthenticated) to detect backtest / paper-trading mode.
  * In backtest mode no credentials are required, so the login overlay is
