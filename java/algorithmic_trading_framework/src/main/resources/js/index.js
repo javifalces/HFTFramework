@@ -209,7 +209,8 @@ function handleMessage(msg) {
         showLoginOverlay('Session expired – please log in again');
         return;
     }
-    if (msg.algorithmInfo) document.getElementById('algo-info').textContent = msg.algorithmInfo;
+    // Algorithm info display removed from header
+    // if (msg.algorithmInfo) document.getElementById('algo-info').textContent = msg.algorithmInfo;
     appendLog(msg.type, msg.algorithmInfo, msg.data);
 
     switch (msg.type) {
@@ -247,11 +248,16 @@ function handleMessage(msg) {
     }
 }
 
-// ── STATE restoration ─────────────────────────────────────────────────────────
+// ── STATE restoration ─────────────────────────────────────────────────────
 function applyState(msg) {
     if (msg.backtest === true) {
         backtestMode = true;
         hideLoginOverlay();
+        document.documentElement.classList.remove('light-theme');
+    }
+    if (msg.backtest === false) {
+        backtestMode = false;
+        document.documentElement.classList.add('light-theme');
     }
     if (typeof msg.algoRunning === 'boolean') {
         algoRunning = msg.algoRunning;
@@ -724,8 +730,12 @@ async function checkModeAndConnect() {
             if (mode.backtest === true) {
                 backtestMode = true;
                 hideLoginOverlay();
+                document.documentElement.classList.remove('light-theme');
                 connect();
                 return;
+            } else if (mode.backtest === false) {
+                backtestMode = false;
+                document.documentElement.classList.add('light-theme');
             }
         }
     } catch (e) {

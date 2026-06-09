@@ -1,6 +1,9 @@
 // ── Trade sound notifications ─────────────────────────────────────────────────
 let bellEnabled = false;
 
+// ── Backtest mode tracking ────────────────────────────────────────────────────
+let isBacktestMode = false;
+
 function toggleBell() {
     bellEnabled = !bellEnabled;
     const btn = document.getElementById('bell-btn');
@@ -42,6 +45,9 @@ function updateModeBanner(isBacktest, isPaperTrading) {
     if (!banner) return;
 
     const speedControl = document.getElementById('backtest-speed-control');
+
+    // Track the backtest mode globally so other functions can check it
+    isBacktestMode = isBacktest;
 
     if (isBacktest) {
         banner.textContent = '⚠ BACKTEST MODE ⚠';
@@ -836,7 +842,8 @@ function reconnect() {
 
 // ── Message dispatcher ────────────────────────────────────────────────────────
 function handleMessage(msg) {
-    if (msg.algorithmInfo) document.getElementById('algo-info').textContent = msg.algorithmInfo;
+    // Algorithm info display removed from header
+    // if (msg.algorithmInfo) document.getElementById('algo-info').textContent = msg.algorithmInfo;
     appendLog(msg.type, msg.algorithmInfo, msg.data);
 
     switch (msg.type) {
@@ -905,8 +912,13 @@ function applyState(msg) {
         algoRunning = msg.algoRunning;
         updateAlgoToggleBtn();
     }
-    // Update mode banner
+    // Update mode banner and apply theme
     updateModeBanner(msg.backtest, msg.paperTrading);
+    if (msg.backtest === true) {
+        document.documentElement.classList.remove('light-theme');
+    } else if (msg.backtest === false) {
+        document.documentElement.classList.add('light-theme');
+    }
     const s = msg.data;
     if (s) {
         if (s.portfoliosByAlgo) {
@@ -1271,7 +1283,8 @@ function onExecutionReport(msg) {
     updateActiveOrdersFromER(er);
 
     // Toast + sound only for our own fills (CompletelyFilled / PartialFilled).
-    if (TRADE_ER_STATUSES.has(er.executionReportStatus)) {
+    // Skip toast notifications in backtest mode.
+    if (TRADE_ER_STATUSES.has(er.executionReportStatus) && !isBacktestMode) {
         const verb = er.verb || '';
         const isBuy = verb.toLowerCase() === 'buy';
         const isSell = verb.toLowerCase() === 'sell';
@@ -1967,6 +1980,7 @@ async function checkModeAndConnect() {
             if (mode.backtest) {
                 // Backtest mode – show banner immediately, skip login
                 updateModeBanner(true, false);
+                document.documentElement.classList.remove('light-theme');
                 setToken('backtest-mode', true);
                 hideLoginOverlay();
                 connect();
@@ -1975,6 +1989,10 @@ async function checkModeAndConnect() {
             if (mode.paperTrading) {
                 // Paper-trading mode – show banner immediately before login/connect
                 updateModeBanner(false, true);
+                document.documentElement.classList.add('light-theme');
+            } else {
+                // Neither backtest nor paper trading – apply light theme for normal mode
+                document.documentElement.classList.add('light-theme');
             }
         }
     } catch (e) {
@@ -2019,4 +2037,8 @@ setInterval(() => {
         window.addEventListener('resize', renderPnlChart);
     }
 })();
+
+
+
+
 

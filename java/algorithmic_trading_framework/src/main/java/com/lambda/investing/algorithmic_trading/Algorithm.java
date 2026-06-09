@@ -850,6 +850,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
     protected void onFinishedBacktest() {
         if (isBacktest) {
+            algorithmNotifier.notifyObserversOnUpdatePortfolioSnapshot(portfolioManager.getPortfolioSnapshot());
+
             if (saveBacktestOutputTrades) {
                 saveBacktestTrades();
             }
