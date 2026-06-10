@@ -70,6 +70,14 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
      */
     private final MultiAlgoPortfolioAggregator portfolioAggregator = new MultiAlgoPortfolioAggregator();
     private volatile Map<String, Object> latestParams;
+    /**
+     * Parameters per algorithm (algorithmInfo -> parameters map). Used for MultiAlgorithm scenarios.
+     */
+    private final Map<String, Map<String, Object>> paramsByAlgorithm = new ConcurrentHashMap<>();
+    /**
+     * Custom columns per algorithm (algorithmInfo -> custom columns map). Used for MultiAlgorithm scenarios.
+     */
+    private final Map<String, Map<String, Object>> customColumnsByAlgorithm = new ConcurrentHashMap<>();
     private final Map<String, Double> latestCustomColumns = new ConcurrentHashMap<>();
     /** Latest L2 depth snapshot per instrument (used to restore orderbook on reconnect). */
     private final Map<String, Map<String, Object>> latestDepths = new ConcurrentHashMap<>();
@@ -222,6 +230,10 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
     @Override
     public void onUpdateParams(String algorithmInfo, Map<String, Object> newParams) {
         this.latestParams = newParams;
+        // Store parameters per algorithm (MultiAlgorithm support)
+        if (algorithmInfo != null) {
+            paramsByAlgorithm.put(algorithmInfo, newParams);
+        }
         String json = buildMessage("PARAMS", algorithmInfo, newParams, currentTimeMs());
         server.broadcastUpdate(json);
         refreshState();
@@ -367,10 +379,19 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
     @Override
     public void onCustomColumns(long timestamp, String algorithmInfo, String instrumentPk, String key, Double value) {
         latestCustomColumns.put((instrumentPk != null ? instrumentPk + "." : "") + key, value);
+
+        // Store custom column in per-algorithm map for STATE restore
+        if (algorithmInfo != null) {
+            customColumnsByAlgorithm.computeIfAbsent(algorithmInfo, k -> new ConcurrentHashMap<>())
+                    .put((instrumentPk != null ? instrumentPk + "." : "") + key, value);
+        }
+
         Map<String, Object> data = new HashMap<>();
         data.put("instrumentPk", instrumentPk);
         data.put("key", key);
         data.put("value", value);
+        // Include algorithmInfo in the custom column data so the frontend knows which algorithm it came from
+        data.put("algorithmInfo", algorithmInfo);
         String json = buildMessage("CUSTOM_COLUMN", algorithmInfo, data, timestamp);
         server.broadcastUpdate(json);
         refreshState();
@@ -487,8 +508,16 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         if (latestParams != null) {
             state.put("params", latestParams);
         }
+        // Include per-algorithm parameters for MultiAlgorithm scenarios
+        if (!paramsByAlgorithm.isEmpty()) {
+            state.put("paramsByAlgorithm", paramsByAlgorithm);
+        }
         if (!latestCustomColumns.isEmpty()) {
             state.put("customColumns", latestCustomColumns);
+        }
+        // Include per-algorithm custom columns for MultiAlgorithm scenarios
+        if (!customColumnsByAlgorithm.isEmpty()) {
+            state.put("customColumnsByAlgorithm", customColumnsByAlgorithm);
         }
         if (!latestDepths.isEmpty()) {
             state.put("depths", latestDepths);
@@ -508,6 +537,15 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
 
         // Update the /api/portfolio-snapshot endpoint with the latest aggregated portfolio snapshot
         updatePortfolioSnapshotEndpoint();
+
+        // Update the /api/parameters endpoint with the latest parameters
+        updateParametersEndpoint();
+
+        // Update the /api/instruments endpoint with the latest instrument PnL data
+        updateInstrumentsEndpoint();
+
+        // Update the /api/custom-metrics endpoint with the latest custom metrics
+        updateCustomMetricsEndpoint();
     }
 
     /**
@@ -520,6 +558,77 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         PortfolioSnapshot aggregatedSnapshot = portfolioAggregator.getAggregatedPortfolioSnapshot();
         String snapshotJson = sanitizeJson(toJsonStringGSON(toPortfolioDto(aggregatedSnapshot)));
         server.updatePortfolioSnapshot(snapshotJson);
+    }
+
+    /**
+     * Updates the {@code GET /api/parameters} REST endpoint with the latest
+     * parameters from all algorithms.
+     * The endpoint returns both global parameters and per-algorithm parameters.
+     */
+    private void updateParametersEndpoint() {
+        Map<String, Object> paramsData = new LinkedHashMap<>();
+        if (latestParams != null) {
+            paramsData.put("params", latestParams);
+        }
+        if (!paramsByAlgorithm.isEmpty()) {
+            paramsData.put("paramsByAlgorithm", paramsByAlgorithm);
+        }
+        String json = sanitizeJson(toJsonStringGSON(paramsData));
+        server.updateParameters(json);
+    }
+
+    /**
+     * Updates the {@code GET /api/instruments} REST endpoint with the latest
+     * instrument PnL data from all algorithms.
+     * The endpoint returns per-instrument snapshots for displaying in the Instruments tab.
+     */
+    private void updateInstrumentsEndpoint() {
+        if (lastPortfolioSnapshot == null) {
+            server.updateInstruments("{}");
+            return;
+        }
+
+        Map<String, Object> instrumentData = new LinkedHashMap<>();
+        if (lastPortfolioSnapshot.getInstrumentPnlSnapshotMap() != null) {
+            Map<String, Object> instrMap = new LinkedHashMap<>();
+            for (Map.Entry<String, PnlSnapshot> e : lastPortfolioSnapshot.getInstrumentPnlSnapshotMap().entrySet()) {
+                PnlSnapshot s = e.getValue();
+                if (s != null) {
+                    Map<String, Object> sm = new LinkedHashMap<>();
+                    sm.put("instrumentPk", s.getInstrumentPk());
+                    sm.put("realizedPnl", s.realizedPnl);
+                    sm.put("unrealizedPnl", s.unrealizedPnl);
+                    sm.put("totalPnl", s.totalPnl);
+                    sm.put("netPosition", s.netPosition);
+                    sm.put("totalFees", s.totalFees);
+                    sm.put("netInvestment", s.netInvestment);
+                    sm.put("numberOfTrades", s.numberOfTrades != null ? s.numberOfTrades.get() : 0);
+                    sm.put("numberOfAggressorTrades", s.numberOfAggressorTrades != null ? s.numberOfAggressorTrades.get() : 0);
+                    sm.put("numberOfAggressedTrades", s.numberOfAggressedTrades != null ? s.numberOfAggressedTrades.get() : 0);
+                    instrMap.put(e.getKey(), sm);
+                }
+            }
+            instrumentData.put("instrumentPnlSnapshotMap", instrMap);
+        }
+        String json = sanitizeJson(toJsonStringGSON(instrumentData));
+        server.updateInstruments(json);
+    }
+
+    /**
+     * Updates the {@code GET /api/custom-metrics} REST endpoint with the latest
+     * custom metrics from all algorithms.
+     * The endpoint returns both global custom metrics and per-algorithm custom metrics.
+     */
+    private void updateCustomMetricsEndpoint() {
+        Map<String, Object> metricsData = new LinkedHashMap<>();
+        if (!latestCustomColumns.isEmpty()) {
+            metricsData.put("customColumns", latestCustomColumns);
+        }
+        if (!customColumnsByAlgorithm.isEmpty()) {
+            metricsData.put("customColumnsByAlgorithm", customColumnsByAlgorithm);
+        }
+        String json = sanitizeJson(toJsonStringGSON(metricsData));
+        server.updateCustomMetrics(json);
     }
 
     /**

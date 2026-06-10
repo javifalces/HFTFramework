@@ -193,4 +193,19 @@ public class MultiAlgorithm extends Algorithm {
 //        }
 //        return result;
     }
+
+    public void manualStop() {
+        if (algorithms == null) return;
+        for (Algorithm algorithm : algorithms) {
+            algorithm.manualStop();
+        }
+    }
+
+    public void manualStart() {
+        if (algorithms == null) return;
+        for (Algorithm algorithm : algorithms) {
+            algorithm.manualStart();
+        }
+    }
+
 }

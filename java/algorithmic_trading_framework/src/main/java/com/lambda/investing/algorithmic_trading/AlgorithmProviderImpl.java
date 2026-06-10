@@ -65,7 +65,8 @@ public class AlgorithmProviderImpl implements AlgorithmProvider {
 
     /**
      * Parses {@code jsonInput} as a JSON object and applies each key-value pair to
-     * the algorithm's parameter map.  For each entry:
+     * the algorithm's parameter map (or to a specific child algorithm in a MultiAlgorithm).
+     * For each entry:
      * <ul>
      *   <li>If the key does not currently exist in the algorithm's parameters a
      *       warning is printed / logged and the method returns {@code false}.</li>
@@ -76,7 +77,12 @@ public class AlgorithmProviderImpl implements AlgorithmProvider {
      *       with a properly typed value.</li>
      * </ul>
      *
+     * <p>Special handling for MultiAlgorithm: if the JSON includes an "algorithmInfo" field,
+     * the parameter change is applied to the child algorithm with that name instead of
+     * the wrapper MultiAlgorithm.
+     *
      * @param jsonInput a JSON object string, e.g. {@code {"spread":0.002,"levels":3}}
+     * or {@code {"algorithmInfo":"AvellanedaStoikov_test1","midpricePeriodWindow":80}}
      * @return {@code true} if every key-value pair was applied successfully,
      * {@code false} otherwise
      */
@@ -99,9 +105,39 @@ public class AlgorithmProviderImpl implements AlgorithmProvider {
             return false;
         }
 
-        Map<String, Object> currentParams = algorithm.getParameters();
+        // Check if algorithmInfo is specified (for MultiAlgorithm scenarios)
+        String targetAlgorithmInfo = null;
+        if (parsed.containsKey("algorithmInfo")) {
+            targetAlgorithmInfo = parsed.getString("algorithmInfo");
+            parsed.remove("algorithmInfo");  // Remove it from params to process
+        }
+
+        // Determine the target algorithm to update
+        Algorithm targetAlgorithm = algorithm;
+        if (targetAlgorithmInfo != null && algorithm instanceof MultiAlgorithm) {
+            // MultiAlgorithm: find the child algorithm with matching algorithmInfo
+            final String algoNameToFind = targetAlgorithmInfo;  // Make final for lambda
+            MultiAlgorithm multiAlgo = (MultiAlgorithm) algorithm;
+            targetAlgorithm = multiAlgo.getAlgorithms().stream()
+                    .filter(algo -> algoNameToFind.equals(algo.getAlgorithmInfo()))
+                    .findFirst()
+                    .orElse(null);
+
+            if (targetAlgorithm == null) {
+                String msg = String.format(
+                        "changeParameters: child algorithm '%s' not found in MultiAlgorithm '%s'",
+                        targetAlgorithmInfo, algorithm.getAlgorithmInfo());
+                System.out.println("WARNING: " + msg);
+                logger.warn(msg);
+                return false;
+            }
+        }
+
+        Map<String, Object> currentParams = targetAlgorithm.getParameters();
         if (currentParams == null) {
-            String msg = "changeParameters: algorithm has no parameters map initialised";
+            String msg = String.format(
+                    "changeParameters: algorithm '%s' has no parameters map initialised",
+                    targetAlgorithm.getAlgorithmInfo());
             System.out.println("WARNING: " + msg);
             logger.warn(msg);
             return false;
@@ -115,7 +151,7 @@ public class AlgorithmProviderImpl implements AlgorithmProvider {
             if (!currentParams.containsKey(key)) {
                 String msg = String.format(
                         "changeParameters: key '%s' not found in algorithm '%s' parameters – ignoring",
-                        key, algorithm.getAlgorithmInfo());
+                        key, targetAlgorithm.getAlgorithmInfo());
                 System.out.println("WARNING: " + msg);
                 logger.warn(msg);
                 allOk = false;
@@ -130,9 +166,9 @@ public class AlgorithmProviderImpl implements AlgorithmProvider {
                 continue;
             }
 
-            algorithm.setParameter(key, castValue);
+            targetAlgorithm.setParameter(key, castValue);
             logger.info("changeParameters: updated '{}' = {} (algo: {})", key, castValue,
-                    algorithm.getAlgorithmInfo());
+                    targetAlgorithm.getAlgorithmInfo());
         }
 
         return allOk;

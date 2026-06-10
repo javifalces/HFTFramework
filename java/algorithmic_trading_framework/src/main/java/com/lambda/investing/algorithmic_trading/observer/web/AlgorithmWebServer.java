@@ -48,6 +48,10 @@ import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
  *   <li>{@code GET /api/execution-reports}   – returns the last N execution reports as a JSON array</li>
  *   <li>{@code GET /api/order-requests}      – returns the last N order requests as a JSON array</li>
  *   <li>{@code GET /api/portfolio-snapshot}  – returns the latest portfolio snapshot as JSON</li>
+ *   <li>{@code GET /api/active-orders}       – returns the currently active orders as a JSON array</li>
+ *   <li>{@code GET /api/parameters}          – returns the last known parameters as JSON</li>
+ *   <li>{@code GET /api/instruments}         – returns the last known instruments/PnL data as JSON</li>
+ *   <li>{@code GET /api/custom-metrics}      – returns the last known custom metrics as JSON</li>
  *   <li>{@code GET /ws}                      – WebSocket upgrade; pushes typed JSON update envelopes</li>
  * </ul>
  */
@@ -83,6 +87,21 @@ public class AlgorithmWebServer {
      * in response to incoming execution reports.
      */
     private volatile String activeOrdersJson = "[]";
+    /**
+     * Latest parameters snapshot – returned via GET /api/parameters.
+     * Contains both global and per-algorithm parameters.
+     */
+    private volatile String parametersJson = "{}";
+    /**
+     * Latest instruments snapshot – returned via GET /api/instruments.
+     * Contains instrument PnL data from the portfolio snapshot.
+     */
+    private volatile String instrumentsJson = "{}";
+    /**
+     * Latest custom metrics snapshot – returned via GET /api/custom-metrics.
+     * Contains both global and per-algorithm custom metrics.
+     */
+    private volatile String customMetricsJson = "{}";
     /** Optional Grafana base URL included in STATE messages (empty = Grafana tab hidden). */
     private volatile String grafanaUrl = "";
     /**
@@ -229,6 +248,36 @@ public class AlgorithmWebServer {
      */
     public void updateActiveOrders(String ordersJson) {
         this.activeOrdersJson = (ordersJson != null) ? ordersJson : "[]";
+    }
+
+    /**
+     * Updates the latest parameters (global + per-algorithm) returned by {@code GET /api/parameters}.
+     * Called by {@link WebAlgorithmObserver} whenever parameters change.
+     *
+     * @param parametersJson JSON object with global params and paramsByAlgorithm
+     */
+    public void updateParameters(String parametersJson) {
+        this.parametersJson = (parametersJson != null) ? parametersJson : "{}";
+    }
+
+    /**
+     * Updates the latest instruments snapshot returned by {@code GET /api/instruments}.
+     * Called by {@link WebAlgorithmObserver} whenever the portfolio snapshot changes.
+     *
+     * @param instrumentsJson JSON object with instrument PnL data
+     */
+    public void updateInstruments(String instrumentsJson) {
+        this.instrumentsJson = (instrumentsJson != null) ? instrumentsJson : "{}";
+    }
+
+    /**
+     * Updates the latest custom metrics snapshot returned by {@code GET /api/custom-metrics}.
+     * Called by {@link WebAlgorithmObserver} whenever custom metrics change.
+     *
+     * @param customMetricsJson JSON object with global custom metrics and per-algorithm metrics
+     */
+    public void updateCustomMetrics(String customMetricsJson) {
+        this.customMetricsJson = (customMetricsJson != null) ? customMetricsJson : "{}";
     }
 
     /**
@@ -432,6 +481,39 @@ public class AlgorithmWebServer {
                 } else {
                     response = new DefaultFullHttpResponse(HTTP_1_1, OK,
                             Unpooled.copiedBuffer(activeOrdersJson, CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                }
+            } else if ("/api/parameters".equals(uri)) {
+                String token = getAuthToken(req, query);
+                if (!isValidToken(token)) {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, UNAUTHORIZED,
+                            Unpooled.copiedBuffer("{\"error\":\"Unauthorized\"}", CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                } else {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                            Unpooled.copiedBuffer(parametersJson, CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                }
+            } else if ("/api/instruments".equals(uri)) {
+                String token = getAuthToken(req, query);
+                if (!isValidToken(token)) {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, UNAUTHORIZED,
+                            Unpooled.copiedBuffer("{\"error\":\"Unauthorized\"}", CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                } else {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                            Unpooled.copiedBuffer(instrumentsJson, CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                }
+            } else if ("/api/custom-metrics".equals(uri)) {
+                String token = getAuthToken(req, query);
+                if (!isValidToken(token)) {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, UNAUTHORIZED,
+                            Unpooled.copiedBuffer("{\"error\":\"Unauthorized\"}", CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                } else {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                            Unpooled.copiedBuffer(customMetricsJson, CharsetUtil.UTF_8));
                     response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
                 }
             } else {

@@ -218,12 +218,30 @@
             </div>
         </div>
         <div class="card">
-            <h2>Parameters</h2>
+            <h2 style="display:flex;align-items:center;justify-content:space-between">
+                Parameters
+                <div id="algorithm-selector-wrapper" style="display:none;align-items:center;gap:6px">
+                    <label for="algorithm-selector"
+                           style="font-size:11px;color:var(--muted);font-weight:normal;text-transform:none;letter-spacing:0">Algorithm:</label>
+                    <select id="algorithm-selector"
+                            style="padding:4px 8px;font-size:11px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:3px"
+                            onchange="onAlgorithmSelectorChange()"></select>
+                </div>
+            </h2>
             <div id="params-container"><span
                     style="color:var(--muted);font-size:12px">No parameters received yet.</span></div>
         </div>
         <div class="card">
-            <h2>Custom Metrics</h2>
+            <h2 style="display:flex;align-items:center;justify-content:space-between">
+                Custom Metrics
+                <div id="custom-metrics-selector-wrapper" style="display:none;align-items:center;gap:6px">
+                    <label for="custom-metrics-selector"
+                           style="font-size:11px;color:var(--muted);font-weight:normal;text-transform:none;letter-spacing:0">Algorithm:</label>
+                    <select id="custom-metrics-selector"
+                            style="padding:4px 8px;font-size:11px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:3px"
+                            onchange="onCustomMetricsSelectorChange()"></select>
+                </div>
+            </h2>
             <div class="kv-grid" id="custom-kv"><span
                     style="color:var(--muted);font-size:12px">No custom metrics yet.</span></div>
         </div>

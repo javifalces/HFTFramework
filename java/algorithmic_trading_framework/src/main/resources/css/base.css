@@ -13,18 +13,18 @@
     --font: "Segoe UI", system-ui, sans-serif;
 }
 
-/* ── Light theme ─────────────────────────────────────────────────────────── */
+/* ── Light theme ─────────────────────────────────────────────────────── */
 :root.light-theme {
-    --bg: #e8eaed;
-    --surface: #f0f2f5;
-    --border: #d0d0d0;
-    --accent: #3b82f6;
-    --blue: #3b82f6;
-    --green: #10b981;
-    --red: #ef4444;
-    --yellow: #f59e0b;
-    --text: #2d3436;
-    --muted: #757575;
+    --bg: #d4d9de;
+    --surface: #e3e8ed;
+    --border: #b0b8c1;
+    --accent: #2563eb;
+    --blue: #2563eb;
+    --green: #059669;
+    --red: #dc2626;
+    --yellow: #d97706;
+    --text: #1a1d23;
+    --muted: #4d515a;
 }
 
 /* ── Reset ───────────────────────────────────────────────────────────────── */

@@ -436,6 +436,110 @@ async function fetchPortfolioSnapshot() {
 }
 
 /**
+ * Fetches the latest parameters from the backend and updates the Parameters card.
+ * Handles both global parameters and per-algorithm parameters.
+ */
+async function fetchParameters() {
+    const token = getToken();
+    if (!token) return;
+    try {
+        const res = await fetch(getApiBase() + '/api/parameters', {
+            headers: {'Authorization': 'Bearer ' + token}
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data) return;
+
+        // Update global parameters
+        if (data.params) {
+            Object.assign(paramsState, data.params);
+        }
+
+        // Update per-algorithm parameters
+        if (data.paramsByAlgorithm) {
+            Object.keys(paramsByAlgorithm).forEach(k => delete paramsByAlgorithm[k]);
+            Object.entries(data.paramsByAlgorithm).forEach(([algoName, params]) => {
+                paramsByAlgorithm[algoName] = params;
+            });
+            updateAlgorithmSelector();
+        }
+
+        renderParameterCards();
+    } catch (e) {
+        console.debug('fetchParameters error:', e);
+    }
+}
+
+/**
+ * Fetches the latest instrument data from the backend and updates the Instruments card.
+ */
+async function fetchInstruments() {
+    const token = getToken();
+    if (!token) return;
+    try {
+        const res = await fetch(getApiBase() + '/api/instruments', {
+            headers: {'Authorization': 'Bearer ' + token}
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data) return;
+
+        // Extract instrument snapshots
+        const instruments = data.instrumentPnlSnapshotMap || {};
+        const timestamp = Date.now();
+
+        // Update the latest instrument snapshot map
+        Object.entries(instruments).forEach(([instr, s]) => {
+            if (s) latestInstrumentSnapshotMap[instr] = s;
+        });
+
+        // Render instrument cards
+        scheduleInstrumentCardsRender();
+    } catch (e) {
+        console.debug('fetchInstruments error:', e);
+    }
+}
+
+/**
+ * Fetches the latest custom metrics from the backend and updates the Custom Metrics card.
+ * Handles both global custom metrics and per-algorithm metrics.
+ */
+async function fetchCustomMetrics() {
+    const token = getToken();
+    if (!token) return;
+    try {
+        const res = await fetch(getApiBase() + '/api/custom-metrics', {
+            headers: {'Authorization': 'Bearer ' + token}
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data) return;
+
+        // Update global custom columns
+        if (data.customColumns) {
+            Object.entries(data.customColumns).forEach(([k, v]) => {
+                customState[k] = v;
+            });
+        }
+
+        // Update per-algorithm custom columns
+        if (data.customColumnsByAlgorithm) {
+            Object.keys(customMetricsByAlgorithm).forEach(k => delete customMetricsByAlgorithm[k]);
+            Object.entries(data.customColumnsByAlgorithm).forEach(([algoName, cols]) => {
+                if (cols) {
+                    customMetricsByAlgorithm[algoName] = cols;
+                }
+            });
+            updateCustomMetricsSelector();
+        }
+
+        renderCustomMetricsCards();
+    } catch (e) {
+        console.debug('fetchCustomMetrics error:', e);
+    }
+}
+
+/**
  * Appends a live PnL entry during the current session (rate-limited to pnlSampleIntervalMs).
  * Keeps the chart growing in real-time between page refreshes.
  */
@@ -601,24 +705,18 @@ let obPage = 0;
 
 const customState = {};
 const paramsState = {};
-/** Map<instrument, Map<clientOrderId, {verb,price,quantity,quantityFill}>> */
+/**
+ * Parameters per algorithm keyed by algorithmInfo.
+ * Used in MultiAlgorithm setups to store and display parameters for different algorithms.
+ */
+const paramsByAlgorithm = {};
+/**
+ * Currently selected algorithm for viewing/editing parameters.
+ * In single-algorithm mode, defaults to null (show all params).
+ */
+let selectedAlgorithm = null;
+/** Map<clientOrderId, {verb,price,quantity,quantityFill}>> */
 const activeOrdersMap = {};
-/**
- * Per-algorithm portfolio snapshots keyed by algorithmInfo.
- * Aggregated to produce the Portfolio card totals and the Instruments cards in a
- * MultiAlgorithm setup where each child emits only its own single-instrument snapshot.
- */
-const portfolioByAlgo = {};
-/**
- * Latest per-instrument PnL snapshot keyed by instrumentPk.
- * Updated from both PORTFOLIO_SNAPSHOT (instrumentPnlSnapshotMap) and PNL_SNAPSHOT messages.
- * Used to render the Instruments card mini-cards and to aggregate portfolio totals.
- */
-const latestInstrumentSnapshotMap = {};
-/**
- * Debounce timer for renderInstrumentCards to prevent blinking from rapid updates.
- */
-let renderInstrumentCardsTimer = null;
 
 // ── Table pagination state ────────────────────────────────────────────────────
 /** All order-request rows stored latest-first as innerHTML strings */
@@ -887,7 +985,7 @@ function handleMessage(msg) {
             // Order requests are no longer displayed; silently ignored
             break;
         case 'PARAMS':
-            updateParams(msg.data);
+            updateParams(msg.data, msg.algorithmInfo);
             break;
         case 'CUSTOM_COLUMN':
             updateCustom(msg.data);
@@ -930,11 +1028,33 @@ function applyState(msg) {
             updatePortfolio(s.portfolio);
         }
         if (s.params) updateParams(s.params);
+        // Handle per-algorithm parameters (MultiAlgorithm support)
+        if (s.paramsByAlgorithm) {
+            Object.keys(paramsByAlgorithm).forEach(k => delete paramsByAlgorithm[k]);
+            Object.entries(s.paramsByAlgorithm).forEach(([algoName, params]) => {
+                paramsByAlgorithm[algoName] = params;
+            });
+            updateAlgorithmSelector();
+            renderParameterCards();
+        }
         if (s.customColumns) Object.entries(s.customColumns).forEach(([k, v]) => {
             const p = k.split('.');
             const key = p.pop();
             updateCustom({instrumentPk: p.join('.') || null, key, value: v});
         });
+        // Handle per-algorithm custom columns (MultiAlgorithm support)
+        if (s.customColumnsByAlgorithm) {
+            Object.keys(customMetricsByAlgorithm).forEach(k => delete customMetricsByAlgorithm[k]);
+            Object.entries(s.customColumnsByAlgorithm).forEach(([algoName, cols]) => {
+                if (cols) {
+                    Object.entries(cols).forEach(([k, v]) => {
+                        const p = k.split('.');
+                        const key = p.pop();
+                        updateCustom({instrumentPk: p.join('.') || null, key, value: v, algorithmInfo: algoName});
+                    });
+                }
+            });
+        }
         if (s.depths) Object.entries(s.depths).forEach(([instr, d]) => {
             depthMap[instr] = d;
             ensureInstrumentKnown(instr);
@@ -964,6 +1084,10 @@ function applyState(msg) {
     fetchActiveOrders();
     fetchExecutionReports();
     fetchPortfolioSnapshot();
+    // Fetch parameters, instruments, and custom metrics from new endpoints
+    fetchParameters();
+    fetchInstruments();
+    fetchCustomMetrics();
 }
 
 // ── Portfolio / instruments ───────────────────────────────────────────────────
@@ -1457,21 +1581,124 @@ function updateActiveOrdersFromER(er) {
 }
 
 // ── Parameters & custom metrics ───────────────────────────────────────────────
-function updateParams(params) {
+/**
+ * Custom metrics per algorithm: { algorithmInfo: { key: value, ... } }
+ * Used to track and display custom metrics from different algorithms.
+ */
+const customMetricsByAlgorithm = {};
+/**
+ * Currently selected algorithm for viewing custom metrics.
+ * In single-algorithm mode, defaults to null (show all metrics).
+ */
+let selectedCustomMetricsAlgorithm = null;
+
+/**
+ * Updates parameters from a PARAMS message. In MultiAlgorithm scenarios,
+ * parameters are stored per-algorithm and a selector is shown.
+ * @param {Object} params - The parameters object from the message
+ * @param {string} algorithmInfo - Optional algorithm identifier from the message
+ */
+function updateParams(params, algorithmInfo) {
     if (!params) return;
+
+    // Store parameters by algorithm if algorithmInfo is provided
+    if (algorithmInfo) {
+        paramsByAlgorithm[algorithmInfo] = params;
+        updateAlgorithmSelector();
+    } else {
+        // Single-algorithm mode: store in paramsState directly
+        Object.assign(paramsState, params);
+    }
+
+    // Render parameters for the currently selected algorithm (or all if no selector)
+    renderParameterCards();
+}
+
+/**
+ * Updates the algorithm selector dropdown with all available algorithms.
+ * Shows/hides the selector based on whether there are multiple algorithms.
+ */
+function updateAlgorithmSelector() {
+    const wrapper = document.getElementById('algorithm-selector-wrapper');
+    const selector = document.getElementById('algorithm-selector');
+    if (!wrapper || !selector) return;
+
+    const algoList = Object.keys(paramsByAlgorithm);
+
+    // Show selector only if there are multiple algorithms
+    if (algoList.length > 1) {
+        wrapper.style.display = 'flex';
+
+        // Preserve current selection if it still exists
+        const currentValue = selector.value;
+        selector.innerHTML = '';
+
+        algoList.sort().forEach(algo => {
+            const option = document.createElement('option');
+            option.value = algo;
+            option.textContent = algo;
+            selector.appendChild(option);
+        });
+
+        // Restore previous selection or default to first algorithm
+        if (algoList.includes(currentValue)) {
+            selector.value = currentValue;
+        } else {
+            selector.value = algoList[0];
+            selectedAlgorithm = algoList[0];
+        }
+    } else {
+        wrapper.style.display = 'none';
+        selectedAlgorithm = null;
+    }
+}
+
+/**
+ * Handles algorithm selector change event.
+ * Updates selectedAlgorithm and re-renders the parameters card.
+ */
+function onAlgorithmSelectorChange() {
+    const selector = document.getElementById('algorithm-selector');
+    if (selector) {
+        selectedAlgorithm = selector.value || null;
+        renderParameterCards();
+    }
+}
+
+/**
+ * Renders the parameters card based on the currently selected algorithm.
+ * In single-algorithm mode, displays all parameters.
+ * In multi-algorithm mode, displays only the selected algorithm's parameters.
+ */
+function renderParameterCards() {
     const c = document.getElementById('params-container');
     if (!c) return;
-    const e = Object.entries(params);
-    if (!e.length) {
-        c.innerHTML = '<span style="color:var(--muted);font-size:12px">No parameters yet.</span>';
+
+    // Determine which parameters to display
+    let params;
+    if (selectedAlgorithm && paramsByAlgorithm[selectedAlgorithm]) {
+        params = paramsByAlgorithm[selectedAlgorithm];
+    } else if (Object.keys(paramsState).length > 0) {
+        params = paramsState;
+    } else {
+        c.innerHTML = '<span style="color:var(--muted);font-size:12px">No parameters received yet.</span>';
         return;
     }
+
+    const e = Object.entries(params);
+    if (!e.length) {
+        c.innerHTML = '<span style="color:var(--muted);font-size:12px">No parameters for this algorithm.</span>';
+        return;
+    }
+
     if (c.querySelector('span')) c.innerHTML = '';
+
     e.forEach(([k, v]) => {
-        paramsState[k] = String(v);
         const sid = safeParamId(k);
         let row = document.getElementById(sid);
+
         if (!row) {
+            // Create new parameter row
             row = document.createElement('div');
             row.className = 'param-row';
             row.id = sid;
@@ -1484,9 +1711,13 @@ function updateParams(params) {
             input.className = 'param-input';
             input.type = 'text';
             input.value = String(v);
+            input.dataset.paramKey = k;
+            input.dataset.algorithmInfo = selectedAlgorithm || '';
+
             input.addEventListener('input', function () {
                 const btn = this.closest('.param-row').querySelector('.param-update-btn');
-                if (this.value !== paramsState[k]) {
+                const originalValue = paramsByAlgorithm[selectedAlgorithm]?.[k] ?? paramsState[k];
+                if (this.value !== String(originalValue)) {
                     this.classList.add('dirty');
                     btn.classList.add('visible');
                     btn.classList.remove('success', 'error');
@@ -1510,10 +1741,11 @@ function updateParams(params) {
             row.appendChild(btn);
             c.appendChild(row);
         } else {
+            // Update existing parameter row
             const input = row.querySelector('.param-input');
             if (input && !input.classList.contains('dirty')) {
                 input.value = String(v);
-                paramsState[k] = String(v);
+                input.dataset.algorithmInfo = selectedAlgorithm || '';
             }
         }
     });
@@ -1522,10 +1754,15 @@ function updateParams(params) {
 async function changeParameter(key, value, btn) {
     const token = getToken();
     try {
+        const payload = {[key]: value};
+        // Include algorithm info if a specific algorithm is selected
+        if (selectedAlgorithm) {
+            payload.algorithmInfo = selectedAlgorithm;
+        }
         const res = await fetch(getApiBase() + '/api/algo/change-parameter', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
-            body: JSON.stringify({[key]: value})
+            body: JSON.stringify(payload)
         });
         const data = await res.json().catch(() => ({}));
         if (data.success) {
@@ -1533,7 +1770,14 @@ async function changeParameter(key, value, btn) {
             btn.classList.add('success');
             btn.classList.remove('error');
             btn.closest('.param-row').querySelector('.param-input').classList.remove('dirty');
-            paramsState[key] = value;
+
+            // Update the stored parameters
+            if (selectedAlgorithm && paramsByAlgorithm[selectedAlgorithm]) {
+                paramsByAlgorithm[selectedAlgorithm][key] = value;
+            } else {
+                paramsState[key] = value;
+            }
+
             setTimeout(() => {
                 btn.classList.remove('success', 'visible');
                 btn.textContent = 'Update';
@@ -1553,13 +1797,129 @@ async function changeParameter(key, value, btn) {
 function updateCustom(data) {
     if (!data) return;
     const key = (data.instrumentPk ? data.instrumentPk + '.' : '') + (data.key || '');
+    const algorithmInfo = data.algorithmInfo || 'UNKNOWN';
+
+    // Store custom metric in legacy format for compatibility
     customState[key] = data.value;
+
+    // Also store per-algorithm for filtering
+    if (!customMetricsByAlgorithm[algorithmInfo]) {
+        customMetricsByAlgorithm[algorithmInfo] = {};
+    }
+    customMetricsByAlgorithm[algorithmInfo][key] = data.value;
+
+    // Update the dropdown and render
+    updateCustomMetricsSelector();
+    renderCustomMetricsCards();
+}
+
+/**
+ * Updates the custom metrics algorithm selector dropdown with all available algorithms.
+ * Shows/hides the selector based on whether there are multiple algorithms.
+ */
+function updateCustomMetricsSelector() {
+    const wrapper = document.getElementById('custom-metrics-selector-wrapper');
+    const selector = document.getElementById('custom-metrics-selector');
+    if (!wrapper || !selector) return;
+
+    const algoList = Object.keys(customMetricsByAlgorithm);
+
+    // Show selector only if there are multiple algorithms
+    if (algoList.length > 1) {
+        wrapper.style.display = 'flex';
+
+        // Preserve current selection if it still exists
+        const currentValue = selector.value;
+        selector.innerHTML = '';
+
+        // Add "All" option
+        const allOption = document.createElement('option');
+        allOption.value = '';
+        allOption.textContent = '▼ All Algorithms';
+        selector.appendChild(allOption);
+
+        algoList.sort().forEach(algo => {
+            const option = document.createElement('option');
+            option.value = algo;
+            option.textContent = algo;
+            selector.appendChild(option);
+        });
+
+        // Restore previous selection or default to "All"
+        if (algoList.includes(currentValue)) {
+            selector.value = currentValue;
+        } else {
+            selector.value = '';
+            selectedCustomMetricsAlgorithm = null;
+        }
+    } else {
+        wrapper.style.display = 'none';
+        selectedCustomMetricsAlgorithm = null;
+    }
+}
+
+/**
+ * Handles custom metrics algorithm selector change event.
+ * Updates selectedCustomMetricsAlgorithm and re-renders the metrics card.
+ */
+function onCustomMetricsSelectorChange() {
+    const selector = document.getElementById('custom-metrics-selector');
+    if (selector) {
+        selectedCustomMetricsAlgorithm = selector.value || null;
+        renderCustomMetricsCards();
+    }
+}
+
+/**
+ * Renders the custom metrics cards based on the currently selected algorithm.
+ * In single-algorithm mode, displays all metrics.
+ * In multi-algorithm mode, displays only the selected algorithm's metrics or all if selector is empty.
+ */
+function renderCustomMetricsCards() {
     const c = document.getElementById('custom-kv');
     if (!c) return;
+
+    // Determine which metrics to display
+    let metricsToDisplay = {};
+    if (selectedCustomMetricsAlgorithm && customMetricsByAlgorithm[selectedCustomMetricsAlgorithm]) {
+        // Show only selected algorithm's metrics
+        metricsToDisplay = customMetricsByAlgorithm[selectedCustomMetricsAlgorithm];
+    } else if (Object.keys(customMetricsByAlgorithm).length === 1) {
+        // Single algorithm: show its metrics
+        const singleAlgo = Object.keys(customMetricsByAlgorithm)[0];
+        metricsToDisplay = customMetricsByAlgorithm[singleAlgo];
+    } else if (selectedCustomMetricsAlgorithm === null && Object.keys(customMetricsByAlgorithm).length > 1) {
+        // Multi-algorithm view: show all metrics with algorithm labels
+        metricsToDisplay = null; // Special case handled below
+    }
+
     c.innerHTML = '';
-    const e = Object.entries(customState);
-    if (!e.length) {
+
+    // If no metrics at all, show placeholder
+    if (Object.keys(customMetricsByAlgorithm).length === 0) {
         c.innerHTML = '<span style="color:var(--muted);font-size:12px">No metrics yet.</span>';
+        return;
+    }
+
+    // Handle multi-algorithm view (show all with labels)
+    if (metricsToDisplay === null) {
+        const algoList = Object.keys(customMetricsByAlgorithm).sort();
+        algoList.forEach(algo => {
+            const algoMetrics = customMetricsByAlgorithm[algo];
+            Object.entries(algoMetrics).forEach(([k, v]) => {
+                const d = document.createElement('div');
+                d.className = 'kv';
+                d.innerHTML = `<div class="label">${k}<br><small style="color:var(--muted);font-size:10px">[${algo}]</small></div><div class="value ${colorClass(v)}">${fmt(v)}</div>`;
+                c.appendChild(d);
+            });
+        });
+        return;
+    }
+
+    // Handle single algorithm view
+    const e = Object.entries(metricsToDisplay);
+    if (!e.length) {
+        c.innerHTML = '<span style="color:var(--muted);font-size:12px">No metrics for this algorithm.</span>';
         return;
     }
     e.forEach(([k, v]) => {
