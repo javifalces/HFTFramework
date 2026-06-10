@@ -19,7 +19,6 @@ public class QuoteManager implements ExecutionReportListener, Runnable {
     private static boolean CHECK_PENDING_ORDERS_QUOTING = false;
 
     private static int MAX_LIMIT_WAITING_ER = 5;
-    private static boolean UPDATE_QUOTE_BUFFER_THREAD = false;//if true will be update timely on a different thread
 
     Logger logger = LogManager.getLogger(QuoteManager.class);
     private Algorithm algorithm;
@@ -57,13 +56,6 @@ public class QuoteManager implements ExecutionReportListener, Runnable {
         this.instrument = instrument;
         this.bidQuoteSideManager = new QuoteSideManager(this.algorithm, this.instrument, Verb.Buy);
         this.askQuoteSideManager = new QuoteSideManager(this.algorithm, this.instrument, Verb.Sell);
-
-        if (UPDATE_QUOTE_BUFFER_THREAD) {
-            quoteThread = new Thread(this, "quoteManager");
-            quoteThread.setPriority(Thread.MIN_PRIORITY);
-            quoteThread.start();
-        }
-
     }
 
     public Queue<String> getLastClOrdIdsSent() {
@@ -80,12 +72,10 @@ public class QuoteManager implements ExecutionReportListener, Runnable {
 
     public void quoteRequest(QuoteRequest quoteRequest) throws LambdaTradingException {
         this.lastQuoteRequest = quoteRequest;
-        if (!UPDATE_QUOTE_BUFFER_THREAD) {
-            try {
-                updateQuote();
-            } catch (Exception e) {
-                logger.error("quoteRequest error", e);
-            }
+        try {
+            updateQuote();
+        } catch (Exception e) {
+            logger.error("quoteRequest error", e);
         }
     }
 
