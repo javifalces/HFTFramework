@@ -15,16 +15,16 @@
 
 /* ── Light theme ─────────────────────────────────────────────────────────── */
 :root.light-theme {
-    --bg: #f9fafb;
-    --surface: #ffffff;
-    --border: #e5e7eb;
+    --bg: #e8eaed;
+    --surface: #f0f2f5;
+    --border: #d0d0d0;
     --accent: #3b82f6;
     --blue: #3b82f6;
     --green: #10b981;
     --red: #ef4444;
     --yellow: #f59e0b;
-    --text: #1f2937;
-    --muted: #6b7280;
+    --text: #2d3436;
+    --muted: #757575;
 }
 
 /* ── Reset ───────────────────────────────────────────────────────────────── */

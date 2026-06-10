@@ -26,7 +26,7 @@ public class Trade extends CSVable implements Cloneable {
 
     private double quantity, price = DEFAULT_VALUE;
     private String algorithmInfo;//just for backtesting
-    private Verb verb;
+    private Verb verb;//a buyer here is lifting the ask , a seller is hitting the bid
     private long timeToNextUpdateMs = Long.MIN_VALUE;
     private static TradePool TRADE_POOL = new TradePool();
 

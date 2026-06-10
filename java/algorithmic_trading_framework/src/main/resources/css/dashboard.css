@@ -36,6 +36,10 @@
     padding: 4px 10px;
 }
 
+#backtest-speed-control.hidden {
+    display: none !important;
+}
+
 #backtest-speed-slider {
     -webkit-appearance: none;
     appearance: none;
