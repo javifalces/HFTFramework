@@ -24,8 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.regex.Pattern;
 
-import static com.lambda.investing.model.Util.GSON;
-import static com.lambda.investing.model.Util.toJsonStringGSON;
+import static com.lambda.investing.model.Util.*;
 
 /**
  * {@link AlgorithmObserver} implementation that starts an embedded HTTP + WebSocket
@@ -212,7 +211,7 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
             sample.put("total", lastPortfolioSnapshot.totalPnl);
             pnlHistory.addLast(sample);
             while (pnlHistory.size() > MAX_PNL_HISTORY) pnlHistory.pollFirst();
-            server.updatePnlHistory(sanitizeJson(toJsonStringGSON(new ArrayList<>(pnlHistory))));
+            server.updatePnlHistory(sanitizeJson(toJsonString(new ArrayList<>(pnlHistory))));
         }
 
         String json = buildMessage("PORTFOLIO_SNAPSHOT", "AGGREGATED", toPortfolioDto(lastPortfolioSnapshot), currentTimeMs());
@@ -289,7 +288,7 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
 
         erHistory.addLast(entry);
         while (erHistory.size() > MAX_ER_HISTORY) erHistory.pollFirst();
-        server.updateErHistory(sanitizeJson(toJsonStringGSON(new ArrayList<>(erHistory))));
+        server.updateErHistory(sanitizeJson(toJsonString(new ArrayList<>(erHistory))));
     }
 
     /**
@@ -371,7 +370,7 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
                 allOrders.add(order);
             }
         }
-        String json = sanitizeJson(toJsonStringGSON(allOrders));
+        String json = sanitizeJson(toJsonString(allOrders));
         server.updateActiveOrders(json);
         server.broadcastUpdate(buildMessage("ACTIVE_ORDERS", null, allOrders, currentTimeMs()));
     }
@@ -430,7 +429,7 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         if (algorithmInfo != null) {
             sb.append(",\"algorithmInfo\":").append(GSON.toJson(algorithmInfo));
         }
-        sb.append(",\"data\":").append(toJsonStringGSON(data));
+        sb.append(",\"data\":").append(toJsonString(data));
         sb.append("}");
         return sanitizeJson(sb.toString());
     }
@@ -533,7 +532,7 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         if (!activeOrdersDto.isEmpty()) {
             state.put("activeOrders", activeOrdersDto);
         }
-        server.updateState(sanitizeJson(toJsonStringGSON(state)));
+        server.updateState(sanitizeJson(toJsonString(state)));
 
         // Update the /api/portfolio-snapshot endpoint with the latest aggregated portfolio snapshot
         updatePortfolioSnapshotEndpoint();
@@ -556,7 +555,7 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
      */
     private void updatePortfolioSnapshotEndpoint() {
         PortfolioSnapshot aggregatedSnapshot = portfolioAggregator.getAggregatedPortfolioSnapshot();
-        String snapshotJson = sanitizeJson(toJsonStringGSON(toPortfolioDto(aggregatedSnapshot)));
+        String snapshotJson = sanitizeJson(toJsonString(toPortfolioDto(aggregatedSnapshot)));
         server.updatePortfolioSnapshot(snapshotJson);
     }
 
@@ -573,7 +572,7 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         if (!paramsByAlgorithm.isEmpty()) {
             paramsData.put("paramsByAlgorithm", paramsByAlgorithm);
         }
-        String json = sanitizeJson(toJsonStringGSON(paramsData));
+        String json = sanitizeJson(toJsonString(paramsData));
         server.updateParameters(json);
     }
 
@@ -610,7 +609,7 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
             }
             instrumentData.put("instrumentPnlSnapshotMap", instrMap);
         }
-        String json = sanitizeJson(toJsonStringGSON(instrumentData));
+        String json = sanitizeJson(toJsonString(instrumentData));
         server.updateInstruments(json);
     }
 
@@ -627,7 +626,7 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         if (!customColumnsByAlgorithm.isEmpty()) {
             metricsData.put("customColumnsByAlgorithm", customColumnsByAlgorithm);
         }
-        String json = sanitizeJson(toJsonStringGSON(metricsData));
+        String json = sanitizeJson(toJsonString(metricsData));
         server.updateCustomMetrics(json);
     }
 

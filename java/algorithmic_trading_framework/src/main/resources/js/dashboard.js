@@ -695,6 +695,7 @@ function renderPnlChart() {
 // ── Runtime state ─────────────────────────────────────────────────────────────
 let ws = null;
 let reconnectTimer = null;
+let renderInstrumentCardsTimer = null;
 /** Map<instrument, depthSnapshot> */
 const depthMap = {};
 /** Map<instrument, Array<tradeRow>> – latest trades per instrument */
@@ -711,12 +712,18 @@ const paramsState = {};
  */
 const paramsByAlgorithm = {};
 /**
+ * Portfolio snapshots per algorithm. Used for aggregating multi-algorithm portfolio views.
+ */
+const portfolioByAlgo = {};
+/**
  * Currently selected algorithm for viewing/editing parameters.
  * In single-algorithm mode, defaults to null (show all params).
  */
 let selectedAlgorithm = null;
 /** Map<clientOrderId, {verb,price,quantity,quantityFill}>> */
 const activeOrdersMap = {};
+/** Map<instrument, PnlSnapshot> – latest instrument snapshots for rendering cards */
+const latestInstrumentSnapshotMap = {};
 
 // ── Table pagination state ────────────────────────────────────────────────────
 /** All order-request rows stored latest-first as innerHTML strings */
@@ -1111,7 +1118,239 @@ function scheduleInstrumentCardsRender() {
 }
 
 /**
- * Renders the Instruments card as a grid of per-instrument snapshot mini-cards
+ * Toggles the inline orderbook view for an instrument within the instruments card
+ * @param {string} instr - The instrument to show/hide the orderbook for
+ */
+function toggleInstrumentOrderbook(instr) {
+    const sid = safeId(instr);
+    const obRow = document.getElementById('instr-ob-row-' + sid);
+    const container = document.getElementById('instr-orderbook-' + sid);
+    const expandBtn = document.getElementById('instr-expand-btn-' + sid);
+
+    if (!container || !obRow) return;
+
+    // Toggle visibility
+    const isVisible = obRow.style.display !== 'none';
+    obRow.style.display = isVisible ? 'none' : '';
+
+    // Update button icon
+    if (expandBtn) {
+        expandBtn.textContent = isVisible ? '+' : '−';
+    }
+
+    // If showing, render the orderbook
+    if (!isVisible) {
+        renderInlineOrderbook(sid, instr);
+    }
+}
+
+/**
+ * Renders an inline orderbook view for a specific instrument using the same
+ * full-featured structure (bars, my-order overlays, spread/mid) as the OB tab.
+ * Uses "iob-" prefixed element IDs to avoid conflicts with the OB tab cards.
+ * @param {string} sid - Safe ID for the instrument
+ * @param {string} instr - The instrument name
+ */
+function renderInlineOrderbook(sid, instr) {
+    const container = document.getElementById('instr-orderbook-' + sid);
+    if (!container) return;
+
+    const depth = depthMap[instr];
+    if (!depth) {
+        container.innerHTML = '<div style="padding:10px;color:var(--muted);font-size:12px">No orderbook data available</div>';
+        return;
+    }
+
+    container.innerHTML = '';
+
+    const wrapper = document.createElement('div');
+    wrapper.style.padding = '8px 4px';
+
+    // Spread / mid meta line
+    const metaDiv = document.createElement('div');
+    metaDiv.id = 'iob-meta-' + sid;
+    metaDiv.style.fontSize = '11px';
+    metaDiv.style.color = 'var(--muted)';
+    metaDiv.style.marginBottom = '6px';
+    const bestAsk0 = depth.asks?.[0];
+    const bestBid0 = depth.bids?.[0];
+    const spread0 = (bestAsk0 != null && bestBid0 != null) ? (bestAsk0 - bestBid0) : null;
+    const mid0 = (bestAsk0 != null && bestBid0 != null) ? ((bestAsk0 + bestBid0) / 2) : null;
+    metaDiv.innerHTML = spread0 != null ? `Spread: ${fmt(spread0)} &nbsp; Mid: ${fmt(mid0)}` : '';
+    wrapper.appendChild(metaDiv);
+
+    // Reuse the same ob-book-side layout as the OB tab (iob- prefix for unique IDs)
+    const bookSide = document.createElement('div');
+    bookSide.className = 'ob-book-side';
+    bookSide.innerHTML =
+        `<div class="ob-half ob-bids-half">` +
+        `<div class="ob-side-label bids">Bids</div>` +
+        `<div class="ob-bids-wrap"><table class="ob-table" id="iob-bids-${sid}"><tbody id="iob-bids-body-${sid}"></tbody></table></div>` +
+        `</div>` +
+        `<div class="ob-half ob-asks-half">` +
+        `<div class="ob-side-label asks">Asks</div>` +
+        `<div class="ob-asks-wrap"><table class="ob-table" id="iob-asks-${sid}"><tbody id="iob-asks-body-${sid}"></tbody></table></div>` +
+        `</div>`;
+    wrapper.appendChild(bookSide);
+    container.appendChild(wrapper);
+
+    // Populate with full data (bars + my-order overlays)
+    populateInlineBook(sid, depth, instr);
+}
+
+/**
+ * Refreshes an already-rendered inline orderbook for an instrument.
+ * Only does work when the inline row is currently visible.
+ * @param {string} instr - The instrument name
+ */
+function refreshInlineOrderbook(instr) {
+    const sid = safeId(instr);
+    const obRow = document.getElementById('instr-ob-row-' + sid);
+    if (!obRow || obRow.style.display === 'none') return;
+    const depth = depthMap[instr];
+    if (!depth) return;
+    // If the inline OB structure hasn't been built yet, build it now
+    if (!document.getElementById('iob-bids-body-' + sid)) {
+        renderInlineOrderbook(sid, instr);
+    } else {
+        populateInlineBook(sid, depth, instr);
+    }
+}
+
+/**
+ * Populates the inline orderbook tables (iob- prefixed IDs) with the same
+ * rendering logic as populateBook(): bars, my-order overlays, off-book orders.
+ * @param {string} sid - Safe ID for the instrument
+ * @param {object} depth - Depth snapshot from depthMap
+ * @param {string} instr - The instrument name (used to look up active orders)
+ */
+function populateInlineBook(sid, depth, instr) {
+    const askLevels = depth.askLevels || (depth.asks ? depth.asks.length : 0);
+    const bidLevels = depth.bidLevels || (depth.bids ? depth.bids.length : 0);
+    const maxAskQty = Math.max(...(depth.asksQty || []).slice(0, askLevels).filter(Number.isFinite), 1);
+    const maxBidQty = Math.max(...(depth.bidsQty || []).slice(0, bidLevels).filter(Number.isFinite), 1);
+
+    const activeList = instr ? Object.values(activeOrdersMap[instr] || {}) : [];
+    const askActiveByPrice = {};
+    const bidActiveByPrice = {};
+    activeList.forEach(o => {
+        const v = (o.verb || '').toLowerCase();
+        if (v === 'sell') {
+            if (!askActiveByPrice[o.price]) askActiveByPrice[o.price] = [];
+            askActiveByPrice[o.price].push(o);
+        } else if (v === 'buy') {
+            if (!bidActiveByPrice[o.price]) bidActiveByPrice[o.price] = [];
+            bidActiveByPrice[o.price].push(o);
+        }
+    });
+
+    const asksBody = document.getElementById('iob-asks-body-' + sid);
+    const bidsBody = document.getElementById('iob-bids-body-' + sid);
+    const coveredAskPrices = new Set();
+    const coveredBidPrices = new Set();
+
+    if (asksBody) {
+        asksBody.innerHTML = '';
+        for (let i = 0; i < askLevels; i++) {
+            const price = depth.asks?.[i];
+            const qty = depth.asksQty?.[i];
+            if (price == null || !Number.isFinite(price)) continue;
+            coveredAskPrices.add(price);
+            const myOrders = askActiveByPrice[price] || [];
+            const hasMyOrder = myOrders.length > 0;
+            const barPct = qty ? Math.round((qty / maxAskQty) * 100) : 0;
+            const labelParts = [];
+            if (hasMyOrder) myOrders.forEach(o => {
+                const rem = o.quantity - (o.quantityFill || 0);
+                labelParts.push(`● MY ${fmt(rem, 4)}`);
+            });
+            const tr = document.createElement('tr');
+            tr.className = 'ask-row' + (hasMyOrder ? ' algo-level my-order' : '');
+            tr.innerHTML =
+                `<td>${fmt(price)}</td><td>${qty != null ? fmt(qty, 4) : '–'}</td>` +
+                `<td class="ob-bar-cell"><div class="ob-bar ask-bar" style="width:${barPct}%"></div></td>` +
+                `<td>${labelParts.join(', ')}</td>`;
+            asksBody.appendChild(tr);
+        }
+        const offBookAsks = activeList.filter(o =>
+            (o.verb || '').toLowerCase() === 'sell' && !coveredAskPrices.has(o.price));
+        if (offBookAsks.length > 0) {
+            const sep = document.createElement('tr');
+            sep.className = 'off-book-sep';
+            sep.innerHTML = `<td colspan="4">· · ·</td>`;
+            asksBody.appendChild(sep);
+            offBookAsks.sort((a, b) => a.price - b.price);
+            offBookAsks.forEach(o => {
+                const rem = o.quantity - (o.quantityFill || 0);
+                const tr = document.createElement('tr');
+                tr.className = 'ask-row my-order off-book';
+                tr.innerHTML =
+                    `<td>${fmt(o.price)}</td><td>–</td>` +
+                    `<td class="ob-bar-cell"></td><td>● MY ${fmt(rem, 4)}</td>`;
+                asksBody.appendChild(tr);
+            });
+        }
+    }
+
+    if (bidsBody) {
+        bidsBody.innerHTML = '';
+        for (let i = 0; i < bidLevels; i++) {
+            const price = depth.bids?.[i];
+            const qty = depth.bidsQty?.[i];
+            if (price == null || !Number.isFinite(price)) continue;
+            coveredBidPrices.add(price);
+            const myOrders = bidActiveByPrice[price] || [];
+            const hasMyOrder = myOrders.length > 0;
+            const barPct = qty ? Math.round((qty / maxBidQty) * 100) : 0;
+            const labelParts = [];
+            if (hasMyOrder) myOrders.forEach(o => {
+                const rem = o.quantity - (o.quantityFill || 0);
+                labelParts.push(`● MY ${fmt(rem, 4)}`);
+            });
+            const tr = document.createElement('tr');
+            tr.className = 'bid-row' + (hasMyOrder ? ' algo-level my-order' : '');
+            tr.innerHTML =
+                `<td>${labelParts.join(', ')}</td>` +
+                `<td class="ob-bar-cell"><div class="ob-bar bid-bar" style="width:${barPct}%"></div></td>` +
+                `<td>${qty != null ? fmt(qty, 4) : '–'}</td>` +
+                `<td>${fmt(price)}</td>`;
+            bidsBody.appendChild(tr);
+        }
+        const offBookBids = activeList.filter(o =>
+            (o.verb || '').toLowerCase() === 'buy' && !coveredBidPrices.has(o.price));
+        if (offBookBids.length > 0) {
+            const sep = document.createElement('tr');
+            sep.className = 'off-book-sep';
+            sep.innerHTML = `<td colspan="4">· · ·</td>`;
+            bidsBody.appendChild(sep);
+            offBookBids.sort((a, b) => b.price - a.price);
+            offBookBids.forEach(o => {
+                const rem = o.quantity - (o.quantityFill || 0);
+                const tr = document.createElement('tr');
+                tr.className = 'bid-row my-order off-book';
+                tr.innerHTML =
+                    `<td>● MY ${fmt(rem, 4)}</td>` +
+                    `<td class="ob-bar-cell"></td>` +
+                    `<td>–</td>` +
+                    `<td>${fmt(o.price)}</td>`;
+                bidsBody.appendChild(tr);
+            });
+        }
+    }
+
+    // Keep spread/mid meta in sync
+    const metaEl = document.getElementById('iob-meta-' + sid);
+    if (metaEl) {
+        const bestAsk = depth.asks?.[0];
+        const bestBid = depth.bids?.[0];
+        const spread = (bestAsk != null && bestBid != null) ? (bestAsk - bestBid) : null;
+        const mid = (bestAsk != null && bestBid != null) ? ((bestAsk + bestBid) / 2) : null;
+        metaEl.innerHTML = spread != null ? `Spread: ${fmt(spread)} &nbsp; Mid: ${fmt(mid)}` : '';
+    }
+}
+
+/**
+ * Renders the Instruments card as a table with per-instrument snapshot columns
  * and updates the Portfolio card totals by aggregating across all known instruments.
  */
 function renderInstrumentCards() {
@@ -1147,44 +1386,184 @@ function renderInstrumentCards() {
     recordLivePnlSample();
     renderPnlChart();
 
-    // Render instrument mini-cards (rebuild on every update – dataset is small)
-    container.innerHTML = '';
-    entries.forEach(([instr, s]) => {
-        const card = document.createElement('div');
-        card.className = 'instr-snapshot-card';
-        card.id = 'instr-snap-' + safeId(instr);
+    // Remember which instruments currently have their inline orderbook open
+    // so we can restore the expanded state after rebuilding the DOM.
+    const expandedInstrs = new Set();
+    entries.forEach(([instr]) => {
+        const obRow = document.getElementById('instr-ob-row-' + safeId(instr));
+        if (obRow && obRow.style.display !== 'none') {
+            expandedInstrs.add(instr);
+        }
+    });
 
-        const ts = s.lastTimestampUpdate || s.timestamp || null;
+    // Render instruments as a table
+    container.innerHTML = '';
+    const table = document.createElement('table');
+    table.className = 'instruments-table';
+    table.style.width = '100%';
+    table.style.borderCollapse = 'collapse';
+
+    // Create table header
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    const headers = ['', 'Instrument', 'Position', 'Total PnL', 'Realized PnL', 'Unrealized PnL', 'Total Fees', 'Net Investment', 'Total Trades', 'Aggressor Trades', 'Action'];
+    const colSpan = headers.length;
+    headers.forEach((header, idx) => {
+        const th = document.createElement('th');
+        th.textContent = header;
+        th.style.padding = '10px';
+        th.style.textAlign = 'left';
+        th.style.fontWeight = 'bold';
+        th.style.borderBottom = '1px solid var(--border)';
+        th.style.backgroundColor = 'var(--card-bg)';
+        // First column (expand) is narrower
+        if (idx === 0) {
+            th.style.width = '40px';
+            th.style.textAlign = 'center';
+        }
+        headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    // Create table body
+    const tbody = document.createElement('tbody');
+    entries.forEach(([instr, s]) => {
+        const row = document.createElement('tr');
+        row.id = 'instr-row-' + safeId(instr);
+        row.style.borderBottom = '1px solid var(--border-light)';
+        row.style.transition = 'background-color 0.2s';
+        row.onmouseover = () => row.style.backgroundColor = 'var(--hover-bg)';
+        row.onmouseout = () => row.style.backgroundColor = 'transparent';
+
         const instrName = s.instrumentPk || instr;
 
-        card.innerHTML =
-            `<div class="instr-snap-header">` +
-            `<span class="instr-snap-name">${instrName}</span>` +
-            `<button class="btn-action btn-close-pos" onclick="closePositionAction(${JSON.stringify(instr)},${+(s.netPosition) || 0})" title="Close position for ${instrName}">× Close Position</button>` +
-            (ts ? `<span class="instr-snap-ts">${fmtTs(ts)}</span>` : '') +
-            `</div>` +
-            `<div class="instr-snap-kv-grid">` +
-            `<div class="instr-snap-kv"><div class="label">Realized PnL</div>` +
-            `<div class="value ${colorClass(s.realizedPnl)}">${fmt(s.realizedPnl)}</div></div>` +
-            `<div class="instr-snap-kv"><div class="label">Unrealized PnL</div>` +
-            `<div class="value ${colorClass(s.unrealizedPnl)}">${fmt(s.unrealizedPnl)}</div></div>` +
-            `<div class="instr-snap-kv"><div class="label">Total PnL</div>` +
-            `<div class="value ${colorClass(s.totalPnl)}">${fmt(s.totalPnl)}</div></div>` +
-            `<div class="instr-snap-kv"><div class="label">Position</div>` +
-            `<div class="value">${fmt(s.netPosition, 6)}</div></div>` +
-            `<div class="instr-snap-kv"><div class="label">Total Fees</div>` +
-            `<div class="value">${fmt(s.totalFees)}</div></div>` +
-            `<div class="instr-snap-kv"><div class="label">Net Investment</div>` +
-            `<div class="value">${fmt(s.netInvestment)}</div></div>` +
-            `<div class="instr-snap-kv"><div class="label">Total Trades</div>` +
-            `<div class="value">${+(s.numberOfTrades) || 0}</div></div>` +
-            `<div class="instr-snap-kv"><div class="label">Aggressor Trades</div>` +
-            `<div class="value">${+(s.numberOfAggressorTrades) || 0}</div></div>` +
-            `<div class="instr-snap-kv"><div class="label">Aggressed Trades</div>` +
-            `<div class="value">${+(s.numberOfAggressedTrades) || 0}</div></div>` +
-            `</div>`;
+        // Get position for conditional styling
+        const netPosition = +(s.netPosition) || 0;
+        const isPositive = netPosition > 0;
+        const isNegative = netPosition < 0;
+        const positionColor = isPositive ? '#4CAF50' : (isNegative ? '#f44336' : 'var(--text-muted)');
 
-        container.appendChild(card);
+        // Expand button (first column)
+        const tdExpand = document.createElement('td');
+        tdExpand.style.padding = '10px';
+        tdExpand.style.textAlign = 'center';
+        tdExpand.style.cursor = 'pointer';
+        const expandBtn = document.createElement('button');
+        expandBtn.className = 'btn-action btn-expand';
+        expandBtn.id = 'instr-expand-btn-' + safeId(instr);
+        expandBtn.textContent = '+';
+        expandBtn.title = 'Show orderbook for ' + instrName;
+        expandBtn.style.border = 'none';
+        expandBtn.style.background = 'transparent';
+        expandBtn.style.cursor = 'pointer';
+        expandBtn.style.fontSize = '14px';
+        // Expand button: green if position < 0, red if position > 0
+        expandBtn.style.color = isNegative ? '#4CAF50' : (isPositive ? '#f44336' : 'var(--text-muted)');
+        expandBtn.onclick = () => toggleInstrumentOrderbook(instr);
+        tdExpand.appendChild(expandBtn);
+        row.appendChild(tdExpand);
+
+        // Instrument name
+        const tdInstr = document.createElement('td');
+        tdInstr.textContent = instrName;
+        tdInstr.style.padding = '10px';
+        tdInstr.style.fontWeight = '500';
+        // Instrument name: green if position > 0, red if position < 0
+        tdInstr.style.color = positionColor;
+        row.appendChild(tdInstr);
+
+        // Position
+        const tdPosition = document.createElement('td');
+        tdPosition.textContent = fmt(s.netPosition, 6);
+        tdPosition.style.padding = '10px';
+        row.appendChild(tdPosition);
+
+        // Total PnL
+        const tdTotalPnL = document.createElement('td');
+        tdTotalPnL.textContent = fmt(s.totalPnl);
+        tdTotalPnL.className = 'value ' + colorClass(s.totalPnl);
+        tdTotalPnL.style.padding = '10px';
+        row.appendChild(tdTotalPnL);
+
+        // Realized PnL
+        const tdRealizedPnL = document.createElement('td');
+        tdRealizedPnL.textContent = fmt(s.realizedPnl);
+        tdRealizedPnL.className = 'value ' + colorClass(s.realizedPnl);
+        tdRealizedPnL.style.padding = '10px';
+        row.appendChild(tdRealizedPnL);
+
+        // Unrealized PnL
+        const tdUnrealizedPnL = document.createElement('td');
+        tdUnrealizedPnL.textContent = fmt(s.unrealizedPnl);
+        tdUnrealizedPnL.className = 'value ' + colorClass(s.unrealizedPnl);
+        tdUnrealizedPnL.style.padding = '10px';
+        row.appendChild(tdUnrealizedPnL);
+
+        // Total Fees
+        const tdFees = document.createElement('td');
+        tdFees.textContent = fmt(s.totalFees);
+        tdFees.style.padding = '10px';
+        row.appendChild(tdFees);
+
+        // Net Investment
+        const tdInvestment = document.createElement('td');
+        tdInvestment.textContent = fmt(s.netInvestment);
+        tdInvestment.style.padding = '10px';
+        row.appendChild(tdInvestment);
+
+        // Total Trades
+        const tdTrades = document.createElement('td');
+        tdTrades.textContent = +(s.numberOfTrades) || 0;
+        tdTrades.style.padding = '10px';
+        row.appendChild(tdTrades);
+
+        // Aggressor Trades
+        const tdAggressorTrades = document.createElement('td');
+        tdAggressorTrades.textContent = +(s.numberOfAggressorTrades) || 0;
+        tdAggressorTrades.style.padding = '10px';
+        row.appendChild(tdAggressorTrades);
+
+        // Close Position button
+        const tdAction = document.createElement('td');
+        tdAction.style.padding = '10px';
+        tdAction.style.textAlign = 'center';
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'btn-action btn-close-pos';
+        closeBtn.textContent = '× Close';
+        closeBtn.title = 'Close position for ' + instrName;
+        // Close button: green if position < 0, red if position > 0
+        closeBtn.style.color = isNegative ? '#4CAF50' : (isPositive ? '#f44336' : 'var(--text)');
+        closeBtn.onclick = () => closePositionAction(instr, netPosition);
+        tdAction.appendChild(closeBtn);
+        row.appendChild(tdAction);
+
+        tbody.appendChild(row);
+
+        // Add expandable orderbook row
+        const obRow = document.createElement('tr');
+        obRow.id = 'instr-ob-row-' + safeId(instr);
+        obRow.style.display = 'none';
+        const obCell = document.createElement('td');
+        obCell.colSpan = colSpan;
+        obCell.style.padding = '0';
+        obCell.id = 'instr-orderbook-' + safeId(instr);
+        obRow.appendChild(obCell);
+        tbody.appendChild(obRow);
+    });
+    table.appendChild(tbody);
+    container.appendChild(table);
+
+    // Restore previously expanded orderbooks
+    expandedInstrs.forEach(instr => {
+        const sid = safeId(instr);
+        const obRow = document.getElementById('instr-ob-row-' + sid);
+        const expandBtn = document.getElementById('instr-expand-btn-' + sid);
+        if (obRow) {
+            obRow.style.display = '';
+            if (expandBtn) expandBtn.textContent = '−';
+            renderInlineOrderbook(sid, instr);
+        }
     });
 }
 
@@ -1465,8 +1844,11 @@ function onActiveOrdersUpdate(msg) {
     });
 
     renderLiveOrders();
-    // Refresh OB overlays for all visible instruments
-    instrOrder.forEach(instr => renderOBBook(instr));
+    // Refresh OB overlays for all visible instruments (OB tab + inline instruments card)
+    instrOrder.forEach(instr => {
+        renderOBBook(instr);
+        refreshInlineOrderbook(instr);
+    });
 }
 
 /**
@@ -1564,6 +1946,7 @@ function updateActiveOrdersFromER(er) {
         }
         renderLiveOrders();
         renderOBBook(instr);
+        refreshInlineOrderbook(instr);
     } else if (REMOVED_ER_STATUSES.has(status)) {
         // Remove the order from the active orders map
         delete activeOrdersMap[instr][clientOrderId];
@@ -1577,6 +1960,7 @@ function updateActiveOrdersFromER(er) {
         // Re-render to remove the row from the table
         renderLiveOrders();
         renderOBBook(instr);
+        refreshInlineOrderbook(instr);
     }
 }
 
@@ -2002,6 +2386,8 @@ function onDepth(msg) {
     depthMap[instr] = d;
     ensureInstrumentKnown(instr);
     renderOBBook(instr);
+    // Also refresh the inline orderbook in the instruments card if it is open
+    refreshInlineOrderbook(instr);
 }
 
 function ensureInstrumentKnown(instr) {

@@ -158,6 +158,8 @@ function connect() {
         setStatus(true, 'Connected on port ' + port);
         clearTimeout(reconnectTimer);
         reconnectTimer = null;
+        // Fetch latest data from REST endpoints on connection
+        initializeDataFromRestEndpoints(host, port);
     };
     ws.onclose = (evt) => {
         const reason = (evt && evt.code && evt.code !== 1006)
@@ -187,6 +189,91 @@ function reconnect() {
         return;
     }
     connect();
+}
+
+// ── Initialize data from REST endpoints on WebSocket connection ──────────────
+async function initializeDataFromRestEndpoints(host, port) {
+    try {
+        // Fetch portfolio snapshot
+        try {
+            const portfolioRes = await fetch(`http://${host}:${port}/api/portfolio-snapshot`);
+            if (portfolioRes.ok) {
+                const portfolio = await portfolioRes.json().catch(() => null);
+                if (portfolio) updatePortfolio(portfolio);
+            }
+        } catch (e) {
+            console.error('Failed to fetch portfolio snapshot:', e);
+        }
+
+        // Fetch parameters
+        try {
+            const paramsRes = await fetch(`http://${host}:${port}/api/parameters`);
+            if (paramsRes.ok) {
+                const params = await paramsRes.json().catch(() => null);
+                if (params) updateParams(params);
+            }
+        } catch (e) {
+            console.error('Failed to fetch parameters:', e);
+        }
+
+        // Fetch instruments
+        try {
+            const instrsRes = await fetch(`http://${host}:${port}/api/instruments`);
+            if (instrsRes.ok) {
+                const instruments = await instrsRes.json().catch(() => null);
+                if (instruments) {
+                    // instruments is array of per-instrument snapshots
+                    // Reconstruct portfolio-like format
+                    if (Array.isArray(instruments)) {
+                        const instrumentPnlSnapshotMap = {};
+                        instruments.forEach(instr => {
+                            if (instr.instrumentPk) {
+                                instrumentPnlSnapshotMap[instr.instrumentPk] = instr;
+                            }
+                        });
+                        // Update instruments table with snapshot data
+                        if (instrumentPnlSnapshotMap && Object.keys(instrumentPnlSnapshotMap).length > 0) {
+                            const tb = document.getElementById('instruments-body');
+                            if (tb) {
+                                tb.innerHTML = '';
+                                Object.entries(instrumentPnlSnapshotMap).forEach(([i, s]) => {
+                                    const tr = document.createElement('tr');
+                                    tr.innerHTML = `<td>${i}</td>` +
+                                        `<td class="${colorClass(s.realizedPnl)}">${fmt(s.realizedPnl)}</td>` +
+                                        `<td class="${colorClass(s.unrealizedPnl)}">${fmt(s.unrealizedPnl)}</td>` +
+                                        `<td class="${colorClass(s.totalPnl)}">${fmt(s.totalPnl)}</td>` +
+                                        `<td>${fmt(s.netPosition)}</td>`;
+                                    tb.appendChild(tr);
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Failed to fetch instruments:', e);
+        }
+
+        // Fetch custom metrics
+        try {
+            const metricsRes = await fetch(`http://${host}:${port}/api/custom-metrics`);
+            if (metricsRes.ok) {
+                const metrics = await metricsRes.json().catch(() => null);
+                if (metrics) {
+                    // metrics is a map of key -> value
+                    Object.entries(metrics).forEach(([k, v]) => {
+                        const p = k.split('.');
+                        const key = p.pop();
+                        updateCustom({instrumentPk: p.join('.') || null, key, value: v});
+                    });
+                }
+            }
+        } catch (e) {
+            console.error('Failed to fetch custom metrics:', e);
+        }
+    } catch (e) {
+        console.error('Error initializing data from REST endpoints:', e);
+    }
 }
 
 // ── Message dispatcher ────────────────────────────────────────────────────────
