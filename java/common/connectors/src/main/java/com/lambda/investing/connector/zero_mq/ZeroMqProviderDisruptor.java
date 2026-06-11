@@ -133,7 +133,7 @@ public class ZeroMqProviderDisruptor extends ZeroMqProvider {
                                    Configuration.ConnectorProviderType connectorProviderType) {
         super(zeroMqConfiguration, threadsListening);
         setServer(isServer);
-        this.disruptorThreadName = "zmq-provider-disruptor-" + zeroMqConfiguration;
+        this.disruptorThreadName = "ZeroMqProviderDisruptor-" + zeroMqConfiguration.getPort();
         this.connectorProviderType = connectorProviderType;
     }
 
