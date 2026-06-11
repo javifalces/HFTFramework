@@ -143,9 +143,9 @@ public class Trade extends CSVable implements Cloneable {
         boolean priceIsInBounds = true;
         if (lastDepth != null) {
             try {
-                Double worstAsk = lastDepth.getAsks()[lastDepth.getAskLevels() - 1];
-                Double worstBid = lastDepth.getBids()[lastDepth.getBidLevels() - 1];
-                if (!Double.isNaN(worstAsk) && !Double.isNaN(worstBid)) {
+                Double worstAsk = lastDepth.getWorstAsk();
+                Double worstBid = lastDepth.getWorstBid();
+                if (worstAsk != Double.MAX_VALUE && worstBid != Double.MIN_VALUE) {
                     priceIsInBounds = this.price < worstAsk && this.price > worstBid;
                 }
             } catch (Exception e) {

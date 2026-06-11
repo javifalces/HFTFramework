@@ -71,8 +71,8 @@ public class InstrumentCache {
                 continue;
             }
 
-            double bestBid = depth.getBids()[0];
-            double bestAsk = depth.getAsks()[0];
+            double bestBid = depth.getBestBid();
+            double bestAsk = depth.getBestAsk();
 
             if (tradePrice <= bestBid) {
                 tradeToAllign.setVerb(Verb.Sell);
