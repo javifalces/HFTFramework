@@ -27,7 +27,7 @@ public class QuoteManager implements ExecutionReportListener, Runnable {
     private QuoteRequest lastQuoteRequest;
     private QuoteSideManager bidQuoteSideManager;
     private QuoteSideManager askQuoteSideManager;
-    private Queue<String> lastClOrdIdsSent;
+    private final Queue<String> lastClOrdIdsSent;
     private Date lastWarnLog = null;
     private static final long MAX_LAST_WARN_TIMEOUT_MS = 1000 * 5; // 5 seconds
 
@@ -65,7 +65,9 @@ public class QuoteManager implements ExecutionReportListener, Runnable {
     public void reset() {
         this.bidQuoteSideManager.reset();
         this.askQuoteSideManager.reset();
-        lastClOrdIdsSent.clear();
+        synchronized (lastClOrdIdsSent) {
+            lastClOrdIdsSent.clear();
+        }
         lastSleepingBid = false;
         lastSleepingAsk = false;
     }
@@ -115,15 +117,28 @@ public class QuoteManager implements ExecutionReportListener, Runnable {
         return false;
     }
 
+    private void safeAddAllToLastClOrdIdsSent(Collection<String> clOrdIds) {
+        if (clOrdIds == null || clOrdIds.isEmpty()) {
+            return;
+        }
+        // Take a defensive snapshot to avoid ConcurrentModificationException when the
+        // source collection (a live EvictingQueue inside QuoteSideManager) is mutated
+        // by a concurrent ER-processing thread while we iterate it.
+        List<String> snapshot = new ArrayList<>(clOrdIds);
+        // Synchronize on lastClOrdIdsSent so that a concurrent reset() → clear() cannot
+        // empty the underlying ArrayDeque between EvictingQueue.add()'s size-check and
+        // its delegate.remove() call, which would cause NoSuchElementException.
+        synchronized (lastClOrdIdsSent) {
+            lastClOrdIdsSent.addAll(snapshot);
+        }
+    }
+
     private void updateBidQuoteSide() {
         try {
             Date nextWakeup = bidQuoteSideManager.getSleepUntil();
             if (nextWakeup == null || nextWakeup.getTime() < algorithm.getCurrentTimestamp()) {
                 bidQuoteSideManager.quoteRequest(this.lastQuoteRequest);
-                Collection<String> bidClOrdIds = bidQuoteSideManager.getLastClOrdIdSent();
-                if (bidClOrdIds != null && !bidClOrdIds.isEmpty()) {
-                    lastClOrdIdsSent.addAll(bidClOrdIds);
-                }
+                safeAddAllToLastClOrdIdsSent(bidQuoteSideManager.getLastClOrdIdSent());
                 lastSleepingBid = false;
             } else {
                 if (!lastSleepingBid) {
@@ -142,10 +157,7 @@ public class QuoteManager implements ExecutionReportListener, Runnable {
             Date nextWakeup = askQuoteSideManager.getSleepUntil();
             if (nextWakeup == null || nextWakeup.getTime() < algorithm.getCurrentTimestamp()) {
                 askQuoteSideManager.quoteRequest(this.lastQuoteRequest);
-                Collection<String> askClOrdIds = askQuoteSideManager.getLastClOrdIdSent();
-                if (askClOrdIds != null && !askClOrdIds.isEmpty()) {
-                    lastClOrdIdsSent.addAll(askClOrdIds);
-                }
+                safeAddAllToLastClOrdIdsSent(askQuoteSideManager.getLastClOrdIdSent());
                 lastSleepingAsk = false;
             } else {
                 if (!lastSleepingAsk) {
