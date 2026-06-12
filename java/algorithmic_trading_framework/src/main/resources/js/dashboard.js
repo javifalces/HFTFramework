@@ -527,10 +527,13 @@ async function fetchCustomMetrics() {
             Object.keys(customMetricsByAlgorithm).forEach(k => delete customMetricsByAlgorithm[k]);
             Object.entries(data.customColumnsByAlgorithm).forEach(([algoName, cols]) => {
                 if (cols) {
-                    customMetricsByAlgorithm[algoName] = cols;
+                    Object.entries(cols).forEach(([k, v]) => {
+                        const p = k.split('.');
+                        const key = p.pop();
+                        updateCustom({instrumentPk: p.join('.') || null, key, value: v, algorithmInfo: algoName});
+                    });
                 }
             });
-            updateCustomMetricsSelector();
         }
 
         renderCustomMetricsCards();
@@ -1309,6 +1312,7 @@ function populateInlineBook(sid, depth, instr) {
             });
             const tr = document.createElement('tr');
             tr.className = 'bid-row' + (hasMyOrder ? ' algo-level my-order' : '');
+            // Reversed columns: label | bar | qty | price (price closest to asks/center)
             tr.innerHTML =
                 `<td>${labelParts.join(', ')}</td>` +
                 `<td class="ob-bar-cell"><div class="ob-bar bid-bar" style="width:${barPct}%"></div></td>` +
@@ -1328,6 +1332,7 @@ function populateInlineBook(sid, depth, instr) {
                 const rem = o.quantity - (o.quantityFill || 0);
                 const tr = document.createElement('tr');
                 tr.className = 'bid-row my-order off-book';
+                // Reversed columns: label | bar | qty | price
                 tr.innerHTML =
                     `<td>● MY ${fmt(rem, 4)}</td>` +
                     `<td class="ob-bar-cell"></td>` +
@@ -1853,115 +1858,100 @@ function onActiveOrdersUpdate(msg) {
 
 /**
  * Renders the Live Orders card table from the current {@link activeOrdersMap}.
+ * Orders are grouped by instrument; each group has a collapsible header row.
  * Called after every change to the map (ER events, ACTIVE_ORDERS WS, STATE restore).
- * Removes rows for orders that no longer exist in the active orders map.
  */
 function renderLiveOrders() {
     const tbody = document.getElementById('live-orders-body');
     const countEl = document.getElementById('live-orders-count');
     if (!tbody) return;
 
-    // Flatten all active orders across instruments
-    const allOrders = [];
+    // Build per-instrument groups
+    let totalCount = 0;
+    const grouped = {};
     for (const [instr, orders] of Object.entries(activeOrdersMap)) {
-        for (const order of Object.values(orders)) {
-            allOrders.push(Object.assign({}, order, {instrument: order.instrument || instr}));
-        }
+        const list = Object.values(orders).map(o => Object.assign({}, o, {instrument: o.instrument || instr}));
+        if (list.length === 0) continue;
+        list.sort((a, b) => (b.timestampCreation || 0) - (a.timestampCreation || 0));
+        grouped[instr] = list;
+        totalCount += list.length;
     }
 
     if (countEl) {
-        countEl.textContent = allOrders.length > 0
-            ? '(' + allOrders.length + ' active)'
+        countEl.textContent = totalCount > 0
+            ? '(' + totalCount + ' active)'
             : '(none)';
     }
 
-    // Clear and rebuild the table to remove stale rows
     tbody.innerHTML = '';
-    if (allOrders.length === 0) {
+
+    if (totalCount === 0) {
         const tr = document.createElement('tr');
         tr.innerHTML = '<td colspan="9" style="color:var(--muted);text-align:center;padding:12px">No active orders</td>';
         tbody.appendChild(tr);
         return;
     }
 
-    // Sort: most recent order first (timestampCreation descending)
-    allOrders.sort((a, b) => (b.timestampCreation || 0) - (a.timestampCreation || 0));
+    // Sort instrument groups alphabetically
+    const sortedInstrs = Object.keys(grouped).sort();
 
-    allOrders.forEach(o => {
-        const verb = o.verb || '';
-        const qty = +(o.quantity) || 0;
-        const filled = +(o.quantityFill) || 0;
-        const remaining = Math.max(0, qty - filled);
-        const ts = o.timestampCreation || null;
-        const clOrdId = o.clientOrderId || '';
-        // Truncate long clOrdId for display
-        const clOrdIdDisplay = clOrdId.length > 16 ? clOrdId.substring(0, 14) + '…' : clOrdId;
-        const tr = document.createElement('tr');
-        tr.className = 'live-order-row';
-        tr.id = 'live-order-' + safeId(clOrdId); // Add unique ID for row tracking
-        tr.title = clOrdId; // full id on hover
-        tr.innerHTML =
-            `<td>${ts ? fmtTs(ts) : '–'}</td>` +
-            `<td>${o.instrument || ''}</td>` +
-            `<td style="font-size:11px;font-family:monospace">${clOrdIdDisplay}</td>` +
-            `<td><span class="badge ${sideClass(verb)}">${verb}</span></td>` +
-            `<td>${fmt(o.price)}</td>` +
-            `<td>${fmt(qty, 6)}</td>` +
-            `<td>${fmt(filled, 6)}</td>` +
-            `<td>${fmt(remaining, 6)}</td>` +
-            `<td><button class="btn-action btn-cancel" onclick="cancelOrderAction(${JSON.stringify(clOrdId)})">✕ Cancel</button></td>`;
-        tbody.appendChild(tr);
+    sortedInstrs.forEach(instr => {
+        const orders = grouped[instr];
+        const groupId = 'lo-group-' + safeId(instr);
+
+        // ── Group header row ──────────────────────────────────────────────────
+        const headerTr = document.createElement('tr');
+        headerTr.className = 'lo-group-header';
+        headerTr.dataset.group = groupId;
+        headerTr.innerHTML =
+            `<td colspan="9">` +
+            `<span class="lo-group-toggle">▾</span> ` +
+            `<strong style="color:var(--accent)">${instr}</strong>` +
+            `<span style="color:var(--muted);font-size:11px;margin-left:8px">${orders.length} order${orders.length !== 1 ? 's' : ''}</span>` +
+            `</td>`;
+        headerTr.addEventListener('click', () => toggleLiveOrderGroup(groupId, headerTr));
+        tbody.appendChild(headerTr);
+
+        // ── Order rows ────────────────────────────────────────────────────────
+        orders.forEach(o => {
+            const verb = o.verb || '';
+            const qty = +(o.quantity) || 0;
+            const filled = +(o.quantityFill) || 0;
+            const remaining = Math.max(0, qty - filled);
+            const ts = o.timestampCreation || null;
+            const clOrdId = o.clientOrderId || '';
+            const clOrdIdDisplay = clOrdId.length > 16 ? clOrdId.substring(0, 14) + '…' : clOrdId;
+            const tr = document.createElement('tr');
+            tr.className = 'live-order-row lo-group-row';
+            tr.dataset.group = groupId;
+            tr.id = 'live-order-' + safeId(clOrdId);
+            tr.title = clOrdId;
+            tr.innerHTML =
+                `<td>${ts ? fmtTs(ts) : '–'}</td>` +
+                `<td>${o.instrument || ''}</td>` +
+                `<td style="font-size:11px;font-family:monospace">${clOrdIdDisplay}</td>` +
+                `<td><span class="badge ${sideClass(verb)}">${verb}</span></td>` +
+                `<td>${fmt(o.price)}</td>` +
+                `<td>${fmt(qty, 6)}</td>` +
+                `<td>${fmt(filled, 6)}</td>` +
+                `<td>${fmt(remaining, 6)}</td>` +
+                `<td><button class="btn-action btn-cancel" onclick="cancelOrderAction(${JSON.stringify(clOrdId)})">✕ Cancel</button></td>`;
+            tbody.appendChild(tr);
+        });
     });
 }
 
 /**
- * Updates activeOrdersMap from a single execution-report object.
- * Active/PartialFilled → add/update tracking.
- * Terminal statuses    → remove tracking and delete the row from the table.
- * Triggers a book re-render so the overlay is always fresh.
+ * Toggles visibility of a live-orders instrument group.
  */
-function updateActiveOrdersFromER(er) {
-    const instr = er.instrument;
-    const clientOrderId = er.clientOrderId;
-    const origClientOrderId = er.origClientOrderId;
-    const status = er.executionReportStatus;
-    if (!instr || !clientOrderId) return;
-
-    if (!activeOrdersMap[instr]) activeOrdersMap[instr] = {};
-
-    if (LIVE_ER_STATUSES.has(status)) {
-        activeOrdersMap[instr][clientOrderId] = {
-            clientOrderId,
-            instrument: instr,
-            verb: er.verb,
-            price: er.price,
-            quantity: er.quantity,
-            quantityFill: er.quantityFill || 0,
-            status,
-            timestampCreation: er.timestampCreation || Date.now()
-        };
-        // On modify-confirm, origClientOrderId refers to the superseded order
-        if (origClientOrderId && origClientOrderId !== clientOrderId) {
-            delete activeOrdersMap[instr][origClientOrderId];
-        }
-        renderLiveOrders();
-        renderOBBook(instr);
-        refreshInlineOrderbook(instr);
-    } else if (REMOVED_ER_STATUSES.has(status)) {
-        // Remove the order from the active orders map
-        delete activeOrdersMap[instr][clientOrderId];
-        if (origClientOrderId) delete activeOrdersMap[instr][origClientOrderId];
-
-        // Clean up empty instrument maps
-        if (Object.keys(activeOrdersMap[instr]).length === 0) {
-            delete activeOrdersMap[instr];
-        }
-
-        // Re-render to remove the row from the table
-        renderLiveOrders();
-        renderOBBook(instr);
-        refreshInlineOrderbook(instr);
-    }
+function toggleLiveOrderGroup(groupId, headerTr) {
+    const rows = document.querySelectorAll(`tr.lo-group-row[data-group="${groupId}"]`);
+    const toggle = headerTr.querySelector('.lo-group-toggle');
+    const collapsed = toggle && toggle.textContent.trim() === '▸';
+    rows.forEach(r => {
+        r.style.display = collapsed ? '' : 'none';
+    });
+    if (toggle) toggle.textContent = collapsed ? '▾' : '▸';
 }
 
 // ── Parameters & custom metrics ───────────────────────────────────────────────
@@ -2783,8 +2773,4 @@ setInterval(() => {
         window.addEventListener('resize', renderPnlChart);
     }
 })();
-
-
-
-
 

@@ -645,6 +645,28 @@
     }
 }
 
+/* ── Live Orders – instrument group header rows ──────────────────────────── */
+.lo-group-header td {
+    background: rgba(255, 255, 255, .04);
+    padding: 5px 8px;
+    font-size: 12px;
+    border-top: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+}
+
+.lo-group-header:hover td {
+    background: rgba(255, 255, 255, .07);
+}
+
+.lo-group-toggle {
+    display: inline-block;
+    width: 14px;
+    font-size: 11px;
+    color: var(--muted);
+    margin-right: 2px;
+}
+
 /* ── Action buttons (cancel order / close trade / close position) ─────────── */
 .btn-action {
     font-size: 11px;
