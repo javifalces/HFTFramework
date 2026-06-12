@@ -96,7 +96,7 @@ public class QuoteManager implements ExecutionReportListener, Runnable {
 
         boolean onAskCfList =
                 askQuoteSideManager.getCfTradesClientOrderId() != null && askQuoteSideManager.getCfTradesClientOrderId()
-                        .contains(clientOrderId);
+                        .contains(clientOrderId);  // O(1) — backed by ConcurrentHashSet
         if (onAskCfList) {
             return true;
         }
@@ -110,7 +110,7 @@ public class QuoteManager implements ExecutionReportListener, Runnable {
 
         boolean onBidCfList =
                 bidQuoteSideManager.getCfTradesClientOrderId() != null && bidQuoteSideManager.getCfTradesClientOrderId()
-                        .contains(clientOrderId);
+                        .contains(clientOrderId);  // O(1) — backed by ConcurrentHashSet
         if (onBidCfList) {
             return true;
         }
