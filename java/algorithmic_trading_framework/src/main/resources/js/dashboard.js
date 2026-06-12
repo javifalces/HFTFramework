@@ -1739,6 +1739,8 @@ function renderInstrumentCards() {
         expandBtn.style.background = 'transparent';
         expandBtn.style.cursor = 'pointer';
         expandBtn.style.fontSize = '14px';
+        expandBtn.style.color = 'var(--text-muted)';
+
         expandBtn.onclick = () => toggleInstrumentOrderbook(instr);
         tdExpand.appendChild(expandBtn);
         row.appendChild(tdExpand);
@@ -1749,6 +1751,7 @@ function renderInstrumentCards() {
         tdInstr.style.padding = '10px';
         tdInstr.style.fontWeight = '500';
         // Instrument name: green if position > 0, red if position < 0
+
         tdInstr.style.color = positionColor;
         row.appendChild(tdInstr);
 
