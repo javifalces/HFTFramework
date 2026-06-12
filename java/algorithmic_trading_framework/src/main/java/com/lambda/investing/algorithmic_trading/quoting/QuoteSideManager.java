@@ -29,9 +29,9 @@ public class QuoteSideManager {
     private Instrument instrument;
     private Verb verb;
 
-    private String clientOrderIdSent, clientOrderIdSentBackup;
+    private String clientOrderIdSent;
     private volatile String activeClientOrderId, activeClientOrderIdToBeCanceled;
-    private QuoteRequest lastQuoteSent, lastQuoteSentBackup;
+    private QuoteRequest lastQuoteSent;
 
     private Double lastPrice, lastQuantity;
 
@@ -142,138 +142,153 @@ public class QuoteSideManager {
         return output;
     }
 
-    public synchronized void quoteRequest(QuoteRequest quoteRequest) throws LambdaTradingException {
-        //		synchronized (EXECUTION_REPORT_LOCK) {
-        //			Already check on algorithm
-        //			if(quoteRequest.getQuoteRequestAction().equals(QuoteRequestAction.On) && !algorithm.getAlgorithmState().equals(AlgorithmState.STARTED)){
-        //				throw new LambdaTradingException("cant quote with algo not started");
-        //			}
-        if (clientOrderIdSent != null) {
-            // Safety net: if we have been waiting for an ER longer than MAX_TIME_ERROR_MS,
-            // the ER was probably lost in transit.  Clear the stuck state so quoting can
-            // resume; the active order on the exchange (if any) will be re-synced on the
-            // next depth update cycle.
-            long now = algorithm.getCurrentTimestamp();
-            if (clientOrderIdSentTimestamp != Long.MIN_VALUE
-                    && now - clientOrderIdSentTimestamp > MAX_TIME_ERROR_MS) {
-                logger.warn("[{}] {} clientOrderIdSent={} stuck for >{}ms without ER — clearing stuck state",
-                        new Date(now), verb, clientOrderIdSent, MAX_TIME_ERROR_MS);
-                clientOrderIdSent = null;
-                clientOrderIdSentTimestamp = Long.MIN_VALUE;
-                clOrdIdPending = null;
-                // Do NOT clear activeClientOrderId: the order may still be live on the
-                // exchange; the next quoteRequest will issue a Modify against it.
-            } else {
+    public void quoteRequest(QuoteRequest quoteRequest) throws LambdaTradingException {
+        // ----------------------------------------------------------------
+        // PHASE 1 – state mutation under the lock, NO external calls.
+        //
+        // Holding "this" while calling algorithm.sendOrderRequest() caused a
+        // classic lock-inversion deadlock:
+        //   Thread A (quoting): holds "this", waits for algorithm lock inside sendOrderRequest.
+        //   Thread B (ER recv): holds algorithm lock, calls onExecutionReportUpdate →
+        //                       unquoteSide → quoteRequest → waits for "this".
+        //
+        // Fix: prepare the OrderRequest and commit state while holding "this",
+        // then release the lock and send without holding it.  Rollback is done
+        // in a second synchronized block if the send fails.
+        // ----------------------------------------------------------------
+        final OrderRequest orderRequest;
+        final QuoteRequest lastQuoteSentBackupLocal;
+        final String clientOrderIdSentBackupLocal;
+
+        synchronized (this) {
+            if (clientOrderIdSent != null) {
+                // Safety net: if we have been waiting for an ER longer than MAX_TIME_ERROR_MS,
+                // the ER was probably lost in transit.  Clear the stuck state so quoting can
+                // resume; the active order on the exchange (if any) will be re-synced on the
+                // next depth update cycle.
+                long now = algorithm.getCurrentTimestamp();
+                if (clientOrderIdSentTimestamp != Long.MIN_VALUE
+                        && now - clientOrderIdSentTimestamp > MAX_TIME_ERROR_MS) {
+                    logger.warn("[{}] {} clientOrderIdSent={} stuck for >{}ms without ER — clearing stuck state",
+                            new Date(now), verb, clientOrderIdSent, MAX_TIME_ERROR_MS);
+                    clientOrderIdSent = null;
+                    clientOrderIdSentTimestamp = Long.MIN_VALUE;
+                    clOrdIdPending = null;
+                    // Do NOT clear activeClientOrderId: the order may still be live on the
+                    // exchange; the next quoteRequest will issue a Modify against it.
+                } else {
+                    return;
+                }
+            }
+
+            Instrument instrument = quoteRequest.getInstrument();
+            double price = quoteRequest.getBidPrice();
+            double quantity = quoteRequest.getBidQuantity();
+            if (verb.equals(Verb.Sell)) {
+                price = quoteRequest.getAskPrice();
+                quantity = quoteRequest.getAskQuantity();
+            }
+
+            if (lastPrice != null && lastPrice == price && lastQuantity != null && lastQuantity == quantity) {
+                //if same price dont send the same!
                 return;
             }
-            //				throw new LambdaTradingException("cant quote " + verb + " waiting to ER of " + clientOrderIdSent);
-        }
 
-
-        Instrument instrument = quoteRequest.getInstrument();
-        double price = quoteRequest.getBidPrice();
-        double quantity = quoteRequest.getBidQuantity();
-        if (verb.equals(Verb.Sell)) {
-            price = quoteRequest.getAskPrice();
-            quantity = quoteRequest.getAskQuantity();
-        }
-
-        if (lastPrice != null && lastPrice == price && lastQuantity != null && lastQuantity == quantity) {
-            //if same price dont send the same!
-            return;
-            //				throw new LambdaTradingException(
-            //						"cant quote " + verb + " same price/quantity as before " + clientOrderIdSent);
-        }
-
-        OrderRequest orderRequest = createOrderRequest(instrument, verb, price, quantity, quoteRequest.getReferenceTimestamp());
-        orderRequest.setFreeText(quoteRequest.getFreeText());
-        if (activeClientOrderId != null) {
-            orderRequest.setOrderRequestAction(OrderRequestAction.Modify);
-            orderRequest.setOrigClientOrderId(activeClientOrderId);
-        }
-        if (Math.abs(quantity) < 1e-6) {
-            if (orderRequest.getOrigClientOrderId() != null && cancelConfirmedOriginalClientOrderId
-                    .contains(orderRequest.getOrigClientOrderId())) {
-                isDisablePending = false;
-                return;
-                //					throw new LambdaTradingException(
-                //							"trying to cancel already cancelled order " + orderRequest.getOrigClientOrderId());
-            }
-            orderRequest.setOrderRequestAction(OrderRequestAction.Cancel);
-            if (activeClientOrderId == null) {
-                //					makes no sense to do anything => return
-                return;
-                //					isDisablePending = true;
-                //					throw new LambdaTradingException("trying to cancel quote not confirmed ");
-            } else {
+            orderRequest = createOrderRequest(instrument, verb, price, quantity, quoteRequest.getReferenceTimestamp());
+            orderRequest.setFreeText(quoteRequest.getFreeText());
+            if (activeClientOrderId != null) {
+                orderRequest.setOrderRequestAction(OrderRequestAction.Modify);
                 orderRequest.setOrigClientOrderId(activeClientOrderId);
             }
-        } else {
-            isDisable = false;
-        }
-
-        //send the order
-        //update variables late
-        lastQuoteSentBackup = lastQuoteSent;
-        clientOrderIdSentBackup = clientOrderIdSent;
-
-        lastQuoteSent = quoteRequest;
-        clientOrderIdSent = orderRequest.getClientOrderId();
-        clientOrderIdSentTimestamp = algorithm.getCurrentTimestamp();
-
-        lastQuantity = quantity;
-        lastPrice = price;
-
-        try {
-            if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal()) {
-                logger.info("[{}] {}", new Date(orderRequest.getTimestampCreation()), orderRequest);
+            if (Math.abs(quantity) < 1e-6) {
+                if (orderRequest.getOrigClientOrderId() != null && cancelConfirmedOriginalClientOrderId
+                        .contains(orderRequest.getOrigClientOrderId())) {
+                    isDisablePending = false;
+                    return;
+                }
+                orderRequest.setOrderRequestAction(OrderRequestAction.Cancel);
+                if (activeClientOrderId == null) {
+                    return;
+                } else {
+                    orderRequest.setOrigClientOrderId(activeClientOrderId);
+                }
+            } else {
+                isDisable = false;
             }
 
-            if (orderRequest.getClientOrderId() == null) {
-                logger.warn("QuoteRequest {} has null clientOrderId, this should not happen", orderRequest);
-            } else {
+            // Commit state — lock is still held here, no external call yet.
+            lastQuoteSentBackupLocal = lastQuoteSent;
+            clientOrderIdSentBackupLocal = clientOrderIdSent;
+
+            lastQuoteSent = quoteRequest;
+            clientOrderIdSent = orderRequest.getClientOrderId();
+            clientOrderIdSentTimestamp = algorithm.getCurrentTimestamp();
+
+            lastQuantity = quantity;
+            lastPrice = price;
+
+            if (orderRequest.getClientOrderId() != null) {
                 lastClOrdIdSent.offer(orderRequest.getClientOrderId());
                 clOrdIdPending = orderRequest.getClientOrderId();
-                algorithm.sendOrderRequest(orderRequest);
+            }
+        } // <-- lock released here, before any external call
+
+        // ----------------------------------------------------------------
+        // PHASE 2 – send the order WITHOUT holding "this".
+        // ----------------------------------------------------------------
+        if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal()) {
+            logger.info("[{}] {}", new Date(orderRequest.getTimestampCreation()), orderRequest);
+        }
+
+        if (orderRequest.getClientOrderId() == null) {
+            logger.warn("QuoteRequest {} has null clientOrderId, this should not happen", orderRequest);
+            return;
+        }
+
+        try {
+            algorithm.sendOrderRequest(orderRequest);
+            synchronized (this) {
                 timestampError = Long.MIN_VALUE;
             }
         } catch (LambdaTradingException e) {
             logger.warn("[{}] can't send {} {}", new Date(orderRequest.getTimestampCreation()),
                     orderRequest.getClientOrderId(), e.getMessage());
-            //update variables late
-            clOrdIdPending = null;
-            lastQuoteSent = lastQuoteSentBackup;
-            clientOrderIdSent = clientOrderIdSentBackup;
-            lastQuantity = null;
-            lastPrice = null;
-            if (timestampError == Long.MIN_VALUE) {
-                timestampError = orderRequest.getTimestampCreation();
-            } else if (orderRequest.getTimestampCreation() - timestampError > MAX_TIME_ERROR_MS) {
-                //desperate measure!
-                //send cancel!
+
+            final boolean shouldReset;
+            synchronized (this) {
+                // Rollback state
+                clOrdIdPending = null;
+                lastQuoteSent = lastQuoteSentBackupLocal;
+                clientOrderIdSent = clientOrderIdSentBackupLocal;
+                lastQuantity = null;
+                lastPrice = null;
+                if (timestampError == Long.MIN_VALUE) {
+                    timestampError = orderRequest.getTimestampCreation();
+                    shouldReset = false;
+                } else if (orderRequest.getTimestampCreation() - timestampError > MAX_TIME_ERROR_MS) {
+                    shouldReset = !isResetting;
+                } else {
+                    shouldReset = false;
+                }
+            }
+
+            if (shouldReset) {
+                // Desperate measure: send a cancel, then reset the side.
                 logger.error("time in error >MAX_TIME_ERROR_MS {} -> cancel and restart side  ", MAX_TIME_ERROR_MS);
                 orderRequest.setOrderRequestAction(OrderRequestAction.Cancel);
                 logger.error("[{}] {}", new Date(orderRequest.getTimestampCreation()), orderRequest);
                 try {
                     algorithm.sendOrderRequest(orderRequest);
                 } catch (LambdaException ex) {
-
+                    // best-effort cancel
                 }
-
-                if (!isResetting) {
-                    //avoid StackOverFlow
-                    reset();
-                }
-
-
+                reset(); // avoid StackOverflow: guarded by shouldReset (!isResetting)
             }
         } catch (Exception e) {
             logger.error("[{}] Error sending quote {} ", new Date(orderRequest.getTimestampCreation()),
                     orderRequest.getClientOrderId(), e);
             throw e;
         }
-
-        //		}
     }
 
     public String getClientOrderIdSent() {
