@@ -460,7 +460,7 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
                     if (killMarketDataPool) {
                         return;
                     }
-                    marketDataLatencyEngine.delay(new Date(depth.getTimestamp()));
+                    marketDataLatencyEngine.delay(depth.getDate());
                     super.notifyDepth(depth);
                 });
             }
@@ -476,7 +476,7 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
                     if (killMarketDataPool) {
                         return;
                     }
-                    marketDataLatencyEngine.delay(new Date(trade.getTimestamp()));
+                    marketDataLatencyEngine.delay(trade.getDate());
                     super.notifyTrade(trade);
                 });
             }

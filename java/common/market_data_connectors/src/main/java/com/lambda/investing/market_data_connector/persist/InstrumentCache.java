@@ -76,7 +76,7 @@ public class InstrumentCache {
 
             if (tradePrice <= bestBid) {
                 tradeToAllign.setVerb(Verb.Sell);
-//                logger.info("{} {} Trade at {} to {} aligned with depth from {} to {}", tradeToAllign.getVerb(), tradeToAllign.getInstrument(), tradePrice, bestBid, new Date(tradeToAllign.getTimestamp()), new Date(depth.getTimestamp()));
+//                logger.info("{} {} Trade at {} to {} aligned with depth from {} to {}", tradeToAllign.getVerb(), tradeToAllign.getInstrument(), tradePrice, bestBid, new Date(tradeToAllign.getTimestamp()), depth.getDate());
                 tradeToAllign.setPrice(bestBid);
                 tradeToAllign.setTimestamp(depth.getTimestamp() - 1);
                 tradesSync.incrementAndGet();
@@ -86,7 +86,7 @@ public class InstrumentCache {
             if (tradePrice >= bestAsk) {
                 tradeToAllign.setVerb(Verb.Buy);
                 tradeToAllign.setPrice(bestAsk);
-//                logger.info("{} {} Trade at {} to {} aligned with depth from {} to {}", tradeToAllign.getVerb(), tradeToAllign.getInstrument(), tradePrice, bestAsk, new Date(tradeToAllign.getTimestamp()), new Date(depth.getTimestamp()));
+//                logger.info("{} {} Trade at {} to {} aligned with depth from {} to {}", tradeToAllign.getVerb(), tradeToAllign.getInstrument(), tradePrice, bestAsk, new Date(tradeToAllign.getTimestamp()), depth.getDate());
                 tradeToAllign.setTimestamp(depth.getTimestamp() - 1);
                 tradesSync.incrementAndGet();
                 return tradeToAllign;

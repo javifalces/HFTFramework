@@ -88,7 +88,7 @@ public class LookForwardBiasAlgorithm extends Algorithm {
         boolean output = super.onDepthUpdate(depth);
         if (lastDepthUpdateTime == 0) {
             // First time we receive a depth update, we need to download the candles
-            Date startDate = new Date(depth.getTimestamp());
+            Date startDate = depth.getDate();
             Date endDate = new Date(startDate.getTime()); // One day later
             endDate.setHours(23);
             endDate.setMinutes(59);

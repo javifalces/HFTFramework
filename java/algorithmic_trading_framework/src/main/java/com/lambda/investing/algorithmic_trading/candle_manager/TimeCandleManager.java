@@ -59,7 +59,7 @@ public class TimeCandleManager {
     }
 
     public void onDepthUpdate(Depth depth) {
-        Date date = new Date(depth.getTimestamp());
+        Date date = depth.getDate();
         boolean isNewDay = startOfDayDate == null || (date.getDay() > startOfDayDate.getDay());
         if (isNewDay) {
             startOfDayDate = new Date(date.getYear(), date.getMonth(), date.getDate(), 0, 0, 0);

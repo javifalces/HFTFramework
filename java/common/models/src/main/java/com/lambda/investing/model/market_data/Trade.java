@@ -8,6 +8,7 @@ import com.lambda.investing.model.trading.Verb;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.Date;
 import java.util.UUID;
 
 import static com.lambda.investing.model.Util.*;
@@ -23,6 +24,34 @@ public class Trade extends CSVable implements Cloneable {
     private long timestampBrokerConnector;// set AbstractMarketDataConnectorPublisher.notifyTrade just before publish
     private long timestampAlgoConnector;//set in ZeroMqMarketDataConnector.onUpdate // OrdinaryMarketDataProvider.onUpdate
     private long timestampStrategy;//set in Algorithm.OnTradeUpdate when received
+
+    private Date date;
+
+    public void setTimestamp(long timestampCreation) {
+        this.timestamp = timestampCreation;
+        this.date = new Date(timestampCreation);
+    }
+
+    private Date dateAlgoConnector;
+
+    public void setTimestampAlgoConnector(long timestampAlgoConnector) {
+        this.timestampAlgoConnector = timestampAlgoConnector;
+        this.dateAlgoConnector = new Date(timestampAlgoConnector);
+    }
+
+    private Date dateBrokerConnector;
+
+    public void setTimestampBrokerConnector(long timestampBrokerConnector) {
+        this.timestampBrokerConnector = timestampBrokerConnector;
+        this.dateBrokerConnector = new Date(timestampBrokerConnector);
+    }
+
+    private Date dateStrategy;
+
+    public void setTimestampStrategy(long timestampStrategy) {
+        this.timestampStrategy = timestampStrategy;
+        this.dateStrategy = new Date(timestampStrategy);
+    }
 
     private double quantity, price = DEFAULT_VALUE;
     private String algorithmInfo;//just for backtesting
@@ -62,10 +91,11 @@ public class Trade extends CSVable implements Cloneable {
         newTrade.verb = trade.verb;
         newTrade.timeToNextUpdateMs = trade.timeToNextUpdateMs;
 
-        newTrade.timestamp = trade.timestamp;
-        newTrade.timestampStrategy = trade.timestampStrategy;
-        newTrade.timestampBrokerConnector = trade.timestampBrokerConnector;
-        newTrade.timestampAlgoConnector = trade.timestampAlgoConnector;
+        newTrade.setTimestamp(trade.timestamp);
+        newTrade.setTimestampStrategy(trade.timestampStrategy);
+        newTrade.setTimestampBrokerConnector(trade.timestampBrokerConnector);
+        newTrade.setTimestampAlgoConnector(trade.timestampAlgoConnector);
+
         return newTrade;
     }
 
@@ -113,6 +143,12 @@ public class Trade extends CSVable implements Cloneable {
         timestampStrategy = 0;
         timestampBrokerConnector = 0;
         timestampAlgoConnector = 0;
+
+        date = null;
+        dateAlgoConnector = null;
+        dateBrokerConnector = null;
+        dateStrategy = null;
+
     }
 
     private Trade() {
@@ -121,7 +157,7 @@ public class Trade extends CSVable implements Cloneable {
 
     public void setTradeFromParquet(TradeParquet tradeParquet, Instrument instrument) {
         this.instrument = instrument.getPrimaryKey();
-        this.timestamp = tradeParquet.getTimestamp();
+        this.setTimestamp(tradeParquet.getTimestamp());
         this.quantity = tradeParquet.getQuantity();
         this.price = tradeParquet.getPrice();
         this.id = generateId();
@@ -130,7 +166,7 @@ public class Trade extends CSVable implements Cloneable {
 
     public void setTradeFromExecutionReport(ExecutionReport executionReport) {
         this.instrument = executionReport.getInstrument();
-        this.timestamp = executionReport.getTimestampCreation();
+        this.setTimestamp(executionReport.getTimestampCreation());
         this.quantity = executionReport.getLastQuantity();
         this.price = executionReport.getPrice();
         this.algorithmInfo = executionReport.getAlgorithmInfo();

@@ -34,6 +34,33 @@ public class Depth extends CSVable implements Cloneable {
     private long timestampAlgoConnector;//set in ZeroMqMarketDataConnector.onUpdate // OrdinaryMarketDataProvider.onUpdate
     private long timestampStrategy;//set in Algorithm.OnDepthUpdate when received
 
+    private Date date;
+
+    public void setTimestamp(long timestampCreation) {
+        this.timestamp = timestampCreation;
+        this.date = new Date(timestampCreation);
+    }
+
+    private Date dateAlgoConnector;
+
+    public void setTimestampAlgoConnector(long timestampAlgoConnector) {
+        this.timestampAlgoConnector = timestampAlgoConnector;
+        this.dateAlgoConnector = new Date(timestampAlgoConnector);
+    }
+
+    private Date dateBrokerConnector;
+
+    public void setTimestampBrokerConnector(long timestampBrokerConnector) {
+        this.timestampBrokerConnector = timestampBrokerConnector;
+        this.dateBrokerConnector = new Date(timestampBrokerConnector);
+    }
+
+    private Date dateStrategy;
+
+    public void setTimestampStrategy(long timestampStrategy) {
+        this.timestampStrategy = timestampStrategy;
+        this.dateStrategy = new Date(timestampStrategy);
+    }
 
     private double[] bidsQuantities, asksQuantities, bids, asks;
 
@@ -64,7 +91,7 @@ public class Depth extends CSVable implements Cloneable {
     public void delayTimestamp(long delay) {
         if (delay <= 0)
             return;
-        this.timestamp += delay;
+        setTimestamp(this.timestamp + delay);
         this.timeToNextUpdateMs -= delay;
         if (this.timeToNextUpdateMs < 0) {
             this.timeToNextUpdateMs = 0;
@@ -251,10 +278,17 @@ public class Depth extends CSVable implements Cloneable {
         bidsAlgorithmInfo = null;
         asksAlgorithmInfo = null;
         timeToNextUpdateMs = Long.MIN_VALUE;
+
         timestamp = 0;
         timestampStrategy = 0;
         timestampBrokerConnector = 0;
         timestampAlgoConnector = 0;
+
+        date = null;
+        dateAlgoConnector = null;
+        dateBrokerConnector = null;
+        dateStrategy = null;
+
     }
 
     private Depth() {
@@ -263,7 +297,7 @@ public class Depth extends CSVable implements Cloneable {
     public void setDepthFromParquet(DepthParquet depthParquet, Instrument instrument) {
         UTC_CALENDAR.setTimeInMillis(depthParquet.getTimestamp());
         this.instrument = instrument.getPrimaryKey();
-        this.timestamp = depthParquet.getTimestamp();
+        setTimestamp(depthParquet.getTimestamp());
 
         //from csv
         if (levels == 0) {

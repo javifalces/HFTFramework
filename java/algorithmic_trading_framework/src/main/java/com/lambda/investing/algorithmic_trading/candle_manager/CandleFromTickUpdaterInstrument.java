@@ -321,7 +321,7 @@ public class CandleFromTickUpdaterInstrument {
     }
 
     public boolean isNewCandle(Depth depth) {
-        Date dateTest = new Date(depth.getTimestamp());
+        Date dateTest = depth.getDate();
         return timeCandleManager.isTimeNewCandle(dateTest);
     }
 
@@ -375,7 +375,7 @@ public class CandleFromTickUpdaterInstrument {
         if (!trade.getInstrument().equals(instrumentPk)) {
             return false;
         }
-        Date date = new Date(trade.getTimestamp());
+        Date date = trade.getDate();
 
         //minute candle
         if (lastTimestampMinuteTradeCandle == null || date.getMinutes() != lastTimestampMinuteTradeCandle

@@ -138,7 +138,7 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 		if (!isBacktest && !isPaper && (currentTime - executionReport.getTimestampCreation()) > 60 * 60 * 1000) {
 			logger.error(
 					"something is wrong a lot of time since execution report was sent! , more than 1 hour?   {}>{}",
-					new Date(currentTime), new Date(executionReport.getTimestampCreation()));
+					new Date(currentTime), executionReport.getDateCreation());
 		}
 		//
 

@@ -99,7 +99,7 @@ public class MainMenuGUI extends JFrame implements AlgorithmObserver {
 
     @Override
     public void onUpdateDepth(String algorithmInfo, Depth depth) {
-        updateTitle(new Date(depth.getTimestamp()));
+        updateTitle(depth.getDate());
         algorithmsMap.get(algorithmInfo).updateDepth(depth);
     }
 
@@ -115,7 +115,7 @@ public class MainMenuGUI extends JFrame implements AlgorithmObserver {
 
     @Override
     public void onUpdateTrade(String algorithmInfo, Trade trade) {
-        updateTitle(new Date(trade.getTimestamp()));
+        updateTitle(trade.getDate());
         algorithmsMap.get(algorithmInfo).updateTrade(trade);
     }
 

@@ -47,6 +47,27 @@ public class ExecutionReport implements Serializable {
     private long timestampAlgoConnector;//when AbstractTradingEngineConnector.onUpdate receive the ER
     private long timestampStrategy;//when Strategy.onExecutionReportUpdate receive the ER
 
+    private Date dateCreation;
+
+    public void setTimestampCreation(long timestampCreation) {
+        this.timestampCreation = timestampCreation;
+        this.dateCreation = new Date(timestampCreation);
+    }
+
+    private Date dateAlgoConnector;
+
+    public void setTimestampAlgoConnector(long timestampAlgoConnector) {
+        this.timestampAlgoConnector = timestampAlgoConnector;
+        this.dateAlgoConnector = new Date(timestampAlgoConnector);
+    }
+
+    private Date dateBrokerConnector;
+
+    public void setTimestampBrokerConnector(long timestampBrokerConnector) {
+        this.timestampBrokerConnector = timestampBrokerConnector;
+        this.dateBrokerConnector = new Date(timestampBrokerConnector);
+    }
+
     public ExecutionReport() {
         //for fastJson construction
     }
@@ -66,12 +87,12 @@ public class ExecutionReport implements Serializable {
 
         this.quantity = orderRequest.getQuantity();
         this.price = orderRequest.getPrice();
-        this.timestampCreation = System.currentTimeMillis();//has to be updated
+        setTimestampStrategy(System.currentTimeMillis());//has to be updated
         this.verb = orderRequest.getVerb();
     }
 
     public void updateTimestampCreation(long timestampCreation) {
-        this.timestampCreation = Math.max(timestampCreation, this.timestampCreation);
+        setTimestampCreation(Math.max(timestampCreation, this.timestampCreation));
     }
 
     @JSONField(serialize = false, deserialize = false)

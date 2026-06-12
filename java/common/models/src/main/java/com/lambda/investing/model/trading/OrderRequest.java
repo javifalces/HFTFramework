@@ -33,9 +33,33 @@ public class OrderRequest implements Cloneable, Serializable {
     public static Random RANDOM_GENERATOR = new Random();
 
     private long referenceTimestamp;//strategy reference time , last depth received
+
     private long timestampCreation;//strategy create the object
+    private Date dateCreation;
+
+    public void setTimestampCreation(long timestampCreation) {
+        this.timestampCreation = timestampCreation;
+        this.dateCreation = new Date(timestampCreation);
+    }
+
+
+    private Date dateAlgoConnector;
     private long timestampAlgoConnector;//Ordinary Trading Engine receive the order request from strategy
+
+    public void setTimestampAlgoConnector(long timestampAlgoConnector) {
+        this.timestampAlgoConnector = timestampAlgoConnector;
+        this.dateAlgoConnector = new Date(timestampAlgoConnector);
+    }
+
     private long timestampBrokerConnector; //Abstract BrokerConnector receive the order request and send to each broker implementation
+    private Date dateBrokerConnector;
+
+    public void setTimestampBrokerConnector(long timestampBrokerConnector) {
+        this.timestampBrokerConnector = timestampBrokerConnector;
+        this.dateBrokerConnector = new Date(timestampBrokerConnector);
+    }
+
+
 
 
     public Object clone() {
