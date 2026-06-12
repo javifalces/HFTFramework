@@ -96,7 +96,9 @@ public class Statistics implements Runnable {
 
     private void printCurrentStatistics() {
         if (topicToCounter.size() > 0) {
-            logger.info("******** {} ********", header);
+            StringBuilder sb = new StringBuilder();
+            sb.append(String.format("******** %s ********\n", header));
+
             for (Map.Entry<String, Long> entry : topicToCounter.entrySet()) {
                 long totalCounter = topicToTotalCounter.getOrDefault(entry.getKey(), 0L);
                 String topic = entry.getKey();
@@ -108,16 +110,17 @@ public class Statistics implements Runnable {
                     }
                     topic = topic.substring(0, 35) + "...-" + suffixAfterDash;
                 }
-
-                logger.info("\t{}:\t{}\ttotal:{}", topic, entry.getValue(), totalCounter);
+                sb.append(String.format("\t%s:\t%d\ttotal:%d\n", topic, entry.getValue(), totalCounter));
             }
 
-            logger.info("Depth.Pool: {}", Depth.logPool());
-            logger.info("Trade.Pool: {}", Trade.logPool());
+            sb.append(String.format("Depth.Pool: %s\n", Depth.logPool()));
+            sb.append(String.format("Trade.Pool: %s\n", Trade.logPool()));
             if (!DisruptorConnectorHelper.isEmpty()) {
-                logger.info("{}", DisruptorConnectorHelper.getAllInstancesStatus());
+                sb.append(DisruptorConnectorHelper.getAllInstancesStatus()).append("\n");
             }
-            logger.info("****************");
+            sb.append("****************");
+
+            logger.info(sb.toString());
 
             if (RESET_STATISTICS_PER_UPDATE) {
                 topicToCounter.clear();

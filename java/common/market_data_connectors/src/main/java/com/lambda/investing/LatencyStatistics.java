@@ -333,15 +333,17 @@ public class LatencyStatistics implements Runnable {
 
     /**
      * Prints a group of statistics with a header and subsections in the correct order.
+     * All lines are accumulated into a single StringBuilder and logged once at the end.
      * For outbound metrics (orderRequest), the order is reversed to reflect the outbound flow.
      */
     private void printGroupedStatistics(String basePrefix, Map<String, List<Long>> subsections) {
+        StringBuilder sb = new StringBuilder();
+
         // If there are subsections, print the header first
         if (subsections.size() > 1 && subsections.containsKey("TOTAL")) {
-            // Print header with base prefix
-            logger.info("═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════");
-            logger.info("  {}", basePrefix);
-            logger.info("───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────");
+            sb.append("═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════\n");
+            sb.append("  ").append(basePrefix).append("\n");
+            sb.append("───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n");
 
             // Determine the order based on whether this is an outbound (orderRequest) metric
             boolean isOutbound = basePrefix.startsWith("orderRequest");
@@ -350,7 +352,7 @@ public class LatencyStatistics implements Runnable {
             // Print subsections in specific order: TOTAL first, then others
             for (String subsectionName : order) {
                 if (subsections.containsKey(subsectionName)) {
-                    printLatencyLine(basePrefix, subsectionName, subsections.get(subsectionName), true);
+                    buildLatencyLine(sb, basePrefix, subsectionName, subsections.get(subsectionName), true);
                 }
             }
 
@@ -358,15 +360,20 @@ public class LatencyStatistics implements Runnable {
             for (Map.Entry<String, List<Long>> subsectionEntry : subsections.entrySet()) {
                 String subsectionName = subsectionEntry.getKey();
                 if (!Arrays.asList(order).contains(subsectionName)) {
-                    printLatencyLine(basePrefix, subsectionName, subsectionEntry.getValue(), true);
+                    buildLatencyLine(sb, basePrefix, subsectionName, subsectionEntry.getValue(), true);
                 }
             }
         } else {
             // Print standalone statistics (without subsections)
             for (Map.Entry<String, List<Long>> subsectionEntry : subsections.entrySet()) {
                 String displayName = subsectionEntry.getKey() == null ? basePrefix : basePrefix + "." + subsectionEntry.getKey();
-                printLatencyLine(basePrefix, displayName, subsectionEntry.getValue(), false);
+                buildLatencyLine(sb, basePrefix, displayName, subsectionEntry.getValue(), false);
             }
+        }
+
+        String message = sb.toString();
+        if (!message.isEmpty()) {
+            logger.info(message);
         }
     }
 
@@ -385,7 +392,7 @@ public class LatencyStatistics implements Runnable {
         }
     }
 
-    private void printLatencyLine(String basePrefix, String topic, List<Long> latency, boolean isSubsection) {
+    private void buildLatencyLine(StringBuilder sb, String basePrefix, String topic, List<Long> latency, boolean isSubsection) {
         int counter = latency.size();
         if (counter > 0) {
             double mean = latency.stream().mapToLong(a -> a).average().orElse(0.0);
@@ -428,18 +435,19 @@ public class LatencyStatistics implements Runnable {
             }
 
             // Highlight TOTAL with special formatting
-            String prefix = topic.equals("TOTAL") ? "  ► " : indent + "    ";
+            String linePrefix = topic.equals("TOTAL") ? "  ► " : indent + "    ";
             String topicPadded = String.format("%-40s", displayTopic);
 
-            logger.info("{}{}  size:{}\tmean(ms):{}[{}]\t50pct:{}[{}]\t75pct:{}[{}]\t90pct:{}[{}]\t95pct:{}[{}]\t99pct:{}[{}]\tmax:{}[{}]",
-                    prefix, topicPadded, counter,
-                    String.format("%.2f", mean), String.format("%.2f", dailyMaxStats.maxMean),
-                    String.format("%.2f", percentile50), String.format("%.2f", dailyMaxStats.maxPercentile50),
-                    String.format("%.2f", percentile75), String.format("%.2f", dailyMaxStats.maxPercentile75),
-                    String.format("%.2f", percentile90), String.format("%.2f", dailyMaxStats.maxPercentile90),
-                    String.format("%.2f", percentile95), String.format("%.2f", dailyMaxStats.maxPercentile95),
-                    String.format("%.2f", percentile99), String.format("%.2f", dailyMaxStats.maxPercentile99),
-                    String.format("%.2f", maxLatency), String.format("%.2f", dailyMaxStats.maxLatency));
+            sb.append(String.format(
+                    "%s%s  size:%d\tmean(ms):%.2f[%.2f]\t50pct:%.2f[%.2f]\t75pct:%.2f[%.2f]\t90pct:%.2f[%.2f]\t95pct:%.2f[%.2f]\t99pct:%.2f[%.2f]\tmax:%.2f[%.2f]\n",
+                    linePrefix, topicPadded, counter,
+                    mean, dailyMaxStats.maxMean,
+                    percentile50, dailyMaxStats.maxPercentile50,
+                    percentile75, dailyMaxStats.maxPercentile75,
+                    percentile90, dailyMaxStats.maxPercentile90,
+                    percentile95, dailyMaxStats.maxPercentile95,
+                    percentile99, dailyMaxStats.maxPercentile99,
+                    maxLatency, dailyMaxStats.maxLatency));
         }
     }
 
