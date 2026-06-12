@@ -4,6 +4,63 @@ let bellEnabled = false;
 // ── Backtest mode tracking ────────────────────────────────────────────────────
 let isBacktestMode = false;
 
+// ── Refresh interval ─────────────────────────────────────────────────────────
+let refreshIntervalMs = 0; // 0 = real-time
+let refreshTimerId = null;
+const msgBuffer = [];
+
+function onRefreshIntervalChange(val) {
+    refreshIntervalMs = parseInt(val, 10);
+    clearInterval(refreshTimerId);
+    refreshTimerId = null;
+    if (refreshIntervalMs > 0) {
+        refreshTimerId = setInterval(flushMsgBuffer, refreshIntervalMs);
+    } else {
+        // Switching to real-time: flush buffered messages immediately
+        flushMsgBuffer();
+    }
+}
+
+/** Capture collapse state of live-order instrument groups (▸ = collapsed). */
+function captureCollapseState() {
+    const collapsed = new Set();
+    document.querySelectorAll('.lo-group-header').forEach(hdr => {
+        const toggle = hdr.querySelector('.lo-group-toggle');
+        if (toggle && toggle.textContent.trim() === '▸') {
+            collapsed.add(hdr.dataset.group);
+        }
+    });
+    return collapsed;
+}
+
+/** Re-apply collapsed state to live-order groups after a re-render. */
+function restoreCollapseState(collapsed) {
+    collapsed.forEach(groupId => {
+        const hdr = document.querySelector(`.lo-group-header[data-group="${groupId}"]`);
+        if (!hdr) return;
+        document.querySelectorAll(`tr.lo-group-row[data-group="${groupId}"]`)
+            .forEach(r => {
+                r.style.display = 'none';
+            });
+        const toggle = hdr.querySelector('.lo-group-toggle');
+        if (toggle) toggle.textContent = '▸';
+    });
+}
+
+/** Flush buffered messages, preserving expand/collapse state across re-renders. */
+function flushMsgBuffer() {
+    if (msgBuffer.length === 0) return;
+    const collapsed = captureCollapseState();
+    msgBuffer.splice(0).forEach(msg => {
+        try {
+            handleMessage(msg);
+        } catch (e) {
+            console.error(e);
+        }
+    });
+    restoreCollapseState(collapsed);
+}
+
 function toggleBell() {
     bellEnabled = !bellEnabled;
     const btn = document.getElementById('bell-btn');
@@ -16,6 +73,31 @@ function toggleBell() {
         btn.textContent = '🔕';
         btn.classList.remove('bell-active');
         btn.title = 'Trade sound notifications (disabled) – click to enable';
+    }
+}
+
+function togglePortfolioCharts() {
+    const chartsSection = document.getElementById('portfolio-charts-section');
+    const expandBtn = document.getElementById('portfolio-expand-btn');
+    if (!chartsSection || !expandBtn) return;
+
+    const isCollapsed = chartsSection.classList.contains('collapsed');
+
+    if (isCollapsed) {
+        // Expand the charts
+        chartsSection.classList.remove('collapsed');
+        expandBtn.classList.add('expanded');
+        expandBtn.title = 'Hide historical charts';
+        // Trigger chart resize after animation
+        setTimeout(() => {
+            renderPnlChart();
+            renderPositionChart();
+        }, 300);
+    } else {
+        // Collapse the charts
+        chartsSection.classList.add('collapsed');
+        expandBtn.classList.remove('expanded');
+        expandBtn.title = 'Show historical charts';
     }
 }
 
@@ -695,6 +777,194 @@ function renderPnlChart() {
     });
 }
 
+// ── Position Timeline ─────────────────────────────────────────────────────────
+/** Array of { ts, positions: {instrument: netPosition} } sampled snapshots */
+const positionHistory = [];
+
+/**
+ * Fetches the full position history stored on the backend and populates positionHistory.
+ * Called whenever a STATE message is received (connect / reconnect).
+ */
+async function fetchPositionHistory() {
+    const token = getToken();
+    if (!token) return;
+    try {
+        const res = await fetch(getApiBase() + '/api/position-history', {
+            headers: {'Authorization': 'Bearer ' + token}
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!Array.isArray(data)) return;
+        const lastBackendTs = data.length > 0 ? (data[data.length - 1].ts || 0) : 0;
+        const localNewer = positionHistory.filter(p => p.ts > lastBackendTs);
+        positionHistory.length = 0;
+        data.forEach(p => positionHistory.push(p));
+        localNewer.forEach(p => positionHistory.push(p));
+        updatePositionCounter();
+        renderPositionChart();
+    } catch (e) {
+        console.debug('fetchPositionHistory error:', e);
+    }
+}
+
+function updatePositionCounter() {
+    const counter = document.getElementById('position-chart-count');
+    if (counter) counter.textContent = positionHistory.length + ' sample' + (positionHistory.length !== 1 ? 's' : '');
+}
+
+/** Records a live position sample from the latest instrument snapshot map. */
+function recordLivePositionSample(ts) {
+    if (Object.keys(latestInstrumentSnapshotMap).length === 0) return;
+    const positions = {};
+    for (const [instr, s] of Object.entries(latestInstrumentSnapshotMap)) {
+        if (s && s.netPosition != null) positions[instr] = s.netPosition;
+    }
+    if (Object.keys(positions).length === 0) return;
+    // Replace or add entry at this ts (same cadence as PnL – driven by backend sample)
+    positionHistory.push({ts, positions});
+    updatePositionCounter();
+    renderPositionChart();
+}
+
+const POSITION_COLORS = [
+    '#4e9af1', '#ecc94b', '#3ecf8e', '#f687b3', '#9f7aea',
+    '#fc8181', '#68d391', '#76e4f7', '#fbd38d', '#b794f4'
+];
+
+function renderPositionChart() {
+    const canvas = document.getElementById('position-chart');
+    if (!canvas) return;
+    const W = canvas.clientWidth || canvas.offsetWidth || 800;
+    const H = canvas.clientHeight || canvas.offsetHeight || 160;
+    if (W === 0 || H === 0) return;
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+
+    const PAD = {top: 20, right: 20, bottom: 40, left: 72};
+    const cW = W - PAD.left - PAD.right;
+    const cH = H - PAD.top - PAD.bottom;
+
+    if (positionHistory.length < 1) {
+        ctx.fillStyle = '#718096';
+        ctx.font = '12px Segoe UI, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Waiting for position data…', W / 2, H / 2);
+        return;
+    }
+
+    // Collect all instruments ever seen
+    const instrSet = new Set();
+    positionHistory.forEach(p => {
+        if (p.positions) Object.keys(p.positions).forEach(k => instrSet.add(k));
+    });
+    const instrs = Array.from(instrSet);
+
+    const first = positionHistory[0].ts;
+    const last = positionHistory[positionHistory.length - 1].ts;
+    const tRange = last - first || 1;
+
+    const allVals = positionHistory.flatMap(p => instrs.map(k => p.positions?.[k])).filter(v => v != null && Number.isFinite(+v)).map(Number);
+    let minY = Math.min(...allVals, 0);
+    let maxY = Math.max(...allVals, 0);
+    if (minY === maxY) {
+        minY -= 1;
+        maxY += 1;
+    }
+    const yPadding = (maxY - minY) * 0.1 || 0.5;
+    minY -= yPadding;
+    maxY += yPadding;
+    const yRange = maxY - minY;
+
+    const xOf = ts => PAD.left + ((ts - first) / tRange) * cW;
+    const yOf = v => PAD.top + (1 - (v - minY) / yRange) * cH;
+
+    // Grid lines + Y labels
+    const Y_STEPS = 4;
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= Y_STEPS; i++) {
+        const v = minY + (yRange / Y_STEPS) * i;
+        const y = yOf(v);
+        ctx.strokeStyle = '#2e3347';
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(PAD.left, y);
+        ctx.lineTo(PAD.left + cW, y);
+        ctx.stroke();
+        ctx.fillStyle = '#718096';
+        ctx.font = '10px Segoe UI, system-ui, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(fmtCompact(v), PAD.left - 6, y);
+    }
+
+    // Zero line
+    if (minY <= 0 && maxY >= 0) {
+        const y0 = yOf(0);
+        ctx.strokeStyle = '#4a5568';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(PAD.left, y0);
+        ctx.lineTo(PAD.left + cW, y0);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    // X axis time labels
+    const xSteps = Math.max(1, Math.min(positionHistory.length, Math.floor(cW / 80)));
+    for (let i = 0; i <= xSteps; i++) {
+        const ts = first + (tRange / xSteps) * i;
+        ctx.fillStyle = '#718096';
+        ctx.font = '10px Segoe UI, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(fmtTs(ts), xOf(ts), PAD.top + cH + 6);
+    }
+
+    // Draw each instrument series
+    instrs.forEach((instr, idx) => {
+        const color = POSITION_COLORS[idx % POSITION_COLORS.length];
+        const pts = positionHistory.filter(p => p.positions?.[instr] != null && Number.isFinite(+p.positions[instr]));
+        if (pts.length < 1) return;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.lineJoin = 'round';
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        pts.forEach((p, i) => {
+            const x = xOf(p.ts);
+            const y = yOf(+p.positions[instr]);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        const lp = pts[pts.length - 1];
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(xOf(lp.ts), yOf(+lp.positions[instr]), 3, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    // Legend
+    let lx = PAD.left + 8;
+    const ly = PAD.top + 6;
+    ctx.font = '10px Segoe UI, system-ui, sans-serif';
+    ctx.textBaseline = 'middle';
+    instrs.forEach((instr, idx) => {
+        const color = POSITION_COLORS[idx % POSITION_COLORS.length];
+        const label = instr.length > 20 ? instr.slice(0, 18) + '…' : instr;
+        ctx.fillStyle = color;
+        ctx.fillRect(lx, ly - 2, 14, 3);
+        ctx.fillStyle = '#a0aec0';
+        ctx.textAlign = 'left';
+        ctx.fillText(label, lx + 18, ly);
+        lx += 18 + ctx.measureText(label).width + 16;
+        if (lx > W - PAD.right - 80) return; // stop if no space
+    });
+}
+
 // ── Runtime state ─────────────────────────────────────────────────────────────
 let ws = null;
 let reconnectTimer = null;
@@ -915,6 +1185,7 @@ function connect() {
         }
         ws = null;
     }
+    msgBuffer.length = 0; // clear any buffered messages from the previous connection
     ws = new WebSocket('ws://' + host + ':' + port + '/ws?token=' + encodeURIComponent(token));
     ws.onopen = () => {
         setStatus(true, 'Connected on port ' + port);
@@ -935,7 +1206,13 @@ function connect() {
     };
     ws.onmessage = e => {
         try {
-            handleMessage(JSON.parse(e.data));
+            const msg = JSON.parse(e.data);
+            // AUTH_FAILED must always be handled immediately regardless of interval
+            if (refreshIntervalMs === 0 || msg.type === 'AUTH_FAILED') {
+                handleMessage(msg);
+            } else {
+                msgBuffer.push(msg);
+            }
         } catch (err) {
             console.error(err);
         }
@@ -952,7 +1229,6 @@ function reconnect() {
 function handleMessage(msg) {
     // Algorithm info display removed from header
     // if (msg.algorithmInfo) document.getElementById('algo-info').textContent = msg.algorithmInfo;
-    appendLog(msg.type, msg.algorithmInfo, msg.data);
 
     switch (msg.type) {
         case 'AUTH_FAILED':
@@ -1001,7 +1277,6 @@ function handleMessage(msg) {
             updateCustom(msg.data);
             break;
         case 'MESSAGE':
-            appendLog('MSG', msg.algorithmInfo, (msg.data?.name || '') + ': ' + (msg.data?.body || ''));
             break;
         case 'TRADE':
             onTrade(msg);
@@ -1090,6 +1365,7 @@ function applyState(msg) {
     renderOBPage();
     // Fetch persisted history from the backend so tables survive page refreshes
     fetchPnlHistory();
+    fetchPositionHistory();
     fetchPnlSnapshots();
     fetchActiveOrders();
     fetchExecutionReports();
@@ -1463,8 +1739,6 @@ function renderInstrumentCards() {
         expandBtn.style.background = 'transparent';
         expandBtn.style.cursor = 'pointer';
         expandBtn.style.fontSize = '14px';
-        // Expand button: green if position < 0, red if position > 0
-        expandBtn.style.color = isNegative ? '#4CAF50' : (isPositive ? '#f44336' : 'var(--text-muted)');
         expandBtn.onclick = () => toggleInstrumentOrderbook(instr);
         tdExpand.appendChild(expandBtn);
         row.appendChild(tdExpand);
@@ -1651,6 +1925,9 @@ function onAggregatedPortfolioUpdate(aggregatedData, timestamp) {
     // Record the aggregated PnL sample for the chart
     recordLivePnlSample();
     renderPnlChart();
+
+    // Record live position sample (same cadence)
+    recordLivePositionSample(timestamp);
 
     // Render all instrument cards with the updated aggregated data
     scheduleInstrumentCardsRender();
@@ -2304,19 +2581,6 @@ function renderCustomMetricsCards() {
     });
 }
 
-// ── Event log ─────────────────────────────────────────────────────────────────
-function appendLog(type, algo, data) {
-    if (type === 'DEPTH') return;
-    const c = document.getElementById('log-container');
-    if (!c) return;
-    const d = document.createElement('div');
-    d.className = 'log-entry';
-    const ts = new Date().toLocaleTimeString();
-    const s = typeof data === 'object' ? JSON.stringify(data).substring(0, 150) : String(data ?? '');
-    d.innerHTML = `<span class="ts">${ts}</span><b>${type}</b>${algo ? ' [' + algo + ']' : ''} ${s}`;
-    c.insertBefore(d, c.firstChild);
-    while (c.children.length > MAX_LOG_ENTRIES) c.removeChild(c.lastChild);
-}
 
 // ── Trade events → ticker update only ────────────────────────────────────────
 function onTrade(msg) {

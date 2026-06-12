@@ -111,6 +111,41 @@
   background: rgba(236, 201, 75, .25);
 }
 
+/* ── Portfolio expand button ──────────────────────────────────────────────── */
+.portfolio-expand-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: color .2s, border-color .2s, transform .2s;
+}
+
+.portfolio-expand-btn:hover {
+    color: var(--text);
+    border-color: var(--accent);
+}
+
+.portfolio-expand-btn.expanded {
+    transform: scaleY(-1);
+}
+
+/* ── Portfolio charts section (collapsible) ────────────────────────────── */
+.portfolio-charts-section {
+    max-height: 500px;
+    overflow: hidden;
+    transition: max-height .3s ease, opacity .3s ease;
+    opacity: 1;
+}
+
+.portfolio-charts-section.collapsed {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+}
+
 /* ── PnL Timeline chart ───────────────────────────────────────────────────── */
 .pnl-canvas {
   display: block;
@@ -340,6 +375,28 @@
 .header-btn:hover {
     color: var(--text);
     border-color: var(--accent);
+}
+
+.header-select {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    outline: none;
+}
+
+.header-select:hover,
+.header-select:focus {
+    color: var(--text);
+    border-color: var(--accent);
+}
+
+.header-select option {
+    background: var(--card-bg, #1e1e2e);
+    color: var(--text);
 }
 
 /* ── Mobile / small-screen overrides ────────────────────────────────────── */

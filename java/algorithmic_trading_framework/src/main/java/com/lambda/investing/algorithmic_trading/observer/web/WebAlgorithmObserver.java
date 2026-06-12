@@ -110,6 +110,14 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
      */
     private volatile long lastPnlSampleTs = 0;
 
+    // ── Position history (persisted on backend, queried by frontend on reconnect) ──
+    /**
+     * Circular buffer of sampled position entries: {@code {ts, positions: {instrument: netPosition}}}.
+     * Sampled at the same rate as pnlHistory.
+     */
+    private final Deque<Map<String, Object>> positionHistory = new ConcurrentLinkedDeque<>();
+    private static final int MAX_POSITION_HISTORY = 10_000;
+
     private PortfolioSnapshot lastPortfolioSnapshot;
 
     /**
@@ -212,6 +220,20 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
             pnlHistory.addLast(sample);
             while (pnlHistory.size() > MAX_PNL_HISTORY) pnlHistory.pollFirst();
             server.updatePnlHistory(sanitizeJson(toJsonString(new ArrayList<>(pnlHistory))));
+
+            // Record per-instrument position snapshot
+            Map<String, Object> posSample = new LinkedHashMap<>();
+            posSample.put("ts", now);
+            Map<String, Object> positions = new LinkedHashMap<>();
+            if (lastPortfolioSnapshot.getInstrumentPnlSnapshotMap() != null) {
+                for (Map.Entry<String, PnlSnapshot> e : lastPortfolioSnapshot.getInstrumentPnlSnapshotMap().entrySet()) {
+                    if (e.getValue() != null) positions.put(e.getKey(), e.getValue().netPosition);
+                }
+            }
+            posSample.put("positions", positions);
+            positionHistory.addLast(posSample);
+            while (positionHistory.size() > MAX_POSITION_HISTORY) positionHistory.pollFirst();
+            server.updatePositionHistory(sanitizeJson(toJsonString(new ArrayList<>(positionHistory))));
         }
 
         String json = buildMessage("PORTFOLIO_SNAPSHOT", "AGGREGATED", toPortfolioDto(lastPortfolioSnapshot), currentTimeMs());

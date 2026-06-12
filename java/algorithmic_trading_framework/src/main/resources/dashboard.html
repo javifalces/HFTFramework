@@ -85,6 +85,13 @@
             <span class="algo-power-icon">⏻</span>
             <span id="algo-toggle-label">Running</span>
         </button>
+        <select id="refresh-interval-select" class="header-select"
+                onchange="onRefreshIntervalChange(this.value)"
+                title="Dashboard refresh interval">
+            <option value="0">⚡ Real-time</option>
+            <option value="5000">⏱ 5s</option>
+            <option value="30000">⏱ 30s</option>
+        </select>
       <button id="bell-btn" class="header-btn bell-btn" onclick="toggleBell()"
               title="Trade sound notifications (disabled)">🔕
       </button>
@@ -120,7 +127,12 @@
     <div class="grid">
         <div class="card">
           <h2 style="display:flex;align-items:center;justify-content:space-between">
-            Portfolio
+              <div style="display:flex;align-items:center;gap:8px">
+                  Portfolio
+                  <button id="portfolio-expand-btn" class="portfolio-expand-btn" onclick="togglePortfolioCharts()"
+                          title="Toggle historical charts">▼
+                  </button>
+              </div>
             <span style="font-size:11px;color:var(--muted);text-transform:none;letter-spacing:0;font-weight:400;display:flex;align-items:center;gap:6px">
                     Sample every
                     <input id="pnl-interval" type="number" value="10" min="1" max="3600"
@@ -151,7 +163,13 @@
                     <div class="value neutral" id="pnl-investment">–</div>
                 </div>
             </div>
-          <canvas id="pnl-chart" class="pnl-canvas" style="margin-top:14px"></canvas>
+            <div id="portfolio-charts-section" class="portfolio-charts-section collapsed">
+                <canvas id="pnl-chart" class="pnl-canvas" style="margin-top:14px"></canvas>
+                <div style="margin-top:10px;font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px">
+                    Position &nbsp;|&nbsp; <span id="position-chart-count" style="color:var(--muted)">0 samples</span>
+                </div>
+                <canvas id="position-chart" class="pnl-canvas" style="margin-top:4px"></canvas>
+            </div>
         </div>
         <div class="card">
             <h2>Instruments</h2>
@@ -244,10 +262,6 @@
             </h2>
             <div class="kv-grid" id="custom-kv"><span
                     style="color:var(--muted);font-size:12px">No custom metrics yet.</span></div>
-        </div>
-        <div class="card full-width">
-            <h2>Event Log</h2>
-            <div id="log-container"></div>
         </div>
     </div>
 </div>

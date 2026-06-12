@@ -52,6 +52,7 @@ import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
  *   <li>{@code GET /api/parameters}          – returns the last known parameters as JSON</li>
  *   <li>{@code GET /api/instruments}         – returns the last known instruments/PnL data as JSON</li>
  *   <li>{@code GET /api/custom-metrics}      – returns the last known custom metrics as JSON</li>
+ *   <li>{@code GET /api/position-history}    – returns the persisted per-instrument position timeline as a JSON array</li>
  *   <li>{@code GET /ws}                      – WebSocket upgrade; pushes typed JSON update envelopes</li>
  * </ul>
  */
@@ -102,6 +103,11 @@ public class AlgorithmWebServer {
      * Contains both global and per-algorithm custom metrics.
      */
     private volatile String customMetricsJson = "{}";
+    /**
+     * Persisted position history – returned via GET /api/position-history.
+     * Each entry: {ts, positions: {instrument: netPosition}}.
+     */
+    private volatile String positionHistoryJson = "[]";
     /** Optional Grafana base URL included in STATE messages (empty = Grafana tab hidden). */
     private volatile String grafanaUrl = "";
     /**
@@ -278,6 +284,16 @@ public class AlgorithmWebServer {
      */
     public void updateCustomMetrics(String customMetricsJson) {
         this.customMetricsJson = (customMetricsJson != null) ? customMetricsJson : "{}";
+    }
+
+    /**
+     * Replaces the persisted position history returned by {@code GET /api/position-history}.
+     * Each entry: {@code {ts, positions: {instrument: netPosition}}}.
+     *
+     * @param historyJson JSON array of position history entries
+     */
+    public void updatePositionHistory(String historyJson) {
+        this.positionHistoryJson = (historyJson != null) ? historyJson : "[]";
     }
 
     /**
@@ -514,6 +530,17 @@ public class AlgorithmWebServer {
                 } else {
                     response = new DefaultFullHttpResponse(HTTP_1_1, OK,
                             Unpooled.copiedBuffer(customMetricsJson, CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                }
+            } else if ("/api/position-history".equals(uri)) {
+                String token = getAuthToken(req, query);
+                if (!isValidToken(token)) {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, UNAUTHORIZED,
+                            Unpooled.copiedBuffer("{\"error\":\"Unauthorized\"}", CharsetUtil.UTF_8));
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+                } else {
+                    response = new DefaultFullHttpResponse(HTTP_1_1, OK,
+                            Unpooled.copiedBuffer(positionHistoryJson, CharsetUtil.UTF_8));
                     response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
                 }
             } else {
