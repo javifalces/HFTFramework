@@ -38,12 +38,11 @@ public class InstrumentManager {
 
     public InstrumentManager(Instrument instrument, boolean isBacktest) {
         this.instrument = instrument;
+        reset();
         if (!isBacktest) {
 //            new Thread(new MapManager(), instrument.getPrimaryKey() + "_instrumentManager").start();
             new Thread(new MapManager()::runAffinity, instrument.getPrimaryKey() + "_instrumentManager").start();
         }
-
-        reset();
     }
 
     public void reset() {
