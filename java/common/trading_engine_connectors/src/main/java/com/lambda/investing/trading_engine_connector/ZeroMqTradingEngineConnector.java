@@ -113,7 +113,7 @@ public class ZeroMqTradingEngineConnector extends AbstractTradingEngineConnector
 //			String message = toJsonString(orderRequest);
 			this.zeroMqPublisher
 					.publish(this.zeroMqConfigurationOrderRequest, TypeMessage.order_request, topic, orderRequest);
-			logger.info("ZeroMQ order request -> {}", orderRequest);
+//			logger.info("ZeroMQ order request -> {}", orderRequest);
 			return true;
 		}
 	}
