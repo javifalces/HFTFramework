@@ -295,7 +295,7 @@ public class QuoteSideManager {
         return clientOrderIdSent;
     }
 
-    public void unquoteSide() throws LambdaTradingException {
+    public synchronized void unquoteSide() throws LambdaTradingException {
         QuoteRequest lastQuote = lastQuoteSent;
         if (isDisable) {
             return;
@@ -334,7 +334,7 @@ public class QuoteSideManager {
         return sleepUntil;
     }
 
-    public boolean onExecutionReportUpdate(ExecutionReport executionReport) {
+    public synchronized boolean onExecutionReportUpdate(ExecutionReport executionReport) {
         if (executionReport.getVerb() != null && !executionReport.getVerb().equals(verb)) {
             //is from the other side
             return false;
@@ -392,11 +392,16 @@ public class QuoteSideManager {
 
         String clientOrderIdRecevied = executionReport.getClientOrderId();
 
-        if (clientOrderId.equalsIgnoreCase(clientOrderIdSent)) {
-            //remove the client
-            clientOrderIdSent = null;
-            clientOrderIdSentTimestamp = Long.MIN_VALUE;
-        }
+        // ----------------------------------------------------------------
+        // IMPORTANT ordering: update activeClientOrderId BEFORE clearing
+        // clientOrderIdSent so that the quoting thread — which spins on
+        // clientOrderIdSent == null inside a synchronized block — always
+        // sees a consistent (confirmed) activeClientOrderId as soon as it
+        // is allowed to proceed.  Clearing clientOrderIdSent first created
+        // a window where the quoting thread would pick up a stale
+        // activeClientOrderId and send a Modify/Cancel against an order
+        // that had already been replaced.
+        // ----------------------------------------------------------------
 
         if (isActive) {
             if (!cfTradesClientOrderId.contains(clientOrderIdRecevied)
@@ -417,6 +422,13 @@ public class QuoteSideManager {
                 }
             }
 
+        }
+
+        // Clear the "sent, waiting for ER" gate only after activeClientOrderId has
+        // been updated above, ensuring atomicity for the quoting thread.
+        if (clientOrderId.equalsIgnoreCase(clientOrderIdSent)) {
+            clientOrderIdSent = null;
+            clientOrderIdSentTimestamp = Long.MIN_VALUE;
         }
 
         if (executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Cancelled)) {
