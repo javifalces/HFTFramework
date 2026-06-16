@@ -678,6 +678,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         logger.warn("createActiveCancel: origClientOrderId {} not found in active orders", origClientOrderId);
         return null;
     }
+
     public OrderRequest createCancel(Instrument instrument, String origClientOrderId) {
         OrderRequest cancelOrderRequest = new OrderRequest();
         cancelOrderRequest.setOrderRequestAction(OrderRequestAction.Cancel);
@@ -1744,6 +1745,12 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                 System.out.println(Configuration.formatLog("onPosition {} = {}", instrumentPK, position));
             }
             instrumentManager.setPosition(position);
+            PnlSnapshot pnlSnapshot = portfolioManager.getLastPnlSnapshot(instrumentPK);
+            if (Math.abs(pnlSnapshot.netPosition - position) > 1e-6) {
+                logger.info("onPosition {} = {} but pnlSnapshot.netPosition={} -> update it", instrumentPK, position, pnlSnapshot.netPosition);
+                pnlSnapshot.netPosition = position;
+                algorithmNotifier.notifyObserversOnUpdatePortfolioSnapshot(portfolioManager.getPortfolioSnapshot());
+            }
         }
 
         synchronized (lockLatchPosition) {

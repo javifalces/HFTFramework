@@ -3,6 +3,37 @@ let authToken = sessionStorage.getItem('hft_token') || null;
 /** Set to true when the server reports it is running a backtest (login is skipped). */
 let backtestMode = false;
 
+// ── Grafana connectivity ──────────────────────────────────────────────────────
+/** The Grafana URL received from the backend STATE message, or null if not configured. */
+let currentGrafanaUrl = null;
+/** Timer handle for periodic Grafana reachability probes. */
+let grafanaCheckTimer = null;
+
+/**
+ * Probes currentGrafanaUrl to determine if Grafana is reachable.
+ * Uses a no-cors fetch so it works cross-origin without CORS headers.
+ * On success: shows the tab button in normal style.
+ * On failure: shows the tab button with a shadowed/disabled appearance.
+ * Re-runs every 30 seconds via grafanaCheckTimer.
+ */
+async function checkGrafanaConnectivity() {
+    if (!currentGrafanaUrl) return;
+    const btn = document.getElementById('tab-btn-grafana');
+    if (!btn) return;
+    btn.style.display = '';
+    try {
+        await fetch(currentGrafanaUrl, {
+            mode: 'no-cors',
+            signal: AbortSignal.timeout(3000)
+        });
+        btn.classList.remove('tab-btn-unavailable');
+        btn.title = 'Grafana';
+    } catch (_) {
+        btn.classList.add('tab-btn-unavailable');
+        btn.title = 'Grafana (unavailable – server not reachable)';
+    }
+}
+
 function showLoginOverlay(errorMsg) {
     document.getElementById('login-overlay').classList.remove('hidden');
     document.getElementById('login-error').textContent = errorMsg || '';
@@ -365,8 +396,18 @@ function applyState(msg) {
         });
     }
     if (msg.grafanaUrl) {
-        document.getElementById('tab-btn-grafana').style.display = '';
+        currentGrafanaUrl = msg.grafanaUrl;
         document.getElementById('grafana-frame').src = msg.grafanaUrl;
+        const btn = document.getElementById('tab-btn-grafana');
+        if (btn) {
+            btn.style.display = '';
+            if (!btn.classList.contains('tab-btn-unavailable')) {
+                btn.classList.add('tab-btn-unavailable');
+            }
+        }
+        checkGrafanaConnectivity();
+        clearInterval(grafanaCheckTimer);
+        grafanaCheckTimer = setInterval(checkGrafanaConnectivity, 30_000);
     }
     const bar = document.getElementById('paper-trading-bar');
     if (bar) bar.classList.toggle('visible', !!msg.paperTrading);

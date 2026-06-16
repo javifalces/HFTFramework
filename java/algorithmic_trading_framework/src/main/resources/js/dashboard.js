@@ -9,6 +9,41 @@ let refreshIntervalMs = 0; // 0 = real-time
 let refreshTimerId = null;
 const msgBuffer = [];
 
+// ── Grafana connectivity ──────────────────────────────────────────────────────
+/** The Grafana URL received from the backend STATE message, or null if not configured. */
+let currentGrafanaUrl = null;
+/** Timer handle for periodic Grafana reachability probes. */
+let grafanaCheckTimer = null;
+
+/**
+ * Probes currentGrafanaUrl to determine if Grafana is reachable.
+ * Uses a no-cors fetch so it works cross-origin without CORS headers.
+ * On success: shows the tab button in normal style.
+ * On failure: shows the tab button with a shadowed/disabled appearance.
+ * Re-runs every 30 seconds via grafanaCheckTimer.
+ */
+async function checkGrafanaConnectivity() {
+    if (!currentGrafanaUrl) return;
+    const btn = document.getElementById('tab-btn-grafana');
+    if (!btn) return;
+    // Always make the button visible once we have a URL
+    btn.style.display = '';
+    try {
+        // no-cors resolves (opaque response) when server is up, rejects when unreachable
+        await fetch(currentGrafanaUrl, {
+            mode: 'no-cors',
+            signal: AbortSignal.timeout(3000)
+        });
+        // Reachable → normal appearance
+        btn.classList.remove('tab-btn-unavailable');
+        btn.title = 'Grafana';
+    } catch (_) {
+        // Unreachable → shadowed appearance
+        btn.classList.add('tab-btn-unavailable');
+        btn.title = 'Grafana (unavailable – server not reachable)';
+    }
+}
+
 function onRefreshIntervalChange(val) {
     refreshIntervalMs = parseInt(val, 10);
     clearInterval(refreshTimerId);
@@ -405,11 +440,17 @@ async function fetchPnlSnapshots() {
  * Fetches the current list of live (active) orders from the backend and
  * repopulates both {@link activeOrdersMap} and the Live Orders card.
  * Called whenever a STATE message is received (connect / reconnect).
- * Removes any local orders that don't exist in the backend response.
+ *
+ * Guard: if any authoritative ACTIVE_ORDERS WebSocket message arrived while
+ * the HTTP request was in-flight the REST snapshot is silently discarded —
+ * the WS data is always more recent and must not be overwritten.
  */
 async function fetchActiveOrders() {
     const token = getToken();
     if (!token) return;
+    // Capture the WS generation before the async gap.
+    // If it changes while we wait, the WS has already given us fresher data.
+    const genAtStart = activeOrdersWsGeneration;
     try {
         const res = await fetch(getApiBase() + '/api/active-orders', {
             headers: {'Authorization': 'Bearer ' + token}
@@ -418,29 +459,13 @@ async function fetchActiveOrders() {
         const data = await res.json();
         if (!Array.isArray(data)) return;
 
-        // Build a set of all current order IDs from the backend for validation
-        const backendOrderIds = new Set();
-        data.forEach(o => {
-            if (o.clientOrderId && o.instrument) {
-                backendOrderIds.add(o.instrument + ':' + o.clientOrderId);
-            }
-        });
+        // If a live ACTIVE_ORDERS WS message arrived while we were waiting,
+        // the map is already up-to-date — discard the stale REST snapshot.
+        if (activeOrdersWsGeneration !== genAtStart) return;
 
-        // Remove orders from frontend that don't exist in backend
-        for (const instr of Object.keys(activeOrdersMap)) {
-            for (const orderId of Object.keys(activeOrdersMap[instr])) {
-                const key = instr + ':' + orderId;
-                if (!backendOrderIds.has(key)) {
-                    delete activeOrdersMap[instr][orderId];
-                }
-            }
-            // Clean up empty instrument maps
-            if (Object.keys(activeOrdersMap[instr]).length === 0) {
-                delete activeOrdersMap[instr];
-            }
-        }
-
-        // Rebuild activeOrdersMap from the backend snapshot
+        // Atomic authoritative replace: clear then repopulate in one step
+        // so no intermediate inconsistent state is visible to other code.
+        Object.keys(activeOrdersMap).forEach(k => delete activeOrdersMap[k]);
         data.forEach(o => {
             if (!o.instrument || !o.clientOrderId) return;
             if (!activeOrdersMap[o.instrument]) activeOrdersMap[o.instrument] = {};
@@ -995,6 +1020,14 @@ const portfolioByAlgo = {};
 let selectedAlgorithm = null;
 /** Map<clientOrderId, {verb,price,quantity,quantityFill}>> */
 const activeOrdersMap = {};
+/**
+ * Monotonically-increasing generation counter incremented every time an
+ * authoritative ACTIVE_ORDERS WS message is applied to activeOrdersMap.
+ * Used by fetchActiveOrders() to detect whether a live WS update arrived
+ * while the async HTTP request was in-flight; if so the stale REST snapshot
+ * is discarded to avoid overwriting the fresher WS data.
+ */
+let activeOrdersWsGeneration = 0;
 /** Map<instrument, PnlSnapshot> – latest instrument snapshots for rendering cards */
 const latestInstrumentSnapshotMap = {};
 
@@ -1208,8 +1241,19 @@ function connect() {
         try {
             const msg = JSON.parse(e.data);
             // AUTH_FAILED must always be handled immediately regardless of interval
-            if (refreshIntervalMs === 0 || msg.type === 'AUTH_FAILED') {
+            if (msg.type === 'AUTH_FAILED') {
                 handleMessage(msg);
+            } else if (refreshIntervalMs === 0) {
+                // Real-time mode: process immediately but preserve view state
+                // (collapse/expand state of live-order groups) across every re-render,
+                // mirroring the same save/restore logic used by flushMsgBuffer().
+                const collapsed = captureCollapseState();
+                try {
+                    handleMessage(msg);
+                } catch (err) {
+                    console.error(err);
+                }
+                restoreCollapseState(collapsed);
             } else {
                 msgBuffer.push(msg);
             }
@@ -1345,7 +1389,9 @@ function applyState(msg) {
             ensureInstrumentKnown(instr);
         });
         if (s.activeOrders) {
-            // Clear any stale activeOrdersMap and repopulate from STATE
+            // Clear any stale activeOrdersMap and repopulate from STATE.
+            // Bump generation so a concurrent fetchActiveOrders() call discards its response.
+            activeOrdersWsGeneration++;
             Object.keys(activeOrdersMap).forEach(k => delete activeOrdersMap[k]);
             Object.entries(s.activeOrders).forEach(([instr, orders]) => {
                 activeOrdersMap[instr] = {};
@@ -1359,8 +1405,21 @@ function applyState(msg) {
         }
     }
     if (msg.grafanaUrl) {
-        document.getElementById('tab-btn-grafana').style.display = '';
+        // Store the URL and always keep the iframe src up to date
+        currentGrafanaUrl = msg.grafanaUrl;
         document.getElementById('grafana-frame').src = msg.grafanaUrl;
+        // Start in shadowed state until the probe completes
+        const btn = document.getElementById('tab-btn-grafana');
+        if (btn) {
+            btn.style.display = '';
+            if (!btn.classList.contains('tab-btn-unavailable')) {
+                btn.classList.add('tab-btn-unavailable');
+            }
+        }
+        // Probe immediately, then re-check every 30 s
+        checkGrafanaConnectivity();
+        clearInterval(grafanaCheckTimer);
+        grafanaCheckTimer = setInterval(checkGrafanaConnectivity, 30_000);
     }
     renderOBPage();
     // Fetch persisted history from the backend so tables survive page refreshes
@@ -2065,6 +2124,67 @@ const REMOVED_ER_STATUSES = new Set(['CompletelyFilled', 'Cancelled', 'Rejected'
 /** Mirrors ExecutionReport.tradeStatus: statuses that represent an actual fill of our order. */
 const TRADE_ER_STATUSES = new Set(['CompletelyFilled', 'PartialFilled']);
 
+/**
+ * Updates activeOrdersMap from a single ExecutionReport and re-renders
+ * the Live Orders table and OB overlays for the affected instrument.
+ *
+ * Active / PartialFilled statuses add/update the order entry.
+ * Terminal statuses (CompletelyFilled, Cancelled, Rejected, CancelRejected) remove it.
+ *
+ * Also handles the modify/replace flow: when origClientOrderId differs from
+ * clientOrderId the superseded old order is removed — mirroring the Java backend.
+ *
+ * Increments activeOrdersWsGeneration so any concurrent fetchActiveOrders() call
+ * knows to discard its now-stale REST snapshot.
+ */
+function updateActiveOrdersFromER(er) {
+    if (!er || !er.instrument || !er.clientOrderId) return;
+    const instr = er.instrument;
+    const status = er.executionReportStatus;
+
+    // Every ER update is authoritative — bump generation to invalidate any
+    // in-flight fetchActiveOrders() HTTP request
+    activeOrdersWsGeneration++;
+
+    if (LIVE_ER_STATUSES.has(status)) {
+        // Add or update the order in the map using the canonical active-order
+        // field set so renderLiveOrders() always has consistent data.
+        if (!activeOrdersMap[instr]) activeOrdersMap[instr] = {};
+        // Merge: preserve existing order skeleton but update mutable fields
+        const existing = activeOrdersMap[instr][er.clientOrderId] || {};
+        activeOrdersMap[instr][er.clientOrderId] = {
+            clientOrderId: er.clientOrderId,
+            instrument: er.instrument,
+            verb: er.verb ?? existing.verb,
+            price: er.price ?? existing.price,
+            quantity: er.quantity ?? existing.quantity,
+            quantityFill: er.quantityFill ?? existing.quantityFill ?? 0,
+            status: status,
+            timestampCreation: er.timestampCreation ?? existing.timestampCreation ?? Date.now()
+        };
+        // On modify/replace: remove the superseded original order (mirrors backend)
+        if (er.origClientOrderId && er.origClientOrderId !== er.clientOrderId) {
+            delete activeOrdersMap[instr][er.origClientOrderId];
+        }
+    } else if (REMOVED_ER_STATUSES.has(status)) {
+        if (activeOrdersMap[instr]) {
+            delete activeOrdersMap[instr][er.clientOrderId];
+            // Also remove by origClientOrderId if present (modify/replace cleanup)
+            if (er.origClientOrderId && er.origClientOrderId !== er.clientOrderId) {
+                delete activeOrdersMap[instr][er.origClientOrderId];
+            }
+            if (Object.keys(activeOrdersMap[instr]).length === 0) {
+                delete activeOrdersMap[instr];
+            }
+        }
+    }
+    // Re-render the live orders table preserving collapse state
+    renderLiveOrders();
+    // Refresh OB overlays for the affected instrument
+    renderOBBook(instr);
+    refreshInlineOrderbook(instr);
+}
+
 function onExecutionReport(msg) {
     const er = msg.data;
     if (!er || !er.instrument) return;
@@ -2089,38 +2209,19 @@ function onExecutionReport(msg) {
 }
 
 /**
- * Handles a backend-authoritative ACTIVE_ORDERS message: replaces the entire
- * activeOrdersMap for every instrument mentioned in the payload and re-renders.
- * Also removes any orders that no longer exist in activeOrdersByInstrument from the frontend.
+ * Handles a backend-authoritative ACTIVE_ORDERS message: atomically replaces
+ * the entire activeOrdersMap and re-renders the Live Orders card + OB overlays.
+ * Increments activeOrdersWsGeneration so any in-flight fetchActiveOrders()
+ * call knows to discard its stale REST snapshot.
  */
 function onActiveOrdersUpdate(msg) {
     const orders = msg.data;
     if (!Array.isArray(orders)) return;
 
-    // Build a set of all current order IDs from the backend for validation
-    const backendOrderIds = new Set();
-    orders.forEach(o => {
-        if (o.clientOrderId && o.instrument) {
-            backendOrderIds.add(o.instrument + ':' + o.clientOrderId);
-        }
-    });
+    // Signal fetchActiveOrders() that WS data is now fresher than any pending REST call
+    activeOrdersWsGeneration++;
 
-    // Remove orders from frontend that don't exist in backend update
-    // This ensures removed orders don't linger in the UI
-    for (const instr of Object.keys(activeOrdersMap)) {
-        for (const orderId of Object.keys(activeOrdersMap[instr])) {
-            const key = instr + ':' + orderId;
-            if (!backendOrderIds.has(key)) {
-                delete activeOrdersMap[instr][orderId];
-            }
-        }
-        // Clean up empty instrument maps
-        if (Object.keys(activeOrdersMap[instr]).length === 0) {
-            delete activeOrdersMap[instr];
-        }
-    }
-
-    // Clear the map and repopulate from the authoritative backend list
+    // Atomic authoritative replace — one clear then one populate, no interim state
     Object.keys(activeOrdersMap).forEach(k => delete activeOrdersMap[k]);
     orders.forEach(o => {
         if (!o.instrument || !o.clientOrderId) return;
@@ -2528,10 +2629,21 @@ function onCustomMetricsSelectorChange() {
  * Renders the custom metrics cards based on the currently selected algorithm.
  * In single-algorithm mode, displays all metrics.
  * In multi-algorithm mode, displays only the selected algorithm's metrics or all if selector is empty.
+ * Uses in-place DOM updates (create-or-update) to preserve scroll position across rapid updates.
  */
 function renderCustomMetricsCards() {
     const c = document.getElementById('custom-kv');
     if (!c) return;
+
+    // If no metrics at all, show placeholder
+    if (Object.keys(customMetricsByAlgorithm).length === 0) {
+        c.innerHTML = '<span style="color:var(--muted);font-size:12px">No metrics yet.</span>';
+        return;
+    }
+
+    // Remove placeholder span if it was showing
+    const placeholder = c.querySelector('span');
+    if (placeholder) c.innerHTML = '';
 
     // Determine which metrics to display
     let metricsToDisplay = {};
@@ -2543,44 +2655,54 @@ function renderCustomMetricsCards() {
         const singleAlgo = Object.keys(customMetricsByAlgorithm)[0];
         metricsToDisplay = customMetricsByAlgorithm[singleAlgo];
     } else if (selectedCustomMetricsAlgorithm === null && Object.keys(customMetricsByAlgorithm).length > 1) {
-        // Multi-algorithm view: show all metrics with algorithm labels
-        metricsToDisplay = null; // Special case handled below
+        // Multi-algorithm view: show all metrics with algorithm labels (handled below)
+        metricsToDisplay = null;
     }
 
-    c.innerHTML = '';
-
-    // If no metrics at all, show placeholder
-    if (Object.keys(customMetricsByAlgorithm).length === 0) {
-        c.innerHTML = '<span style="color:var(--muted);font-size:12px">No metrics yet.</span>';
-        return;
+    // Helper: create or update a .kv div by a stable element id
+    function upsertKv(elemId, labelHtml, value) {
+        let d = document.getElementById(elemId);
+        if (!d) {
+            d = document.createElement('div');
+            d.className = 'kv';
+            d.id = elemId;
+            c.appendChild(d);
+        }
+        d.innerHTML = `<div class="label">${labelHtml}</div><div class="value ${colorClass(value)}">${fmt(value)}</div>`;
     }
 
-    // Handle multi-algorithm view (show all with labels)
+    // Track which element ids are still valid so stale ones can be removed
+    const activeIds = new Set();
+
     if (metricsToDisplay === null) {
+        // Multi-algorithm view
         const algoList = Object.keys(customMetricsByAlgorithm).sort();
         algoList.forEach(algo => {
             const algoMetrics = customMetricsByAlgorithm[algo];
             Object.entries(algoMetrics).forEach(([k, v]) => {
-                const d = document.createElement('div');
-                d.className = 'kv';
-                d.innerHTML = `<div class="label">${k}<br><small style="color:var(--muted);font-size:10px">[${algo}]</small></div><div class="value ${colorClass(v)}">${fmt(v)}</div>`;
-                c.appendChild(d);
+                const elemId = 'cm-' + btoa(algo + '\x00' + k).replace(/[^a-zA-Z0-9]/g, '_');
+                activeIds.add(elemId);
+                upsertKv(elemId,
+                    `${k}<br><small style="color:var(--muted);font-size:10px">[${algo}]</small>`,
+                    v);
             });
         });
-        return;
+    } else {
+        const e = Object.entries(metricsToDisplay);
+        if (!e.length) {
+            c.innerHTML = '<span style="color:var(--muted);font-size:12px">No metrics for this algorithm.</span>';
+            return;
+        }
+        e.forEach(([k, v]) => {
+            const elemId = 'cm-' + btoa(k).replace(/[^a-zA-Z0-9]/g, '_');
+            activeIds.add(elemId);
+            upsertKv(elemId, k, v);
+        });
     }
 
-    // Handle single algorithm view
-    const e = Object.entries(metricsToDisplay);
-    if (!e.length) {
-        c.innerHTML = '<span style="color:var(--muted);font-size:12px">No metrics for this algorithm.</span>';
-        return;
-    }
-    e.forEach(([k, v]) => {
-        const d = document.createElement('div');
-        d.className = 'kv';
-        d.innerHTML = `<div class="label">${k}</div><div class="value ${colorClass(v)}">${fmt(v)}</div>`;
-        c.appendChild(d);
+    // Remove .kv elements that are no longer in the active set (stale keys)
+    Array.from(c.querySelectorAll('.kv')).forEach(el => {
+        if (el.id && !activeIds.has(el.id)) el.remove();
     });
 }
 

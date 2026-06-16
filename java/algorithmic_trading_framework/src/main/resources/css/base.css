@@ -186,6 +186,25 @@ header h1 {
     border-bottom-color: var(--accent);
 }
 
+/* Grafana tab – server not reachable */
+.tab-btn.tab-btn-unavailable {
+    opacity: 0.35;
+    cursor: not-allowed;
+    filter: grayscale(1);
+    text-shadow: none;
+    pointer-events: auto; /* keep visible but showTab() guards the click */
+}
+
+.tab-btn.tab-btn-unavailable:hover {
+    color: var(--muted);
+}
+
+.tab-btn.tab-btn-unavailable::after {
+    content: ' ⚠';
+    font-size: 10px;
+    opacity: 0.7;
+}
+
 .tab-panel {
     display: none;
 }

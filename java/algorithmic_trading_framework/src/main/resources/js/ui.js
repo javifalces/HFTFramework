@@ -5,6 +5,8 @@
  * @param {HTMLElement} btn - The nav button that was clicked
  */
 function showTab(id, btn) {
+    // Do not navigate to tabs whose button is in the unavailable (shadowed) state
+    if (btn && btn.classList.contains('tab-btn-unavailable')) return;
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('tab-' + id).classList.add('active');
