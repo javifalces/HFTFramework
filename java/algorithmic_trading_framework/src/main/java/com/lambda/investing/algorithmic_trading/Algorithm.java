@@ -904,6 +904,31 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
     private void updateAllActiveOrders(ExecutionReport executionReport) {
         if (getAlgorithmState() == AlgorithmState.STOPPED) {
+            // When stopped, skip all internal active-order book-keeping (required to not
+            // corrupt state when resetting RL / restarting), BUT we MUST still dispatch
+            // any pending cancel-when-active requests.  Orders that were in-flight
+            // (sent but not yet acknowledged by the broker) at the moment of stop are
+            // registered in clientOrderIdToCancelWhenActive by cancelAll().  If their
+            // Active ER arrives after the algo transitions to STOPPED and we skip them
+            // here, the cancel is never sent → broker keeps the order live → no
+            // Cancelled ER ever arrives → frontend shows stale active orders indefinitely.
+            boolean isActiveEr =
+                    executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Active)
+                            || executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.PartialFilled);
+            if (isActiveEr && clientOrderIdToCancelWhenActive.containsKey(executionReport.getClientOrderId())) {
+                String instrumentPk = executionReport.getInstrument();
+                InstrumentManager instrumentManager = getInstrumentManager(instrumentPk);
+                OrderRequest cancelRequest = createCancel(instrumentManager.getInstrument(),
+                        executionReport.getClientOrderId());
+                try {
+                    sendOrderRequest(cancelRequest);
+                    clientOrderIdToCancelWhenActive.remove(executionReport.getClientOrderId());
+                    logger.info("[{}] Sent delayed cancel for in-flight order {} that became active after stop",
+                            getCurrentTime(), executionReport.getClientOrderId());
+                } catch (LambdaTradingException e) {
+                    logger.error("can't cancel in-flight order {} after stop: {}", executionReport.getClientOrderId(), e.getMessage());
+                }
+            }
             return;
         }//required to not update when we are resetting RL
         String instrumentPk = executionReport.getInstrument();
