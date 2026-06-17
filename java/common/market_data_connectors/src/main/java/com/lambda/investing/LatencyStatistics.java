@@ -341,6 +341,7 @@ public class LatencyStatistics implements Runnable {
 
         // If there are subsections, print the header first
         if (subsections.size() > 1 && subsections.containsKey("TOTAL")) {
+            sb.append("\n");
             sb.append("═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════\n");
             sb.append("  ").append(basePrefix).append("\n");
             sb.append("───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n");
@@ -371,6 +372,7 @@ public class LatencyStatistics implements Runnable {
             }
         }
 
+        sb.append("───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n");
         String message = sb.toString();
         if (!message.isEmpty()) {
             logger.info(message);
@@ -384,8 +386,8 @@ public class LatencyStatistics implements Runnable {
      */
     private String[] getSubsectionOrder(boolean isOutbound) {
         if (isOutbound) {
-            // For outbound: from strategy creation to market (reversed)
-            return new String[]{"TOTAL", "toAlgoConnector", "toBrokerConnector", "toNow"};
+            // For outbound: from strategy creation to market (reversed) - orderRequest
+            return new String[]{"TOTAL", "toStrategy", "toAlgoConnector", "toBrokerConnector", "toNow"};
         } else {
             // For inbound: from market to strategy (normal)
             return new String[]{"TOTAL", "toBrokerConnector", "toAlgoConnector", "toStrategy", "toNow"};
