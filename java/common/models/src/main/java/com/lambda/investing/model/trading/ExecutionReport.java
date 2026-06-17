@@ -87,6 +87,11 @@ public class ExecutionReport implements Serializable {
 
         this.quantity = orderRequest.getQuantity();
         this.price = orderRequest.getPrice();
+        // Initialize timestampCreation from the OrderRequest's creation time so that
+        // toBrokerConnector latency is meaningful even when the caller does not override it.
+        // Falls back to current time if the OrderRequest timestamp was never set (0).
+        long ts = orderRequest.getTimestampCreation();
+        setTimestampCreation(ts > 0 ? ts : System.currentTimeMillis());
         setTimestampStrategy(System.currentTimeMillis());//has to be updated
         this.verb = orderRequest.getVerb();
     }
