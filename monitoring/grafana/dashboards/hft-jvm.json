@@ -821,13 +821,14 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "s"
+          "unit": "s",
+          "noValue": "-"
         }
       },
       "targets": [
         {
-          "expr": "process_start_time_seconds{job=\"$app\"}",
-          "legendFormat": "start time",
+          "expr": "time() - process_start_time_seconds{job=\"$app\"}",
+          "legendFormat": "uptime",
           "refId": "A"
         }
       ]

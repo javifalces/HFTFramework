@@ -277,6 +277,18 @@ public class QuoteManager implements ExecutionReportListener, Runnable {
             }
             return true;
         } else {
+            String clordId = executionReport.getClientOrderId();
+            //retry by clordId
+            if (bidQuoteSideManager.getLastClOrdIdSent().contains(clordId)) {
+                bidQuoteSideManager.onExecutionReportUpdate(executionReport);
+                return true;
+            }
+
+            if (askQuoteSideManager.getLastClOrdIdSent().contains(clordId)) {
+                askQuoteSideManager.onExecutionReportUpdate(executionReport);
+                return true;
+            }
+
             logger.warn("ER with verb Null received! {}", executionReport);
             return false;
         }

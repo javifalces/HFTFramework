@@ -395,17 +395,23 @@ public class LatencyStatistics implements Runnable {
     }
 
     private void buildLatencyLine(StringBuilder sb, String basePrefix, String topic, List<Long> latency, boolean isSubsection) {
-        int counter = latency.size();
+        // Filter out null values to prevent NullPointerException during unboxing
+        List<Long> validLatencies = latency.stream()
+                .filter(a -> a != null)
+                .toList();
+
+        int counter = validLatencies.size();
         if (counter > 0) {
-            double mean = latency.stream().mapToLong(a -> a).average().orElse(0.0);
-            double maxLatency = latency.stream().mapToLong(a -> a).max().orElse(0);
+            double mean = validLatencies.stream().mapToLong(a -> a).average().orElse(0.0);
+            double maxLatency = validLatencies.stream().mapToLong(a -> a).max().orElse(0);
 
             // Calculate percentiles
-            double percentile50 = latency.stream().sorted().skip((long) (latency.size() * 0.5)).findFirst().orElse(0L);
-            double percentile75 = latency.stream().sorted().skip((long) (latency.size() * 0.75)).findFirst().orElse(0L);
-            double percentile90 = latency.stream().sorted().skip((long) (latency.size() * 0.9)).findFirst().orElse(0L);
-            double percentile95 = latency.stream().sorted().skip((long) (latency.size() * 0.95)).findFirst().orElse(0L);
-            double percentile99 = latency.stream().sorted().skip((long) (latency.size() * 0.99)).findFirst().orElse(0L);
+            List<Long> sorted = validLatencies.stream().sorted().toList();
+            double percentile50 = sorted.stream().skip((long) (sorted.size() * 0.5)).findFirst().orElse(0L);
+            double percentile75 = sorted.stream().skip((long) (sorted.size() * 0.75)).findFirst().orElse(0L);
+            double percentile90 = sorted.stream().skip((long) (sorted.size() * 0.9)).findFirst().orElse(0L);
+            double percentile95 = sorted.stream().skip((long) (sorted.size() * 0.95)).findFirst().orElse(0L);
+            double percentile99 = sorted.stream().skip((long) (sorted.size() * 0.99)).findFirst().orElse(0L);
 
             // Get or create daily max stats for this basePrefix and topic
             Map<String, DailyMaxStats> topicToDailyMaxStats = basePrefixToTopicToDailyMaxStats.computeIfAbsent(

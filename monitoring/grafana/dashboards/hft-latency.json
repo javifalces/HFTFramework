@@ -8,7 +8,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 38,
-  "version": 2,
+  "version": 3,
   "refresh": "10s",
   "time": {
     "from": "now-30m",
@@ -29,7 +29,7 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "query": "label_values(latency_mean_ms, job)",
+        "query": "label_values(jvm_memory_bytes_used, job)",
         "refresh": 2,
         "multi": false,
         "includeAll": false,
@@ -62,35 +62,24 @@
       {
         "name": "prefix",
         "label": "Prefix",
-        "type": "query",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "prometheus"
+        "type": "custom",
+        "query": "depth,trade,executionReport,orderRequest",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
         },
-        "query": "label_values(latency_mean_ms{job=\"$app\"}, topic)",
-        "regex": "/^([^.]+)\\..*/",
-        "refresh": 2,
-        "multi": true,
+        "options": [
+          {"selected": true,  "text": "All",              "value": "$__all"},
+          {"selected": false, "text": "depth",             "value": "depth"},
+          {"selected": false, "text": "trade",             "value": "trade"},
+          {"selected": false, "text": "executionReport",   "value": "executionReport"},
+          {"selected": false, "text": "orderRequest",      "value": "orderRequest"}
+        ],
+        "hide": 0,
+        "multi": false,
         "includeAll": true,
-        "allValue": ".*",
-        "sort": 1,
-        "hide": 0
-      },
-      {
-        "name": "topic",
-        "label": "Topic",
-        "type": "query",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "prometheus"
-        },
-        "query": "label_values(latency_mean_ms{job=\"$app\", topic=~\"($prefix)\\\\..*\"}, topic)",
-        "refresh": 2,
-        "multi": true,
-        "includeAll": true,
-        "allValue": ".*",
-        "sort": 1,
-        "hide": 0
+        "allValue": ".*"
       }
     ]
   },
@@ -98,7 +87,7 @@
     {
       "id": 1,
       "type": "row",
-      "title": "Overview by Prefix \u2014 $percentile",
+      "title": "Overview \u2014 $percentile (last value per prefix)",
       "collapsed": false,
       "gridPos": {"x": 0, "y": 0, "w": 24, "h": 1}
     },
@@ -106,7 +95,7 @@
       "id": 2,
       "type": "stat",
       "title": "Depth \u2014 $percentile (ms)",
-      "description": "Total $percentile latency across all depth topics",
+      "description": "Last $percentile latency for the depth prefix (TOTAL across all topics)",
       "gridPos": {"x": 0, "y": 1, "w": 6, "h": 4},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "options": {
@@ -132,7 +121,7 @@
       },
       "targets": [
         {
-          "expr": "avg(latency_${percentile}_ms{topic=~\"depth\\..*\\.TOTAL\", job=\"$app\"})",
+          "expr": "avg({job=\"$app\", __name__=\"latency_${percentile}_ms\", topic=~\"depth.*TOTAL\"})",
           "legendFormat": "depth",
           "refId": "A"
         }
@@ -142,7 +131,7 @@
       "id": 3,
       "type": "stat",
       "title": "Trade \u2014 $percentile (ms)",
-      "description": "Total $percentile latency across all trade topics",
+      "description": "Last $percentile latency for the trade prefix (TOTAL across all topics)",
       "gridPos": {"x": 6, "y": 1, "w": 6, "h": 4},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "options": {
@@ -168,7 +157,7 @@
       },
       "targets": [
         {
-          "expr": "avg(latency_${percentile}_ms{topic=~\"trade\\..*\\.TOTAL\", job=\"$app\"})",
+          "expr": "avg({job=\"$app\", __name__=\"latency_${percentile}_ms\", topic=~\"trade.*TOTAL\"})",
           "legendFormat": "trade",
           "refId": "A"
         }
@@ -178,7 +167,7 @@
       "id": 4,
       "type": "stat",
       "title": "ExecutionReport \u2014 $percentile (ms)",
-      "description": "Total $percentile latency across all executionReport topics",
+      "description": "Last $percentile latency for the executionReport prefix (TOTAL across all topics)",
       "gridPos": {"x": 12, "y": 1, "w": 6, "h": 4},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "options": {
@@ -204,7 +193,7 @@
       },
       "targets": [
         {
-          "expr": "avg(latency_${percentile}_ms{topic=~\"executionReport\\..*\\.TOTAL\", job=\"$app\"})",
+          "expr": "avg({job=\"$app\", __name__=\"latency_${percentile}_ms\", topic=~\"executionReport.*TOTAL\"})",
           "legendFormat": "executionReport",
           "refId": "A"
         }
@@ -214,7 +203,7 @@
       "id": 5,
       "type": "stat",
       "title": "OrderRequest \u2014 $percentile (ms)",
-      "description": "Total $percentile latency across all orderRequest topics",
+      "description": "Last $percentile latency for the orderRequest prefix (TOTAL across all topics)",
       "gridPos": {"x": 18, "y": 1, "w": 6, "h": 4},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "options": {
@@ -240,7 +229,7 @@
       },
       "targets": [
         {
-          "expr": "avg(latency_${percentile}_ms{topic=~\"orderRequest\\..*\\.TOTAL\", job=\"$app\"})",
+          "expr": "avg({job=\"$app\", __name__=\"latency_${percentile}_ms\", topic=~\"orderRequest.*TOTAL\"})",
           "legendFormat": "orderRequest",
           "refId": "A"
         }
@@ -249,15 +238,15 @@
     {
       "id": 10,
       "type": "row",
-      "title": "Latency by Topic Over Time",
+      "title": "Latency by Stage \u2014 $prefix \u2014 $percentile",
       "collapsed": false,
       "gridPos": {"x": 0, "y": 5, "w": 24, "h": 1}
     },
     {
       "id": 11,
       "type": "timeseries",
-      "title": "$percentile Latency by Topic \u2014 TOTAL (ms)",
-      "description": "Per-topic TOTAL latency over time. Use the Prefix variable to filter by message type and the Topic variable for finer selection.",
+      "title": "TOTAL \u2014 $percentile (ms)",
+      "description": "End-to-end total latency over time for the selected prefix",
       "gridPos": {"x": 0, "y": 6, "w": 24, "h": 8},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "options": {
@@ -276,7 +265,7 @@
       },
       "targets": [
         {
-          "expr": "latency_${percentile}_ms{topic=~\"$topic\", job=\"$app\"}",
+          "expr": "{job=\"$app\", __name__=\"latency_${percentile}_ms\", topic=~\"$prefix.*TOTAL\"}",
           "legendFormat": "{{topic}}",
           "refId": "A"
         }
@@ -285,12 +274,17 @@
     {
       "id": 12,
       "type": "timeseries",
-      "title": "Max Latency Over Time (ms)",
+      "title": "toBrokerConnector \u2014 $percentile (ms)",
+      "description": "Latency from market timestamp to broker connector for the selected prefix",
       "gridPos": {"x": 0, "y": 14, "w": 12, "h": 7},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "options": {
         "tooltip": {"mode": "multi"},
-        "legend": {"displayMode": "list", "placement": "bottom"}
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["lastNotNull", "max", "mean"]
+        }
       },
       "fieldConfig": {
         "defaults": {
@@ -300,8 +294,8 @@
       },
       "targets": [
         {
-          "expr": "latency_max_ms{topic=~\"$topic\", job=\"$app\"}",
-          "legendFormat": "max \u2014 {{topic}}",
+          "expr": "{job=\"$app\", __name__=\"latency_${percentile}_ms\", topic=~\"$prefix.*toBrokerConnector\"}",
+          "legendFormat": "{{topic}}",
           "refId": "A"
         }
       ]
@@ -309,12 +303,17 @@
     {
       "id": 13,
       "type": "timeseries",
-      "title": "Mean Latency Over Time (ms)",
+      "title": "toAlgoConnector \u2014 $percentile (ms)",
+      "description": "Latency from broker connector to algo connector for the selected prefix",
       "gridPos": {"x": 12, "y": 14, "w": 12, "h": 7},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "options": {
         "tooltip": {"mode": "multi"},
-        "legend": {"displayMode": "list", "placement": "bottom"}
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["lastNotNull", "max", "mean"]
+        }
       },
       "fieldConfig": {
         "defaults": {
@@ -324,346 +323,67 @@
       },
       "targets": [
         {
-          "expr": "latency_mean_ms{topic=~\"$topic\", job=\"$app\"}",
-          "legendFormat": "mean \u2014 {{topic}}",
+          "expr": "{job=\"$app\", __name__=\"latency_${percentile}_ms\", topic=~\"$prefix.*toAlgoConnector\"}",
+          "legendFormat": "{{topic}}",
           "refId": "A"
         }
       ]
     },
     {
-      "id": 20,
-      "type": "row",
-      "title": "Latency by Stage",
-      "collapsed": false,
-      "gridPos": {"x": 0, "y": 21, "w": 24, "h": 1}
-    },
-    {
-      "id": 21,
+      "id": 14,
       "type": "timeseries",
-      "title": "Depth Latency by Stage (ms) \u2014 $percentile",
-      "description": "toBrokerConnector / toAlgoConnector / toStrategy / toNow latencies for depth updates",
-      "gridPos": {"x": 0, "y": 22, "w": 12, "h": 7},
+      "title": "toStrategy \u2014 $percentile (ms)",
+      "description": "Latency from algo connector to strategy for the selected prefix",
+      "gridPos": {"x": 0, "y": 21, "w": 12, "h": 7},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "options": {
         "tooltip": {"mode": "multi"},
-        "legend": {"displayMode": "list", "placement": "bottom"}
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["lastNotNull", "max", "mean"]
+        }
       },
       "fieldConfig": {
-        "defaults": {"unit": "ms"}
+        "defaults": {
+          "unit": "ms",
+          "custom": {"lineWidth": 2}
+        }
       },
       "targets": [
         {
-          "expr": "latency_${percentile}_ms{topic=~\"depth\\..*\\.toBrokerConnector\", job=\"$app\"}",
-          "legendFormat": "toBrokerConnector \u2014 {{topic}}",
+          "expr": "{job=\"$app\", __name__=\"latency_${percentile}_ms\", topic=~\"$prefix.*toStrategy\"}",
+          "legendFormat": "{{topic}}",
           "refId": "A"
-        },
-        {
-          "expr": "latency_${percentile}_ms{topic=~\"depth\\..*\\.toAlgoConnector\", job=\"$app\"}",
-          "legendFormat": "toAlgoConnector \u2014 {{topic}}",
-          "refId": "B"
-        },
-        {
-          "expr": "latency_${percentile}_ms{topic=~\"depth\\..*\\.toStrategy\", job=\"$app\"}",
-          "legendFormat": "toStrategy \u2014 {{topic}}",
-          "refId": "C"
-        },
-        {
-          "expr": "latency_${percentile}_ms{topic=~\"depth\\..*\\.toNow\", job=\"$app\"}",
-          "legendFormat": "toNow \u2014 {{topic}}",
-          "refId": "D"
         }
       ]
     },
     {
-      "id": 22,
+      "id": 15,
       "type": "timeseries",
-      "title": "Order Request Latency by Stage (ms) \u2014 $percentile",
-      "description": "Outbound: toAlgoConnector / toBrokerConnector / toStrategy / toNow for order requests",
-      "gridPos": {"x": 12, "y": 22, "w": 12, "h": 7},
+      "title": "toNow \u2014 $percentile (ms)",
+      "description": "Latency from last stage to current time (processing lag) for the selected prefix",
+      "gridPos": {"x": 12, "y": 21, "w": 12, "h": 7},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "options": {
         "tooltip": {"mode": "multi"},
-        "legend": {"displayMode": "list", "placement": "bottom"}
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["lastNotNull", "max", "mean"]
+        }
       },
       "fieldConfig": {
-        "defaults": {"unit": "ms"}
+        "defaults": {
+          "unit": "ms",
+          "custom": {"lineWidth": 2}
+        }
       },
       "targets": [
         {
-          "expr": "latency_${percentile}_ms{topic=~\"orderRequest\\..*\\.toAlgoConnector\", job=\"$app\"}",
-          "legendFormat": "toAlgoConnector \u2014 {{topic}}",
+          "expr": "{job=\"$app\", __name__=\"latency_${percentile}_ms\", topic=~\"$prefix.*toNow\"}",
+          "legendFormat": "{{topic}}",
           "refId": "A"
-        },
-        {
-          "expr": "latency_${percentile}_ms{topic=~\"orderRequest\\..*\\.toBrokerConnector\", job=\"$app\"}",
-          "legendFormat": "toBrokerConnector \u2014 {{topic}}",
-          "refId": "B"
-        },
-        {
-          "expr": "latency_${percentile}_ms{topic=~\"orderRequest\\..*\\.toStrategy\", job=\"$app\"}",
-          "legendFormat": "toStrategy \u2014 {{topic}}",
-          "refId": "C"
-        },
-        {
-          "expr": "latency_${percentile}_ms{topic=~\"orderRequest\\..*\\.toNow\", job=\"$app\"}",
-          "legendFormat": "toNow \u2014 {{topic}}",
-          "refId": "D"
-        }
-      ]
-    },
-    {
-      "id": 23,
-      "type": "timeseries",
-      "title": "ExecutionReport Latency by Stage (ms) \u2014 $percentile",
-      "description": "toBrokerConnector / toAlgoConnector / toStrategy / toNow latencies for execution reports",
-      "gridPos": {"x": 0, "y": 29, "w": 24, "h": 7},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "options": {
-        "tooltip": {"mode": "multi"},
-        "legend": {"displayMode": "list", "placement": "bottom"}
-      },
-      "fieldConfig": {
-        "defaults": {"unit": "ms"}
-      },
-      "targets": [
-        {
-          "expr": "latency_${percentile}_ms{topic=~\"executionReport\\..*\\.toBrokerConnector\", job=\"$app\"}",
-          "legendFormat": "toBrokerConnector \u2014 {{topic}}",
-          "refId": "A"
-        },
-        {
-          "expr": "latency_${percentile}_ms{topic=~\"executionReport\\..*\\.toAlgoConnector\", job=\"$app\"}",
-          "legendFormat": "toAlgoConnector \u2014 {{topic}}",
-          "refId": "B"
-        },
-        {
-          "expr": "latency_${percentile}_ms{topic=~\"executionReport\\..*\\.toStrategy\", job=\"$app\"}",
-          "legendFormat": "toStrategy \u2014 {{topic}}",
-          "refId": "C"
-        },
-        {
-          "expr": "latency_${percentile}_ms{topic=~\"executionReport\\..*\\.toNow\", job=\"$app\"}",
-          "legendFormat": "toNow \u2014 {{topic}}",
-          "refId": "D"
-        }
-      ]
-    },
-    {
-      "id": 30,
-      "type": "row",
-      "title": "Latency Table",
-      "collapsed": false,
-      "gridPos": {"x": 0, "y": 36, "w": 24, "h": 1}
-    },
-    {
-      "id": 31,
-      "type": "table",
-      "title": "Latency Summary \u2014 By Prefix (aggregated TOTAL)",
-      "description": "Latest aggregated percentiles per prefix type (depth / trade / executionReport / orderRequest)",
-      "gridPos": {"x": 0, "y": 37, "w": 12, "h": 10},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "options": {
-        "sortBy": [{"displayName": "p99 (ms)", "desc": true}],
-        "footer": {"show": false}
-      },
-      "fieldConfig": {
-        "defaults": {"unit": "ms"},
-        "overrides": [
-          {
-            "matcher": {"id": "byName", "options": "count"},
-            "properties": [{"id": "unit", "value": "short"}]
-          }
-        ]
-      },
-      "transformations": [
-        {"id": "merge", "options": {}},
-        {
-          "id": "filterFieldsByName",
-          "options": {
-            "include": {
-              "names": ["prefix", "Value #A", "Value #B", "Value #C", "Value #D", "Value #E", "Value #F", "Value #G", "Value #H"]
-            }
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "renameByName": {
-              "prefix":   "Prefix",
-              "Value #A": "mean (ms)",
-              "Value #B": "p50 (ms)",
-              "Value #C": "p75 (ms)",
-              "Value #D": "p90 (ms)",
-              "Value #E": "p95 (ms)",
-              "Value #F": "p99 (ms)",
-              "Value #G": "max (ms)",
-              "Value #H": "count"
-            }
-          }
-        }
-      ],
-      "targets": [
-        {
-          "expr": "avg by (prefix) (label_replace(latency_mean_ms{topic=~\".*\\.TOTAL\", job=\"$app\"}, \"prefix\", \"$1\", \"topic\", \"([^.]+)\\..*\"))",
-          "instant": true,
-          "format": "table",
-          "legendFormat": "__auto",
-          "refId": "A"
-        },
-        {
-          "expr": "avg by (prefix) (label_replace(latency_p50_ms{topic=~\".*\\.TOTAL\", job=\"$app\"}, \"prefix\", \"$1\", \"topic\", \"([^.]+)\\..*\"))",
-          "instant": true,
-          "format": "table",
-          "legendFormat": "__auto",
-          "refId": "B"
-        },
-        {
-          "expr": "avg by (prefix) (label_replace(latency_p75_ms{topic=~\".*\\.TOTAL\", job=\"$app\"}, \"prefix\", \"$1\", \"topic\", \"([^.]+)\\..*\"))",
-          "instant": true,
-          "format": "table",
-          "legendFormat": "__auto",
-          "refId": "C"
-        },
-        {
-          "expr": "avg by (prefix) (label_replace(latency_p90_ms{topic=~\".*\\.TOTAL\", job=\"$app\"}, \"prefix\", \"$1\", \"topic\", \"([^.]+)\\..*\"))",
-          "instant": true,
-          "format": "table",
-          "legendFormat": "__auto",
-          "refId": "D"
-        },
-        {
-          "expr": "avg by (prefix) (label_replace(latency_p95_ms{topic=~\".*\\.TOTAL\", job=\"$app\"}, \"prefix\", \"$1\", \"topic\", \"([^.]+)\\..*\"))",
-          "instant": true,
-          "format": "table",
-          "legendFormat": "__auto",
-          "refId": "E"
-        },
-        {
-          "expr": "avg by (prefix) (label_replace(latency_p99_ms{topic=~\".*\\.TOTAL\", job=\"$app\"}, \"prefix\", \"$1\", \"topic\", \"([^.]+)\\..*\"))",
-          "instant": true,
-          "format": "table",
-          "legendFormat": "__auto",
-          "refId": "F"
-        },
-        {
-          "expr": "avg by (prefix) (label_replace(latency_max_ms{topic=~\".*\\.TOTAL\", job=\"$app\"}, \"prefix\", \"$1\", \"topic\", \"([^.]+)\\..*\"))",
-          "instant": true,
-          "format": "table",
-          "legendFormat": "__auto",
-          "refId": "G"
-        },
-        {
-          "expr": "sum by (prefix) (label_replace(latency_count{topic=~\".*\\.TOTAL\", job=\"$app\"}, \"prefix\", \"$1\", \"topic\", \"([^.]+)\\..*\"))",
-          "instant": true,
-          "format": "table",
-          "legendFormat": "__auto",
-          "refId": "H"
-        }
-      ]
-    },
-    {
-      "id": 32,
-      "type": "table",
-      "title": "Latency Summary \u2014 By Topic (all)",
-      "description": "Latest latency percentiles for every tracked topic. Use the Prefix and Topic variables to filter.",
-      "gridPos": {"x": 12, "y": 37, "w": 12, "h": 10},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "options": {
-        "sortBy": [{"displayName": "p99 (ms)", "desc": true}],
-        "footer": {"show": false}
-      },
-      "fieldConfig": {
-        "defaults": {"unit": "ms"},
-        "overrides": [
-          {
-            "matcher": {"id": "byName", "options": "count"},
-            "properties": [{"id": "unit", "value": "short"}]
-          }
-        ]
-      },
-      "transformations": [
-        {"id": "merge", "options": {}},
-        {
-          "id": "filterFieldsByName",
-          "options": {
-            "include": {
-              "names": ["topic", "Value #A", "Value #B", "Value #C", "Value #D", "Value #E", "Value #F", "Value #G", "Value #H"]
-            }
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "renameByName": {
-              "topic":    "Topic",
-              "Value #A": "mean (ms)",
-              "Value #B": "p50 (ms)",
-              "Value #C": "p75 (ms)",
-              "Value #D": "p90 (ms)",
-              "Value #E": "p95 (ms)",
-              "Value #F": "p99 (ms)",
-              "Value #G": "max (ms)",
-              "Value #H": "count"
-            }
-          }
-        }
-      ],
-      "targets": [
-        {
-          "expr": "latency_mean_ms{topic=~\"$topic\", job=\"$app\"}",
-          "instant": true,
-          "format": "table",
-          "legendFormat": "__auto",
-          "refId": "A"
-        },
-        {
-          "expr": "latency_p50_ms{topic=~\"$topic\", job=\"$app\"}",
-          "instant": true,
-          "format": "table",
-          "legendFormat": "__auto",
-          "refId": "B"
-        },
-        {
-          "expr": "latency_p75_ms{topic=~\"$topic\", job=\"$app\"}",
-          "instant": true,
-          "format": "table",
-          "legendFormat": "__auto",
-          "refId": "C"
-        },
-        {
-          "expr": "latency_p90_ms{topic=~\"$topic\", job=\"$app\"}",
-          "instant": true,
-          "format": "table",
-          "legendFormat": "__auto",
-          "refId": "D"
-        },
-        {
-          "expr": "latency_p95_ms{topic=~\"$topic\", job=\"$app\"}",
-          "instant": true,
-          "format": "table",
-          "legendFormat": "__auto",
-          "refId": "E"
-        },
-        {
-          "expr": "latency_p99_ms{topic=~\"$topic\", job=\"$app\"}",
-          "instant": true,
-          "format": "table",
-          "legendFormat": "__auto",
-          "refId": "F"
-        },
-        {
-          "expr": "latency_max_ms{topic=~\"$topic\", job=\"$app\"}",
-          "instant": true,
-          "format": "table",
-          "legendFormat": "__auto",
-          "refId": "G"
-        },
-        {
-          "expr": "latency_count{topic=~\"$topic\", job=\"$app\"}",
-          "instant": true,
-          "format": "table",
-          "legendFormat": "__auto",
-          "refId": "H"
         }
       ]
     }
