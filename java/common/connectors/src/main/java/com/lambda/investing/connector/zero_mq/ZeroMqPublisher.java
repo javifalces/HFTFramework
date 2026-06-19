@@ -24,8 +24,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class ZeroMqPublisher implements ConnectorPublisher {
 
     private static final int COMMAND_RETRIES_PUBLISH = 1;//zero MQ will retry until ACK
-    private static final Map<Integer, ZMQ.Socket> PORTS_TAKEN_PUB = new ConcurrentHashMap<>();
-    private static final Map<Integer, ZMQ.Socket> PORTS_TAKEN_REQ_ACK = new ConcurrentHashMap<>();
+    // Keyed by the socket URL string (not port integer) so that IPC configurations
+    // with port=0 don't all collide on the same key.
+    private static final Map<String, ZMQ.Socket> PORTS_TAKEN_PUB = new ConcurrentHashMap<>();
+    private static final Map<String, ZMQ.Socket> PORTS_TAKEN_REQ_ACK = new ConcurrentHashMap<>();
     Logger logger = LogManager.getLogger(ZeroMqPublisher.class);
     private int OKReceived = 0;
 
@@ -69,21 +71,26 @@ public class ZeroMqPublisher implements ConnectorPublisher {
 
     private ZMQ.Socket getPublishSocket(ZeroMqConfiguration configuration) {
         //		http://zguide.zeromq.org/java:hwserver
+        // Use the socket URL as the cache key so that IPC configurations (port=0)
+        // don't all collide on the same map entry.
+        String pubKey = isServer ? configuration.getBindUrl() : configuration.getUrl();
+        String ackKey = isServer ? configuration.getAckBindUrl() : configuration.getAckConnectUrl();
+
         ZMQ.Socket publishSocket = null;
         ZMQ.Socket reqSocket = null;
-        if (!PORTS_TAKEN_PUB.containsKey(configuration.getPort())) {
+        if (!PORTS_TAKEN_PUB.containsKey(pubKey)) {
             publishSocket = context.createSocket(ZMQ.PUB);
             publishSocket.setHWM(1);
             publishSocket.setLinger(0);
             if (isServer) {
                 String url = configuration.getBindUrl();
                 logger.info("Creating PUB server socket {} : {}", url, configuration);
-                PORTS_TAKEN_PUB.put(configuration.getPort(), publishSocket);
+                PORTS_TAKEN_PUB.put(pubKey, publishSocket);
                 publishSocket.bind(url);
             } else {
                 String url = configuration.getUrl();
                 logger.info("Connecting PUB socket {} : {}", url, configuration);
-                PORTS_TAKEN_PUB.put(configuration.getPort(), publishSocket);
+                PORTS_TAKEN_PUB.put(pubKey, publishSocket);
                 publishSocket.connect(url);
             }
 
@@ -92,23 +99,21 @@ public class ZeroMqPublisher implements ConnectorPublisher {
             reqSocket.setHWM(1);
             reqSocket.setLinger(0);
             if (isServer) {
-                String urlAck = String.format("%s://*:%d", configuration.getProtocol(), configuration.getPort() + 1);
+                String urlAck = configuration.getAckBindUrl();
                 logger.info("Creating REQ server socket {} ", urlAck);
-                PORTS_TAKEN_REQ_ACK.put(configuration.getPort() + 1, publishSocket);
+                PORTS_TAKEN_REQ_ACK.put(ackKey, publishSocket);
                 reqSocket.bind(urlAck);
             } else {
-                String urlAck = String.format("%s://%s:%d", configuration.getProtocol(), configuration.getHost(), configuration.getPort() + 1);
+                String urlAck = configuration.getAckConnectUrl();
                 logger.info("Connecting REQ socket {} ", urlAck);
-                PORTS_TAKEN_REQ_ACK.put(configuration.getPort() + 1, publishSocket);
+                PORTS_TAKEN_REQ_ACK.put(ackKey, publishSocket);
                 reqSocket.connect(urlAck);
             }
 
-
-            new Thread(new ZeroMqAckReqProvider(reqSocket), "ZeroMqAckReqProvider -> " + configuration.getPort() + 1).start();
-
+            new Thread(new ZeroMqAckReqProvider(reqSocket), "ZeroMqAckReqProvider -> " + ackKey).start();
 
         } else {
-            publishSocket = PORTS_TAKEN_PUB.get(configuration.getPort());
+            publishSocket = PORTS_TAKEN_PUB.get(pubKey);
         }
 
         return publishSocket;

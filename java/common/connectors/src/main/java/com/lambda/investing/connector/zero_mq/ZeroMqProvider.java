@@ -128,8 +128,10 @@ public class ZeroMqProvider implements ConnectorProvider {
     public void start(boolean hardTopicFilter, boolean sendAck) {
 
         if (isServer) {
+            logger.info("Binding SUB socket to {}", url);
             socketSub.bind(url);
         } else {
+            logger.info("Connecting SUB socket to {}", url);
             socketSub.connect(url);
         }
 
@@ -151,12 +153,14 @@ public class ZeroMqProvider implements ConnectorProvider {
             socketSub.subscribe(" ".getBytes(ZMQ.CHARSET));
         }
         if (sendAck) {
-            //ACK REP publisher
+            //ACK REP publisher – use config helpers so IPC addresses are handled correctly
             if (!isServer) {
-                String urlAck = String.format("%s://*:%d", this.zeroMqConfiguration.getProtocol(), this.zeroMqConfiguration.getPort() + 1);
+                String urlAck = this.zeroMqConfiguration.getAckConnectUrl();
+                logger.info("ACK REQ connect {}", urlAck);
                 this.socketReq.connect(urlAck);
             } else {
-                String urlAck = String.format("%s://%s:%d", this.zeroMqConfiguration.getProtocol(), this.zeroMqConfiguration.getHost(), this.zeroMqConfiguration.getPort() + 1);
+                String urlAck = this.zeroMqConfiguration.getAckBindUrl();
+                logger.info("ACK REQ bind {}", urlAck);
                 this.socketReq.bind(urlAck);
             }
         }
@@ -209,21 +213,15 @@ public class ZeroMqProvider implements ConnectorProvider {
 
     private ZMQ.Socket getSubscribeSocket(ZeroMqConfiguration configuration) {
         //		http://zguide.zeromq.org/java:psenvsub
-        ZMQ.Socket subscribeSocket = null;
-        subscribeSocket = context.createSocket(ZMQ.SUB);
+        // Only CREATE and configure the socket here.
+        // Bind/connect is deferred to start() which is called AFTER setServer(),
+        // so that isServer has its final value before we touch the transport layer.
+        // (Previously this method also called bind/connect, causing a double
+        //  bind/connect when start() ran, and using the wrong server role because
+        //  setServer() had not yet been invoked at construction time.)
+        ZMQ.Socket subscribeSocket = context.createSocket(ZMQ.SUB);
         subscribeSocket.setHWM(1);
         subscribeSocket.setLinger(0);
-
-        if (isServer) {
-            url = configuration.getBindUrl();
-            logger.info("Creating Sub server socket {} ", url);
-            subscribeSocket.bind(url);
-        } else {
-            url = configuration.getUrl();
-            logger.info("Connecting Sub socket {} ", url);
-            //		logger.info("Starting connecting to messages on socket {}", url);
-            subscribeSocket.connect(url);
-        }
 
         return subscribeSocket;
 
@@ -281,15 +279,24 @@ public class ZeroMqProvider implements ConnectorProvider {
         public void run() {
             while (running.get()) {
                 try {
-                    final String topic;
-                    final byte[] messageBytes;
-                    final long timestampReceived;
+                    String topic = null;
+                    byte[] messageBytes = null;
+                    long timestampReceived = 0;
 
                     // Minimal lock scope: only socket I/O to minimise time the socket is held
                     synchronized (socketSub) {
                         ZMsg zMsg = ZMsg.recvMsg(socketSub);
+                        if (zMsg == null) {
+                            logger.warn("Received null ZMsg – skipping");
+                            continue;
+                        }
                         topic = zMsg.popString();
-                        messageBytes = zMsg.pop().getData();
+                        org.zeromq.ZFrame payloadFrame = zMsg.pop();
+                        if (payloadFrame == null) {
+                            logger.warn("ZMsg has no payload frame (topic='{}') – skipping", topic);
+                            continue;
+                        }
+                        messageBytes = payloadFrame.getData();
                         // Capture timestamp immediately after bytes are read from socket,
                         // before any deserialization, so timestampAlgoConnector reflects true arrival
                         timestampReceived = System.currentTimeMillis();
@@ -298,23 +305,26 @@ public class ZeroMqProvider implements ConnectorProvider {
                     // Deserialization and listener dispatch run outside the socket lock.
                     // When a thread pool is configured (threadsListening > 0 or < 0) the receiver
                     // thread returns to the socket immediately, reducing head-of-line blocking.
+                    // Capture effectively-final copies for use in the lambda below.
+                    final String finalTopic = topic;
+                    final byte[] finalMessageBytes = messageBytes;
+                    final long finalTimestampReceived = timestampReceived;
+
                     if (onUpdateExecutorService != null) {
                         onUpdateExecutorService.submit(() -> {
                             try {
-                                Object objMessage = SerializationUtils.deserialize(messageBytes);
-                                treatMessage(topic, objMessage, timestampReceived);
+                                Object objMessage = SerializationUtils.deserialize(finalMessageBytes);
+                                treatMessage(finalTopic, objMessage, finalTimestampReceived);
                             } catch (Exception e) {
-                                logger.error("exception processing zeroMq message in thread pool topic:{}", topic, e);
-                                e.printStackTrace();
+                                logger.error("exception processing zeroMq message in thread pool topic:{}", finalTopic, e);
                             }
                         });
                     } else {
-                        Object objMessage = SerializationUtils.deserialize(messageBytes);
+                        Object objMessage = SerializationUtils.deserialize(finalMessageBytes);
                         try {
-                            treatMessage(topic, objMessage, timestampReceived);
+                            treatMessage(finalTopic, objMessage, finalTimestampReceived);
                         } catch (Exception e) {
-                            logger.error("exception processing zeroMq message \ntopic:{}\n", topic, e);
-                            e.printStackTrace();
+                            logger.error("exception processing zeroMq message \ntopic:{}\n", finalTopic, e);
                         }
                     }
 

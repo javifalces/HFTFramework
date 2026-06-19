@@ -112,8 +112,13 @@ public class App {
         //		zeroMqProvider.
 
         Map<String, String> environment = new HashMap<>();
-        environment.put("marketdata.port", String.valueOf(zeroMqTradingConfiguration.getMarketDataPort()));
-        environment.put("marketdata.host", String.valueOf(zeroMqTradingConfiguration.getMarketDataHost()));
+        if (zeroMqTradingConfiguration.getMarketDataIpc() != null && !zeroMqTradingConfiguration.getMarketDataIpc().isEmpty()) {
+            environment.put("marketdata.ipc", zeroMqTradingConfiguration.getMarketDataIpc());
+        } else {
+            environment.put("marketdata.port", String.valueOf(zeroMqTradingConfiguration.getMarketDataPort()));
+            environment.put("marketdata.host", String.valueOf(zeroMqTradingConfiguration.getMarketDataHost()));
+            environment.put("marketdata.ipc", "");
+        }
         disableWarning();
         try {
             setEnv(environment);
@@ -133,8 +138,13 @@ public class App {
         //		zeroMqProvider.
 
         Map<String, String> environment = new HashMap<>();
-        environment.put("factor.port", String.valueOf(zeroMqTradingConfiguration.getFactorPublisherPort()));
-        environment.put("factor.host", String.valueOf(zeroMqTradingConfiguration.getFactorPublisherHost()));
+        if (zeroMqTradingConfiguration.getFactorPublisherIpc() != null && !zeroMqTradingConfiguration.getFactorPublisherIpc().isEmpty()) {
+            environment.put("factor.ipc", zeroMqTradingConfiguration.getFactorPublisherIpc());
+        } else {
+            environment.put("factor.port", String.valueOf(zeroMqTradingConfiguration.getFactorPublisherPort()));
+            environment.put("factor.host", String.valueOf(zeroMqTradingConfiguration.getFactorPublisherHost()));
+            environment.put("factor.ipc", "");
+        }
         try {
             setEnv(environment);
         } catch (Exception e) {
@@ -149,8 +159,13 @@ public class App {
 
         //		ZeroMqConfiguration zeroMqConfiguration=ac.getBean("orderRequestConnectorConfigurationPublisher",ZeroMqConfiguration.class);
         Map<String, String> environment = new HashMap<>();
-        environment.put("tradeengine.port", String.valueOf(zeroMqTradingConfiguration.getTradeEnginePort()));
-        environment.put("tradeengine.host", String.valueOf(zeroMqTradingConfiguration.getTradeEngineHost()));
+        if (zeroMqTradingConfiguration.getTradeEngineIpc() != null && !zeroMqTradingConfiguration.getTradeEngineIpc().isEmpty()) {
+            environment.put("tradeengine.ipc", zeroMqTradingConfiguration.getTradeEngineIpc());
+        } else {
+            environment.put("tradeengine.port", String.valueOf(zeroMqTradingConfiguration.getTradeEnginePort()));
+            environment.put("tradeengine.host", String.valueOf(zeroMqTradingConfiguration.getTradeEngineHost()));
+            environment.put("tradeengine.ipc", "");
+        }
         try {
             setEnv(environment);
         } catch (Exception e) {
@@ -639,6 +654,7 @@ public class App {
             configureMarketDataConnector(zeroMqTradingConfiguration);
             configureOrderRequestConnector(zeroMqTradingConfiguration);
             configureFactorPublisherConnector(zeroMqTradingConfiguration);
+
             //load all beans
             ac = new ClassPathXmlApplicationContext(new String[]{"classpath:core_zero_beans.xml"});
 
@@ -676,10 +692,20 @@ public class App {
             ZeroMqConfiguration zeroMqMarketData = ac
                     .getBean("marketDataAndERconnectorConfiguration", ZeroMqConfiguration.class);
 
-            System.out.println(
-                    String.format("MARKET DATA : %s:%d", zeroMqMarketData.getHost(), zeroMqMarketData.getPort()));
-            System.out.println(String.format("TRADING ENGINE: %s:%d", zeroMqTradingEngine.getHost(),
-                    zeroMqTradingEngine.getPort()));
+            if (zeroMqMarketData.isIpcEnabled()) {
+                System.out.println(
+                        String.format("MARKET DATA : %s", zeroMqMarketData.getIpAddress()));
+            } else {
+                System.out.println(
+                        String.format("MARKET DATA : %s:%d", zeroMqMarketData.getHost(), zeroMqMarketData.getPort()));
+            }
+            if (zeroMqTradingEngine.isIpcEnabled()) {
+                System.out.println(
+                        String.format("TRADING ENGINE : %s", zeroMqTradingEngine.getIpAddress()));
+            } else {
+                System.out.println(String.format("TRADING ENGINE: %s:%d", zeroMqTradingEngine.getHost(),
+                        zeroMqTradingEngine.getPort()));
+            }
 
         } catch (Exception e) {
             logger.error("error in algoTrading ", e);

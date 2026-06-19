@@ -20,8 +20,9 @@
 
 
     <bean id="marketDataAndERconnectorConfiguration" class="com.lambda.investing.connector.zero_mq.ZeroMqConfiguration">
-        <property name="port" value="${marketdata.port}"/>
-        <property name="host" value="${marketdata.host}"/>
+        <property name="port" value="${marketdata.port:0}"/>
+        <property name="host" value="${marketdata.host:}"/>
+        <property name="ipc" value="${marketdata.ipc:}"/>
     </bean>
 
 
@@ -40,8 +41,9 @@
 
     <!--factor listener-->
     <bean id="factorConnectorConfiguration" class="com.lambda.investing.connector.zero_mq.ZeroMqConfiguration">
-        <property name="port" value="${factor.port}"/>
-        <property name="host" value="${factor.host}"/>
+        <property name="port" value="${factor.port:0}"/>
+        <property name="host" value="${factor.host:}"/>
+        <property name="ipc" value="${factor.ipc:}"/>
     </bean>
 
     <bean id="factorConnectorProvider" class="com.lambda.investing.factor_investing_connector.ZeroMqFactorProvider"
@@ -54,8 +56,9 @@
     <!--trading engine-->
     <bean id="orderRequestConnectorConfigurationPublisher"
           class="com.lambda.investing.connector.zero_mq.ZeroMqConfiguration">
-        <property name="port" value="${tradeengine.port}"/>
-        <property name="host" value="${tradeengine.host}"/>
+        <property name="port" value="${tradeengine.port:0}"/>
+        <property name="host" value="${tradeengine.host:}"/>
+        <property name="ipc" value="${tradeengine.ipc:}"/>
     </bean>
 
     <!--    <bean id="orderRequestConnectorPublisher" class="com.lambda.investing.connector.zero_mq.ZeroMqPublisher">-->

@@ -237,10 +237,12 @@
             </dependency>
 
             <!--zero MQ-->
+            <!-- 0.5.x adds Windows IPC support (named pipes); required for ipc:// on Windows.    -->
+            <!-- 0.4.x only supports IPC on Linux/macOS (Unix domain sockets).                    -->
             <dependency>
                 <groupId>org.zeromq</groupId>
                 <artifactId>jeromq</artifactId>
-                <version>0.4.3</version>
+                <version>0.5.3</version>
             </dependency>
             <dependency>
                 <groupId>org.zeromq</groupId>

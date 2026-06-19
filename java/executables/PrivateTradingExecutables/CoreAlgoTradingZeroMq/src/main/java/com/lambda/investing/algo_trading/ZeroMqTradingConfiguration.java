@@ -20,6 +20,11 @@ public class ZeroMqTradingConfiguration {
     private int marketDataPort;
     private int factorPublisherPort;
 
+    private String tradeEngineIpc;
+    private String marketDataIpc;
+    private String factorPublisherIpc;
+    
+
     private boolean paperTrading;
     private boolean demoTrading;
     private String[] instrumentPks;

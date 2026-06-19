@@ -9,6 +9,8 @@ import lombok.Setter;
 import lombok.ToString;
 
 import com.lambda.investing.model.asset.*;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.zeromq.ZContext;
 
 import java.util.ArrayList;
@@ -19,11 +21,13 @@ import java.util.Objects;
 @Setter
 @ToString
 public class ZeroMqConfiguration implements ConnectorConfiguration {
-	private String protocol = "tcp";
+	private static final Logger logger = LogManager.getLogger(ZeroMqConfiguration.class);
+	private String protocol = "tcp";//ipc or tcp
 	private String host;
 	private String topic;
 	private int port;
 	private String ipAddress;
+	boolean ipcEnabled;
 	private static ZContext Z_CONTEXT;
 	private static final Object lockContext = new Object();
 
@@ -45,6 +49,11 @@ public class ZeroMqConfiguration implements ConnectorConfiguration {
 		this.host = zeroMqConfiguration.getHost();
 		this.topic = zeroMqConfiguration.getTopic();
 		this.port = zeroMqConfiguration.getPort();
+		this.protocol = zeroMqConfiguration.getProtocol();
+		this.ipAddress = zeroMqConfiguration.getIpAddress();
+		if (zeroMqConfiguration.ipcEnabled) {
+			this.ipcEnabled = true;
+		}
 	}
 
 	public ZeroMqConfiguration(String host, int port, String topic) {
@@ -58,12 +67,39 @@ public class ZeroMqConfiguration implements ConnectorConfiguration {
 		this.host = host;
 		this.topic = topic;
 		this.port = port;
+		if (protocol.equalsIgnoreCase("ipc")) {
+			this.ipcEnabled = true;
+		}
 	}
 
-	public void setIpc(String address) {
+	/**
+	 * Configures this endpoint to use ZeroMQ IPC (Unix domain sockets / named pipes).
+	 *
+	 * @param directory Base directory for socket files (e.g. "/home/user/lambdaIPC/marketdata").
+	 *                  The actual socket file will be {@code directory/zmq.sock}.
+	 *                  The directory is created automatically if absent.
+	 *                  <p>
+	 *                  NOTE: jeromq supports IPC on Windows only from version 0.5.0+.
+	 *                  With jeromq < 0.5.0 on Windows, use TCP instead.
+	 */
+	public void setIpc(String directory) {
+		if (directory == null || directory.isEmpty()) {
+			return;
+		}
+
 		this.protocol = "ipc";
-		this.host = address;//for print
-		this.ipAddress = Configuration.formatLog("ipc:///{}", address);
+		this.host = directory; // kept for logging / ACK helpers
+		this.ipcEnabled = true;
+		// Create the *parent* directory so ZeroMQ can place a socket FILE inside it.
+		// IMPORTANT: do NOT call mkdirs() on the socket file path itself – if a directory
+		// already exists at that path ZeroMQ cannot create the socket file there.
+		new java.io.File(directory).mkdirs();
+		// Build the ipc:// address pointing to a socket FILE inside the directory.
+		// Normalise separators to forward-slash so the address is valid on all platforms.
+		String normalised = directory.replace('\\', '/');
+		String socketFile = normalised + "/zmq.sock";
+		this.ipAddress = socketFile.startsWith("/") ? "ipc://" + socketFile : "ipc:///" + socketFile;
+		logger.info("IPC configured: directory={}, socket={}", directory, this.ipAddress);
 	}
 
 	public String getUrl() {
@@ -77,11 +113,40 @@ public class ZeroMqConfiguration implements ConnectorConfiguration {
 
 	public String getBindUrl() {
 		if (ipAddress != null) {
-			return String.format("%s/*", this.ipAddress);
+			// IPC uses file paths – no wildcard; bind and connect use the same path
+			return ipAddress;
 		}
 
 		String url = String.format("%s://*:%d", getProtocol(), getPort());
 		return url;
+	}
+
+	/**
+	 * Returns the URL to use for the ACK (REP/REQ) companion socket.
+	 * For TCP this is port+1; for IPC this is a separate socket FILE (ack.sock) in the same directory.
+	 */
+	public String getAckBindUrl() {
+		if (!ipcEnabled) {
+			return String.format("%s://*:%d", getProtocol(), getPort() + 1);
+		} else {
+			// The parent directory already exists (created in setIpc).
+			// Use a socket FILE – do NOT create a directory at this path.
+			String normalised = getHost().replace('\\', '/');
+			String socketFile = normalised + "/ack.sock";
+			return socketFile.startsWith("/") ? "ipc://" + socketFile : "ipc:///" + socketFile;
+		}
+	}
+
+	public String getAckConnectUrl() {
+		if (!ipcEnabled) {
+			return String.format("%s://%s:%d", getProtocol(), getHost(), getPort() + 1);
+		} else {
+			// The parent directory already exists (created in setIpc).
+			// Use a socket FILE – do NOT create a directory at this path.
+			String normalised = getHost().replace('\\', '/');
+			String socketFile = normalised + "/ack.sock";
+			return socketFile.startsWith("/") ? "ipc://" + socketFile : "ipc:///" + socketFile;
+		}
 	}
 
 	/**
