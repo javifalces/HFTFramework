@@ -277,19 +277,24 @@ public class QuoteManager implements ExecutionReportListener, Runnable {
             }
             return true;
         } else {
+            //cancellations maybe without verb
             String clordId = executionReport.getClientOrderId();
+            String origClorId = executionReport.getOrigClientOrderId();
+            boolean isInBid = bidQuoteSideManager.getLastClOrdIdSent().contains(clordId) || (origClorId != null && bidQuoteSideManager.getLastClOrdIdSent().contains(origClorId));
+            boolean isInAsk = askQuoteSideManager.getLastClOrdIdSent().contains(clordId) || (origClorId != null && askQuoteSideManager.getLastClOrdIdSent().contains(origClorId));
+
             //retry by clordId
-            if (bidQuoteSideManager.getLastClOrdIdSent().contains(clordId)) {
+            if (isInBid) {
                 bidQuoteSideManager.onExecutionReportUpdate(executionReport);
                 return true;
             }
 
-            if (askQuoteSideManager.getLastClOrdIdSent().contains(clordId)) {
+            if (isInAsk) {
                 askQuoteSideManager.onExecutionReportUpdate(executionReport);
                 return true;
             }
 
-            logger.warn("ER with verb Null received! {}", executionReport);
+            logger.warn("ER with verb Null received and clorId {} not found:  {}", executionReport);
             return false;
         }
     }
