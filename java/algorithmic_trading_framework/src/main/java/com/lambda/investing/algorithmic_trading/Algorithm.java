@@ -52,6 +52,10 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.lambda.investing.Configuration.*;
@@ -92,6 +96,9 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
     private AtomicInteger depthReceived = new AtomicInteger(0);
     private AtomicInteger tradeReceived = new AtomicInteger(0);
+
+    private int requestPositionScheduleSeconds;
+    private volatile ScheduledExecutorService positionRequestScheduler;
 
     protected Logger logger = LogManager.getLogger(Algorithm.class);
     protected boolean manualStop = false;
@@ -442,6 +449,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             setSeed(this.seed);
         }
 
+        this.requestPositionScheduleSeconds = getParameterIntOrDefault(parameters, "requestPositionScheduleSeconds", 60);
+
         uiEnabled = getParameterIntOrDefault(parameters, "ui", 0) == 1;
         if (uiEnabled) {
             System.out.println("UI ENABLED");
@@ -520,6 +529,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             requestInfo(this.algorithmInfo + "." + REQUESTED_PORTFOLIO_INFO);
             if (!isBacktest) {
                 configureIsPaper();//now we have all connector configured
+                startPositionRequestScheduler();
             }
             if (uiEnabled && !uiStarted) {
                 //start UI
@@ -580,6 +590,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             cancelAllInstruments();//out of market
 
             if (!isBacktest) {
+                stopPositionRequestScheduler();
                 //save trades
                 saveLiveOutputTrades();
             }
@@ -666,6 +677,42 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
     protected void requestInfo(String info) {
         algorithmConnectorConfiguration.getTradingEngineConnector().requestInfo(info);
+    }
+
+    private void startPositionRequestScheduler() {
+        if (requestPositionScheduleSeconds > 0) {
+            if (positionRequestScheduler == null || positionRequestScheduler.isShutdown()) {
+                positionRequestScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+                    Thread t = new Thread(r, "PositionRequest-Scheduler");
+                    t.setDaemon(true);
+                    t.setPriority(Thread.MIN_PRIORITY);
+                    return t;
+                });
+                positionRequestScheduler.scheduleAtFixedRate(() -> {
+                    try {
+                        requestInfo(this.algorithmInfo + "." + REQUESTED_POSITION_INFO);
+                    } catch (Exception e) {
+                        logger.error("Error requesting position info", e);
+                    }
+                }, requestPositionScheduleSeconds, requestPositionScheduleSeconds, TimeUnit.SECONDS);
+                logger.info("Position request scheduler started with interval {} seconds", requestPositionScheduleSeconds);
+            }
+        }
+    }
+
+    private void stopPositionRequestScheduler() {
+        ScheduledExecutorService scheduler = this.positionRequestScheduler;
+        if (scheduler != null && !scheduler.isShutdown()) {
+            scheduler.shutdown();
+            try {
+                if (!scheduler.awaitTermination(2, TimeUnit.SECONDS)) {
+                    scheduler.shutdownNow();
+                }
+            } catch (InterruptedException ie) {
+                scheduler.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
     }
 
     public OrderRequest createActiveCancel(String origClientOrderId) {
