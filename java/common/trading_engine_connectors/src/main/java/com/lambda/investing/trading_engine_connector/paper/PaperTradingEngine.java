@@ -41,7 +41,7 @@ import static com.lambda.investing.Configuration.DELAY_ORDER_BACKTEST_MS;
 import static com.lambda.investing.Configuration.RANDOM_SEED;
 import static com.lambda.investing.model.Util.toJsonString;
 import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_PORTFOLIO_INFO;
-import static com.lambda.investing.trading_engine_connector.ZeroMqTradingEngineConnector.ALL_ALGORITHMS_SUBSCRIPTION;
+import static com.lambda.investing.trading_engine_connector.AbstractTradingEngineConnector.ALL_ALGORITHMS_SUBSCRIPTION;
 
 
 public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPublisher

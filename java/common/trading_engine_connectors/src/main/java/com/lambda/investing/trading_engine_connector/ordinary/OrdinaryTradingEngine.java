@@ -25,7 +25,7 @@ import java.util.concurrent.*;
 
 import static com.lambda.investing.Configuration.logger;
 import static com.lambda.investing.model.Util.fromJsonString;
-import static com.lambda.investing.trading_engine_connector.ZeroMqTradingEngineConnector.ALL_ALGORITHMS_SUBSCRIPTION;
+import static com.lambda.investing.trading_engine_connector.AbstractTradingEngineConnector.ALL_ALGORITHMS_SUBSCRIPTION;
 
 public class OrdinaryTradingEngine implements TradingEngineConnector, ConnectorListener {
     public static long DEFAULT_TIMEOUT_TERMINATION_POOL_MS = 60000;
@@ -34,7 +34,6 @@ public class OrdinaryTradingEngine implements TradingEngineConnector, ConnectorL
 
     private AbstractConnectorPublisherConfiguration ordinaryConnectorConfiguration = new OrdinaryConnectorConfiguration();
     protected Map<String, Map<ExecutionReportListener, String>> listenersManager;
-    private ExecutionReportListener allAlgorithmsExecutionReportListener;
 
     private boolean killSenderPool = false, killReceiverPool = false;
 
@@ -92,9 +91,6 @@ public class OrdinaryTradingEngine implements TradingEngineConnector, ConnectorL
         Map<ExecutionReportListener, String> insideMap = listenersManager
                 .getOrDefault(algorithmInfo, new ConcurrentHashMap<>());
         insideMap.put(executionReportListener, "");
-        if (algorithmInfo.equalsIgnoreCase(ALL_ALGORITHMS_SUBSCRIPTION)) {
-            allAlgorithmsExecutionReportListener = executionReportListener;
-        }
         listenersManager.put(algorithmInfo, insideMap);
     }
 
@@ -206,9 +202,6 @@ public class OrdinaryTradingEngine implements TradingEngineConnector, ConnectorL
             ExecutionReport executionReport = fromObject(content, ExecutionReport.class);
             executionReport.setTimestampAlgoConnector(System.currentTimeMillis());
             notifyExecutionReport(executionReport);
-            //			if (allAlgorithmsExecutionReportListener != null) {
-            //				allAlgorithmsExecutionReportListener.onExecutionReportUpdate(executionReport);
-            //			}
         }
 
         if (typeMessage.equals(TypeMessage.info)) {
