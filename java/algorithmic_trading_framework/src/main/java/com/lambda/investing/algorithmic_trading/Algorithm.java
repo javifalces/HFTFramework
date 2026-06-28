@@ -1822,8 +1822,9 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                 logger.info("onPosition {} = {} but pnlSnapshot.netPosition={} -> update it", instrumentPK, position, pnlSnapshot.netPosition);
                 System.out.println(Configuration.formatLog("WARNING: onPosition {} = {} but pnlSnapshot.netPosition={} -> update it", instrumentPK, position, pnlSnapshot.netPosition));
                 pnlSnapshot.netPosition = position;
-                algorithmNotifier.notifyObserversOnUpdatePortfolioSnapshot(portfolioManager.getPortfolioSnapshot());
                 algorithmNotifier.notifyObserversOnUpdatePnlSnapshot(pnlSnapshot);
+                algorithmNotifier.notifyObserversOnUpdatePortfolioSnapshot(portfolioManager.getPortfolioSnapshot());
+
             }
         }
 
