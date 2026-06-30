@@ -100,6 +100,10 @@ public abstract class AbstractTradingEngineConnector implements TradingEngineCon
         String algorithmInfo = executionReport.getAlgorithmInfo();
         Map<ExecutionReportListener, String> insideMap = listenersManager
                 .getOrDefault(algorithmInfo, new ConcurrentHashMap<>());
+        if (insideMap.size() > 1) {
+            logger.warn("DUPLICATE LISTENERS for algorithmInfo={} count={} listeners={}",
+                    algorithmInfo, insideMap.size(), insideMap.keySet());
+        }
         if (insideMap.size() > 0) {
             for (ExecutionReportListener executionReportListener : insideMap.keySet()) {
                 executionReportListener.onExecutionReportUpdate(executionReport);

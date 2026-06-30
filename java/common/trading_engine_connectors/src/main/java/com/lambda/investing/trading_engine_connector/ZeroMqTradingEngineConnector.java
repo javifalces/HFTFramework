@@ -95,8 +95,13 @@ public class ZeroMqTradingEngineConnector extends AbstractTradingEngineConnector
 	public void register(String algorithmInfo, ExecutionReportListener executionReportListener) {
 		Map<ExecutionReportListener, String> insideMap = listenersManager
 				.getOrDefault(algorithmInfo, new ConcurrentHashMap<>());
+		int previousSize = insideMap.size();
 		insideMap.put(executionReportListener, "");
 		listenersManager.put(algorithmInfo, insideMap);
+		if (insideMap.size() > 1) {
+			logger.warn("MULTIPLE LISTENERS registered for algorithmInfo={} count={} (was {})",
+					algorithmInfo, insideMap.size(), previousSize);
+		}
 	}
 
 	@Override public boolean orderRequest(OrderRequest orderRequest) {
