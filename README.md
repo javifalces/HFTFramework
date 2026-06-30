@@ -46,7 +46,7 @@ associated risks.**
 
 ## How-to use
 
-![Ui](fig/UI.jpg?raw=true "UI")
+![WebUi](fig/webBacktest.png?raw=true "webUI")
 [LLM Documentation](java/docs/Index.md)
 
 ### 1. Create algorithm and backtest
@@ -237,12 +237,18 @@ Real-time observability via Grafana dashboards covering application logs, JVM pe
 algorithm execution, portfolio PnL, and throughput.
 
 * [MONITORING_DOCUMENTATION.md](java/docs/MONITORING_DOCUMENTATION.md)
+### Java UI
+
+Java application ui enabled by parameter setting `"ui": true` in a backtest or live-trading JSON config.
+![Ui](fig/UI.jpg?raw=true "UI")
 
 ### Web Monitoring UI
 
 An embedded, zero-dependency browser dashboard streams algorithm events in real time over WebSocket.
-Enable it by adding `"uiWebPort": 9001` (or any free port) to a backtest or live-trading JSON config, then
+Enable it by adding `"uiWebPort": 9001` (or any free port) to a backtest or live-trading JSON config (not algo parameters!), then
 open `http://localhost:9001`.
+
+
 
 Key features:
 
@@ -254,6 +260,7 @@ Key features:
 
 * [WEB_UI_DOCUMENTATION.md](docs/web-ui.md)
 
+![WebUi](fig/webBacktest.png?raw=true "webUI")
 ### Reference
 
 [A reinforcement learning approach to improve the performance of the Avellaneda-Stoikov market-making algorithm](https://journals.plos.org/plosone/article/authors?id=10.1371/journal.pone.0277042)<br>
