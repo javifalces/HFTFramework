@@ -402,11 +402,17 @@ public class QuoteSideManager {
 
         // ---- Logging (avoid new Date() allocation on the hot path) ----
         if (isRejected) {
-            if (logger.isWarnEnabled()) {
-                logger.warn("[{}] {}-{}  {}", executionReport.getDateCreation(),
+            boolean previousCompleteCanceledOrderTrade = cfTradesSet.contains(clientOrderId) || cancelConfirmedSet.contains(clientOrderId);
+            if (!previousCompleteCanceledOrderTrade) {
+                if (logger.isWarnEnabled()) {
+                    logger.warn("[{}] {}-{}  {}", executionReport.getDateCreation(),
+                            clientOrderId, status, executionReport);
+                }
+                sleepQuoting(new Date(algorithm.getCurrentTime().getTime() + SLEEP_AFTER_REJ_MS));
+            } else {
+                logger.info("[{}] rejection of previous trade/canceled {}-{}  {}", executionReport.getDateCreation(),
                         clientOrderId, status, executionReport);
             }
-            sleepQuoting(new Date(algorithm.getCurrentTime().getTime() + SLEEP_AFTER_REJ_MS));
         } else if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal() && logger.isInfoEnabled()) {
             logger.info("[{}] {}-{}  {}", executionReport.getDateCreation(),
                     clientOrderId, status, executionReport);
