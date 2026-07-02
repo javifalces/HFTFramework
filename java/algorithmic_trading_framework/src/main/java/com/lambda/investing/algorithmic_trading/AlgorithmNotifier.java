@@ -131,7 +131,7 @@ public class AlgorithmNotifier {
             return;
         }
         firstParams = false;
-        lastParams = params;
+        lastParams = new HashMap<>(params);
 
         if (!hasObservers()) return;
         final String info = algorithmInfo;

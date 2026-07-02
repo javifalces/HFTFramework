@@ -192,10 +192,14 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         // names differ (bidsQuantities, asksQuantities, bidsAlgorithmInfo, asksAlgorithmInfo).
         String json = buildMessage("DEPTH", algorithmInfo, snapshot != null ? snapshot : depth, currentTimeMs());
         server.broadcastUpdate(json);
+        refreshState();
     }
 
     @Override
     public void onUpdatePnlSnapshot(String algorithmInfo, PnlSnapshot pnlSnapshot) {
+        String json = buildMessage("PNL_SNAPSHOT", algorithmInfo, toPnlDto(pnlSnapshot), currentTimeMs());
+        server.broadcastUpdate(json);
+        refreshState();
     }
 
     @Override
@@ -246,6 +250,7 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
     public void onUpdateTrade(String algorithmInfo, Trade trade) {
         String json = buildMessage("TRADE", algorithmInfo, trade, currentTimeMs());
         server.broadcastUpdate(json);
+        refreshState();
     }
 
     @Override
