@@ -1554,7 +1554,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
         addStatistics(RECEIVE_STATS + " trade." + trade.getInstrument());
         tradeReceived.incrementAndGet();
-        algorithmNotifier.notifyObserversOnUpdatePnlSnapshot(trade);
+        algorithmNotifier.notifyObserversOnUpdateTrade(trade);
         hedgeManager.onTradeUpdate(trade);
         return true;
     }

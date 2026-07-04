@@ -76,7 +76,13 @@ public class AlgorithmNotifier {
      */
     private void publishNotification(NotificationType notificationType, Object content) {
         NotificationWrapper wrapper = new NotificationWrapper(notificationType, content);
-        disruptorHelper.publish(dummyConfig, System.nanoTime(), TypeMessage.info, wrapper);
+        boolean published = disruptorHelper.tryPublish(dummyConfig, System.nanoTime(), TypeMessage.info, wrapper);
+
+        // Additional logging at AlgorithmNotifier level if needed
+        if (!published) {
+            // The DisruptorConnectorHelper already logs to System.err and logger,
+            // but we can add algorithm-specific context here if desired
+        }
     }
 
     /**
@@ -214,7 +220,7 @@ public class AlgorithmNotifier {
 
     // ── trade ─────────────────────────────────────────────────────────────────
 
-    public void notifyObserversOnUpdatePnlSnapshot(Trade trade) {
+    public void notifyObserversOnUpdateTrade(Trade trade) {
         if (!hasObservers()) return;
         publishNotification(NotificationType.TRADE, trade);
     }
