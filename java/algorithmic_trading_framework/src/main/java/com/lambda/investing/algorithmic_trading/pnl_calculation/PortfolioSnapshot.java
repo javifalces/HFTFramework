@@ -26,6 +26,11 @@ public class PortfolioSnapshot {
         return instrumentPnlSnapshotMap.get(instrument);
     }
 
+
+    public Map<String, PnlSnapshot> getPnlSnapshots() {
+        return instrumentPnlSnapshotMap;
+    }
+
     private void calculatePortfolioSnapshot() {
         //calculate all doubles from instrumentPnlSnapshotMap sum them up
         netInvestment = 0;

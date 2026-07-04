@@ -203,9 +203,6 @@ public abstract class PushService implements AlgorithmObserver {
     public void onUpdateDepth(String algorithmInfo, Depth depth) {
     }
 
-    @Override
-    public void onUpdatePnlSnapshot(String algorithmInfo, PnlSnapshot pnlSnapshot) {
-    }
 
     @Override
     public void onUpdatePortfolioSnapshot(String algorithmInfo, PortfolioSnapshot portfolioSnapshot) {
@@ -242,15 +239,12 @@ public abstract class PushService implements AlgorithmObserver {
         if (!ExecutionReport.isTradeStatus(executionReport)) {
             return;
         }
-        String message = Configuration.formatLog("{} -> {} {} {}@{}",
-                executionReport.getAlgorithmInfo(),
-                executionReport.getVerb(),
-                executionReport.getInstrument(),
-                executionReport.getQuantity(),
-                executionReport.getPrice());
+
+        String title = Configuration.formatLog("{} {} {}@{}", executionReport.getVerb(), executionReport.getInstrument(), executionReport.getLastQuantity(), executionReport.getPrice());
+        String message = Configuration.formatLog("{}", executionReport.getAlgorithmInfo());
         try {
-            sendMessage("Trade", message);
-            logger.info("Push trade notification sent: {}", message);
+            sendMessage(title, message);
+            logger.info("Push trade notification sent: {} {}", title, message);
         } catch (Exception e) {
             logger.error("Error sending push trade notification: {}", e.getMessage());
         }

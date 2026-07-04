@@ -46,7 +46,7 @@ import static com.lambda.investing.model.Util.*;
  * }</pre>
  *
  * <p>Supported message types: {@code STATE}, {@code PORTFOLIO_SNAPSHOT},
- * {@code PNL_SNAPSHOT}, {@code TRADE}, {@code EXECUTION_REPORT},
+ * {@code TRADE}, {@code EXECUTION_REPORT},
  * {@code ORDER_REQUEST}, {@code PARAMS}, {@code CUSTOM_COLUMN}, {@code MESSAGE},
  * {@code DEPTH}.
  */
@@ -195,12 +195,6 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         refreshState();
     }
 
-    @Override
-    public void onUpdatePnlSnapshot(String algorithmInfo, PnlSnapshot pnlSnapshot) {
-        String json = buildMessage("PNL_SNAPSHOT", algorithmInfo, toPnlDto(pnlSnapshot), currentTimeMs());
-        server.broadcastUpdate(json);
-        refreshState();
-    }
 
     @Override
     public void onUpdatePortfolioSnapshot(String algorithmInfo, PortfolioSnapshot portfolioSnapshot) {

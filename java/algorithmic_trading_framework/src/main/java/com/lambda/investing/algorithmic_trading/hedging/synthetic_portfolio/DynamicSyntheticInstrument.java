@@ -37,11 +37,6 @@ public class DynamicSyntheticInstrument extends SyntheticInstrument implements A
 
 
     @Override
-    public void onUpdatePnlSnapshot(String algorithmInfo, PnlSnapshot pnlSnapshot) {
-
-    }
-
-    @Override
     public void onUpdatePortfolioSnapshot(String algorithmInfo, PortfolioSnapshot portfolioSnapshot) {
 
     }

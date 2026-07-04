@@ -13,8 +13,6 @@ import java.util.Map;
 public interface AlgorithmGui {
     void updateDepth(Depth depth);
 
-    void updatePnlSnapshot(PnlSnapshot pnlSnapshot);
-
     void updatePortfolioSnapshot(PortfolioSnapshot portfolioSnapshot);
 
     void updateTrade(Trade trade);

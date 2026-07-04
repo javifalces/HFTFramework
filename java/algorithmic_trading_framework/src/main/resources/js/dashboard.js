@@ -1346,15 +1346,6 @@ function handleMessage(msg) {
         case 'PARAMS':
             updateParams(msg.data, msg.algorithmInfo);
             break;
-        case 'PNL_SNAPSHOT':
-            // Update instrument snapshot and trigger dashboard refresh when realtime is enabled
-            if (msg.data && msg.data.instrumentPk) {
-                latestInstrumentSnapshotMap[msg.data.instrumentPk] = msg.data;
-                if (refreshIntervalMs === 0) {
-                    scheduleInstrumentCardsRender();
-                }
-            }
-            break;
         case 'CUSTOM_COLUMN':
             updateCustom(msg.data);
             break;

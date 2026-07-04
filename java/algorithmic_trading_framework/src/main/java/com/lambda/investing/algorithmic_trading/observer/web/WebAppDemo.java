@@ -320,7 +320,6 @@ public class WebAppDemo {
 
         PortfolioSnapshot portfolio = new PortfolioSnapshot(ALGO_INFO, map);
         observer.onUpdatePortfolioSnapshot(ALGO_INFO, portfolio);
-        observer.onUpdatePnlSnapshot(ALGO_INFO, btcPnl);
     }
 
     /**

@@ -32,7 +32,6 @@ public class AlgorithmNotifier {
      * Notification event types for algorithm observer callbacks.
      */
     private enum NotificationType {
-        PNL_SNAPSHOT,
         PORTFOLIO_SNAPSHOT,
         DEPTH,
         TRADE,
@@ -100,12 +99,6 @@ public class AlgorithmNotifier {
         if (observers.isEmpty()) return;
 
         switch (wrapper.type) {
-            case PNL_SNAPSHOT -> {
-                PnlSnapshot pnlSnapshot = (PnlSnapshot) wrapper.payload;
-                for (AlgorithmObserver obs : observers) {
-                    obs.onUpdatePnlSnapshot(info, pnlSnapshot);
-                }
-            }
             case PORTFOLIO_SNAPSHOT -> {
                 PortfolioSnapshot portfolioSnapshot = (PortfolioSnapshot) wrapper.payload;
                 for (AlgorithmObserver obs : observers) {
@@ -195,13 +188,6 @@ public class AlgorithmNotifier {
             this.name = name;
             this.body = body;
         }
-    }
-
-    // ── pnl snapshots ────────────────────────────────────────────────────────
-
-    public void notifyObserversOnUpdatePnlSnapshot(PnlSnapshot pnlSnapshot) {
-        if (!hasObservers()) return;
-        publishNotification(NotificationType.PNL_SNAPSHOT, pnlSnapshot);
     }
 
     // ── portfolio snapshots ───────────────────────────────────────────────────

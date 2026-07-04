@@ -290,10 +290,6 @@ public class PrometheusAlgorithmObserver implements AlgorithmObserver {
         // not published to Prometheus
     }
 
-    @Override
-    public void onUpdatePnlSnapshot(String algorithmInfo, PnlSnapshot pnlSnapshot) {
-        // not published to Prometheus – handled via onUpdatePortfolioSnapshot
-    }
 
     @Override
     public void onUpdatePortfolioSnapshot(String algorithmInfo, PortfolioSnapshot portfolioSnapshot) {

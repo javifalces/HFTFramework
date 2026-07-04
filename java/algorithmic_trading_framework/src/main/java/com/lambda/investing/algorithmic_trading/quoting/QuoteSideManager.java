@@ -374,9 +374,20 @@ public class QuoteSideManager {
             return false;
         }
         final String clientOrderId = executionReport.getClientOrderId();
-        if (!lastClOrdIdSentSet.contains(clientOrderId)) {   // O(1) — was O(n)
+        final String origClientOrderId = executionReport.getOrigClientOrderId();
+
+        // Check if this ER belongs to us: either clientOrderId or origClientOrderId must be in our sent set
+        boolean belongsToUs = lastClOrdIdSentSet.contains(clientOrderId);
+        if (!belongsToUs && origClientOrderId != null && !origClientOrderId.isEmpty()) {
+            belongsToUs = lastClOrdIdSentSet.contains(origClientOrderId);
+            if (belongsToUs) {
+                logger.warn("onExecutionReportUpdate clientOrderId:{} not found in lastClOrdIdSentSet but found origClientOrderId: {} ", clientOrderId, origClientOrderId);
+            }
+        }
+        if (!belongsToUs) {
             return false;
         }
+
         final Instrument erInstrument = Instrument.getInstrument(executionReport.getInstrument());
         if (!erInstrument.equals(this.instrument)) {
             return false;

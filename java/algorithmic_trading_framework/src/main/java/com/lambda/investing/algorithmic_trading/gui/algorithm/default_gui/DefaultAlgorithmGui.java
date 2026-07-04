@@ -330,7 +330,7 @@ public class DefaultAlgorithmGui implements AlgorithmGui {
 
     @Override
     public void updatePortfolioSnapshot(PortfolioSnapshot portfolioSnapshot) {
-
+        lastPnlSnapshot = portfolioSnapshot.getPnlSnapshots();
     }
 
 

@@ -1839,10 +1839,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     }
 
     protected void addToPersist(ExecutionReport executionReport) {
-        PnlSnapshot pnlSnapshot = portfolioManager.addTrade(executionReport);
-        algorithmNotifier.notifyObserversOnUpdatePnlSnapshot(pnlSnapshot);
         algorithmNotifier.notifyObserversOnUpdatePortfolioSnapshot(portfolioManager.getPortfolioSnapshot());
-
         if (!isBacktest) {
             printRowTrade(executionReport);
             //			System.out.println(
@@ -1922,7 +1919,6 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                 logger.warn(messagePrint);
                 System.out.println("WARNING: " + messagePrint);
                 pnlSnapshot.netPosition = position;
-                algorithmNotifier.notifyObserversOnUpdatePnlSnapshot(pnlSnapshot);
                 algorithmNotifier.notifyObserversOnUpdatePortfolioSnapshot(portfolioManager.getPortfolioSnapshot());
 
             }

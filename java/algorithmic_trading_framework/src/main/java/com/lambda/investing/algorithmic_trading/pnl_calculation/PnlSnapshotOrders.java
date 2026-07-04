@@ -250,7 +250,10 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 		//historical only Cf or Pf
 		updateHistoricals(executionReport.getTimestampCreation());
 		processedClOrdId.put(executionReport.getClientOrderId(), executionReport.getExecutionReportStatus());
-
+		if (!isBacktest && ExecutionReport.isTradeStatus(executionReport)) {
+			String tradeMessage = Configuration.formatLog("TRADE[{}] {} {} {} {} netPosition {} totalPnl {}", numberOfTrades.get(), executionReport.getExecutionReportStatus(), executionReport.getVerb(), executionReport.getLastQuantity(), executionReport.getPrice(), netPosition, totalPnl);
+			System.out.println(tradeMessage);
+		}
 	}
 
 	private void updateOpenPosition(Depth depth, double leverage) {

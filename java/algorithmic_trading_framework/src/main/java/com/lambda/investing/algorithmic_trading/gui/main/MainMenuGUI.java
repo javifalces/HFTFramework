@@ -5,7 +5,6 @@ import com.intellij.uiDesigner.core.GridLayoutManager;
 import com.lambda.investing.algorithmic_trading.*;
 import com.lambda.investing.algorithmic_trading.gui.algorithm.AlgorithmGui;
 import com.lambda.investing.algorithmic_trading.gui.algorithm.default_gui.DefaultAlgorithmGui;
-import com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshot;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioSnapshot;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
@@ -103,10 +102,6 @@ public class MainMenuGUI extends JFrame implements AlgorithmObserver {
         algorithmsMap.get(algorithmInfo).updateDepth(depth);
     }
 
-    @Override
-    public void onUpdatePnlSnapshot(String algorithmInfo, PnlSnapshot pnlSnapshot) {
-        algorithmsMap.get(algorithmInfo).updatePnlSnapshot(pnlSnapshot);
-    }
 
     @Override
     public void onUpdatePortfolioSnapshot(String algorithmInfo, PortfolioSnapshot portfolioSnapshot) {
