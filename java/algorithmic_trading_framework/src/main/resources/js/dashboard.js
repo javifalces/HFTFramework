@@ -226,6 +226,7 @@ async function onBacktestSpeedChange(value) {
 // ── Auth ──────────────────────────────────────────────────────────────────────
 const TOKEN_KEY = 'hft_auth_token';
 let authFailed = false;
+let authDisabled = false; // Track if authentication is disabled (backtest mode or no password)
 
 function getToken() {
     return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
@@ -1202,8 +1203,13 @@ function setStatus(connected, text) {
 function connect() {
     const token = getToken();
     if (!token) {
-        showLoginOverlay('');
-        return;
+        // If authentication is disabled (backtest or no password), generate a dummy token and proceed
+        if (authDisabled) {
+            setToken('auto-generated-token', false);
+        } else {
+            showLoginOverlay('');
+            return;
+        }
     }
     authFailed = false;
     const port = getPort();
@@ -1268,6 +1274,29 @@ function reconnect() {
     reconnectTimer = null;
     connect();
 }
+
+// ── Initialization ────────────────────────────────────────────────────────────
+/** Check /api/mode on page load to see if authentication is disabled */
+async function initializeApp() {
+    try {
+        const res = await fetch(getApiBase() + '/api/mode');
+        if (res.ok) {
+            const mode = await res.json();
+            authDisabled = mode.authDisabled || false;
+            // Set backtest mode flag for UI elements
+            isBacktestMode = mode.backtest || false;
+        }
+    } catch (err) {
+        console.warn('Failed to fetch /api/mode:', err);
+        // Default to auth required on error
+        authDisabled = false;
+    }
+    // Now proceed with the connection
+    connect();
+}
+
+// Initialize the app when the page loads
+initializeApp();
 
 // ── Message dispatcher ────────────────────────────────────────────────────────
 function handleMessage(msg) {

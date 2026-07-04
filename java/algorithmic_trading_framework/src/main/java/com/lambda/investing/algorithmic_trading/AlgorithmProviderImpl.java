@@ -171,6 +171,7 @@ public class AlgorithmProviderImpl implements AlgorithmProvider {
                     targetAlgorithm.getAlgorithmInfo(), key, existingValue, castValue);
             logger.info(messagePrint);
             System.out.println(messagePrint);
+            targetAlgorithm.forceUpdateDepth();
 
         }
 

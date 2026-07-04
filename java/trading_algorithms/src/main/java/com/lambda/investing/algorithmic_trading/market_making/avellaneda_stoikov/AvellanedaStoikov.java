@@ -212,11 +212,6 @@ public class AvellanedaStoikov extends MarketMakingAlgorithm {
 
 
     @Override
-    public void setParameter(String name, Object value) {
-        super.setParameter(name, value);
-    }
-
-    @Override
     public String printAlgo() {
         return String
                 .format("%s  \n\tspreadCalculationType=%s\n\tkCalculationType=%s\n\triskAversion=%.3f\n\tquantity=%.3f\n\tsigmaDefault=%.3f\n\tkDefault=%.3f\n\taDefault=%.3f\n\tmidpricePeriodWindow=%d\n\tmidpricePeriodSeconds=%d\n\tfirstHourOperatingIncluded=%d\n\tlastHourOperatingIncluded=%d\n\tchangeKPeriodSeconds=%d",

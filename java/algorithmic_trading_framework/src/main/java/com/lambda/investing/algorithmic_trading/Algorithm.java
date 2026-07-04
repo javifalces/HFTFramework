@@ -459,6 +459,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
         algorithmNotifier.notifyObserversOnUpdateParams(this.parameters);
 
+
     }
 
     public void setUiEnabled(boolean uiEnabled) {
@@ -472,7 +473,91 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
     public void setParameter(String name, Object value) {
         this.parameters.put(name, value);
+        setFieldByReflection(name, value);
         algorithmNotifier.notifyObserversOnUpdateParams(this.parameters);
+    }
+
+    /**
+     * Sets a field value using reflection by searching the class hierarchy.Used when UI changes
+     *
+     * @param fieldName the name of the field to set
+     * @param value     the value to set
+     * @return true if the field was found and set successfully, false otherwise
+     */
+    protected boolean setFieldByReflection(String fieldName, Object value) {
+        try {
+            java.lang.reflect.Field field = findFieldInClassHierarchy(this.getClass(), fieldName);
+            if (field != null) {
+                field.setAccessible(true);
+                Object convertedValue = convertValueToFieldType(value, field.getType());
+                field.set(this, convertedValue);
+                logger.debug("Successfully set field '{}' to value: {}", fieldName, convertedValue);
+                return true;
+            } else {
+                logger.debug("Field '{}' not found in class hierarchy", fieldName);
+                return false;
+            }
+        } catch (IllegalAccessException e) {
+            logger.warn("Could not access field '{}': {}", fieldName, e.getMessage());
+            return false;
+        } catch (Exception e) {
+            logger.warn("Error setting field '{}': {}", fieldName, e.getMessage());
+            return false;
+        }
+    }
+
+    private java.lang.reflect.Field findFieldInClassHierarchy(Class<?> clazz, String fieldName) {
+        Class<?> currentClass = clazz;
+        while (currentClass != null) {
+            try {
+                return currentClass.getDeclaredField(fieldName);
+            } catch (NoSuchFieldException e) {
+                currentClass = currentClass.getSuperclass();
+            }
+        }
+        return null;
+    }
+
+    private Object convertValueToFieldType(Object value, Class<?> targetType) {
+        if (value == null || targetType.isInstance(value)) {
+            return value;
+        }
+
+        // Handle primitive types and their wrappers
+        if (targetType == int.class || targetType == Integer.class) {
+            if (value instanceof Number) {
+                return ((Number) value).intValue();
+            }
+            return Integer.parseInt(value.toString());
+        } else if (targetType == long.class || targetType == Long.class) {
+            if (value instanceof Number) {
+                return ((Number) value).longValue();
+            }
+            return Long.parseLong(value.toString());
+        } else if (targetType == double.class || targetType == Double.class) {
+            if (value instanceof Number) {
+                return ((Number) value).doubleValue();
+            }
+            return Double.parseDouble(value.toString());
+        } else if (targetType == float.class || targetType == Float.class) {
+            if (value instanceof Number) {
+                return ((Number) value).floatValue();
+            }
+            return Float.parseFloat(value.toString());
+        } else if (targetType == boolean.class || targetType == Boolean.class) {
+            if (value instanceof Boolean) {
+                return value;
+            }
+            if (value instanceof Number) {
+                return ((Number) value).intValue() != 0;
+            }
+            return Boolean.parseBoolean(value.toString());
+        } else if (targetType == String.class) {
+            return value.toString();
+        }
+
+        // If no conversion is needed or possible, return the value as is
+        return value;
     }
 
     public abstract String printAlgo();
@@ -635,6 +720,20 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
     public Depth getLastDepth(Instrument instrument) {
         return getInstrumentManager(instrument.getPrimaryKey()).getLastDepth();
+    }
+
+    /**
+     * Force update depth by calling onDepthUpdate with the last Depth of all instruments in the InstrumentManager.Check basedDepth or override it
+     */
+    public void forceUpdateDepth() {
+        for (InstrumentManager instrumentManager : instrumentToManager.values()) {
+            Depth lastDepth = instrumentManager.getLastDepth();
+            if (lastDepth != null) {
+                //normally base algo timestamp will discard the update
+                //normally base algo double count will discard the update
+                onDepthUpdate(lastDepth);
+            }
+        }
     }
 
 
@@ -1812,8 +1911,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             }
             InstrumentManager instrumentManager = getInstrumentManager(instrumentPK);
             double position = positions.getOrDefault(instrumentPK, 0.0);
-            logger.info("onPosition {} = {}", instrumentPK, position);
-            if (!isBacktest) {
+            if (!isBacktest && Math.abs(position) > 1e-6) {
+                logger.info("onPosition {} = {}", instrumentPK, position);
                 System.out.println(Configuration.formatLog("onPosition {} = {}", instrumentPK, position));
             }
             instrumentManager.setPosition(position);
@@ -1864,8 +1963,11 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     @Override
     public boolean onInfoUpdate(String header, Object message) {
         if (header.startsWith(REQUESTED_POSITION_INFO)) {
-            logger.info("received position from broker {}", message);
+            if (message != null && message.toString().isEmpty()) {
+                return true;
+            }
 
+            logger.info("received position from broker {}", message);
             Map<?, ?> rawPositions = fromJsonString(fromObject(message, String.class), Map.class);
             Map<String, Double> positions = new HashMap<>();
             for (Map.Entry<?, ?> entry : rawPositions.entrySet()) {
