@@ -262,6 +262,7 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         }
         String json = buildMessage("PARAMS", algorithmInfo, newParams, currentTimeMs());
         server.broadcastUpdate(json);
+
         refreshState();
     }
 

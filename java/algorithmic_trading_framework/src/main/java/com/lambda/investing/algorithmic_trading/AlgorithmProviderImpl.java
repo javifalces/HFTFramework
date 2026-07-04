@@ -2,6 +2,7 @@ package com.lambda.investing.algorithmic_trading;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
+import com.lambda.investing.Configuration;
 import com.lambda.investing.market_data_connector.parquet_file_reader.ParquetMarketDataConnectorPublisher;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.trading.OrderRequest;
@@ -165,10 +166,12 @@ public class AlgorithmProviderImpl implements AlgorithmProvider {
                 allOk = false;
                 continue;
             }
-
             targetAlgorithm.setParameter(key, castValue);
-            logger.info("changeParameters: updated '{}' = {} (algo: {})", key, castValue,
-                    targetAlgorithm.getAlgorithmInfo());
+            String messagePrint = Configuration.formatLog("{} changeParameters '{}': {} -> {}",
+                    targetAlgorithm.getAlgorithmInfo(), key, existingValue, castValue);
+            logger.info(messagePrint);
+            System.out.println(messagePrint);
+
         }
 
         return allOk;

@@ -194,6 +194,16 @@ public class MultiAlgorithm extends Algorithm {
 //        return result;
     }
 
+    @Override
+    public boolean onPosition(Map<String, Double> positions) {
+        boolean output = super.onPosition(positions);
+        if (algorithms == null) return output;
+        for (Algorithm algorithm : algorithms) {
+            algorithm.onPosition(positions);
+        }
+        return true;
+    }
+
     public void manualStop() {
         if (algorithms == null) return;
         for (Algorithm algorithm : algorithms) {

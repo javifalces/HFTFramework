@@ -167,6 +167,14 @@ public class Portfolio implements Runnable {
         }
     }
 
+    public Map<String, Double> getPositions() {
+        Map<String, Double> positions = new HashMap<>();
+        for (Map.Entry<String, PortfolioInstrument> entry : portfolioInstruments.entrySet()) {
+            positions.put(entry.getKey(), entry.getValue().getPosition());
+        }
+        return positions;
+    }
+
     @Override
     public void run() {
         while (this.autosave) {

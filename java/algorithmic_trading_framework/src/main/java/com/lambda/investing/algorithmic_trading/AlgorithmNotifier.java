@@ -1,36 +1,50 @@
 package com.lambda.investing.algorithmic_trading;
 
-import com.lambda.investing.LambdaThreadFactory;
+import com.lambda.investing.Configuration;
+import com.lambda.investing.connector.ConnectorConfiguration;
+import com.lambda.investing.connector.disruptor.DisruptorConnectorConfiguration;
+import com.lambda.investing.connector.disruptor.DisruptorConnectorHelper;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshot;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioSnapshot;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
+import com.lambda.investing.model.messaging.TypeMessage;
 import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.OrderRequest;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.*;
 
 /**
  * Asynchronous notifier for algorithm observers (UI / monitoring).
  * <p>
  * Design goals for HFT hot-path safety:
  * - The caller (trading engine) NEVER blocks — all notifications are fire-and-forget.
- * - A bounded queue with DiscardPolicy ensures the queue cannot grow unboundedly;
- * when it is full the notification is silently dropped. UI lag is acceptable;
+ * - Uses LMAX Disruptor ring buffer for high-throughput, low-latency event dispatch.
+ * - If the ring buffer is full, the notification is silently dropped. UI lag is acceptable;
  * trading latency is not.
- * - execute() is used instead of submit() to avoid Future allocation on every call.
- * - The background thread runs at MIN_PRIORITY so the OS scheduler favours
- * trading threads over UI notifications.
+ * - The background thread processes events asynchronously to avoid blocking the caller.
  */
 public class AlgorithmNotifier {
 
-    /** Max pending UI notifications. Excess tasks are silently dropped. */
-    private static final int NOTIFIER_QUEUE_CAPACITY = 1024;
+    /**
+     * Notification event types for algorithm observer callbacks.
+     */
+    private enum NotificationType {
+        PNL_SNAPSHOT,
+        PORTFOLIO_SNAPSHOT,
+        DEPTH,
+        TRADE,
+        PARAMETERS,
+        CUSTOM_COLUMN,
+        MESSAGE,
+        ORDER_REQUEST,
+        EXECUTION_REPORT
+    }
 
-    private final ThreadPoolExecutor notifierPool;
+    private final DisruptorConnectorHelper disruptorHelper;
+    private final ConnectorConfiguration dummyConfig = new DisruptorConnectorConfiguration();
     private volatile String algorithmInfo;
     private final Algorithm algorithm;
 
@@ -41,85 +55,168 @@ public class AlgorithmNotifier {
         this.algorithmInfo = algorithm.algorithmInfo;
         this.algorithm = algorithm;
 
-        // Always async — at least one background thread so the hot path is never blocked.
-        int threads = Math.max(1, threadsNotifier);
-        ThreadFactory namedThreadFactory = LambdaThreadFactory.createThreadFactory(
-                this.algorithmInfo + "_notifier", Thread.MIN_PRIORITY);
-
-        // Bounded queue: when full, DiscardPolicy silently drops the task.
-        BlockingQueue<Runnable> boundedQueue = new ArrayBlockingQueue<>(NOTIFIER_QUEUE_CAPACITY);
-        this.notifierPool = new ThreadPoolExecutor(
-                threads, threads,
-                0L, TimeUnit.MILLISECONDS,
-                boundedQueue,
-                namedThreadFactory,
-                new ThreadPoolExecutor.DiscardPolicy()   // drop UI update, never block caller
+        // Initialize DisruptorConnectorHelper with DISRUPTOR_HIGH_THROUGHPUT
+        String threadName = this.algorithmInfo + "_notifier_disruptor";
+        this.disruptorHelper = DisruptorConnectorHelper.getInstance(
+                threadName,
+                Configuration.ConnectorProviderType.DISRUPTOR_HIGH_THROUGHPUT
         );
+        this.disruptorHelper.init();
+
+        // Register consumer to handle all notification events
+        this.disruptorHelper.addConsumer(this::handleNotification);
     }
 
     public void setAlgorithmInfo(String algorithmInfo) {
         this.algorithmInfo = algorithmInfo;
     }
 
-    /** Non-blocking fire-and-forget submit. Drops task silently when queue is full. */
-    private void submitTask(Runnable task) {
-        notifierPool.execute(task); // execute() avoids Future allocation unlike submit()
+    /**
+     * Non-blocking fire-and-forget publish to Disruptor. Drops event silently when ring buffer is full.
+     */
+    private void publishNotification(NotificationType notificationType, Object content) {
+        NotificationWrapper wrapper = new NotificationWrapper(notificationType, content);
+        disruptorHelper.publish(dummyConfig, System.nanoTime(), TypeMessage.info, wrapper);
+    }
+
+    /**
+     * Consumer callback invoked by DisruptorConnectorHelper on the dedicated consumer thread.
+     */
+    private void handleNotification(ConnectorConfiguration config, long timestamp,
+                                    TypeMessage typeMessage, Object content) {
+        if (!(content instanceof NotificationWrapper wrapper)) {
+            return;
+        }
+
+        final String info = algorithmInfo;
+        final List<AlgorithmObserver> observers = algorithm.getAlgorithmObservers();
+
+        if (observers.isEmpty()) return;
+
+        switch (wrapper.type) {
+            case PNL_SNAPSHOT -> {
+                PnlSnapshot pnlSnapshot = (PnlSnapshot) wrapper.payload;
+                for (AlgorithmObserver obs : observers) {
+                    obs.onUpdatePnlSnapshot(info, pnlSnapshot);
+                }
+            }
+            case PORTFOLIO_SNAPSHOT -> {
+                PortfolioSnapshot portfolioSnapshot = (PortfolioSnapshot) wrapper.payload;
+                for (AlgorithmObserver obs : observers) {
+                    obs.onUpdatePortfolioSnapshot(info, portfolioSnapshot);
+                }
+            }
+            case DEPTH -> {
+                Depth depth = (Depth) wrapper.payload;
+                for (AlgorithmObserver obs : observers) {
+                    obs.onUpdateDepth(info, depth);
+                }
+            }
+            case TRADE -> {
+                Trade trade = (Trade) wrapper.payload;
+                for (AlgorithmObserver obs : observers) {
+                    obs.onUpdateTrade(info, trade);
+                }
+            }
+            case PARAMETERS -> {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> params = (Map<String, Object>) wrapper.payload;
+                for (AlgorithmObserver obs : observers) {
+                    obs.onUpdateParams(info, params);
+                }
+            }
+            case CUSTOM_COLUMN -> {
+                CustomColumnData data = (CustomColumnData) wrapper.payload;
+                for (AlgorithmObserver obs : observers) {
+                    obs.onCustomColumns(data.timestamp, info, data.instrumentPk, data.key, data.value);
+                }
+            }
+            case MESSAGE -> {
+                MessageData data = (MessageData) wrapper.payload;
+                for (AlgorithmObserver obs : observers) {
+                    obs.onUpdateMessage(info, data.name, data.body);
+                }
+            }
+            case ORDER_REQUEST -> {
+                OrderRequest orderRequest = (OrderRequest) wrapper.payload;
+                for (AlgorithmObserver obs : observers) {
+                    obs.onOrderRequest(info, orderRequest);
+                }
+            }
+            case EXECUTION_REPORT -> {
+                ExecutionReport executionReport = (ExecutionReport) wrapper.payload;
+                for (AlgorithmObserver obs : observers) {
+                    obs.onExecutionReportUpdate(info, executionReport);
+                }
+            }
+        }
     }
 
     private boolean hasObservers() {
         return !algorithm.getAlgorithmObservers().isEmpty();
     }
 
+    // Helper classes to wrap notification data
+    private static class NotificationWrapper {
+        final NotificationType type;
+        final Object payload;
+
+        NotificationWrapper(NotificationType type, Object payload) {
+            this.type = type;
+            this.payload = payload;
+        }
+    }
+
+    private static class CustomColumnData {
+        final long timestamp;
+        final String instrumentPk;
+        final String key;
+        final Double value;
+
+        CustomColumnData(long timestamp, String instrumentPk, String key, Double value) {
+            this.timestamp = timestamp;
+            this.instrumentPk = instrumentPk;
+            this.key = key;
+            this.value = value;
+        }
+    }
+
+    private static class MessageData {
+        final String name;
+        final String body;
+
+        MessageData(String name, String body) {
+            this.name = name;
+            this.body = body;
+        }
+    }
+
     // ── pnl snapshots ────────────────────────────────────────────────────────
 
     public void notifyObserversOnUpdatePnlSnapshot(PnlSnapshot pnlSnapshot) {
         if (!hasObservers()) return;
-        final String info = algorithmInfo;
-        final List<AlgorithmObserver> observers = algorithm.getAlgorithmObservers();
-        submitTask(() -> {
-            for (AlgorithmObserver obs : observers) {
-                obs.onUpdatePnlSnapshot(info, pnlSnapshot);
-            }
-        });
+        publishNotification(NotificationType.PNL_SNAPSHOT, pnlSnapshot);
     }
 
     // ── portfolio snapshots ───────────────────────────────────────────────────
 
     public void notifyObserversOnUpdatePortfolioSnapshot(PortfolioSnapshot portfolioSnapshot) {
         if (!hasObservers()) return;
-        final String info = algorithmInfo;
-        final List<AlgorithmObserver> observers = algorithm.getAlgorithmObservers();
-        submitTask(() -> {
-            for (AlgorithmObserver obs : observers) {
-                obs.onUpdatePortfolioSnapshot(info, portfolioSnapshot);
-            }
-        });
+        publishNotification(NotificationType.PORTFOLIO_SNAPSHOT, portfolioSnapshot);
     }
 
     // ── depth ─────────────────────────────────────────────────────────────────
 
     public void notifyObserversOnUpdateDepth(Depth depth) {
         if (!hasObservers()) return;
-        final String info = algorithmInfo;
-        final List<AlgorithmObserver> observers = algorithm.getAlgorithmObservers();
-        submitTask(() -> {
-            for (AlgorithmObserver obs : observers) {
-                obs.onUpdateDepth(info, depth);
-            }
-        });
+        publishNotification(NotificationType.DEPTH, depth);
     }
 
     // ── trade ─────────────────────────────────────────────────────────────────
 
     public void notifyObserversOnUpdatePnlSnapshot(Trade trade) {
         if (!hasObservers()) return;
-        final String info = algorithmInfo;
-        final List<AlgorithmObserver> observers = algorithm.getAlgorithmObservers();
-        submitTask(() -> {
-            for (AlgorithmObserver obs : observers) {
-                obs.onUpdateTrade(info, trade);
-            }
-        });
+        publishNotification(NotificationType.TRADE, trade);
     }
 
     // ── params ────────────────────────────────────────────────────────────────
@@ -134,13 +231,7 @@ public class AlgorithmNotifier {
         lastParams = new HashMap<>(params);
 
         if (!hasObservers()) return;
-        final String info = algorithmInfo;
-        final List<AlgorithmObserver> observers = algorithm.getAlgorithmObservers();
-        submitTask(() -> {
-            for (AlgorithmObserver obs : observers) {
-                obs.onUpdateParams(info, params);
-            }
-        });
+        publishNotification(NotificationType.PARAMETERS, params);
     }
 
     public void notifyLastParams() {
@@ -154,51 +245,28 @@ public class AlgorithmNotifier {
 
     public void notifyObserversCustomColumns(long timestamp, String instrumentPk, String key, Double value) {
         if (!hasObservers()) return;
-        final String info = algorithmInfo;
-        final List<AlgorithmObserver> observers = algorithm.getAlgorithmObservers();
-        submitTask(() -> {
-            for (AlgorithmObserver obs : observers) {
-                obs.onCustomColumns(timestamp, info, instrumentPk, key, value);
-            }
-        });
+        publishNotification(NotificationType.CUSTOM_COLUMN,
+                new CustomColumnData(timestamp, instrumentPk, key, value));
     }
 
     // ── message ───────────────────────────────────────────────────────────────
 
     public void notifyObserversOnUpdateMessage(String name, String body) {
         if (!hasObservers()) return;
-        final String info = algorithmInfo;
-        final List<AlgorithmObserver> observers = algorithm.getAlgorithmObservers();
-        submitTask(() -> {
-            for (AlgorithmObserver obs : observers) {
-                obs.onUpdateMessage(info, name, body);
-            }
-        });
+        publishNotification(NotificationType.MESSAGE, new MessageData(name, body));
     }
 
     // ── order request ─────────────────────────────────────────────────────────
 
     public void notifyObserversOnOrderRequest(OrderRequest orderRequest) {
         if (!hasObservers()) return;
-        final String info = algorithmInfo;
-        final List<AlgorithmObserver> observers = algorithm.getAlgorithmObservers();
-        submitTask(() -> {
-            for (AlgorithmObserver obs : observers) {
-                obs.onOrderRequest(info, orderRequest);
-            }
-        });
+        publishNotification(NotificationType.ORDER_REQUEST, orderRequest);
     }
 
     // ── execution report ──────────────────────────────────────────────────────
 
     public void notifyObserversOnExecutionReportUpdate(ExecutionReport executionReport) {
         if (!hasObservers()) return;
-        final String info = algorithmInfo;
-        final List<AlgorithmObserver> observers = algorithm.getAlgorithmObservers();
-        submitTask(() -> {
-            for (AlgorithmObserver obs : observers) {
-                obs.onExecutionReportUpdate(info, executionReport);
-            }
-        });
+        publishNotification(NotificationType.EXECUTION_REPORT, executionReport);
     }
 }
