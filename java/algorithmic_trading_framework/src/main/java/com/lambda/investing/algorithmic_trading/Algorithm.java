@@ -16,7 +16,6 @@ import com.lambda.investing.algorithmic_trading.hedging.NoHedgeManager;
 import com.lambda.investing.algorithmic_trading.observer.LiveTradeReport;
 import com.lambda.investing.algorithmic_trading.observer.PrometheusAlgorithmObserver;
 import com.lambda.investing.algorithmic_trading.observer.push.PushService;
-import com.lambda.investing.algorithmic_trading.observer.push.pushbullet.PushbulletAlgorithmObserver;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshot;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioManager;
 import com.lambda.investing.algorithmic_trading.quoting.QuoteManager;
@@ -51,7 +50,6 @@ import java.io.File;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -123,7 +121,6 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
     protected long seed = 0;
 
-    protected Map<String, Double> algorithmPosition;
 
     protected HedgeManager hedgeManager = new NoHedgeManager();
 
@@ -164,10 +161,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         algorithmNotifier.notifyObserversCustomColumns(getCurrentTimestamp(), instrumentPk, key, value);
     }
 
-    public PortfolioManager getPortfolioManager() {
-        return portfolioManager;
-    }
-
+    @Getter
     protected PortfolioManager portfolioManager;
     protected AlgorithmNotifier algorithmNotifier;
 
@@ -285,7 +279,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         executionReportManager = new ExecutionReportManager();
         candleFromTickUpdater = new CandleFromTickUpdater();
         candleFromTickUpdater.register(this);
-        algorithmPosition = new HashMap<>();
+
 
         algorithmObservers = new ArrayList<>();
         cfTradesProcessed = EvictingQueue.create(DEFAULT_QUEUE_CF_TRADE);
@@ -1728,6 +1722,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
             boolean isTrade = ExecutionReport.isTradeStatus(executionReport);
             if (isTrade) {
+                portfolioManager.addTrade(executionReport);//update position
 
                 if (slippageStatistics != null) {
                     slippageStatistics.registerPriceExecuted(executionReport.getClientOrderId(), executionReport.getPrice());
@@ -1743,7 +1738,6 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                 }
 
                 addToPersist(executionReport);
-                addPosition(executionReport);
                 if (executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletelyFilled)) {
                     clientOrderIdLastCompletelyFillReceived.put(executionReport.getClientOrderId(), executionReport);
                 }
@@ -1763,27 +1757,9 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
     }
 
-    private void addPosition(ExecutionReport executionReport) {
-        InstrumentManager instrumentManager = getInstrumentManager(executionReport.getInstrument());
-        double previousPosition = instrumentManager.getPosition();
-        double lastQty = executionReport.getLastQuantity();
-        if (executionReport.getVerb().equals(Verb.Sell)) {
-            lastQty = lastQty * -1;
-        }
-        double newPosition = previousPosition + lastQty;
-        instrumentManager.setPosition(newPosition);
-
-        double myPosition = algorithmPosition.getOrDefault(executionReport.getInstrument(), 0.0);
-        myPosition += lastQty;
-        algorithmPosition.put(executionReport.getInstrument(), myPosition);
-    }
 
     protected double getPosition(Instrument instrument) {
-        return getInstrumentManager(instrument.getPrimaryKey()).getPosition();
-    }
-
-    protected double getAlgorithmPosition(Instrument instrument) {
-        return algorithmPosition.getOrDefault(instrument.getPrimaryKey(), 0.0);
+        return portfolioManager.getPosition(instrument.getPrimaryKey());
     }
 
     public OrderRequest createMarketOrderRequest(Instrument instrument, Verb verb, double quantity) {
@@ -1898,7 +1874,6 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     }
 
     public boolean onPosition(Map<String, Double> positions) {
-        algorithmPosition = positions;//override it
         Set<String> instrumentPks = instrumentToManager.keySet();
         for (String instrumentPK : instrumentPks) {
             Instrument instrument = Instrument.getInstrument(instrumentPK);
@@ -1906,13 +1881,13 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                 logger.warn("received position of instrumentPK not found {}", instrumentPK);
                 continue;
             }
-            InstrumentManager instrumentManager = getInstrumentManager(instrumentPK);
+
             double position = positions.getOrDefault(instrumentPK, 0.0);
             if (!isBacktest && Math.abs(position) > 1e-6) {
                 logger.info("onPosition {} = {}", instrumentPK, position);
                 System.out.println(Configuration.formatLog("onPosition {} = {}", instrumentPK, position));
             }
-            instrumentManager.setPosition(position);
+
             PnlSnapshot pnlSnapshot = portfolioManager.getLastPnlSnapshot(instrumentPK);
             if (Math.abs(pnlSnapshot.netPosition - position) > 1e-6) {
                 String messagePrint = Configuration.formatLog("onPosition {} = {} but pnlSnapshot.netPosition={} -> update it", instrumentPK, position, pnlSnapshot.netPosition);

@@ -501,8 +501,8 @@ public class DisruptorConnectorHelper {
             // Buffer full - drop the event and log
             long remainingCapacity = ringBuffer.remainingCapacity();
             String errorMsg = String.format(
-                    "[%s] RING BUFFER FULL! Dropped notification typeMessage=%s (remainingCapacity=%d/%d)",
-                    consumerThreadName, typeMessage, remainingCapacity, ringBuffer.getBufferSize()
+                    "[%s] RING BUFFER FULL! Dropped notification typeMessage=%s content=%s (remainingCapacity=%d/%d)",
+                    consumerThreadName, typeMessage, content, remainingCapacity, ringBuffer.getBufferSize()
             );
             System.err.println(errorMsg);
             logger.error(errorMsg);

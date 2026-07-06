@@ -273,7 +273,7 @@ public class AlgorithmProviderImpl implements AlgorithmProvider {
             ParquetMarketDataConnectorPublisher.setSpeed(speed);
         }
         logger.info("changeSpeed: {}", messagePrint);
-        System.out.println(messagePrint);
+//        System.out.println(messagePrint);
         return true;
     }
 

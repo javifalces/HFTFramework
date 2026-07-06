@@ -274,7 +274,7 @@ public abstract class RLAbstractMarketMaking extends SingleInstrumentRLAlgorithm
     }
 
     protected double getPosition() {
-        return getAlgorithmPosition(instrument);
+        return getPosition(instrument);
     }
 
     //LISTENERS

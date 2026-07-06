@@ -9,6 +9,7 @@ import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.portfolio.Portfolio;
 import com.lambda.investing.model.portfolio.PortfolioInstrument;
 import com.lambda.investing.model.trading.ExecutionReport;
+import lombok.Getter;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -38,8 +39,10 @@ public class PortfolioManager {
     private Set<String> customColumnsKeys;
     private boolean isBacktest;
     private boolean isPaper;
-    private Portfolio portfolio;
 
+
+    @Getter
+    private PortfolioSnapshot portfolioSnapshot;
 
     public long numberOfTrades = 0;
 
@@ -53,9 +56,6 @@ public class PortfolioManager {
         reset();
     }
 
-    public PortfolioSnapshot getPortfolioSnapshot() {
-        return new PortfolioSnapshot(algorithm.getAlgorithmInfo(), instrumentPnlSnapshotMap);
-    }
 
     public PnlSnapshot getLastPnlSnapshot(String instrumentPk) {
         String key = linkCustomPk.getOrDefault(instrumentPk, instrumentPk);
@@ -66,21 +66,6 @@ public class PortfolioManager {
         //TODO fix end result is not working very fine
         linkCustomPk.put(instrumentPk, customInstrumentPk);
         linkCustomPkInversed.put(customInstrumentPk, instrumentPk);
-    }
-
-    public static Table MERGE_TABLES(Map<Instrument, Table> input) {
-        Table output = null;
-        for (Instrument instrument : input.keySet()) {
-
-            Table table = input.get(instrument);
-            if (output == null) {
-                output = table;
-            } else {
-                output = output.append(table);
-            }
-
-        }
-        return output.sortAscendingOn("date");
     }
 
     public String getInstrumentKey(String intrumentPk) {
@@ -110,6 +95,19 @@ public class PortfolioManager {
 
     }
 
+    public double getPosition(String instrumentPk) {
+        PnlSnapshot pnlSnapshot = instrumentPnlSnapshotMap.getOrDefault(instrumentPk, new PnlSnapshotOrders(instrumentPk));
+        return pnlSnapshot.netPosition;
+    }
+
+    public Map<String, Double> getPositions() {
+        Map<String, Double> positions = new HashMap<>();
+        for (String instrumentPk : instrumentPnlSnapshotMap.keySet()) {
+            positions.put(instrumentPk, getPosition(instrumentPk));
+        }
+        return positions;
+    }
+
     public void reset() {
         //		instrumentToExecutionReportsFilled = new ConcurrentHashMap<>();
         instrumentPnlSnapshotMap = new ConcurrentHashMap<>();
@@ -118,6 +116,7 @@ public class PortfolioManager {
         linkCustomPk = new ConcurrentHashMap<>();
         linkCustomPkInversed = new ConcurrentHashMap<>();
         numberOfTrades = 0;
+        this.portfolioSnapshot = new PortfolioSnapshot(algorithm.getAlgorithmInfo(), instrumentPnlSnapshotMap);
     }
 
     private PnlSnapshot getPnlSnapshot(String instrumentPk) {

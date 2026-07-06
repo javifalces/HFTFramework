@@ -456,27 +456,6 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         return sanitizeJson(sb.toString());
     }
 
-    /**
-     * Creates a lightweight PnL map containing only the scalar fields needed by the
-     * dashboard frontend.  Avoids serialising the enormous historical maps, Logger
-     * references and other non-serialisable state stored inside a {@link PnlSnapshot}.
-     */
-    private static Map<String, Object> toPnlDto(PnlSnapshot s) {
-        if (s == null) return Collections.emptyMap();
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("instrumentPk", s.getInstrumentPk());
-        m.put("algorithmInfo", s.getAlgorithmInfo());
-        m.put("realizedPnl", s.realizedPnl);
-        m.put("unrealizedPnl", s.unrealizedPnl);
-        m.put("totalPnl", s.totalPnl);
-        m.put("netPosition", s.netPosition);
-        m.put("avgOpenPrice", s.avgOpenPrice);
-        m.put("netInvestment", s.netInvestment);
-        m.put("totalFees", s.totalFees);
-        m.put("numberOfTrades", s.numberOfTrades != null ? s.numberOfTrades.get() : 0);
-        m.put("lastVerb", s.lastVerb);
-        return m;
-    }
 
     /**
      * Creates a lightweight portfolio map containing only the fields the dashboard

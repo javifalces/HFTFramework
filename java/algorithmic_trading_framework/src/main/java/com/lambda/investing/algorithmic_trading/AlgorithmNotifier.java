@@ -75,8 +75,14 @@ public class AlgorithmNotifier {
      */
     private void publishNotification(NotificationType notificationType, Object content) {
         NotificationWrapper wrapper = new NotificationWrapper(notificationType, content);
-        boolean published = disruptorHelper.tryPublish(dummyConfig, System.nanoTime(), TypeMessage.info, wrapper);
-
+        boolean published = false;
+        if (this.algorithm.isBacktest) {
+            //if so much info blocking
+            published = disruptorHelper.publish(dummyConfig, System.nanoTime(), TypeMessage.info, wrapper);
+        } else {
+            //avoid blocking , better to print
+            published = disruptorHelper.tryPublish(dummyConfig, System.nanoTime(), TypeMessage.info, wrapper);
+        }
         // Additional logging at AlgorithmNotifier level if needed
         if (!published) {
             // The DisruptorConnectorHelper already logs to System.err and logger,
