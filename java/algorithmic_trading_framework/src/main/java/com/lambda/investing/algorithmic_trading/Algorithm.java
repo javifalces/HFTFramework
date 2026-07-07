@@ -394,7 +394,12 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     }
 
     public void register(AlgorithmObserver algorithmObserver) {
+        if (algorithmObservers.contains(algorithmObserver)) {
+            logger.warn("Observer {} already registered - skipping", algorithmObserver.getClass().getSimpleName());
+            return;
+        }
         algorithmObservers.add(algorithmObserver);
+        logger.info("AlgorithmObservers count: {}", algorithmObservers.size());
         algorithmNotifier.notifyLastParams();
         algorithmNotifier.notifyObserversOnUpdatePortfolioSnapshot(portfolioManager.getPortfolioSnapshot());
     }
