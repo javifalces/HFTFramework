@@ -613,7 +613,9 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             requestInfo(this.algorithmInfo + "." + REQUESTED_PORTFOLIO_INFO);
             if (!isBacktest) {
                 configureIsPaper();//now we have all connector configured
-                startPositionRequestScheduler();
+                if (!isPaper) {
+                    startPositionRequestScheduler();
+                }
             }
             if (uiEnabled && !uiStarted) {
                 //start UI

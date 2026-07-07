@@ -72,7 +72,7 @@ public class PnlSnapshotTest {
 		PnlSnapshot pnlSnapshot = new PnlSnapshot(instrumentPk);
 		pnlSnapshot.setAlgorithmInfo(algoInfo);
 		//buy 100@101
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Buy, 101, 100));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Buy, 101, 100));
 		Assert.assertEquals(10100, pnlSnapshot.netInvestment, 0.0001);
 		Assert.assertEquals(0.0, pnlSnapshot.realizedPnl, 0.0001);
 		Assert.assertEquals(0.0, pnlSnapshot.unrealizedPnl, 0.0001);
@@ -87,7 +87,7 @@ public class PnlSnapshotTest {
 
 
 		//sell 100@99
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Sell, 99, 100));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Sell, 99, 100));
 		Assert.assertEquals(-200, pnlSnapshot.realizedPnl, 0.0001);
 		Assert.assertEquals(0, pnlSnapshot.netPosition, 0.0001);
 		Assert.assertEquals(0, pnlSnapshot.unrealizedPnl, 0.0001);//we dont have anything open
@@ -99,7 +99,7 @@ public class PnlSnapshotTest {
 		PnlSnapshot pnlSnapshot = new PnlSnapshotOrders(instrumentPk);
 		pnlSnapshot.setAlgorithmInfo(algoInfo);
 		//buy 100@101
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Buy, 101, 100));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Buy, 101, 100));
 		Assert.assertEquals(10100, pnlSnapshot.netInvestment, 0.0001);
 		Assert.assertEquals(0.0, pnlSnapshot.realizedPnl, 0.0001);
 		Assert.assertEquals(0.0, pnlSnapshot.unrealizedPnl, 0.0001);
@@ -113,7 +113,7 @@ public class PnlSnapshotTest {
 		Assert.assertEquals(10100, pnlSnapshot.netInvestment, 0.0001);
 
 		//sell 100@99
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Sell, 99, 100));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Sell, 99, 100));
 		Assert.assertEquals(-200, pnlSnapshot.realizedPnl, 0.0001);
 		Assert.assertEquals(0, pnlSnapshot.netPosition, 0.0001);
 		Assert.assertEquals(0, pnlSnapshot.unrealizedPnl, 0.0001);//we dont have anything open
@@ -125,7 +125,7 @@ public class PnlSnapshotTest {
 		PnlSnapshot pnlSnapshot = new PnlSnapshotOrders(instrumentPk);
 		pnlSnapshot.setAlgorithmInfo(algoInfo);
 		//sell 100@101
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Sell, 101, 100));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Sell, 101, 100));
 		Assert.assertEquals(10100, pnlSnapshot.netInvestment, 0.0001);
 		Assert.assertEquals(-100, pnlSnapshot.netPosition, 0.0001);
 		Assert.assertEquals(0.0, pnlSnapshot.realizedPnl, 0.0001);
@@ -140,7 +140,7 @@ public class PnlSnapshotTest {
 		Assert.assertEquals(10100, pnlSnapshot.netInvestment, 0.0001);
 
 		//sell 100@99
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Buy, 99, 100));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Buy, 99, 100));
 		Assert.assertEquals(200, pnlSnapshot.realizedPnl, 0.0001);
 		Assert.assertEquals(0, pnlSnapshot.netPosition, 0.0001);
 		Assert.assertEquals(0, pnlSnapshot.unrealizedPnl, 0.0001);//we dont have anything open
@@ -151,7 +151,7 @@ public class PnlSnapshotTest {
 	@Test public void testPnlUpdatesOpenPosition() {
 		PnlSnapshot pnlSnapshot = new PnlSnapshot(instrumentPk);
 		//buy 100@101
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Buy, 101, 100));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Buy, 101, 100));
 
 		/// last depth received best bid 99
 		pnlSnapshot.updateDepth(createDepth(99, 101, 500, 500));
@@ -163,7 +163,7 @@ public class PnlSnapshotTest {
 		Assert.assertEquals(10100, pnlSnapshot.netInvestment, 0.0001);
 
 		//sell 100@99
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Sell, 99, 100));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Sell, 99, 100));
 
 	}
 
@@ -171,7 +171,7 @@ public class PnlSnapshotTest {
 		PnlSnapshotOrders pnlSnapshot = new PnlSnapshotOrders(instrumentPk);
 		//buy 100@101
 		pnlSnapshot.setAlgorithmInfo(algoInfo);
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Buy, 101, 100));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Buy, 101, 100));
 
 		/// last depth received best bid 99
 		pnlSnapshot.updateDepth(createDepth(99, 101, 500, 500));
@@ -183,18 +183,18 @@ public class PnlSnapshotTest {
 		Assert.assertEquals(10100, pnlSnapshot.netInvestment, 0.0001);
 
 		//sell 100@99
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Sell, 99, 100));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Sell, 99, 100));
 	}
 
 	@Test public void testPnlUpdatesIncreasingOpenPosition() {
 		PnlSnapshot pnlSnapshot = new PnlSnapshot(instrumentPk);
 		pnlSnapshot.setAlgorithmInfo(algoInfo);
 		//buy 100@101
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Buy, 101, 100));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Buy, 101, 100));
 		/// last depth received best bid 99
 		pnlSnapshot.updateDepth(createDepth(99, 103, 500, 500));
 		//buy 100@103
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Buy, 103, 100));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Buy, 103, 100));
 
 		Assert.assertEquals(0, pnlSnapshot.realizedPnl, 0.0001);
 		Assert.assertEquals(200, pnlSnapshot.netPosition, 0.0001);
@@ -209,7 +209,7 @@ public class PnlSnapshotTest {
 		Assert.assertEquals(600, pnlSnapshot.totalPnl, 0.0001);
 
 		//sell 100@105
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Sell, 105, 100));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Sell, 105, 100));
 		Assert.assertEquals(300, pnlSnapshot.realizedPnl, 0.0001);
 		Assert.assertEquals(100, pnlSnapshot.netPosition, 0.0001);
 		Assert.assertEquals(300, pnlSnapshot.unrealizedPnl, 0.0001);//we dont have anything open
@@ -228,11 +228,11 @@ public class PnlSnapshotTest {
 		PnlSnapshotOrders pnlSnapshot = new PnlSnapshotOrders(instrumentPk);
 		pnlSnapshot.setAlgorithmInfo(algoInfo);
 		//buy 100@101
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Buy, 101, 100));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Buy, 101, 100));
 		/// last depth received best bid 99
 		pnlSnapshot.updateDepth(createDepth(99, 103, 500, 500));
 		//buy 100@103
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Buy, 103, 100));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Buy, 103, 100));
 
 		Assert.assertEquals(0, pnlSnapshot.realizedPnl, 0.0001);
 		Assert.assertEquals(200, pnlSnapshot.netPosition, 0.0001);
@@ -247,7 +247,7 @@ public class PnlSnapshotTest {
 		Assert.assertEquals(600, pnlSnapshot.totalPnl, 0.0001);
 
 		//sell 100@105
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Sell, 105, 100));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Sell, 105, 100));
 		Assert.assertEquals(101, pnlSnapshot.avgOpenPrice, 0.0001);
 		Assert.assertEquals(200, pnlSnapshot.realizedPnl, 0.0001);
 		Assert.assertEquals(100, pnlSnapshot.netPosition, 0.0001);
@@ -267,11 +267,11 @@ public class PnlSnapshotTest {
 		PnlSnapshotOrders pnlSnapshot = new PnlSnapshotOrders(instrumentPk);
 		pnlSnapshot.setAlgorithmInfo(algoInfo);
 		//sell 100@101
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Sell, 101, 100));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Sell, 101, 100));
 		/// last depth received best bid 99
 		pnlSnapshot.updateDepth(createDepth(99, 103, 500, 500));
 		//sell 100@103
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Sell, 103, 100));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Sell, 103, 100));
 		Assert.assertEquals(102, pnlSnapshot.avgOpenPrice, 0.0001);
 
 		Assert.assertEquals(0, pnlSnapshot.realizedPnl, 0.0001);
@@ -287,7 +287,7 @@ public class PnlSnapshotTest {
 		Assert.assertEquals(-1000, pnlSnapshot.totalPnl, 0.0001);
 
 		//buy 100@105 -> close 101 position   103 remains
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Buy, 105, 100));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Buy, 105, 100));
 		Assert.assertEquals(-400, pnlSnapshot.realizedPnl, 0.0001);
 		Assert.assertEquals(103, pnlSnapshot.avgOpenPrice, 0.0001);
 		Assert.assertEquals(-100, pnlSnapshot.netPosition, 0.0001);
@@ -308,11 +308,11 @@ public class PnlSnapshotTest {
 		PnlSnapshot pnlSnapshot = new PnlSnapshot(instrumentPk);
 		pnlSnapshot.setAlgorithmInfo(algoInfo);
 		//buy 100@101
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Buy, 101, 100));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Buy, 101, 100));
 		/// last depth received best bid 99
 		pnlSnapshot.updateDepth(createDepth(99, 103, 500, 500));
 
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Sell, 99, 200));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Sell, 99, 200));
 
 		Assert.assertEquals(-200, pnlSnapshot.realizedPnl, 0.0001);
 		Assert.assertEquals(-100, pnlSnapshot.netPosition, 0.0001);
@@ -325,11 +325,11 @@ public class PnlSnapshotTest {
 		PnlSnapshotOrders pnlSnapshot = new PnlSnapshotOrders(instrumentPk);
 		pnlSnapshot.setAlgorithmInfo(algoInfo);
 		//buy 100@101
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Buy, 101, 100));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Buy, 101, 100));
 		/// last depth received best bid 99
 		pnlSnapshot.updateDepth(createDepth(99, 103, 500, 500));
 
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Sell, 99, 200));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Sell, 99, 200));
 
 		Assert.assertEquals(-200, pnlSnapshot.realizedPnl, 0.0001);
 		Assert.assertEquals(-100, pnlSnapshot.netPosition, 0.0001);
@@ -342,11 +342,11 @@ public class PnlSnapshotTest {
 		PnlSnapshotOrders pnlSnapshot = new PnlSnapshotOrders(instrumentPk);
 		pnlSnapshot.setAlgorithmInfo(algoInfo);
 		//buy 100@101
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Sell, 101, 100));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Sell, 101, 100));
 		/// last depth received best bid 99
 		pnlSnapshot.updateDepth(createDepth(99, 103, 500, 500));
 
-		pnlSnapshot.updateExecutionReport(createExecutionReport(Verb.Buy, 99, 200));
+		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Buy, 99, 200));
 
 		Assert.assertEquals(200, pnlSnapshot.realizedPnl, 0.0001);
 		Assert.assertEquals(100, pnlSnapshot.netPosition, 0.0001);

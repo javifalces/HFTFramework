@@ -104,7 +104,7 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 
 	}
 
-	public synchronized void updateExecutionReport(ExecutionReport executionReport) {
+	public synchronized void updateExecutionReportTrade(ExecutionReport executionReport) {
 
 		boolean validQuantity = !(executionReport.getLastQuantity() == 0 || Double
 				.isNaN(executionReport.getLastQuantity()) || Double.isInfinite(executionReport.getLastQuantity()));
@@ -182,6 +182,7 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 			quantityWithDirection = -1 * quantityWithDirection;
 		}
 		double newPosition = netPosition + quantityWithDirection;
+//		logger.info("{} {} new position: {}", executionReport.getInstrument(),executionReport.getClientOrderId(), newPosition);
 
 		boolean isClosePosition = newPosition == 0;//close pnl is saved when we have position ==0
 		boolean isChangeSide = netPosition != 0 && Math.signum(netPosition) != Math.signum(newPosition);

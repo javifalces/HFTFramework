@@ -178,7 +178,7 @@ public class PortfolioManager {
 
         PnlSnapshot pnlSnapshot = getPnlSnapshot(keyInstrument);
         pnlSnapshot.setAlgorithmInfo(executionReport.getAlgorithmInfo());
-        pnlSnapshot.updateExecutionReport(executionReport);// updateHistoricals inside
+        pnlSnapshot.updateExecutionReportTrade(executionReport);// updateHistoricals inside
         updateCustomHistoricals(keyInstrument, executionReport.getTimestampCreation(), pnlSnapshot);
 
         numberOfTrades++;
