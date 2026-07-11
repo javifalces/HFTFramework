@@ -9,6 +9,7 @@ import com.lambda.investing.algorithmic_trading.market_making.avellaneda_stoikov
 import com.lambda.investing.algorithmic_trading.market_making.constant_spread.AlphaConstantSpread;
 import com.lambda.investing.algorithmic_trading.market_making.constant_spread.ConstantSpreadAlgorithm;
 import com.lambda.investing.algorithmic_trading.market_making.constant_spread.LinearConstantSpreadAlgorithm;
+import com.lambda.investing.algorithmic_trading.python.PythonAlgorithm;
 import com.lambda.investing.algorithmic_trading.tester.LookForwardBiasAlgorithm;
 import org.springframework.stereotype.Component;
 
@@ -25,7 +26,8 @@ public class TradingAlgorithmsProvider implements AlgorithmProvider {
         ALPHA_AVELLANEDA_STOIKOV("AlphaAvellanedaStoikov"),
         LOOK_FORWARD_BIAS("LookForwardBiasAlgorithm"),
         MARKET_FACTOR_INVESTING("MarketFactorInvestingAlgorithm"),
-        SNIPER_FACTOR_INVESTING("SniperFactorInvestingAlgorithm");
+        SNIPER_FACTOR_INVESTING("SniperFactorInvestingAlgorithm"),
+        PYTHON("PythonAlgorithm");
 
 
         private final String prefix;
@@ -62,6 +64,8 @@ public class TradingAlgorithmsProvider implements AlgorithmProvider {
                     return new MarketFactorInvestingAlgorithm(config, algorithmName, parameters);
                 case SNIPER_FACTOR_INVESTING:
                     return new SniperFactorInvestingAlgorithm(config, algorithmName, parameters);
+                case PYTHON:
+                    return new PythonAlgorithm(config, algorithmName, parameters);
                 default:
                     throw new IllegalArgumentException("Unexpected value: " + this);
             }
