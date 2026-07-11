@@ -250,6 +250,13 @@
                 <version>3.1.0</version>
             </dependency>
 
+            <!--MessagePack — binary serialisation for the Python bridge-->
+            <dependency>
+                <groupId>org.msgpack</groupId>
+                <artifactId>msgpack-core</artifactId>
+                <version>0.9.8</version>
+            </dependency>
+
             <!--ProgressBar-->
             <dependency>
                 <groupId>me.tongfei</groupId>

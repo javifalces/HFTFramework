@@ -10,30 +10,53 @@ import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.messaging.Command;
 import com.lambda.investing.model.trading.*;
 import org.apache.logging.log4j.LogManager;
+import org.msgpack.core.MessagePack;
+import org.msgpack.core.MessagePacker;
+import org.msgpack.core.MessageUnpacker;
+import org.msgpack.value.Value;
+import org.msgpack.value.ValueType;
 import org.zeromq.ZContext;
 import org.zeromq.ZMQ;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
+import java.util.*;
 
 /**
  * PythonAlgorithm bridges the Java framework to a pure-Python strategy.
  *
- * Transport (ZeroMQ, JSON):
- *   Java PUB  mdPubPort  → Python SUB   market-data events (depth / trade / execution_report)
- *   Java PULL cmdPullPort ← Python PUSH  order / quote commands
+ * Transport (ZeroMQ):
+ *   Java PUB  → Python SUB   market-data events (depth / trade / execution_report)
+ *   Java PULL ← Python PUSH  order / quote commands
  *
- * Parameters (all optional, with defaults):
- *   python_md_pub_port   int  default 7700  port Java binds its PUB socket on
- *   python_cmd_pull_port int  default 7701  port Java binds its PULL socket on
- *   python_host          str  default "*"   bind address (use "*" for all interfaces)
+ * Endpoint type (python_transport_type):
+ *   tcp  (default) — TCP sockets; works across hosts.
+ *   ipc            — Unix-domain sockets; same host, lower latency.
+ *
+ * Codec (python_codec):
+ *   json    (default) — UTF-8 JSON; human-readable, always available.
+ *   msgpack           — binary MessagePack; ~3× faster parsing, smaller frames.
+ *
+ * Parameters (all optional):
+ *   python_transport_type  str  default "tcp"              "tcp" | "ipc"
+ *   python_md_pub_port     int  default 7700               TCP mode: Java PUB port
+ *   python_cmd_pull_port   int  default 7701               TCP mode: Java PULL port
+ *   python_host            str  default "*"                TCP mode: bind address
+ *   python_ipc_md_path     str  default "/tmp/python_algo_md"   IPC mode: MD socket path
+ *   python_ipc_cmd_path    str  default "/tmp/python_algo_cmd"  IPC mode: CMD socket path
+ *   python_codec           str  default "json"             "json" | "msgpack"
  */
 public class PythonAlgorithm extends SingleInstrumentAlgorithm {
 
     // ---- parameter keys ----
-    public static final String PARAM_MD_PUB_PORT  = "python_md_pub_port";
-    public static final String PARAM_CMD_PULL_PORT = "python_cmd_pull_port";
-    public static final String PARAM_HOST          = "python_host";
+    public static final String PARAM_TRANSPORT_TYPE  = "python_transport_type";
+    public static final String PARAM_MD_PUB_PORT     = "python_md_pub_port";
+    public static final String PARAM_CMD_PULL_PORT   = "python_cmd_pull_port";
+    public static final String PARAM_HOST            = "python_host";
+    public static final String PARAM_IPC_MD_PATH     = "python_ipc_md_path";
+    public static final String PARAM_IPC_CMD_PATH    = "python_ipc_cmd_path";
+    public static final String PARAM_CODEC           = "python_codec";
 
     // ---- message type constants ----
     private static final String TYPE_DEPTH            = "depth";
@@ -45,15 +68,24 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
     private static final String CMD_QUOTE_REQUEST = "quote_request";
     private static final String CMD_REQUEST_INFO  = "request_info";
 
-    private static final int DEFAULT_MD_PUB_PORT   = 7700;
-    private static final int DEFAULT_CMD_PULL_PORT = 7701;
-    private static final String DEFAULT_HOST       = "*";
+    // ---- defaults ----
+    private static final int    DEFAULT_MD_PUB_PORT   = 7700;
+    private static final int    DEFAULT_CMD_PULL_PORT = 7701;
+    private static final String DEFAULT_HOST          = "*";
+    private static final String DEFAULT_IPC_MD_PATH   = "/tmp/python_algo_md";
+    private static final String DEFAULT_IPC_CMD_PATH  = "/tmp/python_algo_cmd";
+    private static final String TRANSPORT_IPC         = "ipc";
+    private static final String CODEC_MSGPACK         = "msgpack";
 
     private final ZContext zmqContext;
     private ZMQ.Socket pubSocket;
     private ZMQ.Socket pullSocket;
     private Thread cmdThread;
     private volatile boolean running = false;
+
+    // resolved at init()
+    private boolean useIpc     = false;
+    private boolean useMsgpack = false;
 
     public PythonAlgorithm(AlgorithmConnectorConfiguration algorithmConnectorConfiguration,
                            String algorithmInfo, Map<String, Object> parameters) {
@@ -82,26 +114,45 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
     @Override
     public void init() {
         super.init();
-        int mdPubPort   = getParameterIntOrDefault(parameters, PARAM_MD_PUB_PORT,   DEFAULT_MD_PUB_PORT);
-        int cmdPullPort = getParameterIntOrDefault(parameters, PARAM_CMD_PULL_PORT,  DEFAULT_CMD_PULL_PORT);
-        String host     = (String) parameters.getOrDefault(PARAM_HOST, DEFAULT_HOST);
+
+        String transportType = (String) parameters.getOrDefault(PARAM_TRANSPORT_TYPE, "tcp");
+        String codec         = (String) parameters.getOrDefault(PARAM_CODEC, "json");
+        useIpc     = TRANSPORT_IPC.equalsIgnoreCase(transportType);
+        useMsgpack = CODEC_MSGPACK.equalsIgnoreCase(codec);
 
         pubSocket = zmqContext.createSocket(ZMQ.PUB);
         pubSocket.setLinger(0);
-        pubSocket.bind(String.format("tcp://%s:%d", host, mdPubPort));
 
         pullSocket = zmqContext.createSocket(ZMQ.PULL);
         pullSocket.setLinger(0);
         pullSocket.setReceiveTimeOut(200);
-        pullSocket.bind(String.format("tcp://%s:%d", host, cmdPullPort));
+
+        String mdEndpoint;
+        String cmdEndpoint;
+
+        if (useIpc) {
+            String mdPath  = (String) parameters.getOrDefault(PARAM_IPC_MD_PATH,  DEFAULT_IPC_MD_PATH);
+            String cmdPath = (String) parameters.getOrDefault(PARAM_IPC_CMD_PATH, DEFAULT_IPC_CMD_PATH);
+            mdEndpoint  = "ipc://" + mdPath;
+            cmdEndpoint = "ipc://" + cmdPath;
+        } else {
+            int    mdPubPort   = getParameterIntOrDefault(parameters, PARAM_MD_PUB_PORT,   DEFAULT_MD_PUB_PORT);
+            int    cmdPullPort = getParameterIntOrDefault(parameters, PARAM_CMD_PULL_PORT,  DEFAULT_CMD_PULL_PORT);
+            String host        = (String) parameters.getOrDefault(PARAM_HOST, DEFAULT_HOST);
+            mdEndpoint  = String.format("tcp://%s:%d", host, mdPubPort);
+            cmdEndpoint = String.format("tcp://%s:%d", host, cmdPullPort);
+        }
+
+        pubSocket.bind(mdEndpoint);
+        pullSocket.bind(cmdEndpoint);
 
         running = true;
         cmdThread = new Thread(this::commandLoop, "PythonAlgorithm-cmd-" + algorithmInfo);
         cmdThread.setDaemon(true);
         cmdThread.start();
 
-        logger.info("[PythonAlgorithm] started — MD PUB tcp://{}:{} | CMD PULL tcp://{}:{}",
-                host, mdPubPort, host, cmdPullPort);
+        logger.info("[PythonAlgorithm] started — codec={} MD PUB {} | CMD PULL {}",
+                useMsgpack ? "msgpack" : "json", mdEndpoint, cmdEndpoint);
     }
 
     @Override
@@ -110,7 +161,7 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
         if (cmdThread != null) {
             cmdThread.interrupt();
         }
-        if (pubSocket != null)  pubSocket.close();
+        if (pubSocket  != null) pubSocket.close();
         if (pullSocket != null) pullSocket.close();
         zmqContext.close();
         super.stop();
@@ -159,35 +210,98 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
     // -----------------------------------------------------------------------
 
     /**
-     * Publishes a JSON event on the PUB socket.
+     * Publishes a market-data event on the PUB socket.
      * Topic format: {@code <instrument>.<type>}
      * Frame 0: topic bytes
-     * Frame 1: JSON payload {"v":1,"type":"...","instrument":"...","data":{...}}
+     * Frame 1: payload encoded by the configured codec
      */
     private void publishEvent(String type, String instrument, String dataJson) {
         if (pubSocket == null) return;
-        String topic   = instrument + "." + type;
-        String payload = "{\"v\":1,\"type\":\"" + type + "\",\"instrument\":\"" + instrument
-                + "\",\"data\":" + dataJson + "}";
+        String topic = instrument + "." + type;
+        byte[] payload = useMsgpack
+                ? encodeMsgpack(type, instrument, dataJson)
+                : encodeJson(type, instrument, dataJson);
         synchronized (pubSocket) {
             pubSocket.sendMore(topic.getBytes(StandardCharsets.UTF_8));
-            pubSocket.send(payload.getBytes(StandardCharsets.UTF_8), 0);
+            pubSocket.send(payload, 0);
+        }
+    }
+
+    /** Encodes the event envelope as UTF-8 JSON. */
+    private static byte[] encodeJson(String type, String instrument, String dataJson) {
+        String payload = "{\"v\":1,\"type\":\"" + type + "\",\"instrument\":\"" + instrument
+                + "\",\"data\":" + dataJson + "}";
+        return payload.getBytes(StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Encodes the event envelope as MessagePack.
+     * Transcodes the dataJson string through GSON into a msgpack map to avoid
+     * a second-pass JSON parser dependency.
+     */
+    private static byte[] encodeMsgpack(String type, String instrument, String dataJson) {
+        try {
+            Map<?, ?> data = Util.GSON.fromJson(dataJson, Map.class);
+            ByteArrayOutputStream out = new ByteArrayOutputStream(256);
+            try (MessagePacker packer = MessagePack.newDefaultPacker(out)) {
+                packer.packMapHeader(4);
+                packer.packString("v");          packer.packInt(1);
+                packer.packString("type");       packer.packString(type);
+                packer.packString("instrument"); packer.packString(instrument);
+                packer.packString("data");       packObject(packer, data);
+            }
+            return out.toByteArray();
+        } catch (IOException e) {
+            // Should not happen with ByteArrayOutputStream; fall back to JSON
+            return encodeJson(type, instrument, dataJson);
+        }
+    }
+
+    /** Recursively packs an arbitrary object as msgpack. */
+    @SuppressWarnings("unchecked")
+    private static void packObject(MessagePacker packer, Object obj) throws IOException {
+        if (obj == null) {
+            packer.packNil();
+        } else if (obj instanceof Map) {
+            Map<Object, Object> map = (Map<Object, Object>) obj;
+            packer.packMapHeader(map.size());
+            for (Map.Entry<Object, Object> e : map.entrySet()) {
+                packObject(packer, e.getKey());
+                packObject(packer, e.getValue());
+            }
+        } else if (obj instanceof List) {
+            List<Object> list = (List<Object>) obj;
+            packer.packArrayHeader(list.size());
+            for (Object item : list) {
+                packObject(packer, item);
+            }
+        } else if (obj instanceof Boolean) {
+            packer.packBoolean((Boolean) obj);
+        } else if (obj instanceof Number) {
+            double d = ((Number) obj).doubleValue();
+            long   l = (long) d;
+            if (d == l) {
+                packer.packLong(l);
+            } else {
+                packer.packDouble(d);
+            }
+        } else {
+            packer.packString(obj.toString());
         }
     }
 
     /**
      * Background thread: drains the PULL socket for Python commands.
-     *
-     * Expected JSON envelope from Python:
-     * {"v":1,"type":"order_request"|"quote_request"|"request_info","data":{...}}
      */
     private void commandLoop() {
         while (running && !Thread.currentThread().isInterrupted()) {
             try {
                 byte[] raw = pullSocket.recv(0);
-                if (raw == null) continue; // timeout
-                String json = new String(raw, StandardCharsets.UTF_8);
-                dispatchCommand(json);
+                if (raw == null) continue;
+                Map<?, ?> envelope = useMsgpack ? decodeMsgpack(raw) : decodeJson(raw);
+                if (envelope != null) {
+                    dispatchCommand(envelope);
+                }
             } catch (Exception e) {
                 if (running) {
                     logger.warn("[PythonAlgorithm] error in command loop: {}", e.getMessage());
@@ -196,13 +310,86 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
         }
     }
 
-    private void dispatchCommand(String json) {
+    /** Deserialises a JSON command envelope into a Map. */
+    private static Map<?, ?> decodeJson(byte[] raw) {
+        String json = new String(raw, StandardCharsets.UTF_8);
+        return Util.GSON.fromJson(json, Map.class);
+    }
+
+    /** Deserialises a MessagePack command envelope into a Map. */
+    private static Map<?, ?> decodeMsgpack(byte[] raw) throws IOException {
+        try (MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(raw)) {
+            Object result = unpackValue(unpacker);
+            return (result instanceof Map) ? (Map<?, ?>) result : null;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Object unpackValue(MessageUnpacker unpacker) throws IOException {
+        if (!unpacker.hasNext()) return null;
+        Value v = unpacker.unpackValue();
+        switch (v.getValueType()) {
+            case NIL:     return null;
+            case BOOLEAN: return v.asBooleanValue().getBoolean();
+            case INTEGER: return v.asIntegerValue().toLong();
+            case FLOAT:   return v.asFloatValue().toDouble();
+            case STRING:  return v.asStringValue().asString();
+            case ARRAY: {
+                org.msgpack.value.ArrayValue arr = v.asArrayValue();
+                List<Object> list = new ArrayList<>(arr.size());
+                for (Value item : arr) {
+                    list.add(valueToObject(item));
+                }
+                return list;
+            }
+            case MAP: {
+                org.msgpack.value.MapValue map = v.asMapValue();
+                Map<String, Object> result = new LinkedHashMap<>(map.size() * 2);
+                for (Map.Entry<Value, Value> entry : map.entrySet()) {
+                    result.put(entry.getKey().asStringValue().asString(),
+                               valueToObject(entry.getValue()));
+                }
+                return result;
+            }
+            default:
+                return v.toString();
+        }
+    }
+
+    private static Object valueToObject(Value v) {
+        if (v == null) return null;
+        switch (v.getValueType()) {
+            case NIL:     return null;
+            case BOOLEAN: return v.asBooleanValue().getBoolean();
+            case INTEGER: return v.asIntegerValue().toLong();
+            case FLOAT:   return v.asFloatValue().toDouble();
+            case STRING:  return v.asStringValue().asString();
+            case ARRAY: {
+                org.msgpack.value.ArrayValue arr = v.asArrayValue();
+                List<Object> list = new ArrayList<>(arr.size());
+                for (Value item : arr) list.add(valueToObject(item));
+                return list;
+            }
+            case MAP: {
+                org.msgpack.value.MapValue map = v.asMapValue();
+                Map<String, Object> result = new LinkedHashMap<>(map.size() * 2);
+                for (Map.Entry<Value, Value> entry : map.entrySet()) {
+                    result.put(entry.getKey().asStringValue().asString(),
+                               valueToObject(entry.getValue()));
+                }
+                return result;
+            }
+            default:
+                return v.toString();
+        }
+    }
+
+    private void dispatchCommand(Map<?, ?> envelope) {
         try {
-            Map<?, ?> envelope = Util.GSON.fromJson(json, Map.class);
             String type = (String) envelope.get("type");
             Object data = envelope.get("data");
             if (type == null || data == null) {
-                logger.warn("[PythonAlgorithm] ignoring malformed command: {}", json);
+                logger.warn("[PythonAlgorithm] ignoring malformed command: {}", envelope);
                 return;
             }
             String dataJson = Util.GSON.toJson(data);
@@ -226,7 +413,7 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
         } catch (LambdaTradingException e) {
             logger.error("[PythonAlgorithm] trading exception dispatching command: {}", e.getMessage());
         } catch (Exception e) {
-            logger.error("[PythonAlgorithm] error dispatching command {}: {}", json, e.getMessage());
+            logger.error("[PythonAlgorithm] error dispatching command: {}", e.getMessage());
         }
     }
 
@@ -255,9 +442,9 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
 
     @Override
     public String printAlgo() {
-        int mdPubPort   = getParameterIntOrDefault(parameters, PARAM_MD_PUB_PORT,   DEFAULT_MD_PUB_PORT);
-        int cmdPullPort = getParameterIntOrDefault(parameters, PARAM_CMD_PULL_PORT,  DEFAULT_CMD_PULL_PORT);
-        return String.format("PythonAlgorithm[%s] mdPubPort=%d cmdPullPort=%d",
-                algorithmInfo, mdPubPort, cmdPullPort);
+        String transport = useIpc ? "ipc" : "tcp";
+        String codec     = useMsgpack ? "msgpack" : "json";
+        return String.format("PythonAlgorithm[%s] transport=%s codec=%s",
+                algorithmInfo, transport, codec);
     }
 }

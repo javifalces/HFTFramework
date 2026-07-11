@@ -1,8 +1,12 @@
 """
 Message schemas for the Java ↔ Python bridge.
 
-All wire messages are JSON with envelope:
+Wire envelope:
   {"v": 1, "type": "<type>", "instrument": "<pk>", "data": {...}}
+
+The encoding of that envelope (JSON vs MessagePack) is determined by the
+:class:`~python_algo.codec.Codec` in use.  The default is
+:class:`~python_algo.codec.JsonCodec`.
 
 Market-data types (Java → Python):
   depth             DepthMsg
@@ -18,10 +22,18 @@ Command types (Python → Java):
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, asdict, field
-from typing import List, Optional
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, List, Optional
+
+if TYPE_CHECKING:
+    from python_algo.codec import Codec
 
 SCHEMA_VERSION = 1
+
+# Lazy default so that importing messages.py does not force codec.py to run.
+def _default_codec() -> "Codec":
+    from python_algo.codec import JsonCodec
+    return JsonCodec()
 
 
 # ---------------------------------------------------------------------------
@@ -124,8 +136,8 @@ class Envelope:
     data: dict
 
     @staticmethod
-    def parse(raw: bytes) -> "Envelope":
-        d = json.loads(raw.decode("utf-8"))
+    def parse(raw: bytes, codec: Optional["Codec"] = None) -> "Envelope":
+        d = (codec or _default_codec()).decode(raw)
         return Envelope(
             version=int(d.get("v", 1)),
             type=d["type"],
@@ -173,6 +185,9 @@ class OrderRequestCmd:
         }
         return {"v": SCHEMA_VERSION, "type": "order_request", "data": data}
 
+    def to_bytes(self, codec: Optional["Codec"] = None) -> bytes:
+        return (codec or _default_codec()).encode(self.to_envelope())
+
     def to_json(self) -> str:
         return json.dumps(self.to_envelope())
 
@@ -199,6 +214,9 @@ class QuoteRequestCmd:
         }
         return {"v": SCHEMA_VERSION, "type": "quote_request", "data": data}
 
+    def to_bytes(self, codec: Optional["Codec"] = None) -> bytes:
+        return (codec or _default_codec()).encode(self.to_envelope())
+
     def to_json(self) -> str:
         return json.dumps(self.to_envelope())
 
@@ -209,6 +227,9 @@ class RequestInfoCmd:
 
     def to_envelope(self) -> dict:
         return {"v": SCHEMA_VERSION, "type": "request_info", "data": {"info": self.info}}
+
+    def to_bytes(self, codec: Optional["Codec"] = None) -> bytes:
+        return (codec or _default_codec()).encode(self.to_envelope())
 
     def to_json(self) -> str:
         return json.dumps(self.to_envelope())

@@ -25,10 +25,19 @@ class MyEnv(PythonAlgoEnv):
         # send an order based on the action
         self.send_order(OrderRequestCmd(...))
 
+# TCP + JSON (default)
 env = MyEnv(
     observation_space=spaces.Box(...),
     action_space=spaces.Discrete(3),
     transport=ZmqTransport(md_sub_port=7700, cmd_push_port=7701),
+)
+
+# IPC + MessagePack (same host, lower latency)
+from python_algo.codec import MsgpackCodec
+env = MyEnv(
+    observation_space=spaces.Box(...),
+    action_space=spaces.Discrete(3),
+    transport=ZmqTransport(transport_type="ipc", codec=MsgpackCodec()),
 )
 model = PPO("MlpPolicy", env, verbose=1)
 model.learn(total_timesteps=100_000)
@@ -38,7 +47,7 @@ from __future__ import annotations
 
 import abc
 import logging
-from typing import Optional, Tuple, Any, Dict
+from typing import TYPE_CHECKING, Optional, Tuple, Any, Dict
 
 import numpy as np
 import gymnasium
@@ -54,6 +63,9 @@ from python_algo.messages import (
     RequestInfoCmd,
 )
 from python_algo.transport import Transport
+
+if TYPE_CHECKING:
+    from python_algo.codec import Codec
 
 log = logging.getLogger(__name__)
 
@@ -80,12 +92,15 @@ class PythonAlgoEnv(gymnasium.Env):
         transport: Transport,
         instruments: Optional[list] = None,
         max_wait_ms: int = 5_000,
+        codec: Optional["Codec"] = None,
     ) -> None:
         super().__init__()
         self.observation_space = observation_space
         self.action_space      = action_space
         self._transport        = transport
         self._max_wait_ms      = max_wait_ms
+        # Inherit codec from transport if available, else use explicit or default (JSON)
+        self._codec = getattr(transport, "codec", None) or codec
 
         self._last_depth: Optional[DepthMsg]           = None
         self._last_er:    Optional[ExecutionReportMsg] = None
@@ -172,13 +187,13 @@ class PythonAlgoEnv(gymnasium.Env):
     # -----------------------------------------------------------------------
 
     def send_order(self, cmd: OrderRequestCmd) -> None:
-        self._transport.send(cmd.to_json().encode("utf-8"))
+        self._transport.send(cmd.to_bytes(self._codec))
 
     def send_quote(self, cmd: QuoteRequestCmd) -> None:
-        self._transport.send(cmd.to_json().encode("utf-8"))
+        self._transport.send(cmd.to_bytes(self._codec))
 
     def request_info(self, info: str) -> None:
-        self._transport.send(RequestInfoCmd(info).to_json().encode("utf-8"))
+        self._transport.send(RequestInfoCmd(info).to_bytes(self._codec))
 
     # -----------------------------------------------------------------------
     # Internal helpers
@@ -199,7 +214,7 @@ class PythonAlgoEnv(gymnasium.Env):
             if raw is None:
                 continue
             try:
-                env = Envelope.parse(raw)
+                env = Envelope.parse(raw, self._codec)
             except Exception as e:
                 log.warning("parse error: %s", e)
                 continue

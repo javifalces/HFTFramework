@@ -17,17 +17,23 @@ class MyStrategy(PythonStrategy):
     def on_trade(self, trade: TradeMsg) -> None: ...
     def on_execution_report(self, er: ExecutionReportMsg) -> None: ...
 
+# TCP + JSON (default)
 transport = ZmqTransport(md_sub_port=7700, cmd_push_port=7701)
-transport.subscribe("")  # all topics
 strategy  = MyStrategy(transport, instruments=["btcusdt_binance"])
 strategy.run()           # blocking event loop
+
+# IPC + MessagePack (local, lower latency)
+from python_algo.codec import MsgpackCodec
+transport = ZmqTransport(transport_type="ipc", codec=MsgpackCodec())
+strategy  = MyStrategy(transport)
+strategy.run()
 """
 
 from __future__ import annotations
 
 import abc
 import logging
-from typing import Optional, List
+from typing import TYPE_CHECKING, Optional, List
 
 from python_algo.messages import (
     Envelope,
@@ -39,6 +45,9 @@ from python_algo.messages import (
     RequestInfoCmd,
 )
 from python_algo.transport import Transport
+
+if TYPE_CHECKING:
+    from python_algo.codec import Codec
 
 log = logging.getLogger(__name__)
 
@@ -56,9 +65,17 @@ class PythonStrategy(abc.ABC):
     manual / Gymnasium-driven iteration.
     """
 
-    def __init__(self, transport: Transport, instruments: Optional[List[str]] = None) -> None:
+    def __init__(
+        self,
+        transport: Transport,
+        instruments: Optional[List[str]] = None,
+        codec: Optional["Codec"] = None,
+    ) -> None:
         self._transport = transport
         self._running   = False
+        # Use the transport's codec if it exposes one, falling back to the
+        # explicitly supplied codec, then None (which defaults to JsonCodec).
+        self._codec = getattr(transport, "codec", None) or codec
 
         # Subscribe to all or specific instrument topics
         if instruments:
@@ -95,13 +112,13 @@ class PythonStrategy(abc.ABC):
     # -----------------------------------------------------------------------
 
     def send_order(self, cmd: OrderRequestCmd) -> None:
-        self._transport.send(cmd.to_json().encode("utf-8"))
+        self._transport.send(cmd.to_bytes(self._codec))
 
     def send_quote(self, cmd: QuoteRequestCmd) -> None:
-        self._transport.send(cmd.to_json().encode("utf-8"))
+        self._transport.send(cmd.to_bytes(self._codec))
 
     def request_info(self, info: str) -> None:
-        self._transport.send(RequestInfoCmd(info).to_json().encode("utf-8"))
+        self._transport.send(RequestInfoCmd(info).to_bytes(self._codec))
 
     # -----------------------------------------------------------------------
     # Event loop
@@ -117,7 +134,7 @@ class PythonStrategy(abc.ABC):
         if raw is None:
             return False
         try:
-            env = Envelope.parse(raw)
+            env = Envelope.parse(raw, self._codec)
             self._dispatch(env)
         except Exception as e:
             log.warning("error processing message: %s", e)
