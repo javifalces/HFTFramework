@@ -47,6 +47,8 @@
     cursor: pointer;
 }
 
+/* stylelint-disable-next-line selector-pseudo-element-no-unknown */
+/*noinspection CssInvalidPseudoSelector*/
 #backtest-speed-slider::-webkit-slider-track {
     background: linear-gradient(to right,
     var(--red) 0%,
@@ -56,6 +58,7 @@
     border-radius: 3px;
 }
 
+
 #backtest-speed-slider::-moz-range-track {
     background: linear-gradient(to right,
     var(--red) 0%,
@@ -64,6 +67,7 @@
     height: 6px;
     border-radius: 3px;
 }
+
 
 #backtest-speed-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
@@ -76,6 +80,7 @@
     margin-top: -5px;
 }
 
+
 #backtest-speed-slider::-moz-range-thumb {
     width: 16px;
     height: 16px;
@@ -84,10 +89,12 @@
     border: 2px solid var(--border);
 }
 
+
 #backtest-speed-slider:hover::-webkit-slider-thumb {
     background: var(--accent);
     border-color: var(--accent);
 }
+
 
 #backtest-speed-slider:hover::-moz-range-thumb {
     background: var(--accent);
@@ -630,11 +637,6 @@
     .instr-snap-kv .value {
         font-size: 13px;
     }
-}
-
-/* Prevents zoom on iOS */
-        width: 60px;
-    }
 
     #ob-page-wrap {
         padding: 10px;
@@ -653,12 +655,12 @@
         min-height: unset;
     }
 
-  .ob-book-side {
-    flex-direction: row;
+    .ob-book-side {
+        flex-direction: row;
     }
 
-  .ob-half {
-    /* no fixed heights on mobile either — trim to content */
+    .ob-half {
+        /* no fixed heights on mobile either — trim to content */
     }
 
     .ticker-side {
