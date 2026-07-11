@@ -12,6 +12,7 @@ Market-data types (Java → Python):
   depth             DepthMsg
   trade             TradeMsg
   execution_report  ExecutionReportMsg
+  candle            CandleMsg
 
 Command types (Python → Java):
   order_request     OrderRequestCmd
@@ -128,6 +129,37 @@ class ExecutionReportMsg:
 
 
 @dataclass
+class CandleMsg:
+    instrument: str
+    timestamp: int       # epoch ms
+    open: float
+    high: float
+    low: float
+    close: float
+    candle_type: str = ""
+    open_volume: float = 0.0
+    high_volume: float = 0.0
+    low_volume: float = 0.0
+    close_volume: float = 0.0
+
+    @staticmethod
+    def from_dict(d: dict) -> "CandleMsg":
+        return CandleMsg(
+            instrument=d.get("instrumentPk", ""),
+            timestamp=int(d.get("timestamp", 0)),
+            open=float(d.get("open", 0.0)),
+            high=float(d.get("high", 0.0)),
+            low=float(d.get("low", 0.0)),
+            close=float(d.get("close", 0.0)),
+            candle_type=d.get("candleType", ""),
+            open_volume=float(d.get("openVolume", 0.0)),
+            high_volume=float(d.get("highVolume", 0.0)),
+            low_volume=float(d.get("lowVolume", 0.0)),
+            close_volume=float(d.get("closeVolume", 0.0)),
+        )
+
+
+@dataclass
 class Envelope:
     """Parsed inbound envelope from Java."""
     version: int
@@ -153,6 +185,9 @@ class Envelope:
 
     def as_execution_report(self) -> ExecutionReportMsg:
         return ExecutionReportMsg.from_dict(self.data)
+
+    def as_candle(self) -> CandleMsg:
+        return CandleMsg.from_dict(self.data)
 
 
 # ---------------------------------------------------------------------------

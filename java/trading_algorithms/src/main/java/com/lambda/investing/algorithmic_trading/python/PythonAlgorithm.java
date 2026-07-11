@@ -4,6 +4,7 @@ import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
 import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
 import com.lambda.investing.model.Util;
 import com.lambda.investing.model.asset.Instrument;
+import com.lambda.investing.model.candle.Candle;
 import com.lambda.investing.model.exception.LambdaTradingException;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
@@ -62,6 +63,7 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
     private static final String TYPE_DEPTH            = "depth";
     private static final String TYPE_TRADE            = "trade";
     private static final String TYPE_EXECUTION_REPORT = "execution_report";
+    private static final String TYPE_CANDLE           = "candle";
 
     // ---- command type constants (received from Python) ----
     private static final String CMD_ORDER_REQUEST = "order_request";
@@ -193,6 +195,12 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
         publishEvent(TYPE_EXECUTION_REPORT, executionReport.getInstrument(),
                 executionReport.toJsonString());
         return proceed;
+    }
+
+    @Override
+    public void onCandleUpdate(Candle candle) {
+        super.onCandleUpdate(candle);
+        publishEvent(TYPE_CANDLE, candle.getInstrumentPk(), Util.toJsonString(candle));
     }
 
     @Override

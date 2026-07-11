@@ -40,6 +40,7 @@ from python_algo.messages import (
     DepthMsg,
     TradeMsg,
     ExecutionReportMsg,
+    CandleMsg,
     OrderRequestCmd,
     QuoteRequestCmd,
     RequestInfoCmd,
@@ -54,6 +55,7 @@ log = logging.getLogger(__name__)
 _TYPE_DEPTH = "depth"
 _TYPE_TRADE = "trade"
 _TYPE_ER    = "execution_report"
+_TYPE_CANDLE = "candle"
 
 
 class PythonStrategy(abc.ABC):
@@ -99,6 +101,10 @@ class PythonStrategy(abc.ABC):
     @abc.abstractmethod
     def on_execution_report(self, er: ExecutionReportMsg) -> None:
         """Called on every execution report from Java."""
+
+    @abc.abstractmethod
+    def on_candle(self, candle: CandleMsg) -> None:
+        """Called on every completed candle published by Java."""
 
     # -----------------------------------------------------------------------
     # Optional hook — override to react to unknown message types
@@ -164,5 +170,7 @@ class PythonStrategy(abc.ABC):
             self.on_trade(env.as_trade())
         elif env.type == _TYPE_ER:
             self.on_execution_report(env.as_execution_report())
+        elif env.type == _TYPE_CANDLE:
+            self.on_candle(env.as_candle())
         else:
             self.on_unknown(env)

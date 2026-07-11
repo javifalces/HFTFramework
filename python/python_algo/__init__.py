@@ -26,7 +26,7 @@ strategy.run()
 
 from python_algo.codec import Codec, JsonCodec, MsgpackCodec
 from python_algo.messages import (
-    Envelope, DepthMsg, TradeMsg, ExecutionReportMsg,
+    Envelope, DepthMsg, TradeMsg, ExecutionReportMsg, CandleMsg,
     OrderRequestCmd, QuoteRequestCmd, RequestInfoCmd,
 )
 from python_algo.transport import Transport, ZmqTransport
@@ -41,6 +41,7 @@ __all__ = [
     "DepthMsg",
     "TradeMsg",
     "ExecutionReportMsg",
+    "CandleMsg",
     "OrderRequestCmd",
     "QuoteRequestCmd",
     "RequestInfoCmd",
