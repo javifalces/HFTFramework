@@ -3,6 +3,7 @@ package com.lambda.investing.algorithmic_trading.python;
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
 import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
 import com.lambda.investing.model.Util;
+import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.exception.LambdaTradingException;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
@@ -212,7 +213,7 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
                     sendOrderRequest(orderRequest);
                     break;
                 case CMD_QUOTE_REQUEST:
-                    QuoteRequest quoteRequest = Util.GSON.fromJson(dataJson, QuoteRequest.class);
+                    QuoteRequest quoteRequest = buildQuoteRequest(data);
                     sendQuoteRequest(quoteRequest);
                     break;
                 case CMD_REQUEST_INFO:
@@ -227,6 +228,29 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
         } catch (Exception e) {
             logger.error("[PythonAlgorithm] error dispatching command {}: {}", json, e.getMessage());
         }
+    }
+
+    /** Builds a QuoteRequest from the parsed data map, resolving Instrument by primary key. */
+    private QuoteRequest buildQuoteRequest(Object data) {
+        Map<?, ?> m = (Map<?, ?>) data;
+        String instrumentPk = (String) m.get("instrument");
+        QuoteRequest qr = new QuoteRequest();
+        qr.setInstrument(Instrument.getInstrument(instrumentPk));
+        Object actionObj = m.get("quoteRequestAction");
+        if (actionObj != null) {
+            qr.setQuoteRequestAction(QuoteRequestAction.valueOf((String) actionObj));
+        }
+        Number bidPrice = (Number) m.get("bidPrice");
+        Number bidQty   = (Number) m.get("bidQuantity");
+        Number askPrice = (Number) m.get("askPrice");
+        Number askQty   = (Number) m.get("askQuantity");
+        if (bidPrice != null) qr.setBidPrice(bidPrice.doubleValue());
+        if (bidQty   != null) qr.setBidQuantity(bidQty.doubleValue());
+        if (askPrice != null) qr.setAskPrice(askPrice.doubleValue());
+        if (askQty   != null) qr.setAskQuantity(askQty.doubleValue());
+        Object algo = m.get("algorithmInfo");
+        if (algo != null) qr.setAlgorithmInfo((String) algo);
+        return qr;
     }
 
     @Override
