@@ -3,6 +3,7 @@
 notebook>=7.0.6
 sbx-rl>=0.9.1
 pyzmq
+msgpack>=1.0.0
 pathos>=0.3.1
 pyarrow>=14.0.2
 
