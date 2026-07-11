@@ -822,7 +822,6 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                 return createCancel(instrumentManager.getInstrument(), origClientOrderId);
             }
         }
-        logger.warn("createActiveCancel: origClientOrderId {} not found in active orders", origClientOrderId);
         return null;
     }
 
@@ -1701,6 +1700,49 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         return instruments;
     }
 
+
+    public boolean containsOrder(String clientOrderId) {
+
+        // Check if this algorithm instance sent the order (either the original or a modification)
+        return historicalOrdersRequestSent.containsKey(clientOrderId);
+    }
+
+    public boolean containsInstrumentOrder(String instrumentPk, String clientOrderId) {
+
+        // Check if this algorithm instance sent the order (either the original or a modification)
+        boolean isMyOrder = historicalOrdersRequestSent.containsKey(clientOrderId);
+
+        // Also check in per-instrument tracking
+        if (!isMyOrder && instrumentToManager != null) {
+            try {
+                InstrumentManager instrumentManager = getInstrumentManager(instrumentPk);
+                Map<String, OrderRequest> instrumentSendOrders = instrumentManager.getAllRequestOrders();
+                isMyOrder = instrumentSendOrders.containsKey(clientOrderId);
+            } catch (Exception e) {
+                // Instrument manager may not exist, that's ok
+            }
+        }
+
+        return isMyOrder;
+    }
+
+    private boolean containsExecutionReport(ExecutionReport executionReport) {
+        String clientOrderId = executionReport.getClientOrderId();
+        String origClientOrderId = executionReport.getOrigClientOrderId();
+        String instrumentPk = executionReport.getInstrument();
+
+        // Check if this algorithm instance sent the order (either the original or a modification)
+        boolean isMyOrder = containsInstrumentOrder(instrumentPk, clientOrderId);
+
+        // Also check if the original order was sent by this algorithm instance
+        if (!isMyOrder && origClientOrderId != null) {
+            isMyOrder = containsInstrumentOrder(instrumentPk, origClientOrderId);
+        }
+
+        return isMyOrder;
+    }
+
+
     /**
      * Has to be called by the algo extending
      *
@@ -1713,6 +1755,17 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                 //is not mine
                 return true;
             }
+
+            // In a MultiAlgorithm setup with multiple instances sharing the same algorithmInfo,
+            // each instance receives ALL ExecutionReports for that algorithmInfo.
+            // We must verify this specific instance actually sent the order to avoid duplicate
+            // processing and observer notifications.
+            if (!containsExecutionReport(executionReport)) {
+                // This ExecutionReport is not for an order sent by this algorithm instance
+                logger.debug("Ignoring ExecutionReport for order {} (orig {}) not sent by this algorithm instance", executionReport.getClientOrderId(), executionReport.getOrigClientOrderId());
+                return true;
+            }
+
             executionReport.setTimestampStrategy(System.currentTimeMillis());
 
             boolean hasPriority = executionReportManager.isNewStatus(executionReport);

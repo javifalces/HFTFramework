@@ -299,6 +299,8 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         data.put("instrument", er.getInstrument());
         data.put("verb", er.getVerb() != null ? er.getVerb().name() : null);
         data.put("lastQuantity", er.getLastQuantity());
+        data.put("quantity", er.getQuantity());
+        data.put("quantityFill", er.getQuantityFill());
         data.put("price", er.getPrice());
         data.put("executionReportStatus", er.getExecutionReportStatus() != null ? er.getExecutionReportStatus().name() : null);
         data.put("timestampCreation", ts);
