@@ -21,7 +21,7 @@ import static com.lambda.investing.algorithmic_trading.Algorithm.LOG_LEVEL;
 public class QuoteSideManager {
 
     public static int MAX_SIZE_LAST_CLORDID_SENT = 200;
-    private static final long MAX_TIME_ERROR_MS = 1000 * 10;
+    private static final long MAX_TIME_ERROR_MS = 1000 * 30;
     private static final int MAX_CANCEL_REJ_DELETE = 5;
     private static final long SLEEP_AFTER_REJ_MS = 500;
 
