@@ -46,7 +46,10 @@ import java.util.*;
  *   python_host            str  default "*"                TCP mode: bind address
  *   python_ipc_md_path     str  default "/tmp/python_algo_md"   IPC mode: MD socket path
  *   python_ipc_cmd_path    str  default "/tmp/python_algo_cmd"  IPC mode: CMD socket path
+ *   python_ipc_ack_path    str  default "/tmp/python_algo_ack"  IPC mode: ACK socket path
  *   python_codec           str  default "json"             "json" | "msgpack"
+ *   python_backtest_sync   bool default false              block after each event until Python ACKs
+ *   python_ack_pull_port   int  default 7702               TCP mode: ACK PULL port (sync mode only)
  */
 public class PythonAlgorithm extends SingleInstrumentAlgorithm {
 
@@ -58,6 +61,9 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
     public static final String PARAM_IPC_MD_PATH     = "python_ipc_md_path";
     public static final String PARAM_IPC_CMD_PATH    = "python_ipc_cmd_path";
     public static final String PARAM_CODEC           = "python_codec";
+    public static final String PARAM_BACKTEST_SYNC = "python_backtest_sync";
+    public static final String PARAM_ACK_PULL_PORT = "python_ack_pull_port";
+    public static final String PARAM_IPC_ACK_PATH = "python_ipc_ack_path";
 
     // ---- message type constants ----
     private static final String TYPE_DEPTH            = "depth";
@@ -73,21 +79,29 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
     // ---- defaults ----
     private static final int    DEFAULT_MD_PUB_PORT   = 7700;
     private static final int    DEFAULT_CMD_PULL_PORT = 7701;
+    private static final int DEFAULT_ACK_PULL_PORT = 7702;
     private static final String DEFAULT_HOST          = "*";
     private static final String DEFAULT_IPC_MD_PATH   = "/tmp/python_algo_md";
     private static final String DEFAULT_IPC_CMD_PATH  = "/tmp/python_algo_cmd";
+    private static final String DEFAULT_IPC_ACK_PATH = "/tmp/python_algo_ack";
     private static final String TRANSPORT_IPC         = "ipc";
     private static final String CODEC_MSGPACK         = "msgpack";
+    /**
+     * How long (ms) to wait per poll cycle for a Python ACK in sync mode (-1 = indefinite).
+     */
+    private static final int ACK_POLL_TIMEOUT_MS = 500;
 
     private final ZContext zmqContext;
     private ZMQ.Socket pubSocket;
     private ZMQ.Socket pullSocket;
+    private ZMQ.Socket ackSocket;   // PULL — receives ACKs from Python in backtest-sync mode
     private Thread cmdThread;
     private volatile boolean running = false;
 
     // resolved at init()
-    private boolean useIpc     = false;
+    private boolean useIpc = false;
     private boolean useMsgpack = false;
+    private boolean backtestSync  = false;
 
     public PythonAlgorithm(AlgorithmConnectorConfiguration algorithmConnectorConfiguration,
                            String algorithmInfo, Map<String, Object> parameters) {
@@ -119,8 +133,11 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
 
         String transportType = (String) parameters.getOrDefault(PARAM_TRANSPORT_TYPE, "tcp");
         String codec         = (String) parameters.getOrDefault(PARAM_CODEC, "json");
-        useIpc     = TRANSPORT_IPC.equalsIgnoreCase(transportType);
+        useIpc = TRANSPORT_IPC.equalsIgnoreCase(transportType);
         useMsgpack = CODEC_MSGPACK.equalsIgnoreCase(codec);
+        backtestSync = getParameterIntOrDefault(parameters, PARAM_BACKTEST_SYNC, 0) != 0
+                || Boolean.TRUE.equals(parameters.get(PARAM_BACKTEST_SYNC))
+                || "true".equalsIgnoreCase(String.valueOf(parameters.getOrDefault(PARAM_BACKTEST_SYNC, "false")));
 
         pubSocket = zmqContext.createSocket(ZMQ.PUB);
         pubSocket.setLinger(0);
@@ -148,6 +165,23 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
         pubSocket.bind(mdEndpoint);
         pullSocket.bind(cmdEndpoint);
 
+        if (backtestSync) {
+            ackSocket = zmqContext.createSocket(ZMQ.PULL);
+            ackSocket.setLinger(0);
+            ackSocket.setReceiveTimeOut(ACK_POLL_TIMEOUT_MS);
+            String ackEndpoint;
+            if (useIpc) {
+                String ackPath = (String) parameters.getOrDefault(PARAM_IPC_ACK_PATH, DEFAULT_IPC_ACK_PATH);
+                ackEndpoint = "ipc://" + ackPath;
+            } else {
+                int ackPort = getParameterIntOrDefault(parameters, PARAM_ACK_PULL_PORT, DEFAULT_ACK_PULL_PORT);
+                String host = (String) parameters.getOrDefault(PARAM_HOST, DEFAULT_HOST);
+                ackEndpoint = String.format("tcp://%s:%d", host, ackPort);
+            }
+            ackSocket.bind(ackEndpoint);
+            logger.info("[PythonAlgorithm] backtest-sync enabled — ACK PULL {}", ackEndpoint);
+        }
+
         running = true;
         cmdThread = new Thread(this::commandLoop, "PythonAlgorithm-cmd-" + algorithmInfo);
         cmdThread.setDaemon(true);
@@ -165,6 +199,7 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
         }
         if (pubSocket  != null) pubSocket.close();
         if (pullSocket != null) pullSocket.close();
+        if (ackSocket != null) ackSocket.close();
         zmqContext.close();
         super.stop();
     }
@@ -222,6 +257,10 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
      * Topic format: {@code <instrument>.<type>}
      * Frame 0: topic bytes
      * Frame 1: payload encoded by the configured codec
+     *
+     * In backtest-sync mode ({@code python_backtest_sync=true}) this method blocks
+     * until Python sends an ACK on the ack socket, so the backtest naturally pauses
+     * whenever the Python side is stopped at a debugger breakpoint.
      */
     private void publishEvent(String type, String instrument, String dataJson) {
         if (pubSocket == null) return;
@@ -232,6 +271,23 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
         synchronized (pubSocket) {
             pubSocket.sendMore(topic.getBytes(StandardCharsets.UTF_8));
             pubSocket.send(payload, 0);
+        }
+        if (backtestSync) {
+            waitForAck(type, instrument);
+        }
+    }
+
+    /**
+     * Blocks until Python sends an ACK for the last published event.
+     * Polls in short bursts so that a {@code stop()} call can still unblock this thread.
+     */
+    private void waitForAck(String type, String instrument) {
+        while (running) {
+            byte[] ack = ackSocket.recv(0);
+            if (ack != null) {
+                return;  // ACK received — backtest may advance
+            }
+            // ackSocket timed out (ACK_POLL_TIMEOUT_MS) — Python may be at a breakpoint; keep waiting
         }
     }
 
@@ -463,7 +519,7 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
     public String printAlgo() {
         String transport = useIpc ? "ipc" : "tcp";
         String codec     = useMsgpack ? "msgpack" : "json";
-        return String.format("PythonAlgorithm[%s] transport=%s codec=%s",
-                algorithmInfo, transport, codec);
+        return String.format("PythonAlgorithm[%s] transport=%s codec=%s backtestSync=%s",
+                algorithmInfo, transport, codec, backtestSync);
     }
 }

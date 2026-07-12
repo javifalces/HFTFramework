@@ -20,6 +20,10 @@ Edit the constants below to match your environment:
   SLOW_PERIOD — slow SMA period (candles)
   MD_PUB_PORT — Java PUB socket port (must match ``python_md_pub_port``)
   CMD_PULL_PORT — Java PULL socket port (must match ``python_cmd_pull_port``)
+  ACK_PUSH_PORT — Java ACK PULL socket port (must match ``python_ack_pull_port``,
+                  only used when BACKTEST_SYNC=True)
+  BACKTEST_SYNC — set True to pause the backtest whenever the Python debugger
+                  hits a breakpoint (adds ACK handshake per event)
 
 Prerequisites
 -------------
@@ -65,6 +69,8 @@ FAST_PERIOD   = 5
 SLOW_PERIOD   = 20
 MD_PUB_PORT   = 7700
 CMD_PULL_PORT = 7701
+ACK_PUSH_PORT = 7702
+BACKTEST_SYNC = True   # set False for live / non-debug runs
 
 # Candle period used by PythonAlgorithm (seconds). Default in the framework is 56 s.
 CANDLE_SECONDS = 60
@@ -104,6 +110,8 @@ def _build_backtest_launcher():
             "python_cmd_pull_port": str(CMD_PULL_PORT),
             "python_transport_type": "tcp",
             "python_codec": "json",
+            "python_backtest_sync":  str(BACKTEST_SYNC).lower(),
+            "python_ack_pull_port":  str(ACK_PUSH_PORT),
             # Candle period forwarded to CandleFromTickUpdater via Algorithm base class
             "candle_seconds": str(CANDLE_SECONDS),
         },
@@ -135,6 +143,8 @@ def main() -> None:
     transport = ZmqTransport(
         md_sub_port=MD_PUB_PORT,
         cmd_push_port=CMD_PULL_PORT,
+        backtest_sync=BACKTEST_SYNC,
+        ack_push_port=ACK_PUSH_PORT,
     )
     strategy = SmaCandleStrategy(
         transport,

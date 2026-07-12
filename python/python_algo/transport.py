@@ -6,6 +6,7 @@ Interface
 Transport (ABC)
   recv() -> bytes | None
   send(data: bytes) -> None
+  send_ack() -> None
   subscribe(topic: str) -> None
   close() -> None
 
@@ -14,8 +15,12 @@ ZmqTransport
     tcp  – TCP sockets (cross-host or local)
     ipc  – Unix-domain sockets via ZeroMQ IPC (same host, lower latency)
 
-  SUB socket: subscribes to Java PUB
+  SUB socket:  subscribes to Java PUB
   PUSH socket: pushes commands to Java PULL
+  ACK socket:  (optional) PUSH that sends an ACK after each event in
+               backtest-sync mode so the Java backtest blocks until
+               Python has finished processing (including at a debugger
+               breakpoint).  Enable with ``backtest_sync=True``.
 
   Accepts an optional :class:`~python_algo.codec.Codec` for
   serialisation.  Pass ``codec=MsgpackCodec()`` to use binary MessagePack
@@ -45,6 +50,12 @@ class Transport(abc.ABC):
     def send(self, data: bytes) -> None:
         """Send an outbound command payload."""
 
+    def send_ack(self) -> None:
+        """
+        Send an ACK to Java after processing one event.
+        Only meaningful in backtest-sync mode; the default is a no-op.
+        """
+
     @abc.abstractmethod
     def subscribe(self, topic: str) -> None:
         """Add a subscription filter (empty string = all topics)."""
@@ -72,6 +83,16 @@ class ZmqTransport(Transport):
 
     The host / port parameters are ignored in IPC mode.
 
+    Backtest-sync mode
+    ------------------
+    Set ``backtest_sync=True`` to enable the ACK handshake.  After every
+    dispatched event the strategy calls ``send_ack()``, which pushes a
+    single byte to the Java ACK PULL socket (port ``ack_push_port``,
+    default 7702).  Java blocks until it receives this ACK, so the
+    backtest naturally pauses whenever the Python debugger hits a
+    breakpoint.  This flag should be ``False`` (default) during live
+    trading to avoid the per-event round-trip overhead.
+
     Codec
     -----
     Pass ``codec=MsgpackCodec()`` to use binary MessagePack encoding.
@@ -80,6 +101,7 @@ class ZmqTransport(Transport):
 
     _IPC_MD_DEFAULT  = "/tmp/python_algo_md"
     _IPC_CMD_DEFAULT = "/tmp/python_algo_cmd"
+    _IPC_ACK_DEFAULT = "/tmp/python_algo_ack"
 
     def __init__(
         self,
@@ -93,6 +115,11 @@ class ZmqTransport(Transport):
         # IPC parameters
         ipc_md_path: str = _IPC_MD_DEFAULT,
         ipc_cmd_path: str = _IPC_CMD_DEFAULT,
+        # Backtest-sync / ACK parameters
+        backtest_sync: bool = False,
+        ack_push_host: str = "localhost",
+        ack_push_port: int = 7702,
+        ipc_ack_path: str = _IPC_ACK_DEFAULT,
         # Serialisation
         codec: Optional["Codec"] = None,
     ) -> None:
@@ -119,6 +146,16 @@ class ZmqTransport(Transport):
         self._poller = zmq.Poller()
         self._poller.register(self._sub, zmq.POLLIN)
 
+        # Optional ACK socket for backtest-sync mode
+        self._ack: Optional[zmq.Socket] = None
+        if backtest_sync:
+            self._ack = self._ctx.socket(zmq.PUSH)
+            self._ack.setsockopt(zmq.LINGER, 0)
+            if transport_type == "ipc":
+                self._ack.connect(f"ipc://{ipc_ack_path}")
+            else:
+                self._ack.connect(f"tcp://{ack_push_host}:{ack_push_port}")
+
     @property
     def codec(self) -> Optional["Codec"]:
         """The codec used for message serialisation, or None for the default (JSON)."""
@@ -138,9 +175,16 @@ class ZmqTransport(Transport):
             return None
         return parts[1]
 
+    def send_ack(self) -> None:
+        """Send a single-byte ACK to Java (backtest-sync mode only)."""
+        if self._ack is not None:
+            self._ack.send(b'\x01', copy=False)
+
     def send(self, data: bytes) -> None:
         self._push.send(data, copy=False)
 
     def close(self) -> None:
         self._sub.close()
         self._push.close()
+        if self._ack is not None:
+            self._ack.close()

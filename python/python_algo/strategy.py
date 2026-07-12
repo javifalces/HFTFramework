@@ -27,6 +27,12 @@ from python_algo.codec import MsgpackCodec
 transport = ZmqTransport(transport_type="ipc", codec=MsgpackCodec())
 strategy  = MyStrategy(transport)
 strategy.run()
+
+# Backtest with debugger support — Java blocks until Python ACKs each event,
+# so hitting a breakpoint naturally pauses the whole backtest.
+transport = ZmqTransport(md_sub_port=7700, cmd_push_port=7701, backtest_sync=True)
+strategy  = MyStrategy(transport, instruments=["btcusdt_binance"])
+strategy.run()
 """
 
 from __future__ import annotations
@@ -138,6 +144,9 @@ class PythonStrategy(abc.ABC):
         Process one inbound message (non-blocking with timeout).
         Returns True if a message was processed, False on timeout.
         Suitable for Gymnasium step() or manual driving.
+
+        In backtest-sync mode the transport's ``send_ack()`` is called after
+        dispatching so that Java unblocks and advances to the next event.
         """
         raw = self._transport.recv(timeout_ms)
         if raw is None:
@@ -147,6 +156,8 @@ class PythonStrategy(abc.ABC):
             self._dispatch(env)
         except Exception as e:
             log.warning("error processing message: %s", e)
+        finally:
+            self._transport.send_ack()
         return True
 
     def run(self, poll_ms: int = 200) -> None:
