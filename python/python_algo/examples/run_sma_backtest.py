@@ -50,6 +50,8 @@ import sys
 import threading
 import time
 
+from trading_algorithms.algorithm import AlgorithmParameters
+
 # ---------------------------------------------------------------------------
 # Make sure the python/ directory is on sys.path when run directly
 # ---------------------------------------------------------------------------
@@ -61,9 +63,9 @@ if _PYTHON_ROOT not in sys.path:
 # ---------------------------------------------------------------------------
 # Configuration — adjust to your environment
 # ---------------------------------------------------------------------------
-INSTRUMENT    = "btcusdt_binance"
-START_DATE    = datetime.datetime(2024, 11, 9, 7, 0, 0)
-END_DATE      = datetime.datetime(2024, 11, 9, 15, 0, 0)
+INSTRUMENT    = "eurusd_darwinex"
+START_DATE    = datetime.datetime(2026, 4, 20, 7, 0, 0)
+END_DATE      = datetime.datetime(2026, 4, 20, 15, 0, 0)
 QUANTITY      = 0.001
 FAST_PERIOD   = 5
 SLOW_PERIOD   = 20
@@ -114,6 +116,9 @@ def _build_backtest_launcher():
             "python_ack_pull_port":  str(ACK_PUSH_PORT),
             # Candle period forwarded to CandleFromTickUpdater via Algorithm base class
             "candle_seconds": str(CANDLE_SECONDS),
+            AlgorithmParameters.first_hour:0,
+            AlgorithmParameters.last_hour:23,
+            AlgorithmParameters.instrument_pks:[INSTRUMENT],
         },
     )
 
