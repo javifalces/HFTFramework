@@ -405,6 +405,17 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
             switch (type) {
                 case CMD_ORDER_REQUEST:
                     OrderRequest orderRequest = Util.GSON.fromJson(dataJson, OrderRequest.class);
+                    // Normalise empty-string fields that Python may send as "" instead of null
+                    // so that Algorithm.checkOrderRequest auto-fills them correctly.
+                    if (orderRequest.getClientOrderId() != null && orderRequest.getClientOrderId().isEmpty()) {
+                        orderRequest.setClientOrderId(null);
+                    }
+                    if (orderRequest.getOrigClientOrderId() != null && orderRequest.getOrigClientOrderId().isEmpty()) {
+                        orderRequest.setOrigClientOrderId(null);
+                    }
+                    if (orderRequest.getAlgorithmInfo() != null && orderRequest.getAlgorithmInfo().isEmpty()) {
+                        orderRequest.setAlgorithmInfo(null);
+                    }
                     sendOrderRequest(orderRequest);
                     break;
                 case CMD_QUOTE_REQUEST:

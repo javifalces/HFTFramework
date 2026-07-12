@@ -79,10 +79,14 @@ class PythonStrategy(abc.ABC):
         # explicitly supplied codec, then None (which defaults to JsonCodec).
         self._codec = getattr(transport, "codec", None) or codec
 
-        # Subscribe to all or specific instrument topics
+        # Subscribe to all or specific instrument topics.
+        # When no instruments are specified, subscribe to all messages so that
+        # the SUB socket receives every topic published by Java.
         if instruments:
             for inst in instruments:
                 transport.subscribe(inst)
+        else:
+            transport.subscribe("")
 
 
     # -----------------------------------------------------------------------
