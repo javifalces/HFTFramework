@@ -1,6 +1,7 @@
 package com.lambda.investing.algorithmic_trading.reinforcement_learning.state;
 
 import com.lambda.investing.TimeSeriesQueue;
+import com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshot;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioSnapshot;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.ScoreEnum;
 import com.lambda.investing.model.asset.Instrument;
@@ -551,7 +552,11 @@ public class MarketState extends AbstractState {
         unrealizedPnlBuffer.offer(portfolioSnapshot.unrealizedPnl / quantity);
         realizedPnlBuffer.offer(portfolioSnapshot.realizedPnl / quantity);
 
-        double position = portfolioSnapshot.getPnlSnapshot(instrument.getPrimaryKey()).netPosition;
+        PnlSnapshot pnlSnapshot = portfolioSnapshot.getPnlSnapshot(instrument.getPrimaryKey());
+        double position = 0;
+        if (pnlSnapshot != null)
+            position = pnlSnapshot.netPosition;
+
         if (PRIVATE_QUANTITY_RELATIVE) {
             position = position / quantity;
         }
