@@ -31,7 +31,13 @@ from python_algo.messages import (
 )
 from python_algo.transport import Transport, ZmqTransport
 from python_algo.strategy import PythonStrategy
-from python_algo.live_env import PythonAlgoEnv
+
+# PythonAlgoEnv depends on numpy / gymnasium.  Import it lazily so that the
+# rest of the package remains usable in environments without those heavy deps.
+try:
+    from python_algo.live_env import PythonAlgoEnv
+except ImportError:
+    PythonAlgoEnv = None  # type: ignore[assignment,misc]
 
 __all__ = [
     "Codec",

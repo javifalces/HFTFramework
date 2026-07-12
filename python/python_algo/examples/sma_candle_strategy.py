@@ -78,6 +78,11 @@ class SmaCandleStrategy(PythonStrategy):
             raise ValueError(
                 f"fast_period ({fast_period}) must be less than slow_period ({slow_period})"
             )
+        # Pass a per-instrument subscription when an instrument is known so
+        # that the SUB socket only receives events for that symbol.  If no
+        # instrument is given the base-class default (subscribe-all) is used.
+        if instrument is not None:
+            kwargs.setdefault("instruments", [instrument])
         super().__init__(transport, **kwargs)
         self._instrument = instrument
         self._quantity = quantity
