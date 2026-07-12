@@ -70,7 +70,7 @@ class PythonStrategy(abc.ABC):
     def __init__(
         self,
         transport: Transport,
-        instruments: Optional[List[str]] = None,
+        instruments: [List[str]] = None,
         codec: Optional["Codec"] = None,
     ) -> None:
         self._transport = transport
@@ -83,8 +83,7 @@ class PythonStrategy(abc.ABC):
         if instruments:
             for inst in instruments:
                 transport.subscribe(inst)
-        else:
-            transport.subscribe("")  # all topics
+
 
     # -----------------------------------------------------------------------
     # Abstract callbacks — implement in subclass

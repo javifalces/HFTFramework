@@ -125,7 +125,8 @@ class ZmqTransport(Transport):
         return self._codec
 
     def subscribe(self, topic: str = "") -> None:
-        self._sub.setsockopt_string(4, topic)  # zmq.SUBSCRIBE = 4
+        import zmq
+        self._sub.setsockopt(zmq.SUBSCRIBE, topic.encode())
 
     def recv(self, timeout_ms: int = 200) -> Optional[bytes]:
         socks = dict(self._poller.poll(timeout_ms))
