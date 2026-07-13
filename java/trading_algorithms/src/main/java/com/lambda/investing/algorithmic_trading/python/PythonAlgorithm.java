@@ -642,8 +642,13 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
      * Encodes the current PortfolioSnapshot as a response.
      * 
      * Retrieves the current portfolio snapshot from the algorithm's portfolio manager,
-     * serializes it to JSON, and then encodes it in the appropriate format (JSON or
-     * MessagePack) based on the configured codec.
+     * serializes it to JSON with a reduced set of fields from PnlSnapshot objects,
+     * and then encodes it in the appropriate format (JSON or MessagePack) based on 
+     * the configured codec.
+     *
+     * To reduce payload size, only essential fields from PnlSnapshot are included:
+     * netPosition, avgOpenPrice, netInvestment, realizedPnl, unrealizedPnl, totalPnl,
+     * totalFees, lastPriceForUnrealized, spread, realizedFees, unrealizedFees.
      * 
      * The response envelope structure:
      * <pre>
@@ -670,14 +675,77 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
      * 
      * @see #encodeResponseJson(String, String)
      * @see #encodeResponseMsgpack(String, String)
+     * @see #createReducedPortfolioSnapshotJson(com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioSnapshot)
      */
     private byte[] encodePortfolioSnapshotResponse() {
         com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioSnapshot snapshot = portfolioManager.getPortfolioSnapshot();
-        String snapshotJson = Util.toJsonString(snapshot);
+        String snapshotJson = createReducedPortfolioSnapshotJson(snapshot);
         
         return useMsgpack
                 ? encodeResponseMsgpack("portfolio_snapshot", snapshotJson)
                 : encodeResponseJson("portfolio_snapshot", snapshotJson);
+    }
+
+    /**
+     * Creates a reduced JSON representation of a PortfolioSnapshot.
+     * <p>
+     * This method filters the PnlSnapshot objects in the instrumentPnlSnapshotMap to include
+     * only the essential fields, significantly reducing the payload size for large portfolios.
+     * <p>
+     * Included PnlSnapshot fields:
+     * - netPosition
+     * - avgOpenPrice
+     * - netInvestment
+     * - realizedPnl
+     * - unrealizedPnl
+     * - totalPnl
+     * - totalFees
+     * - lastPriceForUnrealized
+     * - spread
+     * - realizedFees
+     * - unrealizedFees
+     *
+     * @param snapshot The full PortfolioSnapshot to serialize
+     * @return JSON string with reduced PnlSnapshot data
+     */
+    private String createReducedPortfolioSnapshotJson(com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioSnapshot snapshot) {
+        Map<String, Object> reducedSnapshot = new LinkedHashMap<>();
+        reducedSnapshot.put("algorithmInfo", snapshot.getAlgorithmInfo());
+        reducedSnapshot.put("netInvestment", snapshot.netInvestment);
+        reducedSnapshot.put("realizedPnl", snapshot.realizedPnl);
+        reducedSnapshot.put("unrealizedPnl", snapshot.unrealizedPnl);
+        reducedSnapshot.put("totalPnl", snapshot.totalPnl);
+        reducedSnapshot.put("totalFees", snapshot.totalFees);
+        reducedSnapshot.put("realizedFees", snapshot.realizedFees);
+        reducedSnapshot.put("unrealizedFees", snapshot.unrealizedFees);
+        reducedSnapshot.put("netPosition", snapshot.netPosition);
+        reducedSnapshot.put("lastTimestampUpdate", snapshot.getLastTimestampUpdate());
+
+        // Create reduced instrumentPnlSnapshotMap with only essential fields
+        Map<String, Map<String, Double>> reducedPnlMap = new LinkedHashMap<>();
+        for (Map.Entry<String, com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshot> entry : snapshot.getPnlSnapshots().entrySet()) {
+            com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshot pnl = entry.getValue();
+            Map<String, Double> reducedPnl = new LinkedHashMap<>();
+            reducedPnl.put("netPosition", pnl.netPosition);
+            reducedPnl.put("avgOpenPrice", pnl.avgOpenPrice);
+            reducedPnl.put("netInvestment", pnl.netInvestment);
+            reducedPnl.put("realizedPnl", pnl.realizedPnl);
+            reducedPnl.put("unrealizedPnl", pnl.unrealizedPnl);
+            reducedPnl.put("totalPnl", pnl.totalPnl);
+            reducedPnl.put("totalFees", pnl.totalFees);
+            reducedPnl.put("lastPriceForUnrealized", pnl.lastPriceForUnrealized);
+            reducedPnl.put("spread", pnl.spread);
+            reducedPnl.put("realizedFees", pnl.realizedFees);
+            reducedPnl.put("unrealizedFees", pnl.unrealizedFees);
+
+            reducedPnl.put("numberOfTrades", pnl.numberOfTrades.doubleValue());
+            reducedPnl.put("numberOfAggressedTrades", pnl.numberOfAggressedTrades.doubleValue());
+            reducedPnl.put("numberOfAggressorTrades", pnl.numberOfAggressorTrades.doubleValue());
+            reducedPnlMap.put(entry.getKey(), reducedPnl);
+        }
+        reducedSnapshot.put("instrumentPnlSnapshotMap", reducedPnlMap);
+
+        return Util.toJsonString(reducedSnapshot);
     }
 
     /**
