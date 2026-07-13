@@ -15,9 +15,13 @@ Market-data types (Java → Python):
   candle            CandleMsg
 
 Command types (Python → Java):
-  order_request     OrderRequestCmd
-  quote_request     QuoteRequestCmd
-  request_info      RequestInfoCmd
+  order_request              OrderRequestCmd
+  quote_request              QuoteRequestCmd
+  request_info               RequestInfoCmd
+  portfolio_snapshot_request PortfolioSnapshotRequestCmd
+
+Response types (Java → Python):
+  portfolio_snapshot         PortfolioSnapshotMsg
 """
 
 from __future__ import annotations
@@ -268,3 +272,102 @@ class RequestInfoCmd:
 
     def to_json(self) -> str:
         return json.dumps(self.to_envelope())
+
+
+@dataclass
+class PortfolioSnapshotRequestCmd:
+    """
+    Command to request the current portfolio snapshot from Java (synchronous).
+    
+    This command is sent via the REQ socket and blocks waiting for a
+    PortfolioSnapshotMsg response. Use PythonStrategy.get_portfolio_snapshot()
+    instead of constructing this directly.
+    
+    Wire format:
+        {"v": 1, "type": "portfolio_snapshot_request", "data": {}}
+    
+    Example:
+        # Don't use directly - use the strategy method instead:
+        snapshot = strategy.get_portfolio_snapshot(timeout_ms=5000)
+    """
+
+    def to_envelope(self) -> dict:
+        """Convert to wire envelope dict."""
+        return {"v": SCHEMA_VERSION, "type": "portfolio_snapshot_request", "data": {}}
+
+    def to_bytes(self, codec: Optional["Codec"] = None) -> bytes:
+        """Encode to bytes using the specified codec (or default JsonCodec)."""
+        return (codec or _default_codec()).encode(self.to_envelope())
+
+    def to_json(self) -> str:
+        """Encode to JSON string."""
+        return json.dumps(self.to_envelope())
+
+
+@dataclass
+class PortfolioSnapshotMsg:
+    """
+    Portfolio snapshot response from Java.
+    
+    Contains aggregated portfolio-level metrics and per-instrument P&L breakdown.
+    This is the response to a PortfolioSnapshotRequestCmd.
+    
+    Attributes:
+        algorithm_info: Algorithm identifier
+        net_investment: Total capital invested across all positions
+        realized_pnl: Profit/loss from closed positions
+        unrealized_pnl: Profit/loss from open positions (mark-to-market)
+        total_pnl: Total P&L (realized + unrealized)
+        total_fees: All trading fees incurred (realized + unrealized)
+        realized_fees: Fees from closed positions
+        unrealized_fees: Fees from open positions
+        net_position: Net position size across all instruments
+        last_timestamp_update: Timestamp of last update in epoch milliseconds
+        instrument_pnl_snapshots: Per-instrument P&L breakdown (dict)
+    
+    Example:
+        snapshot = strategy.get_portfolio_snapshot()
+        if snapshot:
+            print(f"Total P&L: ${snapshot.total_pnl:.2f}")
+            print(f"Net Position: {snapshot.net_position:.4f}")
+            
+            # Per-instrument breakdown
+            for instrument, pnl_data in snapshot.instrument_pnl_snapshots.items():
+                print(f"{instrument}: {pnl_data}")
+    """
+    algorithm_info: str
+    net_investment: float
+    realized_pnl: float
+    unrealized_pnl: float
+    total_pnl: float
+    total_fees: float
+    realized_fees: float
+    unrealized_fees: float
+    net_position: float
+    last_timestamp_update: int
+    instrument_pnl_snapshots: dict = field(default_factory=dict)
+
+    @staticmethod
+    def from_dict(d: dict) -> "PortfolioSnapshotMsg":
+        """
+        Parse from Java response data dict.
+        
+        Args:
+            d: Response data dict from Java with camelCase field names
+            
+        Returns:
+            PortfolioSnapshotMsg instance with all fields populated
+        """
+        return PortfolioSnapshotMsg(
+            algorithm_info=d.get("algorithmInfo", ""),
+            net_investment=float(d.get("netInvestment", 0.0)),
+            realized_pnl=float(d.get("realizedPnl", 0.0)),
+            unrealized_pnl=float(d.get("unrealizedPnl", 0.0)),
+            total_pnl=float(d.get("totalPnl", 0.0)),
+            total_fees=float(d.get("totalFees", 0.0)),
+            realized_fees=float(d.get("realizedFees", 0.0)),
+            unrealized_fees=float(d.get("unrealizedFees", 0.0)),
+            net_position=float(d.get("netPosition", 0.0)),
+            last_timestamp_update=int(d.get("lastTimestampUpdate", 0)),
+            instrument_pnl_snapshots=d.get("instrumentPnlSnapshotMap", {}),
+        )

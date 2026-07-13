@@ -102,6 +102,7 @@ class ZmqTransport(Transport):
     _IPC_MD_DEFAULT  = "/tmp/python_algo_md"
     _IPC_CMD_DEFAULT = "/tmp/python_algo_cmd"
     _IPC_ACK_DEFAULT = "/tmp/python_algo_ack"
+    _IPC_REQ_DEFAULT = "/tmp/python_algo_req"
 
     def __init__(
         self,
@@ -120,6 +121,10 @@ class ZmqTransport(Transport):
         ack_push_host: str = "localhost",
         ack_push_port: int = 7702,
         ipc_ack_path: str = _IPC_ACK_DEFAULT,
+        # Request-Reply parameters
+        req_host: str = "localhost",
+        req_port: int = 7703,
+        ipc_req_path: str = _IPC_REQ_DEFAULT,
         # Serialisation
         codec: Optional["Codec"] = None,
     ) -> None:
@@ -129,6 +134,10 @@ class ZmqTransport(Transport):
             raise ValueError(f"transport_type must be 'tcp' or 'ipc', got {transport_type!r}")
 
         self._codec = codec  # None → use Codec default (JsonCodec) in messages layer
+        self._transport_type = transport_type
+        self._req_host = req_host
+        self._req_port = req_port
+        self._ipc_req_path = ipc_req_path
 
         self._ctx = zmq.Context.instance()
 
@@ -136,12 +145,19 @@ class ZmqTransport(Transport):
         self._push = self._ctx.socket(zmq.PUSH)
         self._push.setsockopt(zmq.LINGER, 0)
 
+        # REQ socket for synchronous requests
+        self._req = self._ctx.socket(zmq.REQ)
+        self._req.setsockopt(zmq.LINGER, 0)
+        self._req.setsockopt(zmq.RCVTIMEO, 5000)  # 5 second timeout
+
         if transport_type == "ipc":
             self._sub.connect(f"ipc://{ipc_md_path}")
             self._push.connect(f"ipc://{ipc_cmd_path}")
+            self._req.connect(f"ipc://{ipc_req_path}")
         else:
             self._sub.connect(f"tcp://{md_sub_host}:{md_sub_port}")
             self._push.connect(f"tcp://{cmd_push_host}:{cmd_push_port}")
+            self._req.connect(f"tcp://{req_host}:{req_port}")
 
         self._poller = zmq.Poller()
         self._poller.register(self._sub, zmq.POLLIN)
@@ -183,8 +199,73 @@ class ZmqTransport(Transport):
     def send(self, data: bytes) -> None:
         self._push.send(data, copy=False)
 
+    def request(self, data: bytes, timeout_ms: int = 5000) -> Optional[bytes]:
+        """
+        Send a synchronous request and wait for a reply.
+        
+        This method implements the client side of the REQ/REP pattern for
+        synchronous request-response communication with Java. It blocks until
+        a response is received or the timeout expires.
+        
+        Args:
+            data: Serialized request payload (typically from a command's to_bytes())
+            timeout_ms: Maximum time to wait for response in milliseconds.
+                       Default is 5000ms (5 seconds).
+        
+        Returns:
+            bytes: The raw response payload from Java, or None if timeout occurs
+            
+        Behavior:
+            - Sends request on REQ socket
+            - Blocks waiting for response
+            - On timeout: Closes and recreates REQ socket to reset state
+            - Automatically reconnects after timeout
+            
+        Note:
+            The REQ/REP socket pattern requires strict alternation: one send
+            followed by one receive. If a timeout occurs, the socket is reset
+            to maintain this state machine.
+            
+        Thread Safety:
+            This method is not thread-safe. Only call from the strategy's
+            main event loop thread.
+            
+        Example:
+            request = PortfolioSnapshotRequestCmd().to_bytes(codec)
+            response = transport.request(request, timeout_ms=3000)
+            if response:
+                # Process response
+                pass
+            else:
+                # Handle timeout
+                pass
+        """
+        import zmq
+        # Save the old timeout
+        old_timeout = self._req.getsockopt(zmq.RCVTIMEO)
+        try:
+            self._req.setsockopt(zmq.RCVTIMEO, timeout_ms)
+            self._req.send(data, copy=False)
+            reply = self._req.recv()
+            return reply
+        except zmq.Again:
+            # Timeout - need to reset the REQ socket state
+            self._req.setsockopt(zmq.LINGER, 0)
+            self._req.close()
+            self._req = self._ctx.socket(zmq.REQ)
+            self._req.setsockopt(zmq.LINGER, 0)
+            # Reconnect based on transport type
+            if self._transport_type == "ipc":
+                self._req.connect(f"ipc://{self._ipc_req_path}")
+            else:
+                self._req.connect(f"tcp://{self._req_host}:{self._req_port}")
+            return None
+        finally:
+            self._req.setsockopt(zmq.RCVTIMEO, old_timeout)
+
     def close(self) -> None:
         self._sub.close()
         self._push.close()
+        self._req.close()
         if self._ack is not None:
             self._ack.close()

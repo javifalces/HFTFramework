@@ -25,6 +25,8 @@ associated risks.**
 * [HFT Framework](#hft-framework)
   * [How-to use](#how-to-use)
     * [1. Create algorithm and backtest](#1-create-algorithm-and-backtest)
+      * [1.1 Java Algorithms](#11-java-algorithms)
+      * [1.2 Pure Python Strategies (python_algo)](#12-pure-python-strategies-python_algo)
     * [2. Live trading](#2-live-trading)
       * [Monitoring](java/docs/MONITORING_DOCUMENTATION.md)
     * [Web Monitoring UI](#web-monitoring-ui)
@@ -58,11 +60,11 @@ associated risks.**
 * [MARKET_MAKING_ALGORITHMS_DOCUMENTATION.md](java/docs/MARKET_MAKING_ALGORITHMS_DOCUMENTATION.md)
 * [MONITORING_DOCUMENTATION.md](java/docs/MONITORING_DOCUMENTATION.md)
 
+#### 1.1 Java Algorithms
+
 In this instance, we execute a backtest for the Java
 strategies [ConstantSpread](java/trading_algorithms/src/main/java/com/lambda/investing/algorithmic_trading/market_making/constant_spread/ConstantSpreadAlgorithm.java)
-and [LinearConstantSpread](java/trading_algorithms/src/main/java/com/lambda/investing/algorithmic_trading/market_making/constant_spread/LinearConstantSpreadAlgorithm.java),
-as well as their Python counterparts [ConstantSpread](python/trading_algorithms/market_making/constant_spread.py)
-and [LinearConstantSpread](python/trading_algorithms/market_making/linear_constant_spread.py).
+and [LinearConstantSpread](java/trading_algorithms/src/main/java/com/lambda/investing/algorithmic_trading/market_making/constant_spread/LinearConstantSpreadAlgorithm.java).
 These instructions pertain to the execution of pre-existing algorithms.
 
 To develop a new algorithm, one must create a new class that extends
@@ -91,6 +93,192 @@ in [TradingAlgorithmsProvider.java](java/trading_algorithms/src/main/java/com/la
             end_date=datetime.datetime(year=2023, day=13, month=11, hour=15),
         )
     ```
+
+#### 1.2 Pure Python Strategies (python_algo)
+
+The framework supports **pure-Python trading strategies** that communicate with the Java framework via ZeroMQ. This allows you to write strategies entirely in Python while leveraging the Java backtesting and live trading infrastructure.
+
+**Architecture:**
+- **Java PUB** → **Python SUB**: Market data events (depth, trade, execution reports, candles)
+- **Java PULL** ← **Python PUSH**: Order/quote commands (asynchronous)
+- **Java REP** ↔ **Python REQ**: Synchronous requests (portfolio snapshot, etc.)
+
+**Transport Options:**
+- **TCP** (default): Works across hosts, `localhost:7700-7703`
+- **IPC**: Same-host only, lower latency via Unix domain sockets
+
+**Codec Options:**
+- **JSON** (default): Human-readable, always available
+- **MessagePack**: ~3× faster parsing, smaller frames
+
+**Quick Start:**
+
+```python
+from python_algo import PythonStrategy, ZmqTransport, DepthMsg, TradeMsg, ExecutionReportMsg, CandleMsg, OrderRequestCmd
+
+class MyStrategy(PythonStrategy):
+    def on_depth(self, depth: DepthMsg) -> None:
+        if depth.spread < 0.01:
+            self.send_order(OrderRequestCmd(
+                instrument=depth.instrument,
+                verb="Buy",
+                order_type="Limit",
+                quantity=0.01,
+                price=depth.best_bid
+            ))
+    
+    def on_trade(self, trade: TradeMsg) -> None:
+        pass
+    
+    def on_execution_report(self, er: ExecutionReportMsg) -> None:
+        print(f"Order {er.status}: {er.verb} {er.quantity} @ {er.price}")
+    
+    def on_candle(self, candle: CandleMsg) -> None:
+        pass
+
+# TCP + JSON (default)
+transport = ZmqTransport(md_sub_port=7700, cmd_push_port=7701, req_port=7703)
+strategy = MyStrategy(transport, instruments=["btcusdt_binance"])
+strategy.run()
+```
+
+**Java Configuration (PythonAlgorithm):**
+
+To run a Python strategy, configure the Java side to use `PythonAlgorithm`:
+
+```json
+{
+  "algorithm": {
+    "algorithmName": "PythonAlgorithm",
+    "algorithmParameters": {
+      "python_transport_type": "tcp",
+      "python_md_pub_port": "7700",
+      "python_cmd_pull_port": "7701",
+      "python_rep_port": "7703",
+      "python_codec": "json",
+      "python_backtest_sync": "false"
+    }
+  },
+  "instruments": ["btcusdt_binance"],
+  "startDate": "2023-11-13 09:00:00",
+  "endDate": "2023-11-13 15:00:00"
+}
+```
+
+**Parameters:**
+- `python_transport_type`: "tcp" (default) or "ipc"
+- `python_md_pub_port`: Port for market data (default: 7700)
+- `python_cmd_pull_port`: Port for commands (default: 7701)
+- `python_rep_port`: Port for synchronous requests (default: 7703)
+- `python_codec`: "json" (default) or "msgpack"
+- `python_backtest_sync`: Enable ACK handshake for debugger-friendly backtesting (default: false)
+- `python_host`: Bind address for TCP mode (default: "*")
+- `python_ipc_md_path`: IPC socket path for market data (default: "/tmp/python_algo_md")
+- `python_ipc_cmd_path`: IPC socket path for commands (default: "/tmp/python_algo_cmd")
+- `python_ipc_rep_path`: IPC socket path for requests (default: "/tmp/python_algo_req")
+
+**Synchronous Portfolio Snapshot:**
+
+```python
+class MyStrategy(PythonStrategy):
+    def on_depth(self, depth: DepthMsg) -> None:
+        # Request current portfolio state
+        snapshot = self.get_portfolio_snapshot(timeout_ms=5000)
+        
+        if snapshot:
+            print(f"Total P&L: {snapshot.total_pnl:.2f}")
+            print(f"Net Position: {snapshot.net_position:.4f}")
+            
+            # Per-instrument breakdown
+            for instrument, pnl in snapshot.instrument_pnl_snapshots.items():
+                print(f"{instrument}: {pnl}")
+```
+
+**Examples:**
+
+The [python/python_algo/examples](python/python_algo/examples) directory contains complete working examples:
+
+1. **[avellaneda_stoikov_strategy.py](python/python_algo/examples/avellaneda_stoikov_strategy.py)** - Market making with dynamic spreads
+   ```bash
+   # Run with backtest:
+   python python/python_algo/examples/run_alpha_as_backtest.py
+   
+   # Run with live ZeroMQ:
+   python python/python_algo/examples/run_alpha_as_zeromq.py
+   ```
+
+2. **[sma_candle_strategy.py](python/python_algo/examples/sma_candle_strategy.py)** - Simple Moving Average crossover on candles
+   ```bash
+   # Run with backtest:
+   python python/python_algo/examples/run_sma_backtest.py
+   
+   # Run with live ZeroMQ:
+   python python/python_algo/examples/run_sma_candle_zeromq.py
+   ```
+
+3. **[test_portfolio_snapshot.py](python/python_algo/examples/test_portfolio_snapshot.py)** - Demonstrates synchronous portfolio snapshot requests
+   ```bash
+   python python/python_algo/examples/test_portfolio_snapshot.py
+   ```
+
+4. **[alpha_as_env.py](python/python_algo/examples/alpha_as_env.py)** - Gymnasium environment wrapper for RL training
+
+**Running Examples:**
+
+All examples require a running Java backtest or ZeroMQ instance:
+
+**Backtest Mode:**
+1. Start Java backtest with PythonAlgorithm configuration (see `run_*_backtest.py` examples)
+2. The Java side will bind sockets and wait for Python to connect
+3. Run your Python strategy
+4. Python connects and receives events synchronously (useful for debugging)
+
+**Live/ZeroMQ Mode:**
+1. Start market engine: `java -jar XChangeEngine.jar`
+2. Start Java AlgoTradingZeroMq with PythonAlgorithm
+3. Run your Python strategy
+4. Python connects and trades in real-time
+
+**Backtest-Sync Mode (Debugger-Friendly):**
+
+Enable `python_backtest_sync: true` for step-by-step debugging:
+- Java blocks after each event until Python sends an ACK
+- Hitting a Python breakpoint naturally pauses the backtest
+- Resume execution continues from where you left off
+
+```json
+"algorithmParameters": {
+  "python_backtest_sync": "true",
+  "python_ack_pull_port": "7702"
+}
+```
+
+**IPC Mode (Lower Latency):**
+
+For same-host deployments, use IPC for ~40% lower latency:
+
+```python
+from python_algo import ZmqTransport, MsgpackCodec
+
+transport = ZmqTransport(
+    transport_type="ipc",
+    codec=MsgpackCodec(),  # Optional: binary encoding
+    ipc_md_path="/tmp/python_algo_md",
+    ipc_cmd_path="/tmp/python_algo_cmd",
+    ipc_req_path="/tmp/python_algo_req"
+)
+```
+
+Java configuration:
+```json
+"algorithmParameters": {
+  "python_transport_type": "ipc",
+  "python_codec": "msgpack",
+  "python_ipc_md_path": "/tmp/python_algo_md",
+  "python_ipc_cmd_path": "/tmp/python_algo_cmd",
+  "python_ipc_rep_path": "/tmp/python_algo_req"
+}
+```
 
 ### 2. Live trading
 

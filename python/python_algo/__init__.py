@@ -28,6 +28,7 @@ from python_algo.codec import Codec, JsonCodec, MsgpackCodec
 from python_algo.messages import (
     Envelope, DepthMsg, TradeMsg, ExecutionReportMsg, CandleMsg,
     OrderRequestCmd, QuoteRequestCmd, RequestInfoCmd,
+    PortfolioSnapshotRequestCmd, PortfolioSnapshotMsg,
 )
 from python_algo.transport import Transport, ZmqTransport
 from python_algo.strategy import PythonStrategy
@@ -51,6 +52,8 @@ __all__ = [
     "OrderRequestCmd",
     "QuoteRequestCmd",
     "RequestInfoCmd",
+    "PortfolioSnapshotRequestCmd",
+    "PortfolioSnapshotMsg",
     "Transport",
     "ZmqTransport",
     "PythonStrategy",

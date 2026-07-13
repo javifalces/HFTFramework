@@ -50,6 +50,8 @@ from python_algo.messages import (
     OrderRequestCmd,
     QuoteRequestCmd,
     RequestInfoCmd,
+    PortfolioSnapshotRequestCmd,
+    PortfolioSnapshotMsg,
 )
 from python_algo.transport import Transport
 
@@ -127,13 +129,124 @@ class PythonStrategy(abc.ABC):
     # -----------------------------------------------------------------------
 
     def send_order(self, cmd: OrderRequestCmd) -> None:
+        """
+        Send an order request to Java (asynchronous).
+        
+        Args:
+            cmd: OrderRequestCmd with order details (instrument, verb, type, quantity, price, etc.)
+            
+        Example:
+            self.send_order(OrderRequestCmd(
+                instrument="btcusdt_binance",
+                verb="Buy",
+                order_type="Limit",
+                quantity=0.01,
+                price=50000.0
+            ))
+        """
         self._transport.send(cmd.to_bytes(self._codec))
 
     def send_quote(self, cmd: QuoteRequestCmd) -> None:
+        """
+        Send a quote request to Java for market making (asynchronous).
+        
+        Args:
+            cmd: QuoteRequestCmd with two-sided quote details
+            
+        Example:
+            self.send_quote(QuoteRequestCmd(
+                instrument="btcusdt_binance",
+                bid_price=49950.0,
+                bid_quantity=0.1,
+                ask_price=50050.0,
+                ask_quantity=0.1
+            ))
+        """
         self._transport.send(cmd.to_bytes(self._codec))
 
     def request_info(self, info: str) -> None:
+        """
+        Send an informational request to Java (asynchronous).
+        
+        Args:
+            info: Information identifier string
+            
+        Note:
+            The response handling depends on the Java implementation's
+            onInfoUpdate() method.
+        """
         self._transport.send(RequestInfoCmd(info).to_bytes(self._codec))
+
+    def get_portfolio_snapshot(self, timeout_ms: int = 5000) -> Optional[PortfolioSnapshotMsg]:
+        """
+        Synchronously request the current portfolio snapshot from Java.
+        
+        This method blocks until a response is received from the Java PythonAlgorithm
+        or the timeout expires. It uses a REQ/REP socket pattern for reliable
+        request-response communication.
+        
+        Args:
+            timeout_ms: Maximum time to wait for response in milliseconds.
+                       Default is 5000ms (5 seconds). Must be positive.
+            
+        Returns:
+            PortfolioSnapshotMsg containing:
+                - algorithm_info: Algorithm identifier
+                - net_investment: Total capital invested
+                - realized_pnl: Realized profit and loss
+                - unrealized_pnl: Unrealized profit and loss
+                - total_pnl: Total P&L (realized + unrealized)
+                - total_fees: All trading fees incurred
+                - realized_fees: Fees from closed positions
+                - unrealized_fees: Fees from open positions
+                - net_position: Net position across all instruments
+                - last_timestamp_update: Timestamp of last update (epoch ms)
+                - instrument_pnl_snapshots: Per-instrument P&L breakdown (dict)
+            
+            Returns None if:
+                - Request times out
+                - Java side is not running
+                - Response cannot be parsed
+                
+        Example:
+            snapshot = self.get_portfolio_snapshot(timeout_ms=3000)
+            if snapshot:
+                print(f"Total P&L: ${snapshot.total_pnl:.2f}")
+                print(f"Net Position: {snapshot.net_position:.4f}")
+                
+                # Check individual instruments
+                for instrument, pnl in snapshot.instrument_pnl_snapshots.items():
+                    print(f"{instrument}: {pnl}")
+            else:
+                print("Failed to retrieve portfolio snapshot")
+                
+        Warning:
+            This method blocks the event loop. Avoid calling it in high-frequency
+            paths. Consider caching snapshots or calling at controlled intervals.
+            
+        Note:
+            - The Java side must have the REP socket enabled (default port 7703)
+            - Requires Java parameter: python_rep_port=7703 (TCP) or
+              python_ipc_rep_path=/tmp/python_algo_req (IPC)
+            - On timeout, the REQ socket is reset to maintain proper state
+        """
+        request_bytes = PortfolioSnapshotRequestCmd().to_bytes(self._codec)
+        response_bytes = self._transport.request(request_bytes, timeout_ms)
+        
+        if response_bytes is None:
+            log.warning("Portfolio snapshot request timed out")
+            return None
+            
+        try:
+            envelope = Envelope.parse(response_bytes, self._codec)
+            if envelope.type == "portfolio_snapshot":
+                return PortfolioSnapshotMsg.from_dict(envelope.data)
+            else:
+                log.warning("Unexpected response type: %s", envelope.type)
+                return None
+        except Exception as e:
+            log.error("Error parsing portfolio snapshot response: %s", e)
+            return None
 
     # -----------------------------------------------------------------------
     # Event loop

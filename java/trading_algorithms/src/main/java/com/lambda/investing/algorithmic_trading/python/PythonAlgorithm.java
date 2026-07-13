@@ -13,7 +13,10 @@ import com.lambda.investing.model.trading.*;
 import org.apache.logging.log4j.LogManager;
 import org.msgpack.core.MessagePack;
 import org.msgpack.core.MessagePacker;
+import org.msgpack.core.MessagePackException;
 import org.msgpack.core.MessageUnpacker;
+import org.msgpack.core.MessagePack.PackerConfig;
+import org.msgpack.core.buffer.OutputStreamBufferOutput;
 import org.msgpack.value.Value;
 import org.msgpack.value.ValueType;
 import org.zeromq.ZContext;
@@ -28,8 +31,9 @@ import java.util.*;
  * PythonAlgorithm bridges the Java framework to a pure-Python strategy.
  *
  * Transport (ZeroMQ):
- *   Java PUB  → Python SUB   market-data events (depth / trade / execution_report)
- *   Java PULL ← Python PUSH  order / quote commands
+ *   Java PUB  → Python SUB   market-data events (depth / trade / execution_report / candle)
+ *   Java PULL ← Python PUSH  order / quote commands (asynchronous)
+ *   Java REP  ↔ Python REQ   synchronous requests (portfolio snapshot, etc.)
  *
  * Endpoint type (python_transport_type):
  *   tcp  (default) — TCP sockets; works across hosts.
@@ -43,13 +47,20 @@ import java.util.*;
  *   python_transport_type  str  default "tcp"              "tcp" | "ipc"
  *   python_md_pub_port     int  default 7700               TCP mode: Java PUB port
  *   python_cmd_pull_port   int  default 7701               TCP mode: Java PULL port
+ *   python_rep_port        int  default 7703               TCP mode: Java REP port (sync requests)
  *   python_host            str  default "*"                TCP mode: bind address
  *   python_ipc_md_path     str  default "/tmp/python_algo_md"   IPC mode: MD socket path
  *   python_ipc_cmd_path    str  default "/tmp/python_algo_cmd"  IPC mode: CMD socket path
+ *   python_ipc_rep_path    str  default "/tmp/python_algo_req"  IPC mode: REP socket path
  *   python_ipc_ack_path    str  default "/tmp/python_algo_ack"  IPC mode: ACK socket path
  *   python_codec           str  default "json"             "json" | "msgpack"
  *   python_backtest_sync   bool default false              block after each event until Python ACKs
  *   python_ack_pull_port   int  default 7702               TCP mode: ACK PULL port (sync mode only)
+ *
+ * Synchronous Requests:
+ *   The REP socket (port 7703 by default) handles synchronous request-response patterns.
+ *   Python can send requests and block waiting for a response. Currently supported:
+ *     - portfolio_snapshot_request: Returns current PortfolioSnapshot
  */
 public class PythonAlgorithm extends SingleInstrumentAlgorithm {
 
@@ -64,6 +75,8 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
     public static final String PARAM_BACKTEST_SYNC = "python_backtest_sync";
     public static final String PARAM_ACK_PULL_PORT = "python_ack_pull_port";
     public static final String PARAM_IPC_ACK_PATH = "python_ipc_ack_path";
+    public static final String PARAM_REP_PORT = "python_rep_port";
+    public static final String PARAM_IPC_REP_PATH = "python_ipc_rep_path";
 
     // ---- message type constants ----
     private static final String TYPE_DEPTH            = "depth";
@@ -75,15 +88,18 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
     private static final String CMD_ORDER_REQUEST = "order_request";
     private static final String CMD_QUOTE_REQUEST = "quote_request";
     private static final String CMD_REQUEST_INFO  = "request_info";
+    private static final String CMD_PORTFOLIO_SNAPSHOT_REQUEST = "portfolio_snapshot_request";
 
     // ---- defaults ----
     private static final int    DEFAULT_MD_PUB_PORT   = 7700;
     private static final int    DEFAULT_CMD_PULL_PORT = 7701;
     private static final int DEFAULT_ACK_PULL_PORT = 7702;
+    private static final int DEFAULT_REP_PORT = 7703;
     private static final String DEFAULT_HOST          = "*";
     private static final String DEFAULT_IPC_MD_PATH   = "/tmp/python_algo_md";
     private static final String DEFAULT_IPC_CMD_PATH  = "/tmp/python_algo_cmd";
     private static final String DEFAULT_IPC_ACK_PATH = "/tmp/python_algo_ack";
+    private static final String DEFAULT_IPC_REP_PATH = "/tmp/python_algo_req";
     private static final String TRANSPORT_IPC         = "ipc";
     private static final String CODEC_MSGPACK         = "msgpack";
     /**
@@ -95,7 +111,9 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
     private ZMQ.Socket pubSocket;
     private ZMQ.Socket pullSocket;
     private ZMQ.Socket ackSocket;   // PULL — receives ACKs from Python in backtest-sync mode
+    private ZMQ.Socket repSocket;   // REP — receives synchronous requests from Python
     private Thread cmdThread;
+    private Thread reqThread;
     private volatile boolean running = false;
 
     // resolved at init()
@@ -165,6 +183,22 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
         pubSocket.bind(mdEndpoint);
         pullSocket.bind(cmdEndpoint);
 
+        // Setup REP socket for synchronous requests
+        repSocket = zmqContext.createSocket(ZMQ.REP);
+        repSocket.setLinger(0);
+        repSocket.setReceiveTimeOut(200);
+        
+        String repEndpoint;
+        if (useIpc) {
+            String repPath = (String) parameters.getOrDefault(PARAM_IPC_REP_PATH, DEFAULT_IPC_REP_PATH);
+            repEndpoint = "ipc://" + repPath;
+        } else {
+            int repPort = getParameterIntOrDefault(parameters, PARAM_REP_PORT, DEFAULT_REP_PORT);
+            String host = (String) parameters.getOrDefault(PARAM_HOST, DEFAULT_HOST);
+            repEndpoint = String.format("tcp://%s:%d", host, repPort);
+        }
+        repSocket.bind(repEndpoint);
+
         if (backtestSync) {
             ackSocket = zmqContext.createSocket(ZMQ.PULL);
             ackSocket.setLinger(0);
@@ -187,8 +221,12 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
         cmdThread.setDaemon(true);
         cmdThread.start();
 
-        logger.info("[PythonAlgorithm] started — codec={} MD PUB {} | CMD PULL {}",
-                useMsgpack ? "msgpack" : "json", mdEndpoint, cmdEndpoint);
+        reqThread = new Thread(this::requestLoop, "PythonAlgorithm-req-" + algorithmInfo);
+        reqThread.setDaemon(true);
+        reqThread.start();
+
+        logger.info("[PythonAlgorithm] started — codec={} MD PUB {} | CMD PULL {} | REP {}",
+                useMsgpack ? "msgpack" : "json", mdEndpoint, cmdEndpoint, repEndpoint);
     }
 
     @Override
@@ -197,9 +235,13 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
         if (cmdThread != null) {
             cmdThread.interrupt();
         }
+        if (reqThread != null) {
+            reqThread.interrupt();
+        }
         if (pubSocket  != null) pubSocket.close();
         if (pullSocket != null) pullSocket.close();
         if (ackSocket != null) ackSocket.close();
+        if (repSocket != null) repSocket.close();
         zmqContext.close();
         super.stop();
     }
@@ -306,14 +348,15 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
     private static byte[] encodeMsgpack(String type, String instrument, String dataJson) {
         try {
             Map<?, ?> data = Util.GSON.fromJson(dataJson, Map.class);
-            ByteArrayOutputStream out = new ByteArrayOutputStream(256);
-            try (MessagePacker packer = MessagePack.newDefaultPacker(out)) {
-                packer.packMapHeader(4);
-                packer.packString("v");          packer.packInt(1);
-                packer.packString("type");       packer.packString(type);
-                packer.packString("instrument"); packer.packString(instrument);
-                packer.packString("data");       packObject(packer, data);
-            }
+            ByteArrayOutputStream out = new ByteArrayOutputStream(8192);  // Increased initial size
+            PackerConfig config = new PackerConfig().withBufferSize(65536);  // 64KB buffer
+            MessagePacker packer = config.newPacker(out);
+            packer.packMapHeader(4);
+            packer.packString("v");          packer.packInt(1);
+            packer.packString("type");       packer.packString(type);
+            packer.packString("instrument"); packer.packString(instrument);
+            packer.packString("data");       packObject(packer, data);
+            packer.close();
             return out.toByteArray();
         } catch (IOException e) {
             // Should not happen with ByteArrayOutputStream; fall back to JSON
@@ -482,6 +525,10 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
                     String info = (String) ((Map<?, ?>) data).get("info");
                     if (info != null) requestInfo(info);
                     break;
+                case CMD_PORTFOLIO_SNAPSHOT_REQUEST:
+                    // This should not be handled here, it's handled in the request loop
+                    logger.warn("[PythonAlgorithm] portfolio_snapshot_request received on PULL socket - should be on REP socket");
+                    break;
                 default:
                     logger.warn("[PythonAlgorithm] unknown command type: {}", type);
             }
@@ -513,6 +560,170 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
         Object algo = m.get("algorithmInfo");
         if (algo != null) qr.setAlgorithmInfo((String) algo);
         return qr;
+    }
+
+    /**
+     * Background thread: handles synchronous REQ/REP requests from Python.
+     * 
+     * This method runs in a separate daemon thread and continuously polls the REP socket
+     * for incoming synchronous requests from Python. Each request is processed and a
+     * response is sent back on the same socket.
+     * 
+     * The REP socket pattern ensures strict request-response alternation: for every
+     * request received, exactly one response must be sent before the next request can
+     * be received.
+     * 
+     * Supported request types are dispatched to {@link #handleRequest(Map)}.
+     * 
+     * @see #handleRequest(Map)
+     * @see #encodePortfolioSnapshotResponse()
+     */
+    private void requestLoop() {
+        while (running && !Thread.currentThread().isInterrupted()) {
+            try {
+                byte[] raw = repSocket.recv(0);
+                if (raw == null) continue;
+                
+                Map<?, ?> envelope = useMsgpack ? decodeMsgpack(raw) : decodeJson(raw);
+                if (envelope != null) {
+                    byte[] response = handleRequest(envelope);
+                    if (response != null) {
+                        synchronized (repSocket) {
+                            repSocket.send(response, 0);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                if (running) {
+                    logger.warn("[PythonAlgorithm] error in request loop: {}", e.getMessage());
+                }
+            }
+        }
+    }
+
+    /**
+     * Handles a synchronous request from Python and returns the response payload.
+     * 
+     * Decodes the request envelope, dispatches to the appropriate handler based on
+     * the request type, and encodes the response using the configured codec.
+     * 
+     * Currently supported request types:
+     * <ul>
+     *   <li>{@code portfolio_snapshot_request} - Returns current portfolio state</li>
+     * </ul>
+     * 
+     * @param envelope The decoded request envelope containing 'type' and 'data' fields
+     * @return Encoded response payload, or null if the request type is unknown or an error occurs
+     * 
+     * @see #encodePortfolioSnapshotResponse()
+     */
+    private byte[] handleRequest(Map<?, ?> envelope) {
+        try {
+            String type = (String) envelope.get("type");
+            if (type == null) {
+                logger.warn("[PythonAlgorithm] ignoring malformed request: {}", envelope);
+                return null;
+            }
+
+            switch (type) {
+                case CMD_PORTFOLIO_SNAPSHOT_REQUEST:
+                    return encodePortfolioSnapshotResponse();
+                default:
+                    logger.warn("[PythonAlgorithm] unknown request type: {}", type);
+                    return null;
+            }
+        } catch (Exception e) {
+            logger.error("[PythonAlgorithm] error handling request: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Encodes the current PortfolioSnapshot as a response.
+     * 
+     * Retrieves the current portfolio snapshot from the algorithm's portfolio manager,
+     * serializes it to JSON, and then encodes it in the appropriate format (JSON or
+     * MessagePack) based on the configured codec.
+     * 
+     * The response envelope structure:
+     * <pre>
+     * {
+     *   "v": 1,                    // schema version
+     *   "type": "portfolio_snapshot",
+     *   "data": {
+     *     "algorithmInfo": "...",
+     *     "netInvestment": 0.0,
+     *     "realizedPnl": 0.0,
+     *     "unrealizedPnl": 0.0,
+     *     "totalPnl": 0.0,
+     *     "totalFees": 0.0,
+     *     "realizedFees": 0.0,
+     *     "unrealizedFees": 0.0,
+     *     "netPosition": 0.0,
+     *     "lastTimestampUpdate": 0,
+     *     "instrumentPnlSnapshotMap": { ... }
+     *   }
+     * }
+     * </pre>
+     * 
+     * @return Encoded response payload (JSON or MessagePack bytes)
+     * 
+     * @see #encodeResponseJson(String, String)
+     * @see #encodeResponseMsgpack(String, String)
+     */
+    private byte[] encodePortfolioSnapshotResponse() {
+        com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioSnapshot snapshot = portfolioManager.getPortfolioSnapshot();
+        String snapshotJson = Util.toJsonString(snapshot);
+        
+        return useMsgpack
+                ? encodeResponseMsgpack("portfolio_snapshot", snapshotJson)
+                : encodeResponseJson("portfolio_snapshot", snapshotJson);
+    }
+
+    /**
+     * Encodes a response envelope as UTF-8 JSON.
+     * 
+     * @param type The response type identifier (e.g., "portfolio_snapshot")
+     * @param dataJson The JSON string representation of the response data
+     * @return UTF-8 encoded JSON bytes
+     */
+    private static byte[] encodeResponseJson(String type, String dataJson) {
+        String payload = "{\"v\":1,\"type\":\"" + type + "\",\"data\":" + dataJson + "}";
+        return payload.getBytes(StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Encodes a response envelope as MessagePack.
+     * 
+     * Parses the JSON data string into a Map, then encodes it using MessagePack
+     * binary format for more efficient serialization compared to JSON.
+     * 
+     * Falls back to JSON encoding if MessagePack encoding fails (should not happen
+     * with in-memory ByteArrayOutputStream).
+     * 
+     * @param type The response type identifier (e.g., "portfolio_snapshot")
+     * @param dataJson The JSON string representation of the response data
+     * @return MessagePack encoded bytes, or JSON bytes if encoding fails
+     * 
+     * @see #encodeResponseJson(String, String)
+     * @see #packObject(MessagePacker, Object)
+     */
+    private static byte[] encodeResponseMsgpack(String type, String dataJson) {
+        try {
+            Map<?, ?> data = Util.GSON.fromJson(dataJson, Map.class);
+            ByteArrayOutputStream out = new ByteArrayOutputStream(8192);  // Increased initial size
+            PackerConfig config = new PackerConfig().withBufferSize(65536);  // 64KB buffer
+            MessagePacker packer = config.newPacker(out);
+            packer.packMapHeader(3);
+            packer.packString("v");    packer.packInt(1);
+            packer.packString("type"); packer.packString(type);
+            packer.packString("data"); packObject(packer, data);
+            packer.close();
+            return out.toByteArray();
+        } catch (IOException e) {
+            // Should not happen with ByteArrayOutputStream; fall back to JSON
+            return encodeResponseJson(type, dataJson);
+        }
     }
 
     @Override
