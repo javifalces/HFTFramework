@@ -8,7 +8,8 @@ pyarrow>=14.0.2
 pytest>=7.4.4
 pytest-cov>=4.1.0
 
-cvxpy>=1.4.1
+# cvxpy<1.8: cvxpy 1.8+ bumped numpy floor to >=2.0.0 (incompatible with numpy<2)
+cvxpy>=1.4.1,<1.8
 # numpy pinned <2.0 for scikit-learn 1.3.x / skfolio / numba compatibility
 numpy>=1.23.4,<2.0
 pandas>=2.1.4
@@ -42,7 +43,7 @@ scikit-learn>=1.3.2,<1.4
 pyotp>=2.9.0
 optuna==3.5.0
 # Not market making
-skfolio>=0.0.10
+skfolio>=0.0.10,<0.3
 etfpy>=1.0.16
 financedatabase>=2.2.2
 financetoolkit>=1.8.4
@@ -65,7 +66,6 @@ PyPDF2>=3.0.1
 
 # sbx-rl is intentionally excluded from this file due to incompatible transitive
 # dependencies (requires numpy>=2 and stable-baselines3>=2.9, which conflict with
-# scikit-learn<1.4 and skfolio). Install sbx-rl in an isolated virtual environment:
-#   python -m venv .venv-sbx && source .venv-sbx/bin/activate
-#   pip install sbx-rl stable-baselines3>=2.9 "numpy>=2"
+# scikit-learn<1.4, skfolio<0.3, and cvxpy<1.8). See requirements-sbx.txt for an
+# isolated venv setup.
 # sbx-rl>=0.9.1
