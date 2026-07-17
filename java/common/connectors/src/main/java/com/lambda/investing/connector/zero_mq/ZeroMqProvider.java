@@ -13,6 +13,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.zeromq.ZContext;
 import org.zeromq.ZMQ;
+import org.zeromq.ZMQException;
 import org.zeromq.ZMsg;
 
 import java.io.IOException;
@@ -129,7 +130,15 @@ public class ZeroMqProvider implements ConnectorProvider {
 
         if (isServer) {
             logger.info("Binding SUB socket to {}", url);
-            socketSub.bind(url);
+            try {
+                socketSub.bind(url);
+            } catch (ZMQException e) {
+                if (e.getErrorCode() == 48) { // EADDRINUSE
+                    logger.error("Address already in use: {}", url);
+                    System.err.println("Address already in use: " + url);
+                }
+                throw e;
+            }
         } else {
             logger.info("Connecting SUB socket to {}", url);
             socketSub.connect(url);
@@ -161,7 +170,15 @@ public class ZeroMqProvider implements ConnectorProvider {
             } else {
                 String urlAck = this.zeroMqConfiguration.getAckBindUrl();
                 logger.info("ACK REQ bind {}", urlAck);
-                this.socketReq.bind(urlAck);
+                try {
+                    this.socketReq.bind(urlAck);
+                } catch (ZMQException e) {
+                    if (e.getErrorCode() == 48) { // EADDRINUSE
+                        logger.error("Address already in use: {}", urlAck);
+                        System.err.println("Address already in use: " + urlAck);
+                    }
+                    throw e;
+                }
             }
         }
 

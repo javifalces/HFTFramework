@@ -338,8 +338,6 @@ function handleMessage(msg) {
         case 'PORTFOLIO_SNAPSHOT':
             updatePortfolio(msg.data);
             break;
-        case 'PNL_SNAPSHOT':
-            break;
         case 'EXECUTION_REPORT':
             prependRow('er-body', formatER(msg.data, msg.timestamp));
             break;

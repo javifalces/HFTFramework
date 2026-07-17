@@ -4,7 +4,6 @@ import com.lambda.investing.algorithmic_trading.Algorithm;
 import com.lambda.investing.algorithmic_trading.AlgorithmObserver;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioSnapshot;
 import com.lambda.investing.algorithmic_trading.candle_manager.CandleListener;
-import com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshot;
 import com.lambda.investing.model.candle.Candle;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
@@ -23,12 +22,12 @@ import java.util.Map;
 public class StateManager implements AlgorithmObserver, CandleListener, Runnable {
 
     protected Logger logger = LogManager.getLogger(StateManager.class);
-    private static long MAX_WAIT_PNL_SNAPSHOT_UPDATE_MS = 1000 * 60 * 5;//5 minutes without update
+    private static long MAX_WAIT_PORTFOLIO_SNAPSHOT_UPDATE_MS = 1000 * 60 * 5;//5 minutes without update
     AbstractState abstractState;
     Algorithm algorithm;
     Thread pnlSnapshotForceUpdate;
     boolean lastIsReady = false;
-    PnlSnapshot lasPnlSnapshotSend = null;
+
     PortfolioSnapshot lastPortfolioSnapshotSend = null;
     Long currentTimestamp;
 
@@ -72,7 +71,6 @@ public class StateManager implements AlgorithmObserver, CandleListener, Runnable
     public void reset() {
         lastIsReady = false;
         currentTimestamp = 0L;
-        lasPnlSnapshotSend = null;
         lastPortfolioSnapshotSend = null;
         abstractState.reset();
 
@@ -82,11 +80,6 @@ public class StateManager implements AlgorithmObserver, CandleListener, Runnable
 
     }
 
-
-    @Override
-    public void onUpdatePnlSnapshot(String algorithmInfo, PnlSnapshot pnlSnapshot) {
-        lasPnlSnapshotSend = pnlSnapshot;
-    }
 
     @Override
     public void onUpdatePortfolioSnapshot(String algorithmInfo, PortfolioSnapshot portfolioSnapshot) {
@@ -131,13 +124,10 @@ public class StateManager implements AlgorithmObserver, CandleListener, Runnable
     @Override
     public void run() {
         while (threadAutoFillPnlSnapshot) {
-            if (lasPnlSnapshotSend != null) {
-                if (this.algorithm.getCurrentTimestamp() - lasPnlSnapshotSend.getLastTimestampUpdate()
-                        > MAX_WAIT_PNL_SNAPSHOT_UPDATE_MS) {
+            if (lastPortfolioSnapshotSend != null) {
+                if (this.algorithm.getCurrentTimestamp() - lastPortfolioSnapshotSend.getLastTimestampUpdate()
+                        > MAX_WAIT_PORTFOLIO_SNAPSHOT_UPDATE_MS) {
                     //force update
-                    lasPnlSnapshotSend.setLastTimestampUpdate(this.algorithm.getCurrentTimestamp());
-                    onUpdatePnlSnapshot(algorithm.getAlgorithmInfo(), lasPnlSnapshotSend);
-
                     lastPortfolioSnapshotSend.setLastTimestampUpdate(this.algorithm.getCurrentTimestamp());
                     onUpdatePortfolioSnapshot(algorithm.getAlgorithmInfo(), lastPortfolioSnapshotSend);
                 }

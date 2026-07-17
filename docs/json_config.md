@@ -3,27 +3,31 @@
 ```
 {
   "backtest": {
-    "startDate": "20221027 06:00:00",
-    "endDate": "20221027 22:00:00",
-    "instrument": "btcusdt_coinbase",
+    "startDate": "20260420 8:00:00",
+    "endDate": "20260420 23:00:00",
     "delayOrderMs": 0,
-    "feesCommissionsIncluded": true,
-    "multithreadConfiguration": "singlethread"
+    "feesCommissionsIncluded": false,
+    "multithreadConfiguration": "single_thread",
+    "uiWebPort": 8080
   },
   "algorithm": {
     "algorithmName": "AvellanedaStoikov_test",
     "parameters": {
-      "risk_aversion": 0.8,
-      "windowTick": 15,
-      "minutesChangeK": 1.0,
-      "quantity": 0.0001,
+      "instrumentPks": [
+        "eurusd_darwinex"
+      ],
+      "riskAversion": 0.00006,
+      "midpricePeriodSeconds": 3,
+      "midpricePeriodWindow": 60,
+      "changeKPeriodSeconds": 60.0,
+      "quantity": 1.0,
       "firstHour": 7.0,
-      "lastHour": 19.0,
-      "kDefault": -1,
-      "spreadMultiplier": 1.0,
-      "positionMultiplier": 1.0,
+      "lastHour": 23.0,
       "spreadCalculation": "Avellaneda",
-      "kCalculation": "Alridge"
+      "kCalculation": "Pct",
+      "calculateTt": 0,
+      "skew": 0,
+      "ui": 0
     }
   }
 }
@@ -41,24 +45,31 @@ specified path format:
 
 ```
 {
-  "marketDataPort": 6610,
-  "tradeEnginePort": 6611,
+  "marketDataPort": 666,
+  "tradeEnginePort": 677,
   "tradeEngineHost": "localhost",
   "marketDataHost": "localhost",
   "paperTrading": "False",
   "demoTrading": "False",
-  "instrumentPks": [
-    "btcusdt_coinbase"
-  ],
+
   "algorithm": {
-    "algorithmName": "ConstantSpread_zeromq_test",
+    "algorithmName": "AvellanedaStoikov_metatrader",
     "parameters": {
-      "level": "0",
-      "skewLevel": "0",
-      "seed": 5,
-      "quantity": "0.001",
-      "firstHour": "7.0",
-      "lastHour": "19.0"
+      "instrumentPks": [
+        "eurusd_darwinex"
+      ],
+      "riskAversion": 0.00006,
+      "midpricePeriodSeconds": 3,
+      "midpricePeriodWindow": 60,
+      "changeKPeriodSeconds": 60.0,
+      "quantity": 0.1,
+      "firstHour": 7.0,
+      "lastHour": 19.0,
+      "spreadCalculation": "Avellaneda",
+      "kCalculation": "Pct",
+      "calculateTt": 0,
+      "skew": 0,
+      "ui": 1
     }
   }
 }

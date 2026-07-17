@@ -293,7 +293,7 @@ public class PnlSnapshot {
         this.lastTimestampUpdate = lastTimestampUpdate;
     }
 
-    public synchronized void updateExecutionReport(ExecutionReport executionReport) {
+    public synchronized void updateExecutionReportTrade(ExecutionReport executionReport) {
 
         boolean validQuantity = !(executionReport.getLastQuantity() == 0 || Double
                 .isNaN(executionReport.getLastQuantity()) || Double.isInfinite(executionReport.getLastQuantity()));

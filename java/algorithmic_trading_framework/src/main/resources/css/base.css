@@ -41,11 +41,18 @@ body {
     font-size: 14px;
     min-height: 100vh;
     padding-bottom: calc(36px + env(safe-area-inset-bottom, 0px));
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 /* Prevent tap highlight flash on touch devices */
-button, input {
+button, input, a {
     -webkit-tap-highlight-color: transparent;
+}
+
+/* Improve touch scrolling on iOS */
+.table-wrap, .ob-asks-wrap, .ob-bids-wrap, #instruments-cards {
+    -webkit-overflow-scrolling: touch;
 }
 
 /* ── Header ──────────────────────────────────────────────────────────────── */
@@ -227,11 +234,38 @@ header h1 {
     }
 }
 
+/* ── Tablet breakpoint (601px - 900px) ──────────────────────────────────────── */
+@media (min-width: 601px) and (max-width: 900px) {
+    .card {
+        padding: 14px;
+    }
+
+    .grid {
+        gap: 14px;
+        padding: 14px;
+    }
+
+    .kv-grid {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    }
+
+    td, th {
+        padding: 6px 6px;
+        font-size: 12px;
+    }
+
+    .instruments-cards-grid {
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    }
+}
+
+
 .card {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 16px;
+    overflow: hidden;
 }
 
 .card h2 {
@@ -303,6 +337,7 @@ table {
     width: 100%;
     border-collapse: collapse;
     font-size: 12px;
+    table-layout: auto;
 }
 
 th {

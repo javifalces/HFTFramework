@@ -13,8 +13,6 @@ public interface AlgorithmObserver {
 
 	void onUpdateDepth(String algorithmInfo, Depth depth);
 
-	void onUpdatePnlSnapshot(String algorithmInfo, PnlSnapshot pnlSnapshot);
-
 	void onUpdatePortfolioSnapshot(String algorithmInfo, PortfolioSnapshot portfolioSnapshot);
 
 	void onUpdateTrade(String algorithmInfo, Trade trade);

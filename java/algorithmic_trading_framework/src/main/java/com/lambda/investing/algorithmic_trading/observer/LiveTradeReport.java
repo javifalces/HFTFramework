@@ -146,10 +146,6 @@ public class LiveTradeReport implements AlgorithmObserver {
         // Not used
     }
 
-    @Override
-    public void onUpdatePnlSnapshot(String algorithmInfo, PnlSnapshot pnlSnapshot) {
-        // Not used
-    }
 
     @Override
     public void onUpdatePortfolioSnapshot(String algorithmInfo, PortfolioSnapshot portfolioSnapshot) {

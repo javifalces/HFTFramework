@@ -21,7 +21,7 @@ import static com.lambda.investing.algorithmic_trading.Algorithm.LOG_LEVEL;
 public class QuoteSideManager {
 
     public static int MAX_SIZE_LAST_CLORDID_SENT = 200;
-    private static final long MAX_TIME_ERROR_MS = 1000 * 10;
+    private static final long MAX_TIME_ERROR_MS = 1000 * 30;
     private static final int MAX_CANCEL_REJ_DELETE = 5;
     private static final long SLEEP_AFTER_REJ_MS = 500;
 
@@ -374,9 +374,20 @@ public class QuoteSideManager {
             return false;
         }
         final String clientOrderId = executionReport.getClientOrderId();
-        if (!lastClOrdIdSentSet.contains(clientOrderId)) {   // O(1) — was O(n)
+        final String origClientOrderId = executionReport.getOrigClientOrderId();
+
+        // Check if this ER belongs to us: either clientOrderId or origClientOrderId must be in our sent set
+        boolean belongsToUs = lastClOrdIdSentSet.contains(clientOrderId);
+        if (!belongsToUs && origClientOrderId != null && !origClientOrderId.isEmpty()) {
+            belongsToUs = lastClOrdIdSentSet.contains(origClientOrderId);
+            if (belongsToUs) {
+                logger.warn("onExecutionReportUpdate clientOrderId:{} not found in lastClOrdIdSentSet but found origClientOrderId: {} ", clientOrderId, origClientOrderId);
+            }
+        }
+        if (!belongsToUs) {
             return false;
         }
+
         final Instrument erInstrument = Instrument.getInstrument(executionReport.getInstrument());
         if (!erInstrument.equals(this.instrument)) {
             return false;
@@ -402,11 +413,17 @@ public class QuoteSideManager {
 
         // ---- Logging (avoid new Date() allocation on the hot path) ----
         if (isRejected) {
-            if (logger.isWarnEnabled()) {
-                logger.warn("[{}] {}-{}  {}", executionReport.getDateCreation(),
+            boolean previousCompleteCanceledOrderTrade = cfTradesSet.contains(clientOrderId) || cancelConfirmedSet.contains(clientOrderId);
+            if (!previousCompleteCanceledOrderTrade) {
+                if (logger.isWarnEnabled()) {
+                    logger.warn("[{}] {}-{}  {}", executionReport.getDateCreation(),
+                            clientOrderId, status, executionReport);
+                }
+                sleepQuoting(new Date(algorithm.getCurrentTime().getTime() + SLEEP_AFTER_REJ_MS));
+            } else {
+                logger.info("[{}] rejection of previous trade/canceled {}-{}  {}", executionReport.getDateCreation(),
                         clientOrderId, status, executionReport);
             }
-            sleepQuoting(new Date(algorithm.getCurrentTime().getTime() + SLEEP_AFTER_REJ_MS));
         } else if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal() && logger.isInfoEnabled()) {
             logger.info("[{}] {}-{}  {}", executionReport.getDateCreation(),
                     clientOrderId, status, executionReport);

@@ -104,7 +104,7 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 
 	}
 
-	public synchronized void updateExecutionReport(ExecutionReport executionReport) {
+	public synchronized void updateExecutionReportTrade(ExecutionReport executionReport) {
 
 		boolean validQuantity = !(executionReport.getLastQuantity() == 0 || Double
 				.isNaN(executionReport.getLastQuantity()) || Double.isInfinite(executionReport.getLastQuantity()));
@@ -182,6 +182,7 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 			quantityWithDirection = -1 * quantityWithDirection;
 		}
 		double newPosition = netPosition + quantityWithDirection;
+//		logger.info("{} {} new position: {}", executionReport.getInstrument(),executionReport.getClientOrderId(), newPosition);
 
 		boolean isClosePosition = newPosition == 0;//close pnl is saved when we have position ==0
 		boolean isChangeSide = netPosition != 0 && Math.signum(netPosition) != Math.signum(newPosition);
@@ -250,7 +251,10 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 		//historical only Cf or Pf
 		updateHistoricals(executionReport.getTimestampCreation());
 		processedClOrdId.put(executionReport.getClientOrderId(), executionReport.getExecutionReportStatus());
-
+		if (!isBacktest && ExecutionReport.isTradeStatus(executionReport)) {
+			String tradeMessage = Configuration.formatLog("TRADE[{}] {} {} {} {} netPosition {} totalPnl {}", numberOfTrades.get(), executionReport.getExecutionReportStatus(), executionReport.getVerb(), executionReport.getLastQuantity(), executionReport.getPrice(), netPosition, totalPnl);
+			System.out.println(tradeMessage);
+		}
 	}
 
 	private void updateOpenPosition(Depth depth, double leverage) {

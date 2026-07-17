@@ -132,7 +132,7 @@ public class Configuration {
      * Resolution order: JVM system property {@code web.ui.password} → env var {@code WEB_UI_PASSWORD}
      * → default {@code admin}.
      */
-    public static String WEB_UI_PASSWORD = getSysPropOrEnvOrDefault("web.ui.password", "WEB_UI_PASSWORD", "admin");
+    public static String WEB_UI_PASSWORD = getSysPropOrEnvOrDefault("web.ui.password", "WEB_UI_PASSWORD", "");
 
     public static int[] GET_AFFINITY_CPUS() throws LambdaConfigurationException {
         if (!USE_THREAD_AFFINITY) {
@@ -161,7 +161,6 @@ public class Configuration {
             BACKTEST_THREADS_LISTENING_ORDER_REQUEST = 0;
             BACKTEST_THREADS_PUBLISHING_ORDER_REQUEST = 0;
             BACKTEST_THREADS_LISTENING_EXECUTION_REPORTS = 0;
-            THREADS_NOTIFY_ALGORITHM_OBSERVERS = 0;
             DELAY_ORDER_BACKTEST_MS = 0;
         }
 

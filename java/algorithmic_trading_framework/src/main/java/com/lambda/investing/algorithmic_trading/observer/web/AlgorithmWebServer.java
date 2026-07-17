@@ -430,7 +430,8 @@ public class AlgorithmWebServer {
                 // can decide whether to show the login overlay or connect directly.
                 response = new DefaultFullHttpResponse(HTTP_1_1, OK,
                         Unpooled.copiedBuffer(
-                                "{\"backtest\":" + backtest + ",\"paperTrading\":" + paperTrading + "}",
+                                "{\"backtest\":" + backtest + ",\"paperTrading\":" + paperTrading +
+                                        ",\"authDisabled\":" + isAuthenticationDisabled() + "}",
                                 CharsetUtil.UTF_8));
                 response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
             } else if ("/api/state".equals(uri)) {
@@ -588,8 +589,8 @@ public class AlgorithmWebServer {
             if ("/api/login".equals(uri)) {
                 String username = extractJsonField(body, "username");
                 String password = extractJsonField(body, "password");
-                // In backtest mode authentication is disabled – any credentials are accepted.
-                boolean credentialsOk = backtest ||
+                // In backtest mode or when no password is configured, authentication is disabled – any credentials are accepted.
+                boolean credentialsOk = isAuthenticationDisabled() ||
                         (Configuration.WEB_UI_LOGIN.equals(username) &&
                                 Configuration.WEB_UI_PASSWORD.equals(password));
                 if (credentialsOk) {
@@ -599,7 +600,7 @@ public class AlgorithmWebServer {
                             Unpooled.copiedBuffer("{\"token\":\"" + token + "\"}", CharsetUtil.UTF_8));
                     response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
                     logger.info("Web UI login successful for user '{}'{}", username,
-                            backtest ? " (backtest mode – auth bypassed)" : "");
+                            isAuthenticationDisabled() ? " (auth disabled – backtest mode or no password)" : "");
                 } else {
                     response = new DefaultFullHttpResponse(HTTP_1_1, UNAUTHORIZED,
                             Unpooled.copiedBuffer("{\"error\":\"Invalid credentials\"}", CharsetUtil.UTF_8));
@@ -671,7 +672,7 @@ public class AlgorithmWebServer {
                     if (algorithmProvider != null) {
                         try {
                             boolean ok = algorithmProvider.changeParameters(body);
-                            logger.info("Web UI change-parameter request: {} -> {}", body, ok);
+//                            logger.info("Web UI change-parameter request: {} -> {}", body, ok);
                             response = new DefaultFullHttpResponse(HTTP_1_1, OK,
                                     Unpooled.copiedBuffer("{\"success\":" + ok + "}", CharsetUtil.UTF_8));
                         } catch (Exception ex) {
@@ -828,11 +829,18 @@ public class AlgorithmWebServer {
         // -- Auth helpers --------------------------------------------------
 
         /**
+         * Returns {@code true} if authentication is disabled (backtest mode or no password configured).
+         */
+        private boolean isAuthenticationDisabled() {
+            return backtest || Configuration.WEB_UI_PASSWORD == null || Configuration.WEB_UI_PASSWORD.trim().isEmpty();
+        }
+
+        /**
          * Returns {@code true} when the token is valid <em>or</em> when the server is
-         * running in backtest mode (no authentication required in that case).
+         * running in backtest mode or no password is configured (no authentication required in those cases).
          */
         private boolean isValidToken(String token) {
-            if (backtest) return true;
+            if (isAuthenticationDisabled()) return true;
             return token != null && validTokens.contains(token);
         }
 

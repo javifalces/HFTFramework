@@ -47,6 +47,8 @@
     cursor: pointer;
 }
 
+/* stylelint-disable-next-line selector-pseudo-element-no-unknown */
+/*noinspection CssInvalidPseudoSelector*/
 #backtest-speed-slider::-webkit-slider-track {
     background: linear-gradient(to right,
     var(--red) 0%,
@@ -56,6 +58,7 @@
     border-radius: 3px;
 }
 
+
 #backtest-speed-slider::-moz-range-track {
     background: linear-gradient(to right,
     var(--red) 0%,
@@ -64,6 +67,7 @@
     height: 6px;
     border-radius: 3px;
 }
+
 
 #backtest-speed-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
@@ -76,6 +80,7 @@
     margin-top: -5px;
 }
 
+
 #backtest-speed-slider::-moz-range-thumb {
     width: 16px;
     height: 16px;
@@ -84,10 +89,12 @@
     border: 2px solid var(--border);
 }
 
+
 #backtest-speed-slider:hover::-webkit-slider-thumb {
     background: var(--accent);
     border-color: var(--accent);
 }
+
 
 #backtest-speed-slider:hover::-moz-range-thumb {
     background: var(--accent);
@@ -234,6 +241,7 @@
     border-radius: 10px;
     padding: 32px 36px;
     width: 340px;
+    max-width: 92vw; /* Responsive for mobile */
     box-shadow: 0 8px 32px rgba(0, 0, 0, .6);
 }
 
@@ -262,7 +270,7 @@
     color: var(--text);
     border-radius: 4px;
     padding: 8px 10px;
-    font-size: 13px;
+    font-size: 16px; /* Prevents zoom on iOS */
 }
 
 .form-group input:focus {
@@ -330,8 +338,11 @@
     border-radius: 10px;
     padding: 28px 32px;
     width: 360px;
+    max-width: 92vw; /* Responsive for mobile */
     box-shadow: 0 8px 32px rgba(0, 0, 0, .6);
     position: relative;
+    max-height: 90vh; /* Prevent overflow on short screens */
+    overflow-y: auto; /* Allow scrolling if needed */
 }
 
 .settings-box h2 {
@@ -350,6 +361,11 @@
     font-size: 18px;
     cursor: pointer;
     line-height: 1;
+    min-width: 44px; /* Touch-friendly */
+    min-height: 44px; /* Touch-friendly */
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .modal-close:hover {
@@ -425,8 +441,8 @@
     #algo-toggle-btn {
         padding: 8px 10px;
         border-radius: 50%;
-        min-width: 36px;
-        min-height: 36px;
+        min-width: 44px; /* Increased for better touch target */
+        min-height: 44px; /* Increased for better touch target */
         justify-content: center;
     }
 
@@ -448,13 +464,16 @@
     }
 
     .header-btn {
-        padding: 6px 8px;
+        padding: 8px 10px; /* Increased padding for better touch targets */
         font-size: 11px;
+        min-width: 44px;
+        min-height: 44px;
     }
 
     .tab-btn {
-        padding: 10px 10px;
+        padding: 12px 12px; /* Increased padding for better touch targets */
         font-size: 12px;
+        min-height: 44px;
     }
 
     .grid {
@@ -464,6 +483,10 @@
 
     .card {
         padding: 12px;
+    }
+
+    .card h2 {
+        font-size: 12px;
     }
 
     .kv-grid {
@@ -485,6 +508,11 @@
 
     .param-key {
         min-width: 100px;
+        font-size: 11px;
+    }
+
+    .param-value {
+        font-size: 11px;
     }
 
     .table-wrap {
@@ -492,7 +520,7 @@
     }
 
     td, th {
-        padding: 4px 5px;
+        padding: 6px 4px; /* Slightly increased vertical padding */
         font-size: 11px;
     }
 
@@ -500,6 +528,7 @@
         gap: 8px;
         padding: 0 10px;
         padding-bottom: env(safe-area-inset-bottom, 0px);
+        flex-wrap: wrap; /* Allow wrapping on very narrow screens */
     }
 
     #port-form label {
@@ -507,8 +536,106 @@
     }
 
     #port-input, #ob-per-page {
-        font-size: 16px;
-        width: 60px;
+        font-size: 16px; /* Prevents zoom on iOS */
+        min-height: 44px; /* Better touch target */
+    }
+
+    .ob-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .ob-toolbar {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .ob-toolbar label {
+        font-size: 11px;
+    }
+
+    .ob-toolbar input {
+        font-size: 14px;
+    }
+
+    .ob-book-side {
+        max-height: unset;
+    }
+
+    .ob-half {
+        min-width: unset;
+        max-width: 100%;
+    }
+
+    .chart-canvas {
+        height: 180px !important;
+    }
+
+    .pnl-canvas {
+        height: 160px !important;
+    }
+
+    .btn-confirm-yes, .btn-confirm-no {
+        font-size: 12px;
+        padding: 8px 12px;
+        min-height: 44px; /* Better touch target */
+    }
+
+    .pager button {
+        font-size: 12px;
+        padding: 6px 10px;
+        min-height: 44px; /* Better touch target */
+    }
+
+    .pager input {
+        min-height: 28px;
+        font-size: 14px;
+    }
+
+    /* Make action buttons more touch-friendly on mobile */
+    .btn-action {
+        padding: 6px 10px;
+        font-size: 12px;
+        min-height: 36px;
+        min-width: 60px;
+    }
+
+    .btn-cancel, .btn-close-trade, .btn-close-pos {
+        padding: 6px 10px;
+        font-size: 12px;
+        min-height: 36px;
+    }
+
+    /* Ensure table cells don't shrink text too much */
+    table {
+        font-size: 11px;
+    }
+
+    /* Make expand buttons in instrument table larger */
+    .btn-expand {
+        font-size: 18px !important;
+        padding: 4px 8px;
+        min-width: 36px;
+        min-height: 36px;
+    }
+
+    /* Improve orderbook spacing */
+    .ob-table td {
+        padding: 6px 4px;
+    }
+
+    /* Better spacing for ticker rows */
+    .ticker-row {
+        padding: 6px 4px;
+        font-size: 11px;
+    }
+
+    /* Improve instrument snapshot cards */
+    .instr-snapshot-card {
+        padding: 12px;
+    }
+
+    .instr-snap-kv .value {
+        font-size: 13px;
     }
 
     #ob-page-wrap {
@@ -528,12 +655,12 @@
         min-height: unset;
     }
 
-  .ob-book-side {
-    flex-direction: row;
+    .ob-book-side {
+        flex-direction: row;
     }
 
-  .ob-half {
-    /* no fixed heights on mobile either — trim to content */
+    .ob-half {
+        /* no fixed heights on mobile either — trim to content */
     }
 
     .ticker-side {
@@ -590,6 +717,26 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     gap: 10px;
+}
+
+/* ── Instruments table overflow handling ────────────────────────────────────── */
+#instruments-cards {
+    overflow-x: auto;
+    max-width: 100%;
+}
+
+#instruments-cards::-webkit-scrollbar {
+    height: 6px;
+}
+
+#instruments-cards::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+}
+
+.instruments-table {
+    min-width: 100%;
+    overflow-x: auto;
 }
 
 .instr-snapshot-card {
@@ -693,12 +840,34 @@
     }
 
     .tab-btn {
-        padding: 10px 8px;
+        padding: 10px 6px;
         font-size: 11px;
     }
 
     .kv-grid {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr; /* Single column for very narrow screens */
+    }
+
+    .card {
+        padding: 10px;
+    }
+
+    /* Ensure all buttons remain touch-friendly */
+    .header-btn {
+        font-size: 10px;
+        padding: 6px;
+    }
+
+    /* Adjust table for narrow screens */
+    td, th {
+        padding: 4px 2px;
+        font-size: 10px;
+    }
+
+    /* Make bottom bar more compact */
+    #bottom-bar {
+        gap: 6px;
+        font-size: 10px;
     }
 }
 

@@ -226,6 +226,7 @@ async function onBacktestSpeedChange(value) {
 // ── Auth ──────────────────────────────────────────────────────────────────────
 const TOKEN_KEY = 'hft_auth_token';
 let authFailed = false;
+let authDisabled = false; // Track if authentication is disabled (backtest mode or no password)
 
 function getToken() {
     return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
@@ -1202,8 +1203,13 @@ function setStatus(connected, text) {
 function connect() {
     const token = getToken();
     if (!token) {
-        showLoginOverlay('');
-        return;
+        // If authentication is disabled (backtest or no password), generate a dummy token and proceed
+        if (authDisabled) {
+            setToken('auto-generated-token', false);
+        } else {
+            showLoginOverlay('');
+            return;
+        }
     }
     authFailed = false;
     const port = getPort();
@@ -1269,6 +1275,29 @@ function reconnect() {
     connect();
 }
 
+// ── Initialization ────────────────────────────────────────────────────────────
+/** Check /api/mode on page load to see if authentication is disabled */
+async function initializeApp() {
+    try {
+        const res = await fetch(getApiBase() + '/api/mode');
+        if (res.ok) {
+            const mode = await res.json();
+            authDisabled = mode.authDisabled || false;
+            // Set backtest mode flag for UI elements
+            isBacktestMode = mode.backtest || false;
+        }
+    } catch (err) {
+        console.warn('Failed to fetch /api/mode:', err);
+        // Default to auth required on error
+        authDisabled = false;
+    }
+    // Now proceed with the connection
+    connect();
+}
+
+// Initialize the app when the page loads
+initializeApp();
+
 // ── Message dispatcher ────────────────────────────────────────────────────────
 function handleMessage(msg) {
     // Algorithm info display removed from header
@@ -1298,14 +1327,42 @@ function handleMessage(msg) {
             break;
         case 'EXECUTION_REPORT':
             onExecutionReport(msg);
+            // Ensure instrument appears in the instruments card immediately
+            if (msg.data && msg.data.instrument) {
+                const instr = msg.data.instrument;
+                // Create minimal snapshot if instrument doesn't exist yet
+                if (!latestInstrumentSnapshotMap[instr]) {
+                    latestInstrumentSnapshotMap[instr] = {
+                        instrumentPk: instr,
+                        netPosition: 0,
+                        realizedPnl: 0,
+                        unrealizedPnl: 0,
+                        totalPnl: 0,
+                        totalFees: 0,
+                        netInvestment: 0,
+                        totalTrades: 0,
+                        totalAggressorTrades: 0,
+                        lastTimestampUpdate: msg.timestamp || Date.now()
+                    };
+                }
+                // Trigger render to show the instrument
+                if (refreshIntervalMs === 0) {
+                    scheduleInstrumentCardsRender();
+                }
+            }
             // Also append trade-status fills to the Last Execution Reports table
-            if (msg.data && TRADE_ER_STATUSES.has(msg.data.executionReportStatus)) {
-                const erTs = msg.data.timestampCreation || msg.timestamp;
-                orRows_raw.unshift({ts: erTs, algorithmInfo: msg.algorithmInfo, data: msg.data});
-                if (orRows_raw.length > MAX_TABLE_ROWS) orRows_raw.length = MAX_TABLE_ROWS;
-                orRows.unshift(formatTradeER(msg.data, erTs));
-                if (orRows.length > MAX_TABLE_ROWS) orRows.length = MAX_TABLE_ROWS;
-                renderORPage();
+            if (msg.data) {
+                const status = msg.data.executionReportStatus;
+                // Debug log to see what statuses are arriving
+                console.log('[DEBUG] ER status:', status, 'isTradeStatus:', TRADE_ER_STATUSES.has(status));
+                if (TRADE_ER_STATUSES.has(status)) {
+                    const erTs = msg.data.timestampCreation || msg.timestamp;
+                    orRows_raw.unshift({ts: erTs, algorithmInfo: msg.algorithmInfo, data: msg.data});
+                    if (orRows_raw.length > MAX_TABLE_ROWS) orRows_raw.length = MAX_TABLE_ROWS;
+                    orRows.unshift(formatTradeER(msg.data, erTs));
+                    if (orRows.length > MAX_TABLE_ROWS) orRows.length = MAX_TABLE_ROWS;
+                    renderORPage();
+                }
             }
             break;
         case 'ACTIVE_ORDERS':
@@ -1324,9 +1381,17 @@ function handleMessage(msg) {
             break;
         case 'TRADE':
             onTrade(msg);
+            // Trigger dashboard refresh when realtime is enabled
+            if (refreshIntervalMs === 0) {
+                scheduleInstrumentCardsRender();
+            }
             break;
         case 'DEPTH':
             onDepth(msg);
+            // Trigger dashboard refresh when realtime is enabled
+            if (refreshIntervalMs === 0) {
+                scheduleInstrumentCardsRender();
+            }
             break;
         default:
             break;
@@ -1589,12 +1654,58 @@ function populateInlineBook(sid, depth, instr) {
 
     if (asksBody) {
         asksBody.innerHTML = '';
+
+        // First, identify which prices are in the market orderbook
+        for (let i = 0; i < askLevels; i++) {
+            const price = depth.asks?.[i];
+            if (price != null && Number.isFinite(price)) {
+                coveredAskPrices.add(price);
+            }
+        }
+
+        const bestAsk = depth.asks?.[0];
+
+        // Collect my ask orders and separate by position relative to market
+        const myAskOrders = activeList.filter(o => (o.verb || '').toLowerCase() === 'sell');
+        const betterAsks = myAskOrders.filter(o => bestAsk != null && o.price < bestAsk);
+        const atOrWorseAsks = myAskOrders.filter(o => bestAsk == null || o.price >= bestAsk);
+
+        // Show orders better than best ask at top (sorted ascending by price)
+        betterAsks.sort((a, b) => a.price - b.price);
+        betterAsks.forEach(o => {
+            const rem = o.quantity - (o.quantityFill || 0);
+            const tr = document.createElement('tr');
+            tr.className = 'ask-row my-order off-book';
+            tr.innerHTML =
+                `<td>${fmt(o.price)}</td><td>–</td>` +
+                `<td class="ob-bar-cell"></td><td>● MY ${fmt(rem, 4)}</td>`;
+            asksBody.appendChild(tr);
+        });
+
+        // Build combined list of market levels and my orders at/worse than best ask
+        const combinedAsks = [];
+
+        // Add market levels
         for (let i = 0; i < askLevels; i++) {
             const price = depth.asks?.[i];
             const qty = depth.asksQty?.[i];
             if (price == null || !Number.isFinite(price)) continue;
             coveredAskPrices.add(price);
             const myOrders = askActiveByPrice[price] || [];
+            combinedAsks.push({price, qty, myOrders, isMarket: true});
+        }
+
+        // Add my worse/equal orders
+        atOrWorseAsks.filter(o => !coveredAskPrices.has(o.price)).forEach(o => {
+            combinedAsks.push({price: o.price, qty: null, myOrders: [o], isMarket: false});
+        });
+
+        // Sort combined list ascending by price
+        combinedAsks.sort((a, b) => a.price - b.price);
+
+        // Render combined list
+        combinedAsks.forEach(entry => {
+            const {price, qty, myOrders, isMarket} = entry;
             const hasMyOrder = myOrders.length > 0;
             const barPct = qty ? Math.round((qty / maxAskQty) * 100) : 0;
             const labelParts = [];
@@ -1603,41 +1714,74 @@ function populateInlineBook(sid, depth, instr) {
                 labelParts.push(`● MY ${fmt(rem, 4)}`);
             });
             const tr = document.createElement('tr');
-            tr.className = 'ask-row' + (hasMyOrder ? ' algo-level my-order' : '');
+            tr.className = 'ask-row' +
+                (hasMyOrder ? ' algo-level my-order' : '') +
+                (!isMarket ? ' off-book' : '');
             tr.innerHTML =
                 `<td>${fmt(price)}</td><td>${qty != null ? fmt(qty, 4) : '–'}</td>` +
                 `<td class="ob-bar-cell"><div class="ob-bar ask-bar" style="width:${barPct}%"></div></td>` +
                 `<td>${labelParts.join(', ')}</td>`;
             asksBody.appendChild(tr);
-        }
-        const offBookAsks = activeList.filter(o =>
-            (o.verb || '').toLowerCase() === 'sell' && !coveredAskPrices.has(o.price));
-        if (offBookAsks.length > 0) {
-            const sep = document.createElement('tr');
-            sep.className = 'off-book-sep';
-            sep.innerHTML = `<td colspan="4">· · ·</td>`;
-            asksBody.appendChild(sep);
-            offBookAsks.sort((a, b) => a.price - b.price);
-            offBookAsks.forEach(o => {
-                const rem = o.quantity - (o.quantityFill || 0);
-                const tr = document.createElement('tr');
-                tr.className = 'ask-row my-order off-book';
-                tr.innerHTML =
-                    `<td>${fmt(o.price)}</td><td>–</td>` +
-                    `<td class="ob-bar-cell"></td><td>● MY ${fmt(rem, 4)}</td>`;
-                asksBody.appendChild(tr);
-            });
-        }
+        });
     }
 
     if (bidsBody) {
         bidsBody.innerHTML = '';
+
+        // Collect all my bid orders not on the book
+        // First, identify which prices are in the market orderbook
+        for (let i = 0; i < bidLevels; i++) {
+            const price = depth.bids?.[i];
+            if (price != null && Number.isFinite(price)) {
+                coveredBidPrices.add(price);
+            }
+        }
+
+        const bestBid = depth.bids?.[0];
+
+        // Collect my bid orders and separate by position relative to market
+        const myBidOrders = activeList.filter(o => (o.verb || '').toLowerCase() === 'buy');
+        const betterBids = myBidOrders.filter(o => bestBid != null && o.price > bestBid);
+        const atOrWorseBids = myBidOrders.filter(o => bestBid == null || o.price <= bestBid);
+
+        // Show orders better than best bid at top (sorted descending by price)
+        betterBids.sort((a, b) => b.price - a.price);
+        betterBids.forEach(o => {
+            const rem = o.quantity - (o.quantityFill || 0);
+            const tr = document.createElement('tr');
+            tr.className = 'bid-row my-order off-book';
+            tr.innerHTML =
+                `<td>● MY ${fmt(rem, 4)}</td>` +
+                `<td class="ob-bar-cell"></td>` +
+                `<td>–</td>` +
+                `<td>${fmt(o.price)}</td>`;
+            bidsBody.appendChild(tr);
+        });
+
+        // Build combined list of market levels and my orders at/worse than best bid
+        const combinedBids = [];
+
+        // Add market levels
         for (let i = 0; i < bidLevels; i++) {
             const price = depth.bids?.[i];
             const qty = depth.bidsQty?.[i];
             if (price == null || !Number.isFinite(price)) continue;
             coveredBidPrices.add(price);
             const myOrders = bidActiveByPrice[price] || [];
+            combinedBids.push({price, qty, myOrders, isMarket: true});
+        }
+
+        // Add my worse/equal orders
+        atOrWorseBids.filter(o => !coveredBidPrices.has(o.price)).forEach(o => {
+            combinedBids.push({price: o.price, qty: null, myOrders: [o], isMarket: false});
+        });
+
+        // Sort combined list descending by price
+        combinedBids.sort((a, b) => b.price - a.price);
+
+        // Render combined list
+        combinedBids.forEach(entry => {
+            const {price, qty, myOrders, isMarket} = entry;
             const hasMyOrder = myOrders.length > 0;
             const barPct = qty ? Math.round((qty / maxBidQty) * 100) : 0;
             const labelParts = [];
@@ -1646,36 +1790,16 @@ function populateInlineBook(sid, depth, instr) {
                 labelParts.push(`● MY ${fmt(rem, 4)}`);
             });
             const tr = document.createElement('tr');
-            tr.className = 'bid-row' + (hasMyOrder ? ' algo-level my-order' : '');
-            // Reversed columns: label | bar | qty | price (price closest to asks/center)
+            tr.className = 'bid-row' +
+                (hasMyOrder ? ' algo-level my-order' : '') +
+                (!isMarket ? ' off-book' : '');
             tr.innerHTML =
                 `<td>${labelParts.join(', ')}</td>` +
                 `<td class="ob-bar-cell"><div class="ob-bar bid-bar" style="width:${barPct}%"></div></td>` +
                 `<td>${qty != null ? fmt(qty, 4) : '–'}</td>` +
                 `<td>${fmt(price)}</td>`;
             bidsBody.appendChild(tr);
-        }
-        const offBookBids = activeList.filter(o =>
-            (o.verb || '').toLowerCase() === 'buy' && !coveredBidPrices.has(o.price));
-        if (offBookBids.length > 0) {
-            const sep = document.createElement('tr');
-            sep.className = 'off-book-sep';
-            sep.innerHTML = `<td colspan="4">· · ·</td>`;
-            bidsBody.appendChild(sep);
-            offBookBids.sort((a, b) => b.price - a.price);
-            offBookBids.forEach(o => {
-                const rem = o.quantity - (o.quantityFill || 0);
-                const tr = document.createElement('tr');
-                tr.className = 'bid-row my-order off-book';
-                // Reversed columns: label | bar | qty | price
-                tr.innerHTML =
-                    `<td>● MY ${fmt(rem, 4)}</td>` +
-                    `<td class="ob-bar-cell"></td>` +
-                    `<td>–</td>` +
-                    `<td>${fmt(o.price)}</td>`;
-                bidsBody.appendChild(tr);
-            });
-        }
+        });
     }
 
     // Keep spread/mid meta in sync
@@ -2035,8 +2159,21 @@ function renderPnlSnapshotPage() {
 // ── Execution reports / last trades table ─────────────────────────────────────
 
 /**
+ * Returns the appropriate CSS badge class for a trade side/verb.
+ * @param {string} verb - The order verb ('buy', 'sell', etc.)
+ * @returns {string} CSS class name ('badge-buy', 'badge-sell', or 'badge-neutral')
+ */
+function sideClass(verb) {
+    const v = (verb || '').toLowerCase();
+    if (v === 'buy') return 'badge-buy';
+    if (v === 'sell') return 'badge-sell';
+    return 'badge-neutral';
+}
+
+/**
  * Formats a trade-status execution report row for the Last Execution Reports table.
  * Shows: time, instrument, side, lastQuantity, price, executionReportStatus.
+ * For partial fills, displays both the last fill quantity and cumulative filled quantity.
  */
 function formatTradeER(er, ts) {
     if (!er) return '';
@@ -2044,12 +2181,21 @@ function formatTradeER(er, ts) {
     const status = er.executionReportStatus || '';
     const statusClass = status === 'CompletelyFilled' ? 'badge-filled' : status === 'PartialFilled' ? 'badge-partial' : '';
     const lastQty = er.lastQuantity != null ? er.lastQuantity : (er.quantityFill != null ? er.quantityFill : '');
+    const totalFilled = er.quantityFill != null ? er.quantityFill : lastQty;
+    const orderQty = er.quantity != null ? er.quantity : '';
+
+    // Build quantity display: show lastQty, and for partial fills add cumulative info
+    let qtyDisplay = fmt(lastQty, 6);
+    if (status === 'PartialFilled' && totalFilled !== '' && orderQty !== '') {
+        qtyDisplay += `<br><span style="font-size:10px;color:var(--muted)">(${fmt(totalFilled, 6)}/${fmt(orderQty, 6)})</span>`;
+    }
+    
     const instrJson = JSON.stringify(er.instrument || '');
     const verbJson = JSON.stringify(v);
     const qtyVal = lastQty !== '' ? lastQty : 0;
     return `<td>${fmtTs(ts || er.timestampCreation)}</td><td>${er.instrument || ''}</td>` +
         `<td><span class="badge ${sideClass(v)}">${v}</span></td>` +
-        `<td>${fmt(lastQty, 6)}</td><td>${fmt(er.price)}</td>` +
+        `<td>${qtyDisplay}</td><td>${fmt(er.price)}</td>` +
         `<td><span class="badge ${statusClass}">${status}</span></td>` +
         `<td><button class="btn-action btn-close-trade" onclick="closeTradeAction(${instrJson},${verbJson},${qtyVal})">× Close</button></td>`;
 }
@@ -2316,7 +2462,12 @@ function renderLiveOrders() {
                 `<td>${fmt(qty, 6)}</td>` +
                 `<td>${fmt(filled, 6)}</td>` +
                 `<td>${fmt(remaining, 6)}</td>` +
-                `<td><button class="btn-action btn-cancel" onclick="cancelOrderAction(${JSON.stringify(clOrdId)})">✕ Cancel</button></td>`;
+                `<td><button class="btn-action btn-cancel">✕ Cancel</button></td>`;
+            // Attach event listener to the cancel button
+            const cancelBtn = tr.querySelector('.btn-cancel');
+            if (cancelBtn) {
+                cancelBtn.addEventListener('click', () => cancelOrderAction(clOrdId));
+            }
             tbody.appendChild(tr);
         });
     });
@@ -2939,106 +3090,152 @@ function populateBook(sid, depth, instr) {
 
     if (asksBody) {
         asksBody.innerHTML = '';
-        // Display asks best → worst (best ask at top, matching bids layout)
+
+        // First, identify which prices are in the market orderbook
+        for (let i = 0; i < askLevels; i++) {
+            const price = depth.asks?.[i];
+            if (price != null && Number.isFinite(price)) {
+                coveredAskPrices.add(price);
+            }
+        }
+
+        const bestAsk = depth.asks?.[0];
+
+        // Collect my ask orders and separate by position relative to market
+        const myAskOrders = activeList.filter(o => (o.verb || '').toLowerCase() === 'sell');
+        const betterAsks = myAskOrders.filter(o => bestAsk != null && o.price < bestAsk);
+        const atOrWorseAsks = myAskOrders.filter(o => bestAsk == null || o.price >= bestAsk);
+
+        // Show orders better than best ask at top (sorted ascending by price)
+        betterAsks.sort((a, b) => a.price - b.price);
+        betterAsks.forEach(o => {
+            const rem = o.quantity - (o.quantityFill || 0);
+            const tr = document.createElement('tr');
+            tr.className = 'ask-row my-order off-book';
+            tr.innerHTML =
+                `<td>${fmt(o.price)}</td><td>–</td>` +
+                `<td class="ob-bar-cell"></td><td>● MY ${fmt(rem, 4)}</td>`;
+            asksBody.appendChild(tr);
+        });
+
+        // Build combined list of market levels and my orders at/worse than best ask
+        const combinedAsks = [];
+
+        // Add market levels
         for (let i = 0; i < askLevels; i++) {
             const price = depth.asks?.[i];
             const qty = depth.asksQty?.[i];
             if (price == null || !Number.isFinite(price)) continue;
             coveredAskPrices.add(price);
-            const algoList = depth.asksAlgoInfo?.[i];
-            const hasAlgo = algoList && algoList.length > 0;
             const myOrders = askActiveByPrice[price] || [];
+            combinedAsks.push({price, qty, myOrders, isMarket: true});
+        }
+
+        // Add my worse/equal orders
+        atOrWorseAsks.filter(o => !coveredAskPrices.has(o.price)).forEach(o => {
+            combinedAsks.push({price: o.price, qty: null, myOrders: [o], isMarket: false});
+        });
+
+        // Sort combined list ascending by price
+        combinedAsks.sort((a, b) => a.price - b.price);
+
+        // Render combined list
+        combinedAsks.forEach(entry => {
+            const {price, qty, myOrders, isMarket} = entry;
             const hasMyOrder = myOrders.length > 0;
             const barPct = qty ? Math.round((qty / maxAskQty) * 100) : 0;
-
             const labelParts = [];
             if (hasMyOrder) myOrders.forEach(o => {
                 const rem = o.quantity - (o.quantityFill || 0);
                 labelParts.push(`● MY ${fmt(rem, 4)}`);
             });
-
             const tr = document.createElement('tr');
             tr.className = 'ask-row' +
-                (hasMyOrder ? ' algo-level my-order' : '');
+                (hasMyOrder ? ' algo-level my-order' : '') +
+                (!isMarket ? ' off-book' : '');
             tr.innerHTML =
                 `<td>${fmt(price)}</td><td>${qty != null ? fmt(qty, 4) : '–'}</td>` +
                 `<td class="ob-bar-cell"><div class="ob-bar ask-bar" style="width:${barPct}%"></div></td>` +
                 `<td>${labelParts.join(', ')}</td>`;
             asksBody.appendChild(tr);
-        }
-        // Off-book own ask orders
-        const offBookAsks = activeList.filter(o =>
-            (o.verb || '').toLowerCase() === 'sell' && !coveredAskPrices.has(o.price));
-        if (offBookAsks.length > 0) {
-            const sep = document.createElement('tr');
-            sep.className = 'off-book-sep';
-            sep.innerHTML = `<td colspan="4">· · ·</td>`;
-            asksBody.appendChild(sep);
-            offBookAsks.sort((a, b) => a.price - b.price);
-            offBookAsks.forEach(o => {
-                const rem = o.quantity - (o.quantityFill || 0);
-                const tr = document.createElement('tr');
-                tr.className = 'ask-row my-order off-book';
-                tr.innerHTML =
-                    `<td>${fmt(o.price)}</td><td>–</td>` +
-                    `<td class="ob-bar-cell"></td><td>● MY ${fmt(rem, 4)}</td>`;
-                asksBody.appendChild(tr);
-            });
-        }
+        });
     }
 
     if (bidsBody) {
         bidsBody.innerHTML = '';
+
+        // Collect all my bid orders not on the book
+        // First, identify which prices are in the market orderbook
+        for (let i = 0; i < bidLevels; i++) {
+            const price = depth.bids?.[i];
+            if (price != null && Number.isFinite(price)) {
+                coveredBidPrices.add(price);
+            }
+        }
+
+        const bestBid = depth.bids?.[0];
+
+        // Collect my bid orders and separate by position relative to market
+        const myBidOrders = activeList.filter(o => (o.verb || '').toLowerCase() === 'buy');
+        const betterBids = myBidOrders.filter(o => bestBid != null && o.price > bestBid);
+        const atOrWorseBids = myBidOrders.filter(o => bestBid == null || o.price <= bestBid);
+
+        // Show orders better than best bid at top (sorted descending by price)
+        betterBids.sort((a, b) => b.price - a.price);
+        betterBids.forEach(o => {
+            const rem = o.quantity - (o.quantityFill || 0);
+            const tr = document.createElement('tr');
+            tr.className = 'bid-row my-order off-book';
+            tr.innerHTML =
+                `<td>● MY ${fmt(rem, 4)}</td>` +
+                `<td class="ob-bar-cell"></td>` +
+                `<td>–</td>` +
+                `<td>${fmt(o.price)}</td>`;
+            bidsBody.appendChild(tr);
+        });
+
+        // Build combined list of market levels and my orders at/worse than best bid
+        const combinedBids = [];
+
+        // Add market levels
         for (let i = 0; i < bidLevels; i++) {
             const price = depth.bids?.[i];
             const qty = depth.bidsQty?.[i];
             if (price == null || !Number.isFinite(price)) continue;
             coveredBidPrices.add(price);
-            const algoList = depth.bidsAlgoInfo?.[i];
-            const hasAlgo = algoList && algoList.length > 0;
             const myOrders = bidActiveByPrice[price] || [];
+            combinedBids.push({price, qty, myOrders, isMarket: true});
+        }
+
+        // Add my worse/equal orders
+        atOrWorseBids.filter(o => !coveredBidPrices.has(o.price)).forEach(o => {
+            combinedBids.push({price: o.price, qty: null, myOrders: [o], isMarket: false});
+        });
+
+        // Sort combined list descending by price
+        combinedBids.sort((a, b) => b.price - a.price);
+
+        // Render combined list
+        combinedBids.forEach(entry => {
+            const {price, qty, myOrders, isMarket} = entry;
             const hasMyOrder = myOrders.length > 0;
             const barPct = qty ? Math.round((qty / maxBidQty) * 100) : 0;
-
             const labelParts = [];
             if (hasMyOrder) myOrders.forEach(o => {
                 const rem = o.quantity - (o.quantityFill || 0);
                 labelParts.push(`● MY ${fmt(rem, 4)}`);
             });
-
             const tr = document.createElement('tr');
             tr.className = 'bid-row' +
-                (hasMyOrder ? ' algo-level my-order' : '');
-            // Reversed columns: label | bar | qty | price (price closest to asks/center)
+                (hasMyOrder ? ' algo-level my-order' : '') +
+                (!isMarket ? ' off-book' : '');
             tr.innerHTML =
                 `<td>${labelParts.join(', ')}</td>` +
                 `<td class="ob-bar-cell"><div class="ob-bar bid-bar" style="width:${barPct}%"></div></td>` +
                 `<td>${qty != null ? fmt(qty, 4) : '–'}</td>` +
                 `<td>${fmt(price)}</td>`;
             bidsBody.appendChild(tr);
-        }
-        // Off-book own bid orders
-        const offBookBids = activeList.filter(o =>
-            (o.verb || '').toLowerCase() === 'buy' && !coveredBidPrices.has(o.price));
-        if (offBookBids.length > 0) {
-            const sep = document.createElement('tr');
-            sep.className = 'off-book-sep';
-            sep.innerHTML = `<td colspan="4">· · ·</td>`;
-            bidsBody.appendChild(sep);
-            offBookBids.sort((a, b) => b.price - a.price);
-            offBookBids.forEach(o => {
-                const rem = o.quantity - (o.quantityFill || 0);
-                const tr = document.createElement('tr');
-                tr.className = 'bid-row my-order off-book';
-                // Reversed columns: label | bar | qty | price
-                tr.innerHTML =
-                    `<td>● MY ${fmt(rem, 4)}</td>` +
-                    `<td class="ob-bar-cell"></td>` +
-                    `<td>–</td>` +
-                    `<td>${fmt(o.price)}</td>`;
-                bidsBody.appendChild(tr);
-            });
-        }
+        });
     }
 }
 

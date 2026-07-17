@@ -43,7 +43,6 @@ import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_POSITION_
 
 
 public class ZeroMqTradingEngineConnector extends AbstractTradingEngineConnector {
-	public static String ALL_ALGORITHMS_SUBSCRIPTION = "*";
 
 	@Getter
 	private ZeroMqConfiguration zeroMqConfigurationExecutionReportListening, zeroMqConfigurationOrderRequest;
@@ -94,15 +93,15 @@ public class ZeroMqTradingEngineConnector extends AbstractTradingEngineConnector
 
 	@Override
 	public void register(String algorithmInfo, ExecutionReportListener executionReportListener) {
-
 		Map<ExecutionReportListener, String> insideMap = listenersManager
 				.getOrDefault(algorithmInfo, new ConcurrentHashMap<>());
+		int previousSize = insideMap.size();
 		insideMap.put(executionReportListener, "");
-		if (algorithmInfo.equalsIgnoreCase(ALL_ALGORITHMS_SUBSCRIPTION)) {
-			allAlgorithmsExecutionReportListener = executionReportListener;
-		}
 		listenersManager.put(algorithmInfo, insideMap);
-
+		if (insideMap.size() > 1) {
+			logger.warn("MULTIPLE LISTENERS registered for algorithmInfo={} count={} (was {})",
+					algorithmInfo, insideMap.size(), previousSize);
+		}
 	}
 
 	@Override public boolean orderRequest(OrderRequest orderRequest) {

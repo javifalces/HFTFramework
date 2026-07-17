@@ -77,7 +77,6 @@ public class ZeroMqPublisher implements ConnectorPublisher {
         String ackKey = isServer ? configuration.getAckBindUrl() : configuration.getAckConnectUrl();
 
         ZMQ.Socket publishSocket = null;
-        ZMQ.Socket reqSocket = null;
         if (!PORTS_TAKEN_PUB.containsKey(pubKey)) {
             publishSocket = context.createSocket(ZMQ.PUB);
             publishSocket.setHWM(1);
@@ -93,27 +92,29 @@ public class ZeroMqPublisher implements ConnectorPublisher {
                 PORTS_TAKEN_PUB.put(pubKey, publishSocket);
                 publishSocket.connect(url);
             }
+        } else {
+            publishSocket = PORTS_TAKEN_PUB.get(pubKey);
+        }
 
+        // ACK socket creation guarded separately to avoid double-bind
+        if (!PORTS_TAKEN_REQ_ACK.containsKey(ackKey)) {
             ZContext contextAck = ZeroMqConfiguration.GetZContext();
-            reqSocket = contextAck.createSocket(ZMQ.REP);
+            ZMQ.Socket reqSocket = contextAck.createSocket(ZMQ.REP);
             reqSocket.setHWM(1);
             reqSocket.setLinger(0);
             if (isServer) {
                 String urlAck = configuration.getAckBindUrl();
-                logger.info("Creating REQ server socket {} ", urlAck);
-                PORTS_TAKEN_REQ_ACK.put(ackKey, publishSocket);
+                logger.info("Creating REP server socket {} ", urlAck);
+                PORTS_TAKEN_REQ_ACK.put(ackKey, reqSocket);
                 reqSocket.bind(urlAck);
             } else {
                 String urlAck = configuration.getAckConnectUrl();
-                logger.info("Connecting REQ socket {} ", urlAck);
-                PORTS_TAKEN_REQ_ACK.put(ackKey, publishSocket);
+                logger.info("Connecting REP socket {} ", urlAck);
+                PORTS_TAKEN_REQ_ACK.put(ackKey, reqSocket);
                 reqSocket.connect(urlAck);
             }
 
             new Thread(new ZeroMqAckReqProvider(reqSocket), "ZeroMqAckReqProvider -> " + ackKey).start();
-
-        } else {
-            publishSocket = PORTS_TAKEN_PUB.get(pubKey);
         }
 
         return publishSocket;

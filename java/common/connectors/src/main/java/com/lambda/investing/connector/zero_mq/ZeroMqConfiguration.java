@@ -93,7 +93,6 @@ public class ZeroMqConfiguration implements ConnectorConfiguration {
 		// Create the *parent* directory so ZeroMQ can place a socket FILE inside it.
 		// IMPORTANT: do NOT call mkdirs() on the socket file path itself – if a directory
 		// already exists at that path ZeroMQ cannot create the socket file there.
-		new java.io.File(directory).mkdirs();
 		// Build the ipc:// address pointing to a socket FILE inside the directory.
 		// Normalise separators to forward-slash so the address is valid on all platforms.
 		String normalised = directory.replace('\\', '/');

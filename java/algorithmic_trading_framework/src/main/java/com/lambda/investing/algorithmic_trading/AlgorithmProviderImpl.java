@@ -2,6 +2,7 @@ package com.lambda.investing.algorithmic_trading;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
+import com.lambda.investing.Configuration;
 import com.lambda.investing.market_data_connector.parquet_file_reader.ParquetMarketDataConnectorPublisher;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.trading.OrderRequest;
@@ -165,10 +166,13 @@ public class AlgorithmProviderImpl implements AlgorithmProvider {
                 allOk = false;
                 continue;
             }
-
             targetAlgorithm.setParameter(key, castValue);
-            logger.info("changeParameters: updated '{}' = {} (algo: {})", key, castValue,
-                    targetAlgorithm.getAlgorithmInfo());
+            String messagePrint = Configuration.formatLog("{} changeParameters '{}': {} -> {}",
+                    targetAlgorithm.getAlgorithmInfo(), key, existingValue, castValue);
+            logger.info(messagePrint);
+            System.out.println(messagePrint);
+            targetAlgorithm.forceUpdateDepth();
+
         }
 
         return allOk;
@@ -178,6 +182,12 @@ public class AlgorithmProviderImpl implements AlgorithmProvider {
     public boolean cancelOrder(String clientOrderId) {
         System.out.println("cancelOrder: clientOrderId = " + clientOrderId);
         OrderRequest cancelOrderRequest = algorithm.createActiveCancel(clientOrderId);
+        if (cancelOrderRequest == null) {
+            System.out.println("WARNING cancelOrder: no active order found for clientOrderId = " + clientOrderId);
+            logger.warn("cancelOrder: no active order found for clientOrderId = {}", clientOrderId);
+            return false;
+        }
+
         try {
             algorithm.sendOrderRequest(cancelOrderRequest);
             return true;
@@ -193,11 +203,11 @@ public class AlgorithmProviderImpl implements AlgorithmProvider {
 
     @Override
     public boolean closeTrade(String instrumentPk, Verb verb, double quantity) {
-        System.out.println(String.format("closeTrade: instrumentPk='%s', verb='%s', quantity=%.6f", instrumentPk, verb, quantity));
+        System.out.printf("closeTrade: instrumentPk='%s', verb='%s', quantity=%.6f%n", instrumentPk, verb, quantity);
         Instrument instrument = Instrument.getInstrument(instrumentPk);
         if (instrument == null) {
             String msg = String.format(
-                    "cancelTrade: instrument '%s' not found", instrumentPk);
+                    "closeTrade: instrument '%s' not found", instrumentPk);
             System.out.println("WARNING: " + msg);
             logger.warn(msg);
             return false;
@@ -205,7 +215,7 @@ public class AlgorithmProviderImpl implements AlgorithmProvider {
         Verb oppositeVerb = Verb.OtherSideVerb(verb);
         if (oppositeVerb == null || oppositeVerb == Verb.NotSet) {
             String msg = String.format(
-                    "cancelTrade: cannot determine opposite verb for '%s'", verb);
+                    "closeTrade: cannot determine opposite verb for '%s'", verb);
             System.out.println("WARNING: " + msg);
             logger.warn(msg);
             return false;
@@ -215,12 +225,12 @@ public class AlgorithmProviderImpl implements AlgorithmProvider {
         OrderRequest marketOrder = algorithm.createMarketOrderRequest(instrument, oppositeVerb, quantity);
         try {
             algorithm.sendOrderRequest(marketOrder);
-            logger.info("cancelTrade: sent market {} order for {} qty={} (algo: {})",
+            logger.info("closeTrade: sent market {} order for {} qty={} (algo: {})",
                     oppositeVerb, instrumentPk, quantity, algorithm.getAlgorithmInfo());
             return true;
         } catch (Exception e) {
             String msg = String.format(
-                    "cancelTrade: failed to send market order for instrument '%s' verb '%s' qty %.6f – %s",
+                    "closeTrade: failed to send market order for instrument '%s' verb '%s' qty %.6f – %s",
                     instrumentPk, oppositeVerb, quantity, e.getMessage());
             System.out.println("WARNING: " + msg);
             logger.warn(msg);
@@ -233,10 +243,17 @@ public class AlgorithmProviderImpl implements AlgorithmProvider {
         Instrument instrument = Instrument.getInstrument(instrumentPk);
         if (instrument == null) {
             String msg = String.format(
-                    "cancelTrade: instrument '%s' not found", instrumentPk);
+                    "closePosition: instrument '%s' not found", instrumentPk);
             System.out.println("WARNING: " + msg);
             logger.warn(msg);
             return false;
+        }
+        if (position == 0) {
+            String msg = String.format(
+                    "closePosition: no position to close for instrument '%s'", instrumentPk);
+            System.out.println("INFO: " + msg);
+            logger.info(msg);
+            return true; // nothing to do
         }
 
         double quantity = Math.abs(position);
@@ -269,7 +286,7 @@ public class AlgorithmProviderImpl implements AlgorithmProvider {
             ParquetMarketDataConnectorPublisher.setSpeed(speed);
         }
         logger.info("changeSpeed: {}", messagePrint);
-        System.out.println(messagePrint);
+//        System.out.println(messagePrint);
         return true;
     }
 

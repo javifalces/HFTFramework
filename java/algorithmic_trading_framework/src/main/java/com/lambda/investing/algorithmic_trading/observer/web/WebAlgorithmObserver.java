@@ -46,7 +46,7 @@ import static com.lambda.investing.model.Util.*;
  * }</pre>
  *
  * <p>Supported message types: {@code STATE}, {@code PORTFOLIO_SNAPSHOT},
- * {@code PNL_SNAPSHOT}, {@code TRADE}, {@code EXECUTION_REPORT},
+ * {@code TRADE}, {@code EXECUTION_REPORT},
  * {@code ORDER_REQUEST}, {@code PARAMS}, {@code CUSTOM_COLUMN}, {@code MESSAGE},
  * {@code DEPTH}.
  */
@@ -192,11 +192,9 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         // names differ (bidsQuantities, asksQuantities, bidsAlgorithmInfo, asksAlgorithmInfo).
         String json = buildMessage("DEPTH", algorithmInfo, snapshot != null ? snapshot : depth, currentTimeMs());
         server.broadcastUpdate(json);
+        refreshState();
     }
 
-    @Override
-    public void onUpdatePnlSnapshot(String algorithmInfo, PnlSnapshot pnlSnapshot) {
-    }
 
     @Override
     public void onUpdatePortfolioSnapshot(String algorithmInfo, PortfolioSnapshot portfolioSnapshot) {
@@ -246,6 +244,7 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
     public void onUpdateTrade(String algorithmInfo, Trade trade) {
         String json = buildMessage("TRADE", algorithmInfo, trade, currentTimeMs());
         server.broadcastUpdate(json);
+        refreshState();
     }
 
     @Override
@@ -257,6 +256,7 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         }
         String json = buildMessage("PARAMS", algorithmInfo, newParams, currentTimeMs());
         server.broadcastUpdate(json);
+
         refreshState();
     }
 
@@ -299,6 +299,8 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         data.put("instrument", er.getInstrument());
         data.put("verb", er.getVerb() != null ? er.getVerb().name() : null);
         data.put("lastQuantity", er.getLastQuantity());
+        data.put("quantity", er.getQuantity());
+        data.put("quantityFill", er.getQuantityFill());
         data.put("price", er.getPrice());
         data.put("executionReportStatus", er.getExecutionReportStatus() != null ? er.getExecutionReportStatus().name() : null);
         data.put("timestampCreation", ts);
@@ -456,27 +458,6 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         return sanitizeJson(sb.toString());
     }
 
-    /**
-     * Creates a lightweight PnL map containing only the scalar fields needed by the
-     * dashboard frontend.  Avoids serialising the enormous historical maps, Logger
-     * references and other non-serialisable state stored inside a {@link PnlSnapshot}.
-     */
-    private static Map<String, Object> toPnlDto(PnlSnapshot s) {
-        if (s == null) return Collections.emptyMap();
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("instrumentPk", s.getInstrumentPk());
-        m.put("algorithmInfo", s.getAlgorithmInfo());
-        m.put("realizedPnl", s.realizedPnl);
-        m.put("unrealizedPnl", s.unrealizedPnl);
-        m.put("totalPnl", s.totalPnl);
-        m.put("netPosition", s.netPosition);
-        m.put("avgOpenPrice", s.avgOpenPrice);
-        m.put("netInvestment", s.netInvestment);
-        m.put("totalFees", s.totalFees);
-        m.put("numberOfTrades", s.numberOfTrades != null ? s.numberOfTrades.get() : 0);
-        m.put("lastVerb", s.lastVerb);
-        return m;
-    }
 
     /**
      * Creates a lightweight portfolio map containing only the fields the dashboard

@@ -19,6 +19,11 @@
             <artifactId>algorithmic_trading_framework</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>org.msgpack</groupId>
+            <artifactId>msgpack-core</artifactId>
+        </dependency>
+
     </dependencies>
 
     <build>

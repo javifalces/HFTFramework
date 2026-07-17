@@ -3,10 +3,13 @@ package com.lambda.investing.algorithmic_trading;
 import com.lambda.investing.algorithmic_trading.hedging.HedgeManager;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.candle.Candle;
+import com.lambda.investing.model.exception.LambdaTradingException;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.messaging.Command;
 import com.lambda.investing.model.trading.ExecutionReport;
+import com.lambda.investing.model.trading.OrderRequest;
+import com.lambda.investing.model.trading.OrderRequestAction;
 import lombok.Getter;
 
 import java.util.*;
@@ -47,6 +50,35 @@ public class MultiAlgorithm extends Algorithm {
         }
     }
 
+    public OrderRequest createActiveCancel(String origClientOrderId) {
+        for (Algorithm algorithm : algorithms) {
+            OrderRequest orderRequest = algorithm.createActiveCancel(origClientOrderId);
+            if (orderRequest != null) {
+                return orderRequest;
+            }
+        }
+        return null;
+    }
+
+    public void sendOrderRequest(OrderRequest orderRequest) throws LambdaTradingException {
+        if (orderRequest.getOrderRequestAction() == OrderRequestAction.Cancel) {
+            for (Algorithm algorithm : algorithms) {
+                try {
+                    if (algorithm.containsOrder(orderRequest.getOrigClientOrderId())) {
+                        algorithm.sendOrderRequest(orderRequest);
+                        return;
+                    }
+                } catch (Exception e) {
+                    System.err.println("Error sending cancel order request " + orderRequest.getInstrument() + " to algorithm " + algorithm.getAlgorithmInfo());
+                    logger.error("Error sending cancel order request {} to algorithm {}: {}", orderRequest.getInstrument(), algorithm.getAlgorithmInfo(), e.getMessage());
+                }
+            }
+        } else {
+            super.sendOrderRequest(orderRequest);
+        }
+    }
+
+
     private void rebuildInstrumentCache() {
         instrumentToAlgorithms.clear();
         instruments.clear();
@@ -71,7 +103,7 @@ public class MultiAlgorithm extends Algorithm {
 
     @Override
     public void setHedgeManager(HedgeManager hedgeManager) {
-        super.setHedgeManager(hedgeManager);
+//        super.setHedgeManager(hedgeManager);
         for (Algorithm algorithm : algorithms) {
             algorithm.setHedgeManager(hedgeManager);
         }
@@ -121,7 +153,7 @@ public class MultiAlgorithm extends Algorithm {
      */
     @Override
     public void register(AlgorithmObserver algorithmObserver) {
-        super.register(algorithmObserver);
+//        super.register(algorithmObserver);//if multi is register this is going to republish everything twice
         // algorithms is null during super() constructor chain – skip propagation in that case;
         // the real registrations happen after construction is complete.
         if (algorithms == null) return;
@@ -135,7 +167,7 @@ public class MultiAlgorithm extends Algorithm {
      */
     @Override
     public void deregister(AlgorithmObserver algorithmObserver) {
-        super.deregister(algorithmObserver);
+//        super.deregister(algorithmObserver);
         if (algorithms == null) return;
         for (Algorithm algorithm : algorithms) {
             algorithm.deregister(algorithmObserver);
@@ -145,53 +177,30 @@ public class MultiAlgorithm extends Algorithm {
     @Override
     public boolean onDepthUpdate(Depth depth) {
         return true;
-//        boolean parentResult = super.onDepthUpdate(depth);
-//        boolean childResult = false;
-//        for (Algorithm algorithm : instrumentToAlgorithms.getOrDefault(depth.getInstrument(), Collections.emptyList())) {
-//            childResult = algorithm.onDepthUpdate(depth) || childResult;
-//        }
-//        return parentResult || childResult;
     }
 
     @Override
     public boolean onTradeUpdate(Trade trade) {
         return true;
-//        boolean parentResult = super.onTradeUpdate(trade);
-//        boolean childResult = false;
-//        for (Algorithm algorithm : instrumentToAlgorithms.getOrDefault(trade.getInstrument(), Collections.emptyList())) {
-//            childResult = algorithm.onTradeUpdate(trade) || childResult;
-//        }
-//        return parentResult || childResult;
     }
 
     @Override
     public boolean onExecutionReportUpdate(ExecutionReport executionReport) {
         return true;
-//        boolean result = false;
-//        for (Algorithm algorithm : algorithms) {
-//            if (Objects.equals(executionReport.getAlgorithmInfo(), algorithm.getAlgorithmInfo())) {
-//                result = algorithm.onExecutionReportUpdate(executionReport) || result;
-//            }
-//        }
-//        return result;
     }
 
     @Override
     public void onCandleUpdate(Candle candle) {
-        return;
-//        for (Algorithm algorithm : instrumentToAlgorithms.getOrDefault(candle.getInstrumentPk(), Collections.emptyList())) {
-//            algorithm.onCandleUpdate(candle);
-//        }
     }
 
     @Override
     public boolean onCommandUpdate(Command command) {
         return true;
-//        boolean result = super.onCommandUpdate(command);
-//        for (Algorithm algorithm : algorithms) {
-//            result = algorithm.onCommandUpdate(command) || result;
-//        }
-//        return result;
+    }
+
+    @Override
+    public boolean onPosition(Map<String, Double> positions) {
+        return true;
     }
 
     public void manualStop() {

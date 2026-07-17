@@ -32,7 +32,7 @@ public class InstrumentManager {
     private Queue<String> cfTradesReceived = EvictingQueue.create(BUFFER_CF_TRADES);//clientOrderId or trades
     private Depth lastDepth;
     private Trade lastTrade;
-    private double position;
+
 
     private Map<Verb, Long> lastTradeTimestamp;
 
@@ -50,9 +50,6 @@ public class InstrumentManager {
         allRequestOrders = new ConcurrentHashMap<>();
         cfTradesReceived = EvictingQueue.create(BUFFER_CF_TRADES);
         lastTradeTimestamp = new ConcurrentHashMap<>();
-
-        //daily restart?
-        position = 0;
     }
 
     public synchronized void setAllActiveOrders(Map<String, ExecutionReport> allActiveOrders) {

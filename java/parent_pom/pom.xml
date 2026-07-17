@@ -250,6 +250,13 @@
                 <version>3.1.0</version>
             </dependency>
 
+            <!--MessagePack — binary serialisation for the Python bridge-->
+            <dependency>
+                <groupId>org.msgpack</groupId>
+                <artifactId>msgpack-core</artifactId>
+                <version>0.9.8</version>
+            </dependency>
+
             <!--ProgressBar-->
             <dependency>
                 <groupId>me.tongfei</groupId>
@@ -339,7 +346,7 @@
             <dependency>
                 <groupId>org.apache.parquet</groupId>
                 <artifactId>parquet-avro</artifactId>
-                <version>1.10.1</version>
+                <version>1.15.2</version>
                 <exclusions>
                     <exclusion>
                         <groupId>org.slf4j</groupId>
@@ -419,7 +426,7 @@
             <dependency>
                 <groupId>org.apache.parquet</groupId>
                 <artifactId>parquet-hadoop</artifactId>
-                <version>1.13.1</version>
+                <version>1.15.2</version>
                 <exclusions>
                     <exclusion>
                         <groupId>org.slf4j</groupId>

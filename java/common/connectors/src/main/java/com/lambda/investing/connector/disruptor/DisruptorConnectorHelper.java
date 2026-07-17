@@ -9,6 +9,7 @@ import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.messaging.TypeMessage;
 import com.lmax.disruptor.BusySpinWaitStrategy;
 import com.lmax.disruptor.EventFactory;
+import com.lmax.disruptor.InsufficientCapacityException;
 import com.lmax.disruptor.RingBuffer;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
@@ -467,6 +468,46 @@ public class DisruptorConnectorHelper {
             ringBuffer.publish(sequence);
         }
         return true;
+    }
+
+    /**
+     * Non-blocking publish to the ring buffer.
+     * If the ring buffer is full, the event is dropped and an error is logged.
+     * This is critical for HFT hot paths where blocking is unacceptable.
+     *
+     * @return {@code true} if published successfully, {@code false} if dropped (buffer full or not initialized).
+     */
+    public boolean tryPublish(ConnectorConfiguration configuration,
+                              long timestampReceived,
+                              TypeMessage typeMessage,
+                              Object content) {
+        if (ringBuffer == null) {
+            return false;
+        }
+
+        try {
+            final long sequence = ringBuffer.tryNext();
+            try {
+                final DisruptorEvent slot = ringBuffer.get(sequence);
+                slot.configuration = configuration;
+                slot.timestampReceived = timestampReceived;
+                slot.typeMessage = typeMessage;
+                slot.content = content;
+            } finally {
+                ringBuffer.publish(sequence);
+            }
+            return true;
+        } catch (InsufficientCapacityException e) {
+            // Buffer full - drop the event and log
+            long remainingCapacity = ringBuffer.remainingCapacity();
+            String errorMsg = String.format(
+                    "[%s] RING BUFFER FULL! Dropped notification typeMessage=%s content=%s (remainingCapacity=%d/%d)",
+                    consumerThreadName, typeMessage, content, remainingCapacity, ringBuffer.getBufferSize()
+            );
+            System.err.println(errorMsg);
+            logger.error(errorMsg);
+            return false;
+        }
     }
 
     // -----------------------------------------------------------------------

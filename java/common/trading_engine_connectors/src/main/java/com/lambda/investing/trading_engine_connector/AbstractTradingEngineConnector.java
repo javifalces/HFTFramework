@@ -29,11 +29,10 @@ import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_POSITION_
 
 public abstract class AbstractTradingEngineConnector implements TradingEngineConnector, ConnectorListener {
 
+    public static final String ALL_ALGORITHMS_SUBSCRIPTION = "*";
 
     protected String name;
     protected Logger logger = LogManager.getLogger(ZeroMqTradingEngineConnector.class);
-
-    protected ExecutionReportListener allAlgorithmsExecutionReportListener;
 
     protected Map<String, Map<ExecutionReportListener, String>> listenersManager;
 
@@ -96,20 +95,30 @@ public abstract class AbstractTradingEngineConnector implements TradingEngineCon
             logger.info("discard update of already notified cf trade {}", executionReport.getClientOrderId());
             return;
         }
+
+        // Notify algorithm-specific listeners
         String algorithmInfo = executionReport.getAlgorithmInfo();
         Map<ExecutionReportListener, String> insideMap = listenersManager
                 .getOrDefault(algorithmInfo, new ConcurrentHashMap<>());
+        if (insideMap.size() > 1) {
+            logger.warn("DUPLICATE LISTENERS for algorithmInfo={} count={} listeners={}",
+                    algorithmInfo, insideMap.size(), insideMap.keySet());
+        }
         if (insideMap.size() > 0) {
             for (ExecutionReportListener executionReportListener : insideMap.keySet()) {
                 executionReportListener.onExecutionReportUpdate(executionReport);
             }
         }
 
-
-        if (allAlgorithmsExecutionReportListener != null && !isPaperTrading) {
-            //on paper trading will stack over flow
-            allAlgorithmsExecutionReportListener.onExecutionReportUpdate(executionReport);
+        // Notify wildcard "*" listeners (for portfolio/aggregator that need ALL ERs) - skip in paper trading
+        if (!isPaperTrading) {
+            Map<ExecutionReportListener, String> allAlgoListeners = listenersManager
+                    .getOrDefault(ALL_ALGORITHMS_SUBSCRIPTION, new ConcurrentHashMap<>());
+            for (ExecutionReportListener listener : allAlgoListeners.keySet()) {
+                listener.onExecutionReportUpdate(executionReport);
+            }
         }
+
         if (isCfTrade) {
             cfTradesNotified.add(executionReport.getClientOrderId());
         }

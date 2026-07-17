@@ -16,7 +16,6 @@ import com.lambda.investing.algorithmic_trading.hedging.NoHedgeManager;
 import com.lambda.investing.algorithmic_trading.observer.LiveTradeReport;
 import com.lambda.investing.algorithmic_trading.observer.PrometheusAlgorithmObserver;
 import com.lambda.investing.algorithmic_trading.observer.push.PushService;
-import com.lambda.investing.algorithmic_trading.observer.push.pushbullet.PushbulletAlgorithmObserver;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshot;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioManager;
 import com.lambda.investing.algorithmic_trading.quoting.QuoteManager;
@@ -51,7 +50,6 @@ import java.io.File;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -123,7 +121,6 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
     protected long seed = 0;
 
-    protected Map<String, Double> algorithmPosition;
 
     protected HedgeManager hedgeManager = new NoHedgeManager();
 
@@ -164,10 +161,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         algorithmNotifier.notifyObserversCustomColumns(getCurrentTimestamp(), instrumentPk, key, value);
     }
 
-    public PortfolioManager getPortfolioManager() {
-        return portfolioManager;
-    }
-
+    @Getter
     protected PortfolioManager portfolioManager;
     protected AlgorithmNotifier algorithmNotifier;
 
@@ -285,7 +279,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         executionReportManager = new ExecutionReportManager();
         candleFromTickUpdater = new CandleFromTickUpdater();
         candleFromTickUpdater.register(this);
-        algorithmPosition = new HashMap<>();
+
 
         algorithmObservers = new ArrayList<>();
         cfTradesProcessed = EvictingQueue.create(DEFAULT_QUEUE_CF_TRADE);
@@ -400,7 +394,12 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     }
 
     public void register(AlgorithmObserver algorithmObserver) {
+        if (algorithmObservers.contains(algorithmObserver)) {
+            logger.warn("Observer {} already registered - skipping", algorithmObserver.getClass().getSimpleName());
+            return;
+        }
         algorithmObservers.add(algorithmObserver);
+        logger.info("AlgorithmObservers count: {}", algorithmObservers.size());
         algorithmNotifier.notifyLastParams();
         algorithmNotifier.notifyObserversOnUpdatePortfolioSnapshot(portfolioManager.getPortfolioSnapshot());
     }
@@ -459,6 +458,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
         algorithmNotifier.notifyObserversOnUpdateParams(this.parameters);
 
+
     }
 
     public void setUiEnabled(boolean uiEnabled) {
@@ -472,7 +472,91 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
     public void setParameter(String name, Object value) {
         this.parameters.put(name, value);
+        setFieldByReflection(name, value);
         algorithmNotifier.notifyObserversOnUpdateParams(this.parameters);
+    }
+
+    /**
+     * Sets a field value using reflection by searching the class hierarchy.Used when UI changes
+     *
+     * @param fieldName the name of the field to set
+     * @param value     the value to set
+     * @return true if the field was found and set successfully, false otherwise
+     */
+    protected boolean setFieldByReflection(String fieldName, Object value) {
+        try {
+            java.lang.reflect.Field field = findFieldInClassHierarchy(this.getClass(), fieldName);
+            if (field != null) {
+                field.setAccessible(true);
+                Object convertedValue = convertValueToFieldType(value, field.getType());
+                field.set(this, convertedValue);
+                logger.debug("Successfully set field '{}' to value: {}", fieldName, convertedValue);
+                return true;
+            } else {
+                logger.debug("Field '{}' not found in class hierarchy", fieldName);
+                return false;
+            }
+        } catch (IllegalAccessException e) {
+            logger.warn("Could not access field '{}': {}", fieldName, e.getMessage());
+            return false;
+        } catch (Exception e) {
+            logger.warn("Error setting field '{}': {}", fieldName, e.getMessage());
+            return false;
+        }
+    }
+
+    private java.lang.reflect.Field findFieldInClassHierarchy(Class<?> clazz, String fieldName) {
+        Class<?> currentClass = clazz;
+        while (currentClass != null) {
+            try {
+                return currentClass.getDeclaredField(fieldName);
+            } catch (NoSuchFieldException e) {
+                currentClass = currentClass.getSuperclass();
+            }
+        }
+        return null;
+    }
+
+    private Object convertValueToFieldType(Object value, Class<?> targetType) {
+        if (value == null || targetType.isInstance(value)) {
+            return value;
+        }
+
+        // Handle primitive types and their wrappers
+        if (targetType == int.class || targetType == Integer.class) {
+            if (value instanceof Number) {
+                return ((Number) value).intValue();
+            }
+            return Integer.parseInt(value.toString());
+        } else if (targetType == long.class || targetType == Long.class) {
+            if (value instanceof Number) {
+                return ((Number) value).longValue();
+            }
+            return Long.parseLong(value.toString());
+        } else if (targetType == double.class || targetType == Double.class) {
+            if (value instanceof Number) {
+                return ((Number) value).doubleValue();
+            }
+            return Double.parseDouble(value.toString());
+        } else if (targetType == float.class || targetType == Float.class) {
+            if (value instanceof Number) {
+                return ((Number) value).floatValue();
+            }
+            return Float.parseFloat(value.toString());
+        } else if (targetType == boolean.class || targetType == Boolean.class) {
+            if (value instanceof Boolean) {
+                return value;
+            }
+            if (value instanceof Number) {
+                return ((Number) value).intValue() != 0;
+            }
+            return Boolean.parseBoolean(value.toString());
+        } else if (targetType == String.class) {
+            return value.toString();
+        }
+
+        // If no conversion is needed or possible, return the value as is
+        return value;
     }
 
     public abstract String printAlgo();
@@ -529,7 +613,9 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             requestInfo(this.algorithmInfo + "." + REQUESTED_PORTFOLIO_INFO);
             if (!isBacktest) {
                 configureIsPaper();//now we have all connector configured
-                startPositionRequestScheduler();
+                if (!isPaper) {
+                    startPositionRequestScheduler();
+                }
             }
             if (uiEnabled && !uiStarted) {
                 //start UI
@@ -637,6 +723,20 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         return getInstrumentManager(instrument.getPrimaryKey()).getLastDepth();
     }
 
+    /**
+     * Force update depth by calling onDepthUpdate with the last Depth of all instruments in the InstrumentManager.Check basedDepth or override it
+     */
+    public void forceUpdateDepth() {
+        for (InstrumentManager instrumentManager : instrumentToManager.values()) {
+            Depth lastDepth = instrumentManager.getLastDepth();
+            if (lastDepth != null) {
+                //normally base algo timestamp will discard the update
+                //normally base algo double count will discard the update
+                onDepthUpdate(lastDepth);
+            }
+        }
+    }
+
 
     /**
      * Method that will be called every day and should restart all to start new fresh day
@@ -722,7 +822,6 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                 return createCancel(instrumentManager.getInstrument(), origClientOrderId);
             }
         }
-        logger.warn("createActiveCancel: origClientOrderId {} not found in active orders", origClientOrderId);
         return null;
     }
 
@@ -1455,7 +1554,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
         addStatistics(RECEIVE_STATS + " trade." + trade.getInstrument());
         tradeReceived.incrementAndGet();
-        algorithmNotifier.notifyObserversOnUpdatePnlSnapshot(trade);
+        algorithmNotifier.notifyObserversOnUpdateTrade(trade);
         hedgeManager.onTradeUpdate(trade);
         return true;
     }
@@ -1601,6 +1700,49 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         return instruments;
     }
 
+
+    public boolean containsOrder(String clientOrderId) {
+
+        // Check if this algorithm instance sent the order (either the original or a modification)
+        return historicalOrdersRequestSent.containsKey(clientOrderId);
+    }
+
+    public boolean containsInstrumentOrder(String instrumentPk, String clientOrderId) {
+
+        // Check if this algorithm instance sent the order (either the original or a modification)
+        boolean isMyOrder = historicalOrdersRequestSent.containsKey(clientOrderId);
+
+        // Also check in per-instrument tracking
+        if (!isMyOrder && instrumentToManager != null) {
+            try {
+                InstrumentManager instrumentManager = getInstrumentManager(instrumentPk);
+                Map<String, OrderRequest> instrumentSendOrders = instrumentManager.getAllRequestOrders();
+                isMyOrder = instrumentSendOrders.containsKey(clientOrderId);
+            } catch (Exception e) {
+                // Instrument manager may not exist, that's ok
+            }
+        }
+
+        return isMyOrder;
+    }
+
+    private boolean containsExecutionReport(ExecutionReport executionReport) {
+        String clientOrderId = executionReport.getClientOrderId();
+        String origClientOrderId = executionReport.getOrigClientOrderId();
+        String instrumentPk = executionReport.getInstrument();
+
+        // Check if this algorithm instance sent the order (either the original or a modification)
+        boolean isMyOrder = containsInstrumentOrder(instrumentPk, clientOrderId);
+
+        // Also check if the original order was sent by this algorithm instance
+        if (!isMyOrder && origClientOrderId != null) {
+            isMyOrder = containsInstrumentOrder(instrumentPk, origClientOrderId);
+        }
+
+        return isMyOrder;
+    }
+
+
     /**
      * Has to be called by the algo extending
      *
@@ -1613,6 +1755,17 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                 //is not mine
                 return true;
             }
+
+            // In a MultiAlgorithm setup with multiple instances sharing the same algorithmInfo,
+            // each instance receives ALL ExecutionReports for that algorithmInfo.
+            // We must verify this specific instance actually sent the order to avoid duplicate
+            // processing and observer notifications.
+            if (!containsExecutionReport(executionReport)) {
+                // This ExecutionReport is not for an order sent by this algorithm instance
+                logger.debug("Ignoring ExecutionReport for order {} (orig {}) not sent by this algorithm instance", executionReport.getClientOrderId(), executionReport.getOrigClientOrderId());
+                return true;
+            }
+
             executionReport.setTimestampStrategy(System.currentTimeMillis());
 
             boolean hasPriority = executionReportManager.isNewStatus(executionReport);
@@ -1629,6 +1782,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
             boolean isTrade = ExecutionReport.isTradeStatus(executionReport);
             if (isTrade) {
+                portfolioManager.addTrade(executionReport);//update position
 
                 if (slippageStatistics != null) {
                     slippageStatistics.registerPriceExecuted(executionReport.getClientOrderId(), executionReport.getPrice());
@@ -1644,7 +1798,6 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                 }
 
                 addToPersist(executionReport);
-                addPosition(executionReport);
                 if (executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletelyFilled)) {
                     clientOrderIdLastCompletelyFillReceived.put(executionReport.getClientOrderId(), executionReport);
                 }
@@ -1664,27 +1817,9 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
     }
 
-    private void addPosition(ExecutionReport executionReport) {
-        InstrumentManager instrumentManager = getInstrumentManager(executionReport.getInstrument());
-        double previousPosition = instrumentManager.getPosition();
-        double lastQty = executionReport.getLastQuantity();
-        if (executionReport.getVerb().equals(Verb.Sell)) {
-            lastQty = lastQty * -1;
-        }
-        double newPosition = previousPosition + lastQty;
-        instrumentManager.setPosition(newPosition);
-
-        double myPosition = algorithmPosition.getOrDefault(executionReport.getInstrument(), 0.0);
-        myPosition += lastQty;
-        algorithmPosition.put(executionReport.getInstrument(), myPosition);
-    }
 
     protected double getPosition(Instrument instrument) {
-        return getInstrumentManager(instrument.getPrimaryKey()).getPosition();
-    }
-
-    protected double getAlgorithmPosition(Instrument instrument) {
-        return algorithmPosition.getOrDefault(instrument.getPrimaryKey(), 0.0);
+        return portfolioManager.getPosition(instrument.getPrimaryKey());
     }
 
     public OrderRequest createMarketOrderRequest(Instrument instrument, Verb verb, double quantity) {
@@ -1740,10 +1875,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     }
 
     protected void addToPersist(ExecutionReport executionReport) {
-        PnlSnapshot pnlSnapshot = portfolioManager.addTrade(executionReport);
-        algorithmNotifier.notifyObserversOnUpdatePnlSnapshot(pnlSnapshot);
         algorithmNotifier.notifyObserversOnUpdatePortfolioSnapshot(portfolioManager.getPortfolioSnapshot());
-
         if (!isBacktest) {
             printRowTrade(executionReport);
             //			System.out.println(
@@ -1802,7 +1934,6 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     }
 
     public boolean onPosition(Map<String, Double> positions) {
-        algorithmPosition = positions;//override it
         Set<String> instrumentPks = instrumentToManager.keySet();
         for (String instrumentPK : instrumentPks) {
             Instrument instrument = Instrument.getInstrument(instrumentPK);
@@ -1810,18 +1941,21 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                 logger.warn("received position of instrumentPK not found {}", instrumentPK);
                 continue;
             }
-            InstrumentManager instrumentManager = getInstrumentManager(instrumentPK);
+
             double position = positions.getOrDefault(instrumentPK, 0.0);
-            logger.info("onPosition {} = {}", instrumentPK, position);
-            if (!isBacktest) {
+            if (!isBacktest && Math.abs(position) > 1e-6) {
+                logger.info("onPosition {} = {}", instrumentPK, position);
                 System.out.println(Configuration.formatLog("onPosition {} = {}", instrumentPK, position));
             }
-            instrumentManager.setPosition(position);
+
             PnlSnapshot pnlSnapshot = portfolioManager.getLastPnlSnapshot(instrumentPK);
             if (Math.abs(pnlSnapshot.netPosition - position) > 1e-6) {
-                logger.info("onPosition {} = {} but pnlSnapshot.netPosition={} -> update it", instrumentPK, position, pnlSnapshot.netPosition);
+                String messagePrint = Configuration.formatLog("onPosition {} = {} but pnlSnapshot.netPosition={} -> update it", instrumentPK, position, pnlSnapshot.netPosition);
+                logger.warn(messagePrint);
+                System.out.println("WARNING: " + messagePrint);
                 pnlSnapshot.netPosition = position;
                 algorithmNotifier.notifyObserversOnUpdatePortfolioSnapshot(portfolioManager.getPortfolioSnapshot());
+
             }
         }
 
@@ -1860,14 +1994,18 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     @Override
     public boolean onInfoUpdate(String header, Object message) {
         if (header.startsWith(REQUESTED_POSITION_INFO)) {
-            logger.info("received position from broker {}", message);
-
+            if (message != null && message.toString().isEmpty()) {
+                return true;
+            }
             Map<?, ?> rawPositions = fromJsonString(fromObject(message, String.class), Map.class);
             Map<String, Double> positions = new HashMap<>();
             for (Map.Entry<?, ?> entry : rawPositions.entrySet()) {
                 // FastJSON deserializes numbers as BigDecimal when target type is raw Map;
                 // use Number.doubleValue() to safely handle both BigDecimal and Double.
                 positions.put((String) entry.getKey(), ((Number) entry.getValue()).doubleValue());
+            }
+            if (!positions.isEmpty()) {
+                logger.info("[{}] received position from broker {}", getCurrentTime(), message);
             }
             return onPosition(positions);
         }
