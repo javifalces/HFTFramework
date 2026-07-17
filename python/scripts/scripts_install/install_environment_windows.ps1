@@ -99,12 +99,40 @@ if ($CUDA_AVAILABLE) {
 }
 
 Write-Host ""
-Write-Host "[Step 5] Installing remaining requirements from requirements.txt..."
+Write-Host "[Step 5] Installing JAX..."
+if ($CUDA_AVAILABLE) {
+    Write-Host "Installing JAX with CUDA 12 support (required by sbx-rl for GPU acceleration)..."
+    uv pip install "jax[cuda12]"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Error installing JAX with CUDA. Exiting."
+        exit $LASTEXITCODE
+    }
+} else {
+    Write-Host "Installing JAX with CPU support..."
+    uv pip install "jax[cpu]"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Error installing JAX with CPU. Exiting."
+        exit $LASTEXITCODE
+    }
+}
+
+Write-Host ""
+Write-Host "[Step 6] Installing remaining requirements from requirements.txt..."
 Set-Location "$PSScriptRoot\..\.."
 uv pip install -r requirements.txt
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Error installing requirements. Exiting."
     exit $LASTEXITCODE
+}
+
+if ($CUDA_AVAILABLE) {
+    Write-Host ""
+    Write-Host "[Step 7] Installing GPU-specific extras from requirements-gpu.txt..."
+    uv pip install -r requirements-gpu.txt
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Error installing GPU requirements. Exiting."
+        exit $LASTEXITCODE
+    }
 }
 
 Write-Host ""
