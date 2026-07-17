@@ -106,12 +106,40 @@ else
 fi
 
 echo ""
-echo "[Step 5] Installing remaining requirements from requirements.txt..."
+echo "[Step 5] Installing JAX..."
+if [ "$CUDA_AVAILABLE" = true ]; then
+    echo "Installing JAX with CUDA 12 support (required by sbx-rl for GPU acceleration)..."
+    uv pip install "jax[cuda12]"
+    if [ $? -ne 0 ]; then
+        echo "Error installing JAX with CUDA. Exiting."
+        exit $?
+    fi
+else
+    echo "Installing JAX with CPU support..."
+    uv pip install "jax[cpu]"
+    if [ $? -ne 0 ]; then
+        echo "Error installing JAX with CPU. Exiting."
+        exit $?
+    fi
+fi
+
+echo ""
+echo "[Step 6] Installing remaining requirements from requirements.txt..."
 cd "$(dirname "$0")/../.."
 uv pip install -r requirements.txt
 if [ $? -ne 0 ]; then
     echo "Error installing requirements. Exiting."
     exit $?
+fi
+
+if [ "$CUDA_AVAILABLE" = true ]; then
+    echo ""
+    echo "[Step 7] Installing GPU-specific extras from requirements-gpu.txt..."
+    uv pip install -r requirements-gpu.txt
+    if [ $? -ne 0 ]; then
+        echo "Error installing GPU requirements. Exiting."
+        exit $?
+    fi
 fi
 
 echo ""

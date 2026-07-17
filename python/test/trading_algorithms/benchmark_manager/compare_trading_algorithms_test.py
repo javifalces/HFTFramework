@@ -326,8 +326,8 @@ class CompareTradingAlgorithmsTest(unittest.TestCase):
                                                                    equity_column_score_enum=score_enum)
         last_pnl = final_metrics[score_enum]
 
-        last_pnl_df = output_plot_df[strategy_name][-1]
-        self.assertEquals(last_pnl, last_pnl_df)
+        last_pnl_df = output_plot_df[strategy_name].iloc[-1]
+        self.assertEqual(last_pnl, last_pnl_df)
 
     # @unittest.skip
     def test_plot_results_compare_statistically(self):

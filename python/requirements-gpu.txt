@@ -1,0 +1,9 @@
+# GPU-specific extras — installed only when CUDA is detected by the install scripts.
+# Targets CUDA 12.8 (cu128). For PyTorch the install scripts use
+# --index-url https://download.pytorch.org/whl/cu128 directly.
+
+# CuPy — GPU-accelerated NumPy-compatible array library for CUDA 12.x
+cupy-cuda12x>=13.0.0
+
+# CUDA-accelerated data loading helpers used by torch-based RL agents
+nvidia-ml-py>=12.535.108
