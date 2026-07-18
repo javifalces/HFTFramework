@@ -1,19 +1,18 @@
 #python 3.10
 #jupyter notebook
 notebook>=7.0.6
-sbx-rl>=0.27
-pyzmq>=27.1.0
+pyzmq
 pathos>=0.3.1
 pyarrow>=14.0.2
 
 pytest>=7.4.4
 pytest-cov>=4.1.0
 
-cvxpy>=1.8
-# numpy>=2.0,<2.5: lower bound required by sbx-rl/jax/cvxpy; upper bound set by numba 0.66
-numpy>=2.0,<2.5
+cvxpy>=1.4.1
+# numpy pinned <2.0 for scikit-learn 1.3.x / skfolio / numba compatibility
+numpy>=1.23.4,<2.0
 pandas>=2.1.4
-numba>=0.60.0
+numba>=0.58.1
 tensorboard>=2.15.1
 polars>=1.32.2
 
@@ -34,13 +33,16 @@ plotly>=5.18.0
 statsmodels>=0.14.1
 
 gymnasium>=0.29.1
-stable-baselines3>=2.9
-scikit-learn>=1.6.0
+# stable-baselines3 2.x is pinned to keep numpy<2 and scikit-learn 1.3.x working.
+# sbx-rl>=0.27 requires stable-baselines3>=2.9 + numpy>=2 which conflicts with
+# scikit-learn==1.3.x and skfolio. Use a separate venv for sbx-rl if needed.
+stable-baselines3>=2.2.1,<2.9
+scikit-learn>=1.3.2,<1.4
 
 pyotp>=2.9.0
-optuna>=3.5.0
+optuna==3.5.0
 # Not market making
-skfolio>=0.20.1
+skfolio>=0.0.10
 etfpy>=1.0.16
 financedatabase>=2.2.2
 financetoolkit>=1.8.4
@@ -60,3 +62,10 @@ transformers>=4.46.3
 agentops>=0.4.16
 python-dotenv
 PyPDF2>=3.0.1
+
+# sbx-rl is intentionally excluded from this file due to incompatible transitive
+# dependencies (requires numpy>=2 and stable-baselines3>=2.9, which conflict with
+# scikit-learn<1.4 and skfolio). Install sbx-rl in an isolated virtual environment:
+#   python -m venv .venv-sbx && source .venv-sbx/bin/activate
+#   pip install sbx-rl stable-baselines3>=2.9 "numpy>=2"
+# sbx-rl>=0.9.1
