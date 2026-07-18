@@ -268,9 +268,7 @@ public class AlgorithmProviderImpl implements AlgorithmProvider {
      * @return
      */
     public boolean changeBacktestSpeed(int speed) {
-        String messagePrint = "Speed: " + speed;
         if (speed == 0) {
-            messagePrint += " (Paused)";
             ParquetMarketDataConnectorPublisher.setPauseTradingEngine(true);
             ParquetMarketDataConnectorPublisher.setSpeed(speed);
         } else {
@@ -278,15 +276,12 @@ public class AlgorithmProviderImpl implements AlgorithmProvider {
         }
 
         if (speed >= 100) {
-            messagePrint = "Speed: max";
             ParquetMarketDataConnectorPublisher.setSpeed(-1);
         }
         if (speed > 0 && speed < 100) {
-            messagePrint = "Speed: " + speed;
             ParquetMarketDataConnectorPublisher.setSpeed(speed);
         }
-        logger.info("changeSpeed: {}", messagePrint);
-//        System.out.println(messagePrint);
+
         return true;
     }
 

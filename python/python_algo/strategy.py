@@ -47,11 +47,16 @@ from python_algo.messages import (
     TradeMsg,
     ExecutionReportMsg,
     CandleMsg,
+    JavaParametersUpdateMsg,
     OrderRequestCmd,
     QuoteRequestCmd,
     RequestInfoCmd,
     PortfolioSnapshotRequestCmd,
     PortfolioSnapshotMsg,
+    GetParametersRequestCmd,
+    SetParametersRequestCmd,
+    ParametersUpdateCmd,
+    ReadyCmd,
 )
 from python_algo.transport import Transport
 
@@ -64,6 +69,7 @@ _TYPE_DEPTH = "depth"
 _TYPE_TRADE = "trade"
 _TYPE_ER    = "execution_report"
 _TYPE_CANDLE = "candle"
+_TYPE_JAVA_PARAMS_UPDATE = "java_parameters_update"
 
 
 class PythonStrategy(abc.ABC):
@@ -95,6 +101,9 @@ class PythonStrategy(abc.ABC):
                 transport.subscribe(inst)
         else:
             transport.subscribe("")
+        
+        # Strategy parameters dictionary
+        self._parameters = {}
 
 
     # -----------------------------------------------------------------------
@@ -123,6 +132,25 @@ class PythonStrategy(abc.ABC):
 
     def on_unknown(self, envelope: Envelope) -> None:
         log.debug("unknown message type=%s instrument=%s", envelope.type, envelope.instrument)
+    
+    def on_java_parameters_update(self, msg: JavaParametersUpdateMsg) -> None:
+        """
+        Called when Java sends parameter updates via PUB socket.
+        
+        Override this method to react to parameter changes from Java.
+        By default, parameters are merged into self._parameters.
+        
+        Args:
+            msg: JavaParametersUpdateMsg containing the updated parameters dictionary
+        """
+        log.info("[PythonStrategy] received %d parameter(s) from Java", len(msg.parameters))
+        for key, value in msg.parameters.items():
+            log.info("[PythonStrategy]   parameter: %s = %s", key, value)
+        
+        # Merge Java parameters into Python parameters
+        self._parameters.update(msg.parameters)
+        log.debug("[PythonStrategy] parameters merged, total count: %d", len(self._parameters))
+
 
     # -----------------------------------------------------------------------
     # Order / quote helpers
@@ -176,6 +204,37 @@ class PythonStrategy(abc.ABC):
             onInfoUpdate() method.
         """
         self._transport.send(RequestInfoCmd(info).to_bytes(self._codec))
+
+    def send_ready(self, version: str = "1.0", strategy_name: str = None) -> None:
+        """
+        Signal to Java that Python strategy is initialized and ready to receive events.
+        
+        Args:
+            version: Strategy version string (default "1.0")
+            strategy_name: Strategy class name (default: class name)
+            
+        Example:
+            self.send_ready(version="2.1", strategy_name="MyCustomStrategy")
+            
+        Note:
+            This should be called after initialization is complete, typically
+            at the start of run() or after subscribing to instruments.
+            Java will log a warning for events published before ready signal.
+        """
+        if strategy_name is None:
+            strategy_name = self.__class__.__name__
+        
+        log.debug(f"[PythonStrategy] send_ready() - signaling Java: strategy={strategy_name} version={version}")
+        
+        try:
+            cmd = ReadyCmd(version=version, strategy=strategy_name)
+            cmd_bytes = cmd.to_bytes(self._codec)
+            log.debug(f"[PythonStrategy] send_ready() - encoded ready signal ({len(cmd_bytes)} bytes)")
+            
+            self._transport.send(cmd_bytes)
+            log.info(f"[PythonStrategy] send_ready() - READY signal sent to Java: strategy={strategy_name} version={version}")
+        except Exception as e:
+            log.error(f"[PythonStrategy] send_ready() - failed to send ready signal: {e}", exc_info=True)
 
     def get_portfolio_snapshot(self, timeout_ms: int = 5000) -> Optional[PortfolioSnapshotMsg]:
         """
@@ -249,6 +308,159 @@ class PythonStrategy(abc.ABC):
             return None
 
     # -----------------------------------------------------------------------
+    # Parameter management
+    # -----------------------------------------------------------------------
+
+    def get_parameters(self) -> dict:
+        """
+        Get the Python strategy parameters.
+        
+        Returns:
+            Dictionary of strategy parameters
+        """
+        params = self._parameters.copy()
+        log.debug(f"[PythonStrategy] get_parameters() - returning {len(params)} parameters")
+        if params:
+            log.debug(f"[PythonStrategy] get_parameters() - parameter keys: {list(params.keys())}")
+        return params
+
+    def set_parameters(self, parameters: dict) -> None:
+        """
+        Set Python strategy parameters and optionally notify Java.
+        
+        During initialization (before run()), parameters are stored but NOT sent.
+        After run() is called, parameters are sent immediately.
+        
+        This ensures parameters are sent AFTER the READY signal, so Java's
+        command loop is active and ready to receive them.
+        
+        Args:
+            parameters: Dictionary of parameters to set
+        """
+        if not parameters:
+            log.info("[PythonStrategy] set_parameters() - received empty parameters (no update)")
+            return
+            
+        log.debug(f"[PythonStrategy] set_parameters() - updating {len(parameters)} parameters")
+        log.debug(f"[PythonStrategy] set_parameters() - parameter keys: {list(parameters.keys())}")
+        
+        original_size = len(self._parameters)
+        self._parameters.update(parameters)
+        new_size = len(self._parameters)
+        
+        log.info(f"[PythonStrategy] set_parameters() - parameters updated (size: {original_size} -> {new_size})")
+        
+        # Only send to Java if strategy is already running (after READY signal sent)
+        if self._running:
+            log.debug("[PythonStrategy] set_parameters() - strategy is running, notifying Java via PUSH socket")
+            try:
+                cmd_bytes = ParametersUpdateCmd(self._parameters).to_bytes(self._codec)
+                log.debug(f"[PythonStrategy] set_parameters() - encoded {len(cmd_bytes)} bytes")
+                self._transport.send(cmd_bytes)
+                log.info(f"[PythonStrategy] set_parameters() - successfully sent {new_size} parameters to Java")
+            except Exception as e:
+                log.error(f"[PythonStrategy] set_parameters() - failed to send to Java: {e}", exc_info=True)
+        else:
+            log.debug("[PythonStrategy] set_parameters() - strategy not running yet, parameters will be sent after READY signal")
+
+    def get_java_parameters(self, timeout_ms: int = 5000) -> Optional[dict]:
+        """
+        Synchronously request parameters from Java PythonAlgorithm.
+        
+        Args:
+            timeout_ms: Maximum time to wait for response in milliseconds.
+                       Default is 5000ms (5 seconds).
+            
+        Returns:
+            Dictionary of Java-side parameters, or None if request fails
+        """
+        log.debug(f"[PythonStrategy] get_java_parameters() - requesting parameters from Java (timeout: {timeout_ms}ms)")
+        
+        try:
+            request_bytes = GetParametersRequestCmd().to_bytes(self._codec)
+            log.debug(f"[PythonStrategy] get_java_parameters() - encoded request ({len(request_bytes)} bytes)")
+            
+            response_bytes = self._transport.request(request_bytes, timeout_ms)
+            
+            if response_bytes is None:
+                log.warning(f"[PythonStrategy] get_java_parameters() - request timed out after {timeout_ms}ms")
+                return None
+            
+            log.debug(f"[PythonStrategy] get_java_parameters() - received response ({len(response_bytes)} bytes)")
+                
+            envelope = Envelope.parse(response_bytes, self._codec)
+            log.debug(f"[PythonStrategy] get_java_parameters() - response type: {envelope.type}")
+            
+            if envelope.type == "get_parameters_response":
+                if isinstance(envelope.data, dict):
+                    params = envelope.data
+                    log.info(f"[PythonStrategy] get_java_parameters() - successfully received {len(params)} parameters from Java")
+                    log.debug(f"[PythonStrategy] get_java_parameters() - parameter keys: {list(params.keys())}")
+                    return params
+                else:
+                    log.warning(f"[PythonStrategy] get_java_parameters() - response data is not a dict: {type(envelope.data).__name__}")
+                    return {}
+            else:
+                log.warning(f"[PythonStrategy] get_java_parameters() - unexpected response type: {envelope.type} (expected: get_parameters_response)")
+                return None
+        except Exception as e:
+            log.error(f"[PythonStrategy] get_java_parameters() - error requesting parameters: {e}", exc_info=True)
+            return None
+
+    def set_java_parameters(self, parameters: dict, timeout_ms: int = 5000) -> bool:
+        """
+        Synchronously send parameters to Java PythonAlgorithm.
+        
+        Args:
+            parameters: Dictionary of parameters to set in Java
+            timeout_ms: Maximum time to wait for response in milliseconds.
+                       Default is 5000ms (5 seconds).
+            
+        Returns:
+            True if parameters were successfully set, False otherwise
+        """
+        if not parameters:
+            log.info("[PythonStrategy] set_java_parameters() - no parameters to send (empty dict)")
+            return True
+            
+        log.debug(f"[PythonStrategy] set_java_parameters() - sending {len(parameters)} parameters to Java (timeout: {timeout_ms}ms)")
+        log.debug(f"[PythonStrategy] set_java_parameters() - parameter keys: {list(parameters.keys())}")
+        
+        try:
+            request_bytes = SetParametersRequestCmd(parameters).to_bytes(self._codec)
+            log.debug(f"[PythonStrategy] set_java_parameters() - encoded request ({len(request_bytes)} bytes)")
+            
+            response_bytes = self._transport.request(request_bytes, timeout_ms)
+            
+            if response_bytes is None:
+                log.warning(f"[PythonStrategy] set_java_parameters() - request timed out after {timeout_ms}ms")
+                return False
+            
+            log.debug(f"[PythonStrategy] set_java_parameters() - received response ({len(response_bytes)} bytes)")
+                
+            envelope = Envelope.parse(response_bytes, self._codec)
+            log.debug(f"[PythonStrategy] set_java_parameters() - response type: {envelope.type}")
+            
+            if envelope.type == "set_parameters_response":
+                if isinstance(envelope.data, dict):
+                    success = envelope.data.get("success", False)
+                    if success:
+                        log.info(f"[PythonStrategy] set_java_parameters() - successfully sent {len(parameters)} parameters to Java")
+                    else:
+                        error = envelope.data.get("error", "Unknown error")
+                        log.warning(f"[PythonStrategy] set_java_parameters() - Java rejected parameters: {error}")
+                    return success
+                else:
+                    log.warning(f"[PythonStrategy] set_java_parameters() - response data is not a dict: {type(envelope.data).__name__}")
+                    return False
+            else:
+                log.warning(f"[PythonStrategy] set_java_parameters() - unexpected response type: {envelope.type} (expected: set_parameters_response)")
+                return False
+        except Exception as e:
+            log.error(f"[PythonStrategy] set_java_parameters() - error sending parameters: {e}", exc_info=True)
+            return False
+
+    # -----------------------------------------------------------------------
     # Event loop
     # -----------------------------------------------------------------------
 
@@ -274,7 +486,27 @@ class PythonStrategy(abc.ABC):
         return True
 
     def run(self, poll_ms: int = 200) -> None:
-        """Blocking event loop. Returns when stop() is called."""
+        """
+        Blocking event loop. Returns when stop() is called.
+        
+        Automatically sends READY signal to Java, then sends parameters,
+        before starting the event loop.
+        """
+        # Signal to Java that we're ready to receive events
+        self.send_ready()
+        
+        # Send parameters to Java after READY signal so Java knows to expect them
+        # This ensures Java's command loop is active and ready to receive parameters
+        if self._parameters:
+            log.debug(f"[PythonStrategy] run() - sending {len(self._parameters)} parameters to Java after READY")
+            try:
+                self._transport.send(ParametersUpdateCmd(self._parameters).to_bytes(self._codec))
+                log.info(f"[PythonStrategy] run() - successfully sent {len(self._parameters)} parameters to Java")
+            except Exception as e:
+                log.error(f"[PythonStrategy] run() - failed to send parameters: {e}", exc_info=True)
+        else:
+            log.debug("[PythonStrategy] run() - no parameters to send")
+        
         self._running = True
         try:
             while self._running:
@@ -299,5 +531,7 @@ class PythonStrategy(abc.ABC):
             self.on_execution_report(env.as_execution_report())
         elif env.type == _TYPE_CANDLE:
             self.on_candle(env.as_candle())
+        elif env.type == _TYPE_JAVA_PARAMS_UPDATE:
+            self.on_java_parameters_update(env.as_java_parameters_update())
         else:
             self.on_unknown(env)

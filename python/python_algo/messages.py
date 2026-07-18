@@ -13,6 +13,7 @@ Market-data types (Java → Python):
   trade             TradeMsg
   execution_report  ExecutionReportMsg
   candle            CandleMsg
+  java_parameters_update    JavaParametersUpdateMsg
 
 Command types (Python → Java):
   order_request              OrderRequestCmd
@@ -164,6 +165,24 @@ class CandleMsg:
 
 
 @dataclass
+class JavaParametersUpdateMsg:
+    """
+    Java-side parameter update pushed to Python via PUB socket.
+    
+    This message is sent by Java when parameters are updated, allowing
+    Python to react to configuration changes.
+    
+    Wire format:
+        {"v": 1, "type": "java_parameters_update", "instrument": "", "data": {...}}
+    """
+    parameters: dict
+    
+    @staticmethod
+    def from_dict(d: dict) -> "JavaParametersUpdateMsg":
+        return JavaParametersUpdateMsg(parameters=d)
+
+
+@dataclass
 class Envelope:
     """Parsed inbound envelope from Java."""
     version: int
@@ -192,6 +211,9 @@ class Envelope:
 
     def as_candle(self) -> CandleMsg:
         return CandleMsg.from_dict(self.data)
+    
+    def as_java_parameters_update(self) -> JavaParametersUpdateMsg:
+        return JavaParametersUpdateMsg.from_dict(self.data)
 
 
 # ---------------------------------------------------------------------------
@@ -294,6 +316,117 @@ class PortfolioSnapshotRequestCmd:
     def to_envelope(self) -> dict:
         """Convert to wire envelope dict."""
         return {"v": SCHEMA_VERSION, "type": "portfolio_snapshot_request", "data": {}}
+
+    def to_bytes(self, codec: Optional["Codec"] = None) -> bytes:
+        """Encode to bytes using the specified codec (or default JsonCodec)."""
+        return (codec or _default_codec()).encode(self.to_envelope())
+
+    def to_json(self) -> str:
+        """Encode to JSON string."""
+        return json.dumps(self.to_envelope())
+
+
+@dataclass
+class GetParametersRequestCmd:
+    """
+    Command to request Java-side parameters (synchronous).
+    
+    This command is sent via the REQ socket to retrieve parameters from the
+    Java PythonAlgorithm instance.
+    
+    Wire format:
+        {"v": 1, "type": "get_parameters_request", "data": {}}
+    """
+
+    def to_envelope(self) -> dict:
+        """Convert to wire envelope dict."""
+        return {"v": SCHEMA_VERSION, "type": "get_parameters_request", "data": {}}
+
+    def to_bytes(self, codec: Optional["Codec"] = None) -> bytes:
+        """Encode to bytes using the specified codec (or default JsonCodec)."""
+        return (codec or _default_codec()).encode(self.to_envelope())
+
+    def to_json(self) -> str:
+        """Encode to JSON string."""
+        return json.dumps(self.to_envelope())
+
+
+@dataclass
+class SetParametersRequestCmd:
+    """
+    Command to send parameters to Java (synchronous).
+    
+    This command is sent via the REQ socket to update parameters in the
+    Java PythonAlgorithm instance.
+    
+    Wire format:
+        {"v": 1, "type": "set_parameters_request", "data": {...}}
+    """
+    parameters: dict
+
+    def to_envelope(self) -> dict:
+        """Convert to wire envelope dict."""
+        return {"v": SCHEMA_VERSION, "type": "set_parameters_request", "data": self.parameters}
+
+    def to_bytes(self, codec: Optional["Codec"] = None) -> bytes:
+        """Encode to bytes using the specified codec (or default JsonCodec)."""
+        return (codec or _default_codec()).encode(self.to_envelope())
+
+    def to_json(self) -> str:
+        """Encode to JSON string."""
+        return json.dumps(self.to_envelope())
+
+
+@dataclass
+class ParametersUpdateCmd:
+    """
+    Command to push Python parameters to Java (asynchronous).
+    
+    This command is sent via the PUSH socket to inform Java of Python-side
+    parameter changes. Java will merge these with its own parameters.
+    
+    Wire format:
+        {"v": 1, "type": "parameters_update", "data": {...}}
+    """
+    parameters: dict
+
+    def to_envelope(self) -> dict:
+        """Convert to wire envelope dict."""
+        return {"v": SCHEMA_VERSION, "type": "parameters_update", "data": self.parameters}
+
+    def to_bytes(self, codec: Optional["Codec"] = None) -> bytes:
+        """Encode to bytes using the specified codec (or default JsonCodec)."""
+        return (codec or _default_codec()).encode(self.to_envelope())
+
+    def to_json(self) -> str:
+        """Encode to JSON string."""
+        return json.dumps(self.to_envelope())
+
+
+@dataclass
+class ReadyCmd:
+    """
+    Command to signal Python strategy is initialized and ready (asynchronous).
+    
+    This command is sent via the PUSH socket to inform Java that the Python
+    strategy is fully initialized and ready to receive market data events.
+    
+    Wire format:
+        {"v": 1, "type": "ready", "data": {"version": "...", "strategy": "..."}}
+    """
+    version: str = "1.0"
+    strategy: str = "PythonStrategy"
+
+    def to_envelope(self) -> dict:
+        """Convert to wire envelope dict."""
+        return {
+            "v": SCHEMA_VERSION,
+            "type": "ready",
+            "data": {
+                "version": self.version,
+                "strategy": self.strategy,
+            }
+        }
 
     def to_bytes(self, codec: Optional["Codec"] = None) -> bytes:
         """Encode to bytes using the specified codec (or default JsonCodec)."""

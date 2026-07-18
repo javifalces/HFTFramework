@@ -1,7 +1,7 @@
 package com.lambda.investing.algorithmic_trading.python;
 
+import com.lambda.investing.algorithmic_trading.Algorithm;
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
-import com.lambda.investing.algorithmic_trading.SingleInstrumentAlgorithm;
 import com.lambda.investing.model.Util;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.candle.Candle;
@@ -31,9 +31,15 @@ import java.util.*;
  * PythonAlgorithm bridges the Java framework to a pure-Python strategy.
  *
  * Transport (ZeroMQ):
- *   Java PUB  → Python SUB   market-data events (depth / trade / execution_report / candle)
+ *   Java PUB  → Python SUB   market-data events (depth / trade / execution_report / candle / java_parameters_update)
  *   Java PULL ← Python PUSH  order / quote commands (asynchronous)
  *   Java REP  ↔ Python REQ   synchronous requests (portfolio snapshot, etc.)
+ *
+ * Parameter Flow (bidirectional):
+ *   Java → Python: via PUB socket (java_parameters_update message type)
+ *                  Triggered when setParameters() is called on Java side
+ *   Python → Java: via PUSH socket (parameters_update command type)
+ *                  Triggered when Python calls set_parameters()
  *
  * Endpoint type (python_transport_type):
  *   tcp  (default) — TCP sockets; works across hosts.
@@ -62,7 +68,7 @@ import java.util.*;
  *   Python can send requests and block waiting for a response. Currently supported:
  *     - portfolio_snapshot_request: Returns current PortfolioSnapshot
  */
-public class PythonAlgorithm extends SingleInstrumentAlgorithm {
+public class PythonAlgorithm extends Algorithm {
 
     // ---- parameter keys ----
     public static final String PARAM_TRANSPORT_TYPE  = "python_transport_type";
@@ -83,12 +89,15 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
     private static final String TYPE_TRADE            = "trade";
     private static final String TYPE_EXECUTION_REPORT = "execution_report";
     private static final String TYPE_CANDLE           = "candle";
+    private static final String TYPE_JAVA_PARAMETERS_UPDATE = "java_parameters_update";
 
     // ---- command type constants (received from Python) ----
     private static final String CMD_ORDER_REQUEST = "order_request";
     private static final String CMD_QUOTE_REQUEST = "quote_request";
     private static final String CMD_REQUEST_INFO  = "request_info";
     private static final String CMD_PORTFOLIO_SNAPSHOT_REQUEST = "portfolio_snapshot_request";
+    private static final String CMD_PARAMETERS_UPDATE = "parameters_update";
+    private static final String CMD_READY = "ready";
 
     // ---- defaults ----
     private static final int    DEFAULT_MD_PUB_PORT   = 7700;
@@ -115,6 +124,7 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
     private Thread cmdThread;
     private Thread reqThread;
     private volatile boolean running = false;
+    private volatile boolean pythonReady = false;
 
     // resolved at init()
     private boolean useIpc = false;
@@ -139,7 +149,74 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
     @Override
     public void setParameters(Map<String, Object> parameters) {
         super.setParameters(parameters);
+
+        // Send parameters to Python via PUB socket if running
+        if (running && pubSocket != null && pythonReady) {
+            logger.info("[PythonAlgorithm] setParameters() - sending {} parameters to Python",
+                    parameters != null ? parameters.size() : 0);
+            sendParametersUpdateToPython(parameters);
+        } else {
+            if (!running) {
+                logger.debug("[PythonAlgorithm] setParameters() - not sending to Python: algorithm not running");
+            } else if (pubSocket == null) {
+                logger.debug("[PythonAlgorithm] setParameters() - not sending to Python: PUB socket is null");
+            } else if (!pythonReady) {
+                logger.debug("[PythonAlgorithm] setParameters() - not sending to Python: Python not ready yet");
+            }
+        }
     }
+
+    /**
+     * Sends parameter updates to Python via the PUB socket (asynchronous broadcast).
+     * <p>
+     * This method publishes a java_parameters_update message that Python subscribes to.
+     * The message is sent asynchronously and does not block or wait for acknowledgment.
+     *
+     * @param parameters The parameters to send to Python
+     */
+    private void sendParametersUpdateToPython(Map<String, Object> parameters) {
+        if (parameters == null || parameters.isEmpty()) {
+            logger.debug("[PythonAlgorithm] sendParametersUpdateToPython() - no parameters to send");
+            return;
+        }
+
+        try {
+            logger.info("[PythonAlgorithm] sendParametersUpdateToPython() - sending {} parameters:",
+                    parameters.size());
+
+            // Log each parameter at INFO level
+            parameters.forEach((key, value) ->
+                    logger.info("[PythonAlgorithm]   parameter: {} = {}", key, value)
+            );
+
+            // Encode and publish
+            byte[] payload = useMsgpack ? encodeMsgpack(TYPE_JAVA_PARAMETERS_UPDATE, "", TYPE_JAVA_PARAMETERS_UPDATE) : encodeJson(TYPE_JAVA_PARAMETERS_UPDATE, "", TYPE_JAVA_PARAMETERS_UPDATE);
+
+            synchronized (pubSocket) {
+                // Use empty topic prefix so all subscribers receive it
+                pubSocket.sendMore("");
+                pubSocket.send(payload, 0);
+            }
+
+            logger.debug("[PythonAlgorithm] sendParametersUpdateToPython() - sent {} bytes via PUB socket",
+                    payload.length);
+
+        } catch (Exception e) {
+            logger.warn("[PythonAlgorithm] sendParametersUpdateToPython() - failed to send: {} - {}",
+                    e.getClass().getSimpleName(), e.getMessage());
+            logger.debug("[PythonAlgorithm] sendParametersUpdateToPython() - full stack trace:", e);
+        }
+    }
+
+    @Override
+    public Map<String, Object> getParameters() {
+        // Return Java-side parameters
+        // Note: Python parameters are automatically merged via CMD_PARAMETERS_UPDATE (asynchronous push)
+        // when Python sends parameter updates through the PUSH/PULL socket
+        return super.getParameters();
+    }
+
+
 
     // -----------------------------------------------------------------------
     // Lifecycle
@@ -156,6 +233,10 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
         backtestSync = getParameterIntOrDefault(parameters, PARAM_BACKTEST_SYNC, 0) != 0
                 || Boolean.TRUE.equals(parameters.get(PARAM_BACKTEST_SYNC))
                 || "true".equalsIgnoreCase(String.valueOf(parameters.getOrDefault(PARAM_BACKTEST_SYNC, "false")));
+
+        // Reset ready flag on init
+        pythonReady = false;
+        logger.info("[PythonAlgorithm] Initializing - waiting for Python strategy to signal READY");
 
         pubSocket = zmqContext.createSocket(ZMQ.PUB);
         pubSocket.setLinger(0);
@@ -227,6 +308,22 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
 
         logger.info("[PythonAlgorithm] started — codec={} MD PUB {} | CMD PULL {} | REP {}",
                 useMsgpack ? "msgpack" : "json", mdEndpoint, cmdEndpoint, repEndpoint);
+
+        logger.info("[PythonAlgorithm] waiting for Python strategy to signal READY (timeout 30s)");
+        boolean ready = waitForPythonReady(30_000);
+        if (!ready) {
+            logger.warn("[PythonAlgorithm] Python strategy did not signal READY within timeout");
+        } else {
+            logger.info("[PythonAlgorithm] Python strategy signaled READY");
+            logger.debug("[PythonAlgorithm] Python parameters will be received via PUSH socket (parameters_update command)");
+            // Note: We don't call getParameters() here because:
+            // 1. Python pushes parameters via set_parameters() -> parameters_update command (PUSH/PULL socket)
+            // 2. Calling getParameters() would trigger a REQ/REP request to Python, which requires 
+            //    Python to implement a request handler (not currently implemented)
+            // 3. Parameters pushed from Python are already merged into this.parameters via CMD_PARAMETERS_UPDATE
+        }
+
+        logger.info("[PythonAlgorithm] initialized");
     }
 
     @Override
@@ -291,6 +388,38 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
     }
 
     // -----------------------------------------------------------------------
+    // Public API
+    // -----------------------------------------------------------------------
+
+    /**
+     * Check if the Python strategy has signaled it is ready.
+     *
+     * @return true if Python sent a "ready" message, false otherwise
+     */
+    public boolean isPythonReady() {
+        return pythonReady;
+    }
+
+    /**
+     * Wait for Python strategy to signal ready, with timeout.
+     *
+     * @param timeoutMs maximum time to wait in milliseconds
+     * @return true if Python became ready within timeout, false otherwise
+     */
+    public boolean waitForPythonReady(long timeoutMs) {
+        long endTime = System.currentTimeMillis() + timeoutMs;
+        while (!pythonReady && System.currentTimeMillis() < endTime) {
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        return pythonReady;
+    }
+
+    // -----------------------------------------------------------------------
     // Internal helpers
     // -----------------------------------------------------------------------
 
@@ -306,6 +435,12 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
      */
     private void publishEvent(String type, String instrument, String dataJson) {
         if (pubSocket == null) return;
+
+        // Log warning if Python is not ready (only once per session)
+        if (!pythonReady) {
+            logger.warn("[PythonAlgorithm] Publishing {} event but Python not ready yet - event may be lost", type);
+        }
+        
         String topic = instrument + "." + type;
         byte[] payload = useMsgpack
                 ? encodeMsgpack(type, instrument, dataJson)
@@ -528,6 +663,64 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
                 case CMD_PORTFOLIO_SNAPSHOT_REQUEST:
                     // This should not be handled here, it's handled in the request loop
                     logger.warn("[PythonAlgorithm] portfolio_snapshot_request received on PULL socket - should be on REP socket");
+                    break;
+                case CMD_PARAMETERS_UPDATE:
+                    // Python sends parameter updates via PUSH socket (asynchronous)
+                    logger.debug("[PythonAlgorithm] dispatchCommand() - received parameters_update from Python");
+
+                    if (!(data instanceof Map)) {
+                        logger.warn("[PythonAlgorithm] dispatchCommand() - parameters_update data is not a Map: {}",
+                                data != null ? data.getClass().getSimpleName() : "null");
+                        break;
+                    }
+
+                    Map<String, Object> pythonParams = new LinkedHashMap<>();
+                    ((Map<?, ?>) data).forEach((k, v) -> pythonParams.put(String.valueOf(k), v));
+
+                    if (pythonParams.isEmpty()) {
+                        logger.info("[PythonAlgorithm] dispatchCommand() - Python sent empty parameters update");
+                    } else {
+                        logger.info("[PythonAlgorithm] dispatchCommand() - Python sent {} parameters:",
+                                pythonParams.size());
+                        // Log each parameter key-value pair at INFO level
+                        pythonParams.forEach((key, value) ->
+                                logger.info("[PythonAlgorithm]   parameter: {} = {}", key, value)
+                        );
+                    }
+
+                    // Merge Python parameters into Java parameters
+                    if (this.parameters == null) {
+                        logger.debug("[PythonAlgorithm] dispatchCommand() - initializing parameters map");
+                        this.parameters = new HashMap<>();
+                    }
+
+                    int originalSize = this.parameters.size();
+                    this.parameters.putAll(pythonParams);
+                    int newSize = this.parameters.size();
+
+                    logger.info("[PythonAlgorithm] dispatchCommand() - parameters merged successfully (size: {} -> {})",
+                            originalSize, newSize);
+
+                    // Notify observers of parameter update
+                    if (algorithmNotifier != null) {
+                        logger.debug("[PythonAlgorithm] dispatchCommand() - notifying observers of parameter update");
+                        algorithmNotifier.notifyObserversOnUpdateParams(this.parameters);
+                    } else {
+                        logger.warn("[PythonAlgorithm] dispatchCommand() - algorithmNotifier is null, observers not notified");
+                    }
+                    break;
+                case CMD_READY:
+                    // Python signals it's fully initialized and ready to receive events
+                    pythonReady = true;
+                    logger.info("[PythonAlgorithm] Python strategy is READY - can now send market data events");
+                    if (data instanceof Map) {
+                        Object version = ((Map<?, ?>) data).get("version");
+                        Object strategyName = ((Map<?, ?>) data).get("strategy");
+                        if (version != null || strategyName != null) {
+                            logger.info("[PythonAlgorithm] Python strategy details: strategy={}, version={}",
+                                    strategyName, version);
+                        }
+                    }
                     break;
                 default:
                     logger.warn("[PythonAlgorithm] unknown command type: {}", type);
@@ -791,6 +984,66 @@ public class PythonAlgorithm extends SingleInstrumentAlgorithm {
         } catch (IOException e) {
             // Should not happen with ByteArrayOutputStream; fall back to JSON
             return encodeResponseJson(type, dataJson);
+        }
+    }
+
+
+    /**
+     * Encodes an error response for set_parameters requests.
+     *
+     * @param type         Response type
+     * @param errorMessage Error message
+     * @return Encoded error response
+     */
+    private byte[] encodeErrorResponse(String type, String errorMessage) {
+        Map<String, Object> errorData = new HashMap<>();
+        errorData.put("success", false);
+        errorData.put("error", errorMessage);
+        String errorJson = Util.GSON.toJson(errorData);
+
+        logger.trace("[PythonAlgorithm] encodeErrorResponse() - encoding error: {}", errorMessage);
+
+        return useMsgpack
+                ? encodeResponseMsgpack(type, errorJson)
+                : encodeResponseJson(type, errorJson);
+    }
+
+    /**
+     * Encodes a request envelope as UTF-8 JSON.
+     *
+     * @param type The request type identifier
+     * @param data The request data map
+     * @return UTF-8 encoded JSON bytes
+     */
+    private static byte[] encodeRequestJson(String type, Map<String, Object> data) {
+        String dataJson = Util.GSON.toJson(data);
+        String payload = "{\"v\":1,\"type\":\"" + type + "\",\"data\":" + dataJson + "}";
+        return payload.getBytes(StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Encodes a request envelope as MessagePack.
+     *
+     * @param type The request type identifier
+     * @param data The request data map
+     * @return MessagePack encoded bytes
+     */
+    private static byte[] encodeRequestMsgpack(String type, Map<String, Object> data) {
+        try {
+            ByteArrayOutputStream out = new ByteArrayOutputStream(8192);
+            PackerConfig config = new PackerConfig().withBufferSize(65536);
+            MessagePacker packer = config.newPacker(out);
+            packer.packMapHeader(3);
+            packer.packString("v");
+            packer.packInt(1);
+            packer.packString("type");
+            packer.packString(type);
+            packer.packString("data");
+            packObject(packer, data);
+            packer.close();
+            return out.toByteArray();
+        } catch (IOException e) {
+            return encodeRequestJson(type, data);
         }
     }
 

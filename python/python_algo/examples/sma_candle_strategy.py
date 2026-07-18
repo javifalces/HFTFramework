@@ -89,6 +89,13 @@ class SmaCandleStrategy(PythonStrategy):
         self._fast_period = fast_period
         self._slow_period = slow_period
 
+        # Initialize strategy parameters and sync to Java
+        self.set_parameters({
+            "quantity": quantity,
+            "fast_period": fast_period,
+            "slow_period": slow_period,
+        })
+
         # Rolling close buffer per instrument
         self._closes: Dict[str, Deque[float]] = collections.defaultdict(
             lambda: collections.deque(maxlen=slow_period)

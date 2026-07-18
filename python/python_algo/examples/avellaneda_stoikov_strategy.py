@@ -121,6 +121,17 @@ class AvellanedaStoikovStrategy(PythonStrategy):
         self._min_half_spread = min_half_spread
         self.alpha          = alpha   # public: RL layer can overwrite per step
 
+        # Initialize strategy parameters and sync to Java
+        self.set_parameters({
+            "gamma": gamma,
+            "kappa": kappa,
+            "sigma_window": sigma_window,
+            "quantity": quantity,
+            "inventory_max": inventory_max,
+            "min_half_spread": min_half_spread,
+            "alpha": alpha,
+        })
+
         # Per-instrument state
         self._inventory: Dict[str, float]     = collections.defaultdict(float)
         self._mids:      Dict[str, Deque[float]] = {}
