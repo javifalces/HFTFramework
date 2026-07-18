@@ -17,11 +17,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3.5.2        
         
-      - name: Set up Python 3.11.0 and dependencies
+      - name: Set up Python 3.10.13 and dependencies
         uses: actions/setup-python@v4   
         id: python_lambda
         with:
-          python-version: '3.11.0'
+          python-version: '3.10.13'
 
           
       - uses: actions/cache@v3
