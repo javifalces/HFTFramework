@@ -2,9 +2,12 @@ package com.lambda.investing.trading_engine_connector;
 
 import com.lambda.investing.connector.ConnectorPublisher;
 import com.lambda.investing.market_data_connector.MarketDataConnectorPublisher;
+import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.portfolio.Portfolio;
 import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.OrderRequest;
+
+import java.util.List;
 
 /**
  * Interface than send the orders and is going to notify Execution reports to ExecutionReportListener
@@ -19,11 +22,15 @@ public interface TradingEngineConnector {
 
     void notifyExecutionReport(ExecutionReport executionReport);
 
-
     void requestInfo(String info);
 
     void reset();
 
     boolean isBusy();
+
+    boolean cancelAll(Instrument instrument);
+
+    List<OrderRequest> activeOrders();
+
 
 }

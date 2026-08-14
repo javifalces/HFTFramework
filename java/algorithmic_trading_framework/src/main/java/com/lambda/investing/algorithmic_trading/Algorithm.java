@@ -882,6 +882,18 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                 logger.error("can't unquote instrument {} on stop algorithm", instrument.getPrimaryKey(), e);
             }
             cancelAll(instrument);
+
+            List<OrderRequest> activeOrders = this.algorithmConnectorConfiguration.getTradingEngineConnector().activeOrders();
+
+            if (activeOrders != null && activeOrders.size() > 0) {
+                logger.warn("cancelAllInstruments {} active orders {}", instrument, activeOrders.size());
+                //log all active orders detected
+                for (OrderRequest orderRequest : activeOrders) {
+                    logger.warn("cancelAllInstruments {} active order {}", instrument, orderRequest);
+                }
+                this.algorithmConnectorConfiguration.getTradingEngineConnector().cancelAll(instrument);
+            }
+
         }
     }
 

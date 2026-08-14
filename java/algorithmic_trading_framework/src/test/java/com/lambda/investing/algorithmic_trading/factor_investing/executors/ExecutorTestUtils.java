@@ -2,6 +2,7 @@ package com.lambda.investing.algorithmic_trading.factor_investing.executors;
 
 import com.lambda.investing.market_data_connector.MarketDataListener;
 import com.lambda.investing.market_data_connector.MarketDataProvider;
+import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.OrderRequest;
 import com.lambda.investing.trading_engine_connector.ExecutionReportListener;
@@ -64,6 +65,16 @@ public class ExecutorTestUtils {
 
         @Override
         public boolean isBusy() { return false; }
+
+        @Override
+        public boolean cancelAll(Instrument instrument) {
+            return false;
+        }
+
+        @Override
+        public List<OrderRequest> activeOrders() {
+            return null;
+        }
 
         /** Returns all orders sent to this connector in order. */
         public List<OrderRequest> getSentOrders() {

@@ -14,6 +14,7 @@ import com.lambda.investing.model.messaging.Command;
 import com.lambda.investing.model.messaging.TypeMessage;
 import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.ExecutionReportStatus;
+import com.lambda.investing.model.trading.OrderRequest;
 import com.lambda.investing.trading_engine_connector.paper.PaperTradingEngine;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -67,6 +68,18 @@ public abstract class AbstractTradingEngineConnector implements TradingEngineCon
     public boolean isBusy() {
         return false;
     }
+
+    @Override
+    public boolean cancelAll(Instrument instrument) {
+        return false;
+    }
+
+
+    @Override
+    public List<OrderRequest> activeOrders() {
+        return null;
+    }
+
 
     @Override
     public void deregister(String algorithmInfo, ExecutionReportListener executionReportListener) {

@@ -6,6 +6,7 @@ import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ConnectorProvider;
 import com.lambda.investing.connector.ConnectorPublisher;
+import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.messaging.TypeMessage;
 import com.lambda.investing.model.portfolio.Portfolio;
 import com.lambda.investing.model.trading.ExecutionReport;
@@ -16,6 +17,7 @@ import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -69,6 +71,16 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
         return false;
     }
 
+    @Override
+    public boolean cancelAll(Instrument instrument) {
+        return false;
+    }
+
+
+    @Override
+    public List<OrderRequest> activeOrders() {
+        return null;
+    }
 
     public void reset() {
     }

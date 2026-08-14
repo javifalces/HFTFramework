@@ -9,6 +9,7 @@ import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ConnectorProvider;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorConfiguration;
 import com.lambda.investing.market_data_connector.MarketDataConnectorPublisherListener;
+import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.messaging.TypeMessage;
 import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.OrderRequest;
@@ -20,6 +21,7 @@ import com.lambda.investing.trading_engine_connector.paper.PaperTradingEngine;
 import static com.lambda.investing.model.Util.fromObject;
 import static net.openhft.affinity.AffinityStrategies.*;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 
@@ -67,6 +69,18 @@ public class OrdinaryTradingEngine implements TradingEngineConnector, ConnectorL
         return senderBusy || receiverBusy;
     }
 
+    @Override
+    public boolean cancelAll(Instrument instrument) {
+        //TODO implement cancelAll for ordinary trading engine
+        return false;
+    }
+
+
+    @Override
+    public List<OrderRequest> activeOrders() {
+        //TODO implement activeOrders for ordinary trading engine
+        return null;
+    }
 
     private void initSenderPool() {
         if (this.threadsSendOrderRequest > 0) {

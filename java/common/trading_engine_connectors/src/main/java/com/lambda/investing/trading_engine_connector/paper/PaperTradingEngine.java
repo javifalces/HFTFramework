@@ -301,6 +301,17 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
         return paperConnectorMarketDataAndExecutionReportPublisher;
     }
 
+    @Override
+    public boolean cancelAll(Instrument instrument) {
+        return false;
+    }
+
+
+    @Override
+    public List<OrderRequest> activeOrders() {
+        return null;
+    }
+
     public boolean orderRequest(OrderRequest orderRequest) {
         //Send orders to the virtual orderbook
         OrderbookManager orderbookManager = orderbookManagerMap.get(orderRequest.getInstrument());

@@ -424,6 +424,9 @@ public class QuoteSideManager {
                 logger.info("[{}] rejection of previous trade/canceled {}-{}  {}", executionReport.getDateCreation(),
                         clientOrderId, status, executionReport);
             }
+        } else if (status.equals(ExecutionReportStatus.Cancelled)) {
+            logger.warn("[{}] {}-{} order is no longer alive — a fill may still arrive for this clOrdId  {}",
+                    executionReport.getDateCreation(), clientOrderId, status, executionReport);
         } else if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal() && logger.isInfoEnabled()) {
             logger.info("[{}] {}-{}  {}", executionReport.getDateCreation(),
                     clientOrderId, status, executionReport);
