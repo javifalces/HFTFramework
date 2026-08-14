@@ -843,7 +843,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         InstrumentManager instrumentManager = getInstrumentManager(instrument.getPrimaryKey());
         Map<String, ExecutionReport> instrumentActiveOrders = instrumentManager.getAllActiveOrders();
 
-        if (instrumentActiveOrders.size() > 0 && LOG_LEVEL > LogLevels.DISABLE.ordinal()) {
+        if (!instrumentActiveOrders.isEmpty() && LOG_LEVEL > LogLevels.DISABLE.ordinal()) {
             logger.info("cancelAll verb {}  {} active orders {}", verb, instrument, instrumentActiveOrders.size());
         }
         for (String clientOrderId : instrumentActiveOrders.keySet()) {
@@ -885,7 +885,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
             List<OrderRequest> activeOrders = this.algorithmConnectorConfiguration.getTradingEngineConnector().activeOrders();
 
-            if (activeOrders != null && activeOrders.size() > 0) {
+            if (activeOrders != null && !activeOrders.isEmpty()) {
                 logger.warn("cancelAllInstruments {} active orders {}", instrument, activeOrders.size());
                 //log all active orders detected
                 for (OrderRequest orderRequest : activeOrders) {
@@ -901,7 +901,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         InstrumentManager instrumentManager = getInstrumentManager(instrument.getPrimaryKey());
         Map<String, ExecutionReport> instrumentActiveOrders = instrumentManager.getAllActiveOrders();
 
-        if (instrumentActiveOrders.size() > 0 && LOG_LEVEL > LogLevels.DISABLE.ordinal()) {
+        if (!instrumentActiveOrders.isEmpty() && LOG_LEVEL > LogLevels.DISABLE.ordinal()) {
             logger.info("cancelAll {} active orders {}", instrument, instrumentActiveOrders.size());
         }
 
