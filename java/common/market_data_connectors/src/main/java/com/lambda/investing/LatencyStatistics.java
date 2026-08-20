@@ -11,13 +11,24 @@ import org.apache.logging.log4j.Logger;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import static com.lambda.investing.PrintUtils.PrintDate;
 
-public class LatencyStatistics implements Runnable {
+public class LatencyStatistics {
+
+    private static final ScheduledExecutorService SHARED_EXECUTOR = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "LatencyStatistics_printer");
+        t.setPriority(Thread.MIN_PRIORITY);
+        t.setDaemon(true);
+        return t;
+    });
+
     private static boolean RESET_STATISTICS_PER_UPDATE = true;
     private long sleepMs;
-    private boolean enable;
+    private volatile boolean enable;
 
     private Map<String, String> keyToTopic;
     private Map<String, Long> keyToStartDate;
@@ -65,10 +76,12 @@ public class LatencyStatistics implements Runnable {
         prometheusEnabled = PrometheusMetricsExporter.getInstance().isEnabled();
         enable = true;
         if (sleepMs > 0) {
-            Thread thread = new Thread(this, "LatencyStatistics_" + header);
-            thread.setPriority(Thread.MIN_PRIORITY);
-            thread.start();
+            SHARED_EXECUTOR.scheduleAtFixedRate(this::printCurrentStatistics, sleepMs, sleepMs, TimeUnit.MILLISECONDS);
         }
+    }
+
+    public void stop() {
+        enable = false;
     }
 
     /**
@@ -276,6 +289,7 @@ public class LatencyStatistics implements Runnable {
 
 
     private synchronized void printCurrentStatistics() {
+        if (!enable) return;
         if (topicToLatency.size() > 0) {
             // Create a deep copy of the map with copied lists to avoid ConcurrentModificationException
             Map<String, List<Long>> snapshot = new ConcurrentHashMap<>();
@@ -491,23 +505,8 @@ public class LatencyStatistics implements Runnable {
     }
 
 
-
-    @Override
-    public void run() {
-
-        while (enable) {
-
-
-            printCurrentStatistics();
-
-            try {
-                Thread.sleep(this.sleepMs);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-
-    }
-
-
 }
+
+
+
+

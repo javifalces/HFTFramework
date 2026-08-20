@@ -11,12 +11,22 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
-public class SlippageStatistics implements Runnable {
+public class SlippageStatistics {
+
+    private static final ScheduledExecutorService SHARED_EXECUTOR = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "SlippageStatistics_printer");
+        t.setPriority(Thread.MIN_PRIORITY);
+        t.setDaemon(true);
+        return t;
+    });
 
     private static boolean RESET_STATISTICS_PER_UPDATE = true;
     private long sleepMs;
-    private boolean enable;
+    private volatile boolean enable;
 
     private Map<String, Double> keyToSendPrice;
     private Map<String, Verb> keyToVerb;
@@ -48,10 +58,12 @@ public class SlippageStatistics implements Runnable {
 
         enable = true;
         if (sleepMs > 0) {
-            Thread thread = new Thread(this, "SlippageStatistics_" + header);
-            thread.setPriority(Thread.MIN_PRIORITY);
-            thread.start();
+            SHARED_EXECUTOR.scheduleAtFixedRate(this::printCurrentStatistics, sleepMs, sleepMs, TimeUnit.MILLISECONDS);
         }
+    }
+
+    public void stop() {
+        enable = false;
     }
 
     /**
@@ -134,6 +146,7 @@ public class SlippageStatistics implements Runnable {
 
 
     private void printCurrentStatistics() {
+        if (!enable) return;
         if (slippages.size() > 0) {
             int counter = slippages.size();
             double mean = slippages.stream().mapToDouble(a -> a).average().orElse(0.0);
@@ -163,24 +176,5 @@ public class SlippageStatistics implements Runnable {
             }
         }
     }
-
-
-    @Override
-    public void run() {
-
-        while (enable) {
-
-
-            printCurrentStatistics();
-
-            try {
-                Thread.sleep(this.sleepMs);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-
-    }
-
 
 }

@@ -10,12 +10,22 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
-public class Statistics implements Runnable {
+public class Statistics {
+
+    private static final ScheduledExecutorService SHARED_EXECUTOR = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "Statistics_printer");
+        t.setPriority(Thread.MIN_PRIORITY);
+        t.setDaemon(true);
+        return t;
+    });
 
     private static boolean RESET_STATISTICS_PER_UPDATE = true;
     private long sleepMs;
-    private boolean enable;
+    private volatile boolean enable;
     private Map<String, Long> topicToCounter;
     private Map<String, Long> topicToTotalCounter;
     private String header;
@@ -35,10 +45,12 @@ public class Statistics implements Runnable {
         this.prometheusPrefix = toPrometheusName("statistics_" + header);
         initPrometheusMetrics();
         if (sleepMs > 0) {
-            Thread thread = new Thread(this, "Statistics_" + header);
-            thread.setPriority(Thread.MIN_PRIORITY);
-            thread.start();
+            SHARED_EXECUTOR.scheduleAtFixedRate(this::printCurrentStatistics, sleepMs, sleepMs, TimeUnit.MILLISECONDS);
         }
+    }
+
+    public void stop() {
+        enable = false;
     }
 
     /**
@@ -95,6 +107,7 @@ public class Statistics implements Runnable {
     }
 
     private void printCurrentStatistics() {
+        if (!enable) return;
         if (topicToCounter.size() > 0) {
             StringBuilder sb = new StringBuilder();
             sb.append(String.format("******** %s ********\n", header));
@@ -127,24 +140,6 @@ public class Statistics implements Runnable {
             }
 
         }
-    }
-
-
-    @Override
-    public void run() {
-
-        while (enable) {
-
-
-            printCurrentStatistics();
-
-            try {
-                Thread.sleep(this.sleepMs);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-
     }
 
 
