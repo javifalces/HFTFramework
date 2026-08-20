@@ -1,5 +1,6 @@
 package com.lambda.investing.trading_engine_connector;
 
+import com.lambda.investing.StatisticsScheduler;
 import com.lambda.investing.PrometheusMetricsExporter;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.trading.Verb;
@@ -11,18 +12,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class SlippageStatistics {
-
-    private static final ScheduledExecutorService SHARED_EXECUTOR = Executors.newSingleThreadScheduledExecutor(r -> {
-        Thread t = new Thread(r, "SlippageStatistics_printer");
-        t.setPriority(Thread.MIN_PRIORITY);
-        t.setDaemon(true);
-        return t;
-    });
 
     private static boolean RESET_STATISTICS_PER_UPDATE = true;
     private long sleepMs;
@@ -58,7 +50,7 @@ public class SlippageStatistics {
 
         enable = true;
         if (sleepMs > 0) {
-            SHARED_EXECUTOR.scheduleAtFixedRate(this::printCurrentStatistics, sleepMs, sleepMs, TimeUnit.MILLISECONDS);
+            StatisticsScheduler.EXECUTOR.scheduleAtFixedRate(this::printCurrentStatistics, sleepMs, sleepMs, TimeUnit.MILLISECONDS);
         }
     }
 

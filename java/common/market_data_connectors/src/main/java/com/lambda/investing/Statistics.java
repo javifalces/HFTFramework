@@ -10,18 +10,9 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class Statistics {
-
-    private static final ScheduledExecutorService SHARED_EXECUTOR = Executors.newSingleThreadScheduledExecutor(r -> {
-        Thread t = new Thread(r, "Statistics_printer");
-        t.setPriority(Thread.MIN_PRIORITY);
-        t.setDaemon(true);
-        return t;
-    });
 
     private static boolean RESET_STATISTICS_PER_UPDATE = true;
     private long sleepMs;
@@ -45,7 +36,7 @@ public class Statistics {
         this.prometheusPrefix = toPrometheusName("statistics_" + header);
         initPrometheusMetrics();
         if (sleepMs > 0) {
-            SHARED_EXECUTOR.scheduleAtFixedRate(this::printCurrentStatistics, sleepMs, sleepMs, TimeUnit.MILLISECONDS);
+            StatisticsScheduler.EXECUTOR.scheduleAtFixedRate(this::printCurrentStatistics, sleepMs, sleepMs, TimeUnit.MILLISECONDS);
         }
     }
 

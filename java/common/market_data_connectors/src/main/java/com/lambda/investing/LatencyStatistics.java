@@ -11,20 +11,11 @@ import org.apache.logging.log4j.Logger;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import static com.lambda.investing.PrintUtils.PrintDate;
 
 public class LatencyStatistics {
-
-    private static final ScheduledExecutorService SHARED_EXECUTOR = Executors.newSingleThreadScheduledExecutor(r -> {
-        Thread t = new Thread(r, "LatencyStatistics_printer");
-        t.setPriority(Thread.MIN_PRIORITY);
-        t.setDaemon(true);
-        return t;
-    });
 
     private static boolean RESET_STATISTICS_PER_UPDATE = true;
     private long sleepMs;
@@ -76,7 +67,7 @@ public class LatencyStatistics {
         prometheusEnabled = PrometheusMetricsExporter.getInstance().isEnabled();
         enable = true;
         if (sleepMs > 0) {
-            SHARED_EXECUTOR.scheduleAtFixedRate(this::printCurrentStatistics, sleepMs, sleepMs, TimeUnit.MILLISECONDS);
+            StatisticsScheduler.EXECUTOR.scheduleAtFixedRate(this::printCurrentStatistics, sleepMs, sleepMs, TimeUnit.MILLISECONDS);
         }
     }
 
