@@ -43,7 +43,7 @@ public class ZeroMqFactorProvider extends AbstractFactorProvider implements Conn
             return;
         }
         this.statisticsReceived = null;
-        zeroMqProvider.start(true, true);
+        zeroMqProvider.start(true, true, "factorProviderThread");
     }
 
     protected Map<String, Double> getFactors(String jsonContent) {

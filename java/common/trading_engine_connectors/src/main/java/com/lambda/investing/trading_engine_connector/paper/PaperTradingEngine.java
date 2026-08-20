@@ -169,7 +169,7 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
         //TODO something more generic on not ZeroMq
         if (this.orderRequestConnectorProvider instanceof ZeroMqProvider) {
             ZeroMqProvider orderRequestConnectorProviderZero = (ZeroMqProvider) this.orderRequestConnectorProvider;
-            orderRequestConnectorProviderZero.start(false, false);//subscribed to all topics on that port
+            orderRequestConnectorProviderZero.start(false, false, "OrderRequestPaperTradingProvider");//subscribed to all topics on that port
         }
     }
 
@@ -350,18 +350,25 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
         if (info.endsWith(REQUESTED_PORTFOLIO_INFO)) {
             //return portfolio on execution Report
             String algorithmInfo = info.split("[.]")[0];
+//            Portfolio portfolio = portfolioMap.getOrDefault(algorithmInfo,
+//                    Portfolio.getPortfolio(String.format(FORMAT_PORTFOLIO, algorithmInfo), isBacktest, isPaperTrading));
             Portfolio portfolio = portfolioMap.getOrDefault(algorithmInfo,
-                    Portfolio.getPortfolio(String.format(FORMAT_PORTFOLIO, algorithmInfo), isBacktest, isPaperTrading));
-
+                    new Portfolio());
             portfolioMap.put(algorithmInfo, portfolio);
+
             String header = Configuration.formatLog("{}.{}", REQUESTED_PORTFOLIO_INFO, algorithmInfo);
             this.marketDataProviderIn.notifyInfo(header, toJsonString(portfolio));
         }
         if (info.endsWith(REQUESTED_POSITION_INFO)) {
             String algorithmInfo = info.split("[.]")[0];
             //get position of the instrument from portfolio
+//            Portfolio portfolio = portfolioMap.getOrDefault(algorithmInfo,
+//                    Portfolio.getPortfolio(String.format(FORMAT_PORTFOLIO, algorithmInfo), isBacktest, isPaperTrading));
             Portfolio portfolio = portfolioMap.getOrDefault(algorithmInfo,
-                    Portfolio.getPortfolio(String.format(FORMAT_PORTFOLIO, algorithmInfo), isBacktest, isPaperTrading));
+                    new Portfolio());
+            portfolioMap.put(algorithmInfo, portfolio);
+
+
             String header = Configuration.formatLog("{}.{}", REQUESTED_POSITION_INFO, algorithmInfo);
             this.marketDataProviderIn.notifyInfo(header, toJsonString(portfolio.getPositions()));
         }

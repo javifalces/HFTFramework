@@ -46,6 +46,11 @@ public class AlgorithmNotifier {
     private final ConnectorConfiguration dummyConfig = new DisruptorConnectorConfiguration();
     private volatile String algorithmInfo;
     private final Algorithm algorithm;
+    /**
+     * Non-null only when this notifier owns (created) the disruptor and must shut it down.
+     */
+    private final String ownedDisruptorName;
+    private final DisruptorConnectorHelper.EventConsumer consumer;
 
     private Map<String, Object> lastParams = new HashMap<>();
     private boolean firstParams = true;
@@ -53,17 +58,43 @@ public class AlgorithmNotifier {
     public AlgorithmNotifier(Algorithm algorithm, int threadsNotifier) {
         this.algorithmInfo = algorithm.algorithmInfo;
         this.algorithm = algorithm;
+        this.consumer = this::handleNotification;
 
-        // Initialize DisruptorConnectorHelper with DISRUPTOR_HIGH_THROUGHPUT
         String threadName = this.algorithmInfo + "_notifier_disruptor";
+        this.ownedDisruptorName = threadName;
         this.disruptorHelper = DisruptorConnectorHelper.getInstance(
                 threadName,
                 Configuration.ConnectorProviderType.DISRUPTOR_HIGH_THROUGHPUT
         );
         this.disruptorHelper.init();
+        this.disruptorHelper.addConsumer(this.consumer);
+    }
 
-        // Register consumer to handle all notification events
-        this.disruptorHelper.addConsumer(this::handleNotification);
+    /**
+     * Creates an {@link AlgorithmNotifier} that routes events through a pre-existing
+     * (shared) {@link DisruptorConnectorHelper} instead of creating its own.
+     * Use this in {@link MultiAlgorithm} when {@code useCommonNotifierDisruptor} is enabled
+     * so all child algorithms share one ring-buffer thread.
+     */
+    public AlgorithmNotifier(Algorithm algorithm, DisruptorConnectorHelper sharedDisruptorHelper) {
+        this.algorithmInfo = algorithm.algorithmInfo;
+        this.algorithm = algorithm;
+        this.ownedDisruptorName = null;
+        this.consumer = this::handleNotification;
+        this.disruptorHelper = sharedDisruptorHelper;
+        this.disruptorHelper.addConsumer(this.consumer);
+    }
+
+    /**
+     * Removes this notifier's consumer from the disruptor.
+     * If this notifier owns the disruptor (created it), also shuts it down and removes it
+     * from the global registry, freeing the background thread.
+     */
+    public void stop() {
+        disruptorHelper.removeConsumer(consumer);
+        if (ownedDisruptorName != null) {
+            DisruptorConnectorHelper.removeInstance(ownedDisruptorName);
+        }
     }
 
     public void setAlgorithmInfo(String algorithmInfo) {

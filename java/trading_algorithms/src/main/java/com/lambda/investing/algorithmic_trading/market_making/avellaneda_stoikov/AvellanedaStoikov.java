@@ -266,8 +266,8 @@ public class AvellanedaStoikov extends MarketMakingAlgorithm {
     private void updateCounterTrades(Trade trade) {
         if (trade.getVerb() == null) {
             //infer the side
-            InstrumentManager instrumentManager = getInstrumentManager(trade.getInstrument());
-            Depth lastDepth = instrumentManager.getLastDepth();
+            InstrumentOrderManager instrumentOrderManager = getInstrumentManager(trade.getInstrument());
+            Depth lastDepth = instrumentOrderManager.getLastDepth();
             if (lastDepth != null && lastDepth.isDepthFilled()) {
                 if (trade.getPrice() < lastDepth.getMidPrice()) {
                     //sell market

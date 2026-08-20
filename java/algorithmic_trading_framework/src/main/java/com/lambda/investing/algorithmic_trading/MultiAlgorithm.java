@@ -1,6 +1,8 @@
 package com.lambda.investing.algorithmic_trading;
 
+import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.hedging.HedgeManager;
+import com.lambda.investing.connector.disruptor.DisruptorConnectorHelper;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.candle.Candle;
 import com.lambda.investing.model.exception.LambdaTradingException;
@@ -17,11 +19,17 @@ import java.util.stream.Collectors;
 
 public class MultiAlgorithm extends Algorithm {
 
+    private static final String COMMON_NOTIFIER_DISRUPTOR_NAME = "MultiAlgorithm_common_notifier_disruptor";
+
     @Getter
     private final List<Algorithm> algorithms;
 
     @Getter
     private final Map<String, List<Algorithm>> instrumentToAlgorithms = new HashMap<>();
+
+    public static DisruptorConnectorHelper COMMON_ALGO_NOTIFIER_DISRUPTOR = null;
+
+
 
     public MultiAlgorithm(AlgorithmConnectorConfiguration algorithmConnectorConfiguration, List<Algorithm> algorithms) {
         super(algorithmConnectorConfiguration, "MultiAlgorithm", new HashMap<>());
@@ -36,6 +44,7 @@ public class MultiAlgorithm extends Algorithm {
         rebuildInstrumentCache();
         propagateConstructorObservers();
     }
+
 
     /**
      * Propagates observers that were registered during {@code super()} (before
@@ -117,10 +126,23 @@ public class MultiAlgorithm extends Algorithm {
         this.algorithmConnectorConfiguration.getTradingEngineConnector().deregister(this.algorithmInfo, this);
         this.algorithmConnectorConfiguration.getMarketDataProvider().deregister(this);
 
+        DisruptorConnectorHelper sharedHelper = DisruptorConnectorHelper.getInstance(
+                COMMON_NOTIFIER_DISRUPTOR_NAME,
+                Configuration.ConnectorProviderType.DISRUPTOR_HIGH_THROUGHPUT
+        );
+        sharedHelper.init();
+        COMMON_ALGO_NOTIFIER_DISRUPTOR = sharedHelper;
+
+        for (Algorithm algorithm : algorithms) {
+            algorithm.useSharedNotifierDisruptor(sharedHelper);
+        }
+
         for (Algorithm algorithm : algorithms) {
             algorithm.setExitOnStop(false);
             algorithm.init();
         }
+
+
         rebuildInstrumentCache();
     }
 

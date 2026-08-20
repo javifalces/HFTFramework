@@ -125,7 +125,7 @@ public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implem
 
 	public void start() {
 		this.statisticsReceived = null;
-		zeroMqProvider.start(true, true);
+		zeroMqProvider.start(true, true, "marketDataProvider");
 	}
 
 	///////////////////// Constructors ////////////////////

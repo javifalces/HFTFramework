@@ -53,7 +53,7 @@ public class MetatraderMarketDataPublisher extends AbstractMarketDataConnectorPu
 	}
 
 	@Override public void init() {
-		this.metatraderZeroBrokerConnector.getPublisherProvider().start(false, false);
+		this.metatraderZeroBrokerConnector.getPublisherProvider().start(false, false, "MetatraderDataProvider");
 		this.metatraderZeroBrokerConnector.getPublisherProvider()
 				.register(this.metatraderZeroBrokerConnector.getPublisherZeroMqConfiguration(), this);
 	}

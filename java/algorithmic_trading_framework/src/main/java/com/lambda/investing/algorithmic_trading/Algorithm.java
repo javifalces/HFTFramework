@@ -117,7 +117,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         return algorithmInfo;
     }
 
-    protected Map<String, InstrumentManager> instrumentToManager;
+    protected static Map<String, InstrumentOrderManager> instrumentToManager;
 
     protected long seed = 0;
 
@@ -164,6 +164,18 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     @Getter
     protected PortfolioManager portfolioManager;
     protected AlgorithmNotifier algorithmNotifier;
+
+    /**
+     * Replaces this algorithm's private notifier disruptor with a shared one supplied by
+     * {@link MultiAlgorithm} when {@code useCommonNotifierDisruptor} is enabled.
+     * Must be called after construction but before {@link #start()}.
+     */
+    public void useSharedNotifierDisruptor(com.lambda.investing.connector.disruptor.DisruptorConnectorHelper sharedHelper) {
+        if (this.algorithmNotifier != null) {
+            this.algorithmNotifier.stop();
+        }
+        this.algorithmNotifier = new AlgorithmNotifier(this, sharedHelper);
+    }
 
     @Getter
     protected boolean isBacktest = false;
@@ -322,7 +334,12 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                         return size() > HISTORICAL_TRADES_SAVE;
                     }
                 });
-        algorithmNotifier = new AlgorithmNotifier(this, Configuration.THREADS_NOTIFY_ALGORITHM_OBSERVERS);
+
+
+        if (!this.getClass().getSimpleName().equals(MultiAlgorithm.class.getSimpleName())) {
+            algorithmNotifier = new AlgorithmNotifier(this, Configuration.THREADS_NOTIFY_ALGORITHM_OBSERVERS);
+        }
+
 
 
         if (!isBacktest) {
@@ -369,28 +386,28 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         this.exitOnStop = exitOnStop;
     }
 
-    public InstrumentManager getInstrumentManager(String instrumentPk) {
-        InstrumentManager instrumentManager = instrumentToManager.get(instrumentPk);
-        if (instrumentManager == null) {
-            instrumentManager = new InstrumentManager(Instrument.getInstrument(instrumentPk), isBacktest);
-            instrumentToManager.put(instrumentPk, instrumentManager);
+    public InstrumentOrderManager getInstrumentManager(String instrumentPk) {
+        InstrumentOrderManager instrumentOrderManager = instrumentToManager.get(instrumentPk);
+        if (instrumentOrderManager == null) {
+            instrumentOrderManager = new InstrumentOrderManager(Instrument.getInstrument(instrumentPk), isBacktest);
+            instrumentToManager.put(instrumentPk, instrumentOrderManager);
         }
         return instrumentToManager.get(instrumentPk);
     }
 
     public Map<String, ExecutionReport> getActiveOrders(Instrument instrument) {
-        InstrumentManager instrumentManager = getInstrumentManager(instrument.getPrimaryKey());
-        return instrumentManager.getAllActiveOrders();
+        InstrumentOrderManager instrumentOrderManager = getInstrumentManager(instrument.getPrimaryKey());
+        return instrumentOrderManager.getAllActiveOrders();
     }
 
     public Map<String, OrderRequest> getRequestOrders(Instrument instrument) {
-        InstrumentManager instrumentManager = getInstrumentManager(instrument.getPrimaryKey());
-        return instrumentManager.getAllRequestOrders();
+        InstrumentOrderManager instrumentOrderManager = getInstrumentManager(instrument.getPrimaryKey());
+        return instrumentOrderManager.getAllRequestOrders();
     }
 
     public void setAllRequestOrders(Instrument instrument, Map<String, OrderRequest> requestOrders) {
-        InstrumentManager instrumentManager = getInstrumentManager(instrument.getPrimaryKey());
-        instrumentManager.setAllRequestOrders(requestOrders);
+        InstrumentOrderManager instrumentOrderManager = getInstrumentManager(instrument.getPrimaryKey());
+        instrumentOrderManager.setAllRequestOrders(requestOrders);
     }
 
     public void register(AlgorithmObserver algorithmObserver) {
@@ -727,8 +744,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
      * Force update depth by calling onDepthUpdate with the last Depth of all instruments in the InstrumentManager.Check basedDepth or override it
      */
     public void forceUpdateDepth() {
-        for (InstrumentManager instrumentManager : instrumentToManager.values()) {
-            Depth lastDepth = instrumentManager.getLastDepth();
+        for (InstrumentOrderManager instrumentOrderManager : instrumentToManager.values()) {
+            Depth lastDepth = instrumentOrderManager.getLastDepth();
             if (lastDepth != null) {
                 //normally base algo timestamp will discard the update
                 //normally base algo double count will discard the update
@@ -763,8 +780,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         lastCurrentDay = 0;
         portfolioManager.reset();
 
-        for (InstrumentManager instrumentManager : instrumentToManager.values()) {
-            instrumentManager.reset();
+        for (InstrumentOrderManager instrumentOrderManager : instrumentToManager.values()) {
+            instrumentOrderManager.reset();
         }
     }
 
@@ -816,10 +833,10 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     }
 
     public OrderRequest createActiveCancel(String origClientOrderId) {
-        for (InstrumentManager instrumentManager : instrumentToManager.values()) {
-            Map<String, ExecutionReport> activeOrders = instrumentManager.getAllActiveOrders();
+        for (InstrumentOrderManager instrumentOrderManager : instrumentToManager.values()) {
+            Map<String, ExecutionReport> activeOrders = instrumentOrderManager.getAllActiveOrders();
             if (activeOrders.containsKey(origClientOrderId)) {
-                return createCancel(instrumentManager.getInstrument(), origClientOrderId);
+                return createCancel(instrumentOrderManager.getInstrument(), origClientOrderId);
             }
         }
         return null;
@@ -840,8 +857,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     }
 
     public void cancelAllVerb(Instrument instrument, Verb verb) {
-        InstrumentManager instrumentManager = getInstrumentManager(instrument.getPrimaryKey());
-        Map<String, ExecutionReport> instrumentActiveOrders = instrumentManager.getAllActiveOrders();
+        InstrumentOrderManager instrumentOrderManager = getInstrumentManager(instrument.getPrimaryKey());
+        Map<String, ExecutionReport> instrumentActiveOrders = instrumentOrderManager.getAllActiveOrders();
 
         if (!instrumentActiveOrders.isEmpty() && LOG_LEVEL > LogLevels.DISABLE.ordinal()) {
             logger.info("cancelAll verb {}  {} active orders {}", verb, instrument, instrumentActiveOrders.size());
@@ -857,7 +874,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         }
 
         //save requested orders to cancel after active received
-        Map<String, OrderRequest> requestOrders = instrumentManager.getAllRequestOrders();
+        Map<String, OrderRequest> requestOrders = instrumentOrderManager.getAllRequestOrders();
 
         try {
             for (String clientOrderId : requestOrders.keySet()) {
@@ -874,8 +891,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     }
 
     private void cancelAllInstruments() {
-        for (InstrumentManager instrumentManager : instrumentToManager.values()) {
-            Instrument instrument = instrumentManager.getInstrument();
+        for (InstrumentOrderManager instrumentOrderManager : instrumentToManager.values()) {
+            Instrument instrument = instrumentOrderManager.getInstrument();
             try {
                 getQuoteManager(instrument.getPrimaryKey()).unquote();
             } catch (LambdaTradingException e) {
@@ -898,8 +915,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     }
 
     public void cancelAll(Instrument instrument) {
-        InstrumentManager instrumentManager = getInstrumentManager(instrument.getPrimaryKey());
-        Map<String, ExecutionReport> instrumentActiveOrders = instrumentManager.getAllActiveOrders();
+        InstrumentOrderManager instrumentOrderManager = getInstrumentManager(instrument.getPrimaryKey());
+        Map<String, ExecutionReport> instrumentActiveOrders = instrumentOrderManager.getAllActiveOrders();
 
         if (!instrumentActiveOrders.isEmpty() && LOG_LEVEL > LogLevels.DISABLE.ordinal()) {
             logger.info("cancelAll {} active orders {}", instrument, instrumentActiveOrders.size());
@@ -924,7 +941,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
 
         //save requested orders to cancel after active received
-        Map<String, OrderRequest> requestOrders = instrumentManager.getAllRequestOrders();
+        Map<String, OrderRequest> requestOrders = instrumentOrderManager.getAllRequestOrders();
         try {
             for (Map.Entry<String, OrderRequest> entry : requestOrders.entrySet()) {
                 String clientOrderId = entry.getKey();
@@ -1075,8 +1092,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                             || executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.PartialFilled);
             if (isActiveEr && clientOrderIdToCancelWhenActive.containsKey(executionReport.getClientOrderId())) {
                 String instrumentPk = executionReport.getInstrument();
-                InstrumentManager instrumentManager = getInstrumentManager(instrumentPk);
-                OrderRequest cancelRequest = createCancel(instrumentManager.getInstrument(),
+                InstrumentOrderManager instrumentOrderManager = getInstrumentManager(instrumentPk);
+                OrderRequest cancelRequest = createCancel(instrumentOrderManager.getInstrument(),
                         executionReport.getClientOrderId());
                 try {
                     sendOrderRequest(cancelRequest);
@@ -1090,12 +1107,12 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             return;
         }//required to not update when we are resetting RL
         String instrumentPk = executionReport.getInstrument();
-        InstrumentManager instrumentManager = getInstrumentManager(instrumentPk);
+        InstrumentOrderManager instrumentOrderManager = getInstrumentManager(instrumentPk);
 
-        Queue<String> tradesInstrument = instrumentManager.getCfTradesReceived();
+        Queue<String> tradesInstrument = instrumentOrderManager.getCfTradesReceived();
 
 
-        Map<String, OrderRequest> instrumentSendOrders = instrumentManager.getAllRequestOrders();
+        Map<String, OrderRequest> instrumentSendOrders = instrumentOrderManager.getAllRequestOrders();
 
         boolean isActive =
                 executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.Active) || executionReport
@@ -1121,13 +1138,13 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         //			pendingToRemoveClientOrderId.add(executionReport.getClientOrderId());
         //		}
         instrumentSendOrders.remove(executionReport.getClientOrderId());
-        setAllRequestOrders(instrumentManager.getInstrument(), instrumentSendOrders);
+        setAllRequestOrders(instrumentOrderManager.getInstrument(), instrumentSendOrders);
 
         if (isActive) {
             boolean wasACfTrade = tradesInstrument.contains(executionReport.getClientOrderId());
             if (!wasACfTrade) {
 
-                Map<String, ExecutionReport> instrumentActiveOrders = instrumentManager.getAllActiveOrders();
+                Map<String, ExecutionReport> instrumentActiveOrders = instrumentOrderManager.getAllActiveOrders();
 
                 instrumentActiveOrders.put(executionReport.getClientOrderId(), executionReport);
                 //remove in case of modify!
@@ -1135,7 +1152,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                     instrumentActiveOrders.remove(executionReport.getOrigClientOrderId());
                 }
                 //update it
-                instrumentManager.setAllActiveOrders(instrumentActiveOrders);
+                instrumentOrderManager.setAllActiveOrders(instrumentActiveOrders);
                 if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal()) {
                     logger.debug("ER {} received active  {} ", executionReport.getClientOrderId(),
                             executionReport.getVerb());
@@ -1145,7 +1162,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                     if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal()) {
                         logger.debug("ER {} detected to be canceled", executionReport.getClientOrderId());
                     }
-                    OrderRequest cancelRequest = createCancel(instrumentManager.getInstrument(),
+                    OrderRequest cancelRequest = createCancel(instrumentOrderManager.getInstrument(),
                             executionReport.getClientOrderId());
                     try {
                         sendOrderRequest(cancelRequest);
@@ -1166,16 +1183,16 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         if (isInactive) {
             if (executionReport.getExecutionReportStatus().equals(ExecutionReportStatus.CompletelyFilled)) {
                 tradesInstrument.offer(executionReport.getClientOrderId());
-                instrumentManager.setCfTradesReceived(tradesInstrument);
+                instrumentOrderManager.setCfTradesReceived(tradesInstrument);
             }
 
-            Map<String, ExecutionReport> instrumentActiveOrders = instrumentManager.getAllActiveOrders();
+            Map<String, ExecutionReport> instrumentActiveOrders = instrumentOrderManager.getAllActiveOrders();
             instrumentActiveOrders.remove(executionReport.getClientOrderId());
             //just in case
             if (executionReport.getOrigClientOrderId() != null) {
                 instrumentActiveOrders.remove(executionReport.getOrigClientOrderId());
             }
-            instrumentManager.setAllActiveOrders(instrumentActiveOrders);
+            instrumentOrderManager.setAllActiveOrders(instrumentActiveOrders);
             if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal()) {
                 logger.debug("ER {} received inactive ", executionReport.getClientOrderId());
             }
@@ -1183,13 +1200,13 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         }
 
         if (isCancelRejected) {
-            Map<String, ExecutionReport> instrumentActiveOrders = instrumentManager.getAllActiveOrders();
+            Map<String, ExecutionReport> instrumentActiveOrders = instrumentOrderManager.getAllActiveOrders();
             if (executionReport.getRejectReason().contains(REJECTION_NOT_FOUND) && instrumentActiveOrders
                     .containsKey(executionReport.getOrigClientOrderId())) {
                 //remove it from active
                 instrumentActiveOrders.remove(executionReport.getOrigClientOrderId());
                 instrumentActiveOrders.remove(executionReport.getClientOrderId());//just in case
-                instrumentManager.setAllActiveOrders(instrumentActiveOrders);
+                instrumentOrderManager.setAllActiveOrders(instrumentActiveOrders);
             }
             if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal()) {
                 logger.debug("ER {} cancel rejected on {} ", executionReport.getClientOrderId(),
@@ -1205,16 +1222,16 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                         executionReport.getPrice());
             }
 
-            Map<Verb, Long> currentLastTradeTimestamp = instrumentManager.getLastTradeTimestamp();
+            Map<Verb, Long> currentLastTradeTimestamp = instrumentOrderManager.getLastTradeTimestamp();
             currentLastTradeTimestamp.put(executionReport.getVerb(), getCurrentTimestamp());
-            instrumentManager.setLastTradeTimestamp(currentLastTradeTimestamp);
+            instrumentOrderManager.setLastTradeTimestamp(currentLastTradeTimestamp);
         }
 
     }
 
     private OrderRequest checkOrderRequest(OrderRequest orderRequest) throws LambdaTradingException {
         String instrumentPk = orderRequest.getInstrument();
-        InstrumentManager instrumentManager = getInstrumentManager(instrumentPk);
+        InstrumentOrderManager instrumentOrderManager = getInstrumentManager(instrumentPk);
 
         //Check order request
         if (orderRequest.getClientOrderId() == null) {
@@ -1269,7 +1286,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
         if (needOrigClientOrdId && orderRequest.getOrigClientOrderId() != null) {
             String origClientOrderId = orderRequest.getOrigClientOrderId();
-            Map<String, ExecutionReport> instrumentActiveOrders = instrumentManager.getAllActiveOrders();
+            Map<String, ExecutionReport> instrumentActiveOrders = instrumentOrderManager.getAllActiveOrders();
             boolean isConfirmed = instrumentActiveOrders.containsKey(origClientOrderId);
             if (!isConfirmed) {
                 String message = String
@@ -1319,8 +1336,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             logger.info("ER rej received {}", executionReport.getRejectReason());
             // retry last action in another thread
             String instrumentPk = executionReport.getInstrument();
-            InstrumentManager instrumentManager = getInstrumentManager(instrumentPk);
-            Map<String, OrderRequest> instrumentSendOrders = instrumentManager.getAllRequestOrders();
+            InstrumentOrderManager instrumentOrderManager = getInstrumentManager(instrumentPk);
+            Map<String, OrderRequest> instrumentSendOrders = instrumentOrderManager.getAllRequestOrders();
             OrderRequest orderRequest = instrumentSendOrders.get(executionReport.getClientOrderId());
             //null pointer!!!!
             if (orderRequest != null) {
@@ -1362,19 +1379,19 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         }
 
         String instrumentPk = orderRequest.getInstrument();
-        InstrumentManager instrumentManager = getInstrumentManager(instrumentPk);
+        InstrumentOrderManager instrumentOrderManager = getInstrumentManager(instrumentPk);
 
         orderRequest = checkOrderRequest(orderRequest);
         orderRequest.setTimestampCreation(getCurrentTimestamp());
 
         //updating the OrderRequestMap before sending
-        Instrument instrumentOrder = instrumentManager.getInstrument();
+        Instrument instrumentOrder = instrumentOrderManager.getInstrument();
         if (orderRequest.getPrice() != OrderRequest.NOT_SET_PRICE_VALUE) {
             //round price
             orderRequest.setPrice(instrumentOrder.roundPrice(orderRequest.getPrice()));
         }
 
-        Map<String, OrderRequest> instrumentSendOrders = instrumentManager.getAllRequestOrders();
+        Map<String, OrderRequest> instrumentSendOrders = instrumentOrderManager.getAllRequestOrders();
         //		if(pendingToRemoveClientOrderId.contains(orderRequest.getClientOrderId())){
         //			pendingToRemoveClientOrderId.remove(orderRequest.getClientOrderId());
         //		}else {
@@ -1430,8 +1447,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     private boolean depthTimestampAlreadyProccess(Depth depth) {
         long timestamp = depth.getTimestamp();
         if (isBacktest && instrumentToManager != null && instrumentToManager.containsKey(depth.getInstrument())) {
-            InstrumentManager instrumentManager = getInstrumentManager(depth.getInstrument());
-            Depth lastDepth = instrumentManager.getLastDepth();
+            InstrumentOrderManager instrumentOrderManager = getInstrumentManager(depth.getInstrument());
+            Depth lastDepth = instrumentOrderManager.getLastDepth();
             if (lastDepth == null) {
                 return false;
             }
@@ -1478,8 +1495,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         depth = removeMe(depth);
         checkDepth(depth);
         //check depth is different than before depth
-        InstrumentManager instrumentManager = getInstrumentManager(depth.getInstrument());
-        Depth lastDepth = instrumentManager.getLastDepth();
+        InstrumentOrderManager instrumentOrderManager = getInstrumentManager(depth.getInstrument());
+        Depth lastDepth = instrumentOrderManager.getLastDepth();
         if (lastDepth != null && lastDepth.equalsContent(depth)) {
             //avoid double counting
             return false;
@@ -1493,7 +1510,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         }
 
 
-        instrumentManager.setLastDepth(depth);
+        instrumentOrderManager.setLastDepth(depth);
         addStatistics(RECEIVE_STATS + " depth." + depth.getInstrument());
         depthReceived.incrementAndGet();
 
@@ -1505,8 +1522,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     private Depth removeMe(Depth depth) {
 
         String instrumentPk = depth.getInstrument();
-        InstrumentManager instrumentManager = getInstrumentManager(instrumentPk);
-        Map<String, ExecutionReport> activeOrdersByClordID = instrumentManager.getAllActiveOrders();
+        InstrumentOrderManager instrumentOrderManager = getInstrumentManager(instrumentPk);
+        Map<String, ExecutionReport> activeOrdersByClordID = instrumentOrderManager.getAllActiveOrders();
         if (activeOrdersByClordID == null || activeOrdersByClordID.size() == 0) {
             return depth;
         }
@@ -1560,8 +1577,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         }
 
         //update cache
-        InstrumentManager instrumentManager = getInstrumentManager(trade.getInstrument());
-        instrumentManager.setLastTrade(trade);
+        InstrumentOrderManager instrumentOrderManager = getInstrumentManager(trade.getInstrument());
+        instrumentOrderManager.setLastTrade(trade);
 
 
         addStatistics(RECEIVE_STATS + " trade." + trade.getInstrument());
@@ -1629,8 +1646,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
     private void plotBacktestResults() {
         try {
-            for (InstrumentManager instrumentManager : instrumentToManager.values()) {
-                Instrument instrument = instrumentManager.getInstrument();
+            for (InstrumentOrderManager instrumentOrderManager : instrumentToManager.values()) {
+                Instrument instrument = instrumentOrderManager.getInstrument();
                 portfolioManager.plotHistorical(instrument);
             }
         } catch (Exception e) {
@@ -1727,8 +1744,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         // Also check in per-instrument tracking
         if (!isMyOrder && instrumentToManager != null) {
             try {
-                InstrumentManager instrumentManager = getInstrumentManager(instrumentPk);
-                Map<String, OrderRequest> instrumentSendOrders = instrumentManager.getAllRequestOrders();
+                InstrumentOrderManager instrumentOrderManager = getInstrumentManager(instrumentPk);
+                Map<String, OrderRequest> instrumentSendOrders = instrumentOrderManager.getAllRequestOrders();
                 isMyOrder = instrumentSendOrders.containsKey(clientOrderId);
             } catch (Exception e) {
                 // Instrument manager may not exist, that's ok

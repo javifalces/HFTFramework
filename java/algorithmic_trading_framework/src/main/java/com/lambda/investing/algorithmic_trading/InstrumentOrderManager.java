@@ -22,10 +22,10 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Getter
 @Setter
-public class InstrumentManager {
+public class InstrumentOrderManager {
 
     private static int BUFFER_CF_TRADES = 60;
-    protected Logger logger = LogManager.getLogger(InstrumentManager.class);
+    protected Logger logger = LogManager.getLogger(InstrumentOrderManager.class);
     private Instrument instrument;
     private Map<String, ExecutionReport> allActiveOrders;//clientOrderId to Active execution report
     private Map<String, OrderRequest> allRequestOrders; // clientOrderId to orderRequest
@@ -36,12 +36,12 @@ public class InstrumentManager {
 
     private Map<Verb, Long> lastTradeTimestamp;
 
-    public InstrumentManager(Instrument instrument, boolean isBacktest) {
+    public InstrumentOrderManager(Instrument instrument, boolean isBacktest) {
         this.instrument = instrument;
         reset();
         if (!isBacktest) {
-//            new Thread(new MapManager(), instrument.getPrimaryKey() + "_instrumentManager").start();
-            new Thread(new MapManager()::runAffinity, instrument.getPrimaryKey() + "_instrumentManager").start();
+//            new Thread(new MapManager(), instrument.getPrimaryKey() + "_instrumentOrderManager").start();
+            new Thread(new MapManager()::runAffinity, instrument.getPrimaryKey() + "_instrumentOrderManager").start();
         }
     }
 

@@ -10,9 +10,6 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.*;
 import io.netty.handler.codec.http.websocketx.*;
-import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketServerCompressionHandler;
-import io.netty.handler.logging.LogLevel;
-import io.netty.handler.logging.LoggingHandler;
 import io.netty.util.CharsetUtil;
 import io.netty.util.concurrent.GlobalEventExecutor;
 import org.apache.logging.log4j.LogManager;
@@ -135,19 +132,17 @@ public class AlgorithmWebServer {
     public AlgorithmWebServer(int port) throws InterruptedException {
         this.port = port;
         bossGroup  = new NioEventLoopGroup(1);
-        workerGroup = new NioEventLoopGroup();
+        workerGroup = new NioEventLoopGroup(2);
 
         ServerBootstrap bootstrap = new ServerBootstrap();
         bootstrap.group(bossGroup, workerGroup)
                  .channel(NioServerSocketChannel.class)
-                 .handler(new LoggingHandler(LogLevel.DEBUG))
                  .childHandler(new ChannelInitializer<SocketChannel>() {
                      @Override
                      protected void initChannel(SocketChannel ch) {
                          ChannelPipeline p = ch.pipeline();
                          p.addLast(new HttpServerCodec());
                          p.addLast(new HttpObjectAggregator(65536));
-                         p.addLast(new WebSocketServerCompressionHandler());
                          p.addLast(new AlgorithmServerHandler());
                      }
                  })
@@ -341,7 +336,6 @@ public class AlgorithmWebServer {
      *   <li>Handles WebSocket frames (text / close) after the upgrade.</li>
      * </ol>
      */
-    @ChannelHandler.Sharable
     private class AlgorithmServerHandler extends SimpleChannelInboundHandler<Object> {
 
         private WebSocketServerHandshaker handshaker;

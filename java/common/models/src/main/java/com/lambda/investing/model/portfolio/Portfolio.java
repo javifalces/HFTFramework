@@ -63,8 +63,9 @@ public class Portfolio implements Runnable {
                     String fileContent = new String(Files.readAllBytes(Paths.get(path)));
                     portfolio = fromJsonString(fileContent, Portfolio.class);
                     portfolio.setPath(path);
-
-                    new Thread(portfolio, "portfolio_autosave").start();
+                    if (portfolio.isAutosave()) {
+                        new Thread(portfolio, "portfolio_autosave").start();
+                    }
 
                 } catch (IOException e) {
                     logger.error("error reading portfolio json from {}-> close app to not override anything", path, e);
