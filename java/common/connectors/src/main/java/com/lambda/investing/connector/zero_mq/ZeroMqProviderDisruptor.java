@@ -13,37 +13,58 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Low-latency variant of {@link ZeroMqProvider} that interposes an LMAX Disruptor
- * ring-buffer between the ZeroMq I/O thread and the registered
- * {@link com.lambda.investing.connector.ConnectorListener}s.
+ * Low-latency variant of {@link ZeroMqProvider} that replaces the
+ * {@code ThreadPoolExecutor} dispatch path with an LMAX Disruptor ring-buffer.
  *
- * <h2>Architecture</h2>
+ * <h2>Threading architecture</h2>
  * <pre>
- *  ZeroMq I/O thread
- *    └─ onUpdate(TypeMessage, Object, String, long)
+ *  ZeroMq kernel buffer
+ *    └─ ZeroMqThreadReceiver  (inherited – owns the SUB socket, same as ZeroMqProvider)
+ *             │  synchronized(socketSub) – minimal lock: read bytes + timestamp only
+ *             │  deserialize (on receiver thread, no pool – use threadsListening=0)
  *             │
- *             ▼  DisruptorConnectorHelper.publish()  (ring-buffer write, ~50 ns)
+ *             ▼  onUpdate() override → DisruptorConnectorHelper.publish()  (~50 ns, no alloc)
  *                     │
- *                     ▼  [zmq-provider-disruptor thread]
- *                 per-listener EventConsumer (one per registered ConnectorListener)
+ *                     ▼  [zmq-provider-disruptor thread]  (BusySpin or Yielding wait strategy)
+ *                 per-listener EventConsumer
  *                     └─ ConnectorListener.onUpdate(...)
  * </pre>
  *
- * <p>The shared ring-buffer infrastructure ({@link DisruptorConnectorHelper}) is
+ * <h2>Relationship to ZeroMqProvider</h2>
+ * {@code ZeroMqThreadReceiver} is still required here – it is the sole owner of the ZMQ
+ * SUB socket and must keep it drained to avoid HWM-triggered message drops.  What this
+ * subclass replaces is the <em>dispatch</em> step: instead of submitting
+ * deserialization + listener delivery to a {@code ThreadPoolExecutor}, the receiver
+ * thread publishes directly to the Disruptor ring-buffer and returns to the socket
+ * immediately.
+ *
+ * <p><strong>Always construct with {@code threadsListening=0}</strong> so the parent
+ * does not create a {@code ThreadPoolExecutor}.  With a pool active the path becomes
+ * {@code socket → thread pool → Disruptor → listener}, adding an unnecessary hop and
+ * defeating the latency goal.
  *
  * <h2>Allocation profile (steady-state hot path)</h2>
  * <ul>
  *   <li>Per-topic {@link ZeroMqConfiguration} objects are cached in
  *       {@link #topicConfigCache}; after the first message per topic no allocation
  *       occurs in {@link #onUpdate(TypeMessage, Object, String, long)}.
- *   <li>The Disruptor slot itself is pre-allocated – only four references are written.
+ *   <li>The Disruptor slot itself is pre-allocated – only four references are written
+ *       per publish.
+ * </ul>
+ *
+ * <h2>Wait strategies</h2>
+ * <ul>
+ *   <li>{@link com.lambda.investing.Configuration.ConnectorProviderType#DISRUPTOR_LOW_LATENCY}
+ *       – BusySpin; lowest latency, dedicates one core to the consumer thread.</li>
+ *   <li>{@link com.lambda.investing.Configuration.ConnectorProviderType#DISRUPTOR_HIGH_THROUGHPUT}
+ *       – Yielding; lower CPU at slightly higher latency.</li>
  * </ul>
  *
  * <h2>Lifecycle</h2>
  * <pre>{@code
- * ZeroMqProviderDisruptor provider = new ZeroMqProviderDisruptor(cfg, 1, false);
+ * ZeroMqProviderDisruptor provider = new ZeroMqProviderDisruptor(cfg, 0, false);
  * provider.register(cfg, myListener);
- * provider.start();   // initialises Disruptor + warmup, then starts ZeroMq listener
+ * provider.start();   // initialises Disruptor + warmup, then starts ZeroMqThreadReceiver
  * }</pre>
  */
 public class ZeroMqProviderDisruptor extends ZeroMqProvider {
@@ -206,6 +227,11 @@ public class ZeroMqProviderDisruptor extends ZeroMqProvider {
      */
     @Override
     public void start(boolean hardTopicFilter, boolean sendAck) {
+        if (helper != null && helper.isReady()) {
+            logger.debug("ZeroMqProviderDisruptor already started for {} – skipping duplicate start",
+                    disruptorThreadName);
+            return;
+        }
         initDisruptor();
         String topic = zeroMqConfiguration.getTopic();
         if (topic == null) {

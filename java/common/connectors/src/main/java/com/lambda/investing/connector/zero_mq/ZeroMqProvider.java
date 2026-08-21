@@ -1,6 +1,7 @@
 package com.lambda.investing.connector.zero_mq;
 
 
+import com.lambda.investing.Configuration;
 import com.lambda.investing.LambdaThreadFactory;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
@@ -26,6 +27,55 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * ZeroMQ SUB-socket provider that receives messages and dispatches them to registered
+ * {@link ConnectorListener}s.
+ *
+ * <h2>Threading architecture</h2>
+ * <pre>
+ *  ZeroMq kernel buffer
+ *    └─ ZeroMqThreadReceiver  (one dedicated thread, owns the SUB socket)
+ *             │  synchronized(socketSub) – minimal lock: read bytes + timestamp only
+ *             │
+ *             ├─ threadsListening == 0  →  deserialize + treatMessage on this thread
+ *             │                            (synchronous; fine for low-volume use)
+ *             │
+ *             └─ threadsListening != 0  →  submit(deserialize + treatMessage)
+ *                        │                 to onUpdateExecutorService
+ *                        ▼
+ *                ThreadPoolExecutor  (fixed if >0, cached if <0)
+ *                        │
+ *                        └─ per-topic synchronized(topicLock)
+ *                                   └─ onUpdate() → ConnectorListener.onUpdate(...)
+ * </pre>
+ *
+ * <h2>Why a dedicated receiver thread?</h2>
+ * ZeroMQ sockets are <em>not thread-safe</em>; {@code ZMsg.recvMsg()} blocks until a
+ * message arrives.  {@code ZeroMqThreadReceiver} dedicates a single thread to that
+ * blocking call so the application thread is never tied up waiting on I/O.  The lock
+ * scope around the socket is intentionally minimal – only raw byte extraction and
+ * timestamping – so the thread returns to the socket as fast as possible.  This matters
+ * because {@code socketSub.setHWM(1)}: if the socket is not drained quickly enough the
+ * ZMQ kernel will start dropping messages.
+ *
+ * <h2>Why offload to a thread pool?</h2>
+ * Two operations on the hot path are expensive relative to socket I/O:
+ * <ol>
+ *   <li>{@code SerializationUtils.deserialize} – allocates, does reflection-based I/O.</li>
+ *   <li>{@code ConnectorListener.onUpdate} – may run algorithm logic or order management.</li>
+ * </ol>
+ * Running both on the receiver thread causes head-of-line blocking: one slow listener
+ * stalls every subsequent message.  The thread pool moves that work off the receiver
+ * thread so it returns to the socket immediately after submission.
+ * Per-topic {@code synchronized(topicLock)} in {@code treatMessage} preserves in-order
+ * delivery within a topic even when multiple pool threads are active.
+ *
+ * <h2>Low-latency alternative</h2>
+ * {@link ZeroMqProviderDisruptor} keeps {@code ZeroMqThreadReceiver} for socket I/O but
+ * replaces the thread pool with an LMAX Disruptor ring-buffer (~50 ns publish, no
+ * steady-state allocation).  When using that subclass pass {@code threadsListening=0} to
+ * suppress the thread pool; the receiver thread will publish directly to the ring-buffer.
+ */
 public class ZeroMqProvider implements ConnectorProvider {
 
     @Getter
@@ -36,13 +86,18 @@ public class ZeroMqProvider implements ConnectorProvider {
     private ZeroMqThreadReceiver threadReceiver;
     private Thread thread;
     private static final Map<Integer, ZMQ.Socket> PORTS_TAKEN_SUB = new ConcurrentHashMap<>();
+    /**
+     * Dispatches deserialization + listener delivery off the receiver thread.
+     * Null when {@code threadsListening == 0} (synchronous mode).
+     * Fixed-size when {@code threadsListening > 0}; cached (unbounded) when {@code < 0}.
+     */
     private ThreadPoolExecutor onUpdateExecutorService;
 
     private long sleepMsBetweenMessages = 0;
     protected List<String> topicListSubscribed;
     private static Map<ZeroMqConfiguration, ZeroMqProvider> INSTANCES = new ConcurrentHashMap<>();
     String url;
-    private ZMQ.Socket socketSub;
+    protected ZMQ.Socket socketSub;
     private ZMQ.Socket socketReq;//forACks
     protected int threadsListening;
 
@@ -53,10 +108,9 @@ public class ZeroMqProvider implements ConnectorProvider {
     private boolean isServer = DEFAULT_SERVER;
 
     public static ZeroMqProvider getInstance(ZeroMqConfiguration zeroMqConfiguration, int threadsListening, boolean isServer) {
-        ZeroMqProvider output = INSTANCES
-                .getOrDefault(zeroMqConfiguration, new ZeroMqProvider(zeroMqConfiguration, threadsListening));
+        ZeroMqProvider output = INSTANCES.computeIfAbsent(zeroMqConfiguration,
+                cfg -> new ZeroMqProvider(cfg, threadsListening));
         output.setServer(isServer);
-        INSTANCES.put(zeroMqConfiguration, output);
 
         //subscribe to topic
         String topic = zeroMqConfiguration.getTopic();
@@ -118,16 +172,36 @@ public class ZeroMqProvider implements ConnectorProvider {
             topicListSubscribed.add(topic);
     }
 
-    public void setSleepMsBetweenMessages(long sleepMsBetweenMessages) {
-        this.sleepMsBetweenMessages = sleepMsBetweenMessages;
-    }
-
     public void start() {
         start(true, true);
     }
-
     public void start(boolean hardTopicFilter, boolean sendAck) {
+        String threadName = Configuration.formatLog("zeroMqThreadReceiverThreadName ({})-> {}:{}", this.threadsListening, zeroMqConfiguration.getHost(), zeroMqConfiguration.getPort());
+        start(hardTopicFilter, sendAck, threadName);
+    }
 
+    public void start(boolean hardTopicFilter, boolean sendAck, String zeroMqThreadReceiverThreadName) {
+        if (thread != null && thread.isAlive()) {
+            logger.debug("ZeroMqProvider receiver thread already running for {}:{} – skipping duplicate start",
+                    zeroMqConfiguration.getHost(), zeroMqConfiguration.getPort());
+            return;
+        }
+
+        setupSocket(hardTopicFilter, sendAck);
+
+        // Receiver thread
+        threadReceiver = new ZeroMqThreadReceiver(this.zeroMqConfiguration);
+        this.thread = new Thread(threadReceiver, zeroMqThreadReceiverThreadName);
+        this.thread.start();
+    }
+
+    /**
+     * Binds/connects the SUB socket, subscribes to topics, and sets up the ACK socket.
+     * Does <em>not</em> start a receiver thread – that is left to the caller.
+     * Subclasses that provide their own receive loop (e.g. {@link ZeroMqProviderDisruptor})
+     * call this method instead of the full {@link #start(boolean, boolean, String)}.
+     */
+    protected void setupSocket(boolean hardTopicFilter, boolean sendAck) {
         if (isServer) {
             logger.info("Binding SUB socket to {}", url);
             try {
@@ -143,7 +217,6 @@ public class ZeroMqProvider implements ConnectorProvider {
             logger.info("Connecting SUB socket to {}", url);
             socketSub.connect(url);
         }
-
 
         if (hardTopicFilter) {
             if (topicListSubscribed.size() == 0) {
@@ -161,8 +234,9 @@ public class ZeroMqProvider implements ConnectorProvider {
             logger.info("SUB (server {}){} to {}", isServer, url, "all -> filtering on listener");
             socketSub.subscribe(" ".getBytes(ZMQ.CHARSET));
         }
+
         if (sendAck) {
-            //ACK REP publisher – use config helpers so IPC addresses are handled correctly
+            // ACK REP publisher – use config helpers so IPC addresses are handled correctly
             if (!isServer) {
                 String urlAck = this.zeroMqConfiguration.getAckConnectUrl();
                 logger.info("ACK REQ connect {}", urlAck);
@@ -181,15 +255,8 @@ public class ZeroMqProvider implements ConnectorProvider {
                 }
             }
         }
-
-        //Receiver thread
-        threadReceiver = new ZeroMqThreadReceiver(this.zeroMqConfiguration);
-
-        this.thread = new Thread(threadReceiver,
-                "ZeroMqProvider -> " + zeroMqConfiguration.getHost() + ":" + zeroMqConfiguration.getPort());
-        this.thread.start();
-
     }
+
 
     @Override
     public void register(ConnectorConfiguration configuration, ConnectorListener listener) {
@@ -245,6 +312,14 @@ public class ZeroMqProvider implements ConnectorProvider {
     }
 
 
+    /**
+     * The sole owner of the ZMQ SUB socket.
+     *
+     * <p>Runs a tight receive loop: acquires {@code socketSub} lock for the minimum time
+     * needed to extract raw bytes and capture the arrival timestamp, then either processes
+     * inline (no pool) or submits to {@link #onUpdateExecutorService} and immediately
+     * returns to the socket.  This keeps the socket drained and avoids HWM-triggered drops.
+     */
     private class ZeroMqThreadReceiver implements Runnable {
 
         private ZeroMqConfiguration zeroMqConfiguration;
