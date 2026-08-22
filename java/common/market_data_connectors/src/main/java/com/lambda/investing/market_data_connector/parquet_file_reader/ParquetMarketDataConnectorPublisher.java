@@ -79,8 +79,8 @@ public class ParquetMarketDataConnectorPublisher extends AbstractMarketDataConne
         this.parquetFileConfiguration = parquetFileConfiguration;
         dates = this.parquetFileConfiguration.getDatesToLoad();
 
-//        readingThread = new Thread(this, "backtestReader");
-        readingThread = new Thread(this::runAffinity, "backtestReader");
+        readingThread = new Thread(this, "backtestReader");
+//        readingThread = new Thread(this::runAffinity, "backtestReader");
 
         this.setStatistics(null);//disable statistics
     }
