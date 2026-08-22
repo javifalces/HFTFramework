@@ -39,11 +39,11 @@ associated risks.**
     * [Live trading](#live-trading)
   * [Environment settings](#environment-settings)
       * [Optional](#optional)
-  * [I owe you one](#i-owe-you-one)
-  * [TODO](#todo)
     * [Java documentation reference](#java-documentation-reference)
     * [Monitoring](#monitoring)
     * [Reference](#reference)
+  * [I owe you one](#i-owe-you-one)
+  * [TODO](#todo)
 <!-- TOC -->
 
 ## How-to use
@@ -385,25 +385,6 @@ metatrader.pull.port=32768
 * LAMBDA_INPUT_PATH = base path where the configuration of algorithms will be read automatically
 * LAMBDA_TEMP_PATH = temp of java algorithms must be the same as application.properties
 
-## I owe you one
-
-* [JavaLOB](https://github.com/DrAshBooth/JavaLOB)
-* [Tablesaw](https://jtablesaw.github.io/tablesaw/)
-* [Apache commons](https://commons.apache.org/)
-* [XChange](https://github.com/knowm/XChange)
-* [Hudson Thames](https://hudsonthames.org/mlfinlab/)
-* [Pandas](https://pandas.pydata.org/)
-* [Numpy](https://numpy.org/)
-* [Seaborn](https://seaborn.pydata.org/)
-* [Darwinex](https://www.darwinex.com)
-* [dwx-zeromq-connector](https://github.com/darwinex/dwx-zeromq-connector)
-* [Stable-baselines3](https://stable-baselines3.readthedocs.io/en/master)
-* [Ray](https://docs.ray.io/en/master/index.html)
-* [Onnx](https://onnxruntime.ai/) 
-* [Weka](https://ml.cms.waikato.ac.nz/weka/)
-* [Autoweka](https://www.cs.ubc.ca/labs/algorithms/Projects/autoweka/)
-* [LMAX Disruptor](https://lmax-exchange.github.io/disruptor/)
-* ...and so on
 
 ### [Java documentation reference](/java/docs/Index.md)
 
@@ -437,6 +418,26 @@ Key features:
 * [WEB_UI_DOCUMENTATION.md](docs/web-ui.md)
 
 ![WebUi](fig/webBacktest.png?raw=true "webUI")
+
+## I owe you one
+
+* [JavaLOB](https://github.com/DrAshBooth/JavaLOB)
+* [Tablesaw](https://jtablesaw.github.io/tablesaw/)
+* [Apache commons](https://commons.apache.org/)
+* [XChange](https://github.com/knowm/XChange)
+* [Hudson Thames](https://hudsonthames.org/mlfinlab/)
+* [Pandas](https://pandas.pydata.org/)
+* [Numpy](https://numpy.org/)
+* [Seaborn](https://seaborn.pydata.org/)
+* [Darwinex](https://www.darwinex.com)
+* [dwx-zeromq-connector](https://github.com/darwinex/dwx-zeromq-connector)
+* [Stable-baselines3](https://stable-baselines3.readthedocs.io/en/master)
+* [Ray](https://docs.ray.io/en/master/index.html)
+* [Onnx](https://onnxruntime.ai/) 
+* [Weka](https://ml.cms.waikato.ac.nz/weka/)
+* [Autoweka](https://www.cs.ubc.ca/labs/algorithms/Projects/autoweka/)
+* [LMAX Disruptor](https://lmax-exchange.github.io/disruptor/)
+* ...and so on
 
 ## TODO
 * Reduce live latency
