@@ -23,20 +23,20 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 @Getter
 @Setter
-public class InstrumentOrderManager {
+public class InstrumentAlgorithmManager {
 
     private static int BUFFER_CF_TRADES = 60;
-    protected Logger logger = LogManager.getLogger(InstrumentOrderManager.class);
+    protected Logger logger = LogManager.getLogger(InstrumentAlgorithmManager.class);
 
     /**
-     * One shared {@link MapManager} background thread per instrument primary key, reused by
+     * One shared {@link InstrumentOrderWatchdog} background thread per instrument primary key, reused by
      * every {@code InstrumentOrderManager} instance created for that instrument (e.g. the same
      * instrument traded/hedged by several algorithm instances in a {@link MultiAlgorithm}).
      * Without this, each instance used to spin up its own dedicated busy-spin thread
      * ({@code Thread.onSpinWait()} loop) named "{instrumentPk}_instrumentOrderManager",
      * wasting a CPU core per duplicate instance for the same instrument.
      */
-    private static final Map<String, MapManager> SHARED_MAP_MANAGERS = new ConcurrentHashMap<>();
+    private static final Map<String, InstrumentOrderWatchdog> SHARED_INSTRUMENT_ORDER_WATCHDOGS = new ConcurrentHashMap<>();
 
     private Instrument instrument;
     private Map<String, ExecutionReport> allActiveOrders;//clientOrderId to Active execution report
@@ -48,7 +48,7 @@ public class InstrumentOrderManager {
 
     private Map<Verb, Long> lastTradeTimestamp;
 
-    public InstrumentOrderManager(Instrument instrument, boolean isBacktest) {
+    public InstrumentAlgorithmManager(Instrument instrument, boolean isBacktest) {
         this.instrument = instrument;
         reset();
         if (!isBacktest) {
@@ -57,21 +57,21 @@ public class InstrumentOrderManager {
     }
 
     /**
-     * Registers this instance in the shared {@link MapManager} for its instrument primary key,
+     * Registers this instance in the shared {@link InstrumentOrderWatchdog} for its instrument primary key,
      * creating (and starting) that manager's thread the first time the instrument is seen.
      * Subsequent {@code InstrumentOrderManager} instances for the same instrument reuse the
      * already-running thread instead of starting a new one.
      */
     private void registerInSharedMapManager() {
         String instrumentPk = instrument.getPrimaryKey();
-        MapManager mapManager = SHARED_MAP_MANAGERS.computeIfAbsent(instrumentPk, pk -> {
-            MapManager newMapManager = new MapManager(pk);
-            Thread thread = new Thread(newMapManager::runAffinity, pk + "_instrumentOrderManager");
+        InstrumentOrderWatchdog instrumentOrderWatchdog = SHARED_INSTRUMENT_ORDER_WATCHDOGS.computeIfAbsent(instrumentPk, pk -> {
+            InstrumentOrderWatchdog newInstrumentOrderWatchdog = new InstrumentOrderWatchdog(pk);
+            Thread thread = new Thread(newInstrumentOrderWatchdog::runAffinity, pk + "_instrumentOrderWatchdog");
             thread.setDaemon(true);
             thread.start();
-            return newMapManager;
+            return newInstrumentOrderWatchdog;
         });
-        mapManager.register(this);
+        instrumentOrderWatchdog.register(this);
     }
 
     public void reset() {
@@ -95,23 +95,23 @@ public class InstrumentOrderManager {
 
     /**
      * Shared background worker, one per instrument primary key, that periodically reconciles
-     * every {@link InstrumentOrderManager} instance registered for that instrument (there can be
+     * every {@link InstrumentAlgorithmManager} instance registered for that instrument (there can be
      * more than one when several algorithm instances trade/hedge the same instrument).
      */
-    private static class MapManager implements Runnable {
+    private static class InstrumentOrderWatchdog implements Runnable {
 
-        private static final Logger LOGGER = LogManager.getLogger(MapManager.class);
+        private static final Logger LOGGER = LogManager.getLogger(InstrumentOrderWatchdog.class);
 
         private final String instrumentPk;
-        private final List<InstrumentOrderManager> managedInstances = new CopyOnWriteArrayList<>();
+        private final List<InstrumentAlgorithmManager> managedInstances = new CopyOnWriteArrayList<>();
         private volatile boolean enable = true;
 
-        private MapManager(String instrumentPk) {
+        private InstrumentOrderWatchdog(String instrumentPk) {
             this.instrumentPk = instrumentPk;
         }
 
-        private void register(InstrumentOrderManager instrumentOrderManager) {
-            managedInstances.add(instrumentOrderManager);
+        private void register(InstrumentAlgorithmManager instrumentAlgorithmManager) {
+            managedInstances.add(instrumentAlgorithmManager);
         }
 
         public void runAffinity() {
@@ -131,24 +131,24 @@ public class InstrumentOrderManager {
         @Override
         public void run() {
             while (enable) {
-                for (InstrumentOrderManager instrumentOrderManager : managedInstances) {
-                    reconcile(instrumentOrderManager);
+                for (InstrumentAlgorithmManager instrumentAlgorithmManager : managedInstances) {
+                    reconcile(instrumentAlgorithmManager);
                 }
                 Thread.onSpinWait();//to not occupy the cpu
 //					Thread.sleep(10);
             }
         }
 
-        private void reconcile(InstrumentOrderManager instrumentOrderManager) {
-            Map<String, OrderRequest> requestOrdersCopy = new ConcurrentHashMap<>(instrumentOrderManager.getAllRequestOrders());
+        private void reconcile(InstrumentAlgorithmManager instrumentAlgorithmManager) {
+            Map<String, OrderRequest> requestOrdersCopy = new ConcurrentHashMap<>(instrumentAlgorithmManager.getAllRequestOrders());
             boolean foundErrorsRequest = false;
             List<String> cfTrades = null;
             List<String> cfRequestsClOrdId = new ArrayList<>();
             //checking requestOrderMap is okey
-            if (requestOrdersCopy.size() > 0) {
+            if (!requestOrdersCopy.isEmpty()) {
                 //check with active
 
-                for (String activeOrdersClientOrderId : instrumentOrderManager.getAllActiveOrders().keySet()) {
+                for (String activeOrdersClientOrderId : instrumentAlgorithmManager.getAllActiveOrders().keySet()) {
                     if (requestOrdersCopy.containsKey(activeOrdersClientOrderId)) {
                         //remove it
                         requestOrdersCopy.remove(activeOrdersClientOrderId);
@@ -157,7 +157,7 @@ public class InstrumentOrderManager {
                     }
                 }
                 //check with trades
-                cfTrades = new ArrayList<>(instrumentOrderManager.getCfTradesReceived());
+                cfTrades = new ArrayList<>(instrumentAlgorithmManager.getCfTradesReceived());
                 for (String cfTradesClientOrderId : cfTrades) {
                     if (requestOrdersCopy.containsKey(cfTradesClientOrderId)) {
                         //remove it
@@ -172,16 +172,16 @@ public class InstrumentOrderManager {
                     //string of comma separated cfRequestsClOrdId
                     String cfRequestsClOrdIdString = String.join(",", cfRequestsClOrdId);
                     LOGGER.warn("Found requests in {} already received as active/trade , clean it: {}", instrumentPk, cfRequestsClOrdIdString);
-                    instrumentOrderManager.setAllRequestOrders(requestOrdersCopy);
+                    instrumentAlgorithmManager.setAllRequestOrders(requestOrdersCopy);
                 }
             }
             //
             boolean foundErrorsActive = false;
-            Map<String, ExecutionReport> activeOrdersCopy = new ConcurrentHashMap<>(instrumentOrderManager.getAllActiveOrders());
+            Map<String, ExecutionReport> activeOrdersCopy = new ConcurrentHashMap<>(instrumentAlgorithmManager.getAllActiveOrders());
             List<String> cfTradesClOrdId = new ArrayList<>();
-            if (activeOrdersCopy.size() > 0) {
+            if (!activeOrdersCopy.isEmpty()) {
                 if (cfTrades == null) {
-                    cfTrades = new ArrayList<>(instrumentOrderManager.getCfTradesReceived());
+                    cfTrades = new ArrayList<>(instrumentAlgorithmManager.getCfTradesReceived());
                 }
 
                 for (String cfClientOrderId : cfTrades) {
@@ -198,7 +198,7 @@ public class InstrumentOrderManager {
                 String cfTradesClOrdIdString = String.join(",", cfTradesClOrdId);
 
                 LOGGER.warn("Found active in clOrdId {} already traded , clean it: {}", instrumentPk, cfTradesClOrdIdString);
-                instrumentOrderManager.setAllActiveOrders(activeOrdersCopy);
+                instrumentAlgorithmManager.setAllActiveOrders(activeOrdersCopy);
             }
         }
     }

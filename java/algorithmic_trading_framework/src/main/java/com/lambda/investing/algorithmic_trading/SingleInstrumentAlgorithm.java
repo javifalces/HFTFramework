@@ -34,7 +34,7 @@ public abstract class SingleInstrumentAlgorithm extends Algorithm {
         super(algorithmInfo, parameters);
     }
 
-    public InstrumentOrderManager getInstrumentManager() {
+    public InstrumentAlgorithmManager getInstrumentManager() {
         return getInstrumentManager(instrument.getPrimaryKey());
     }
 
