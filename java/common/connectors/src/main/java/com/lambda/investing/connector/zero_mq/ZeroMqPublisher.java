@@ -31,8 +31,10 @@ public class ZeroMqPublisher implements ConnectorPublisher {
     Logger logger = LogManager.getLogger(ZeroMqPublisher.class);
     private int OKReceived = 0;
 
-    Map<ZeroMqConfiguration, AtomicInteger> counterMessagesSent = new HashMap<>();
-    Map<ZeroMqConfiguration, AtomicInteger> counterMessagesNotSent = new HashMap<>();
+    //ConcurrentHashMap: send() is no longer synchronized on `this` (see below), so these
+    //counters can now be updated concurrently by different sockets/configurations.
+    Map<ZeroMqConfiguration, AtomicInteger> counterMessagesSent = new ConcurrentHashMap<>();
+    Map<ZeroMqConfiguration, AtomicInteger> counterMessagesNotSent = new ConcurrentHashMap<>();
 
     private ExecutorService poolExecutor;
     private String name;
@@ -182,14 +184,15 @@ public class ZeroMqPublisher implements ConnectorPublisher {
 
     }
 
-    private synchronized void send(Serializable message, ZeroMqConfiguration configuration, String topic, long timestamp,
+    //NOTE: not synchronized here on purpose. The caller (publish()) already holds
+    //synchronized(socket) for the minimum required scope; synchronizing this method on
+    //`this` as well would additionally serialize sends across *every* ZeroMqConfiguration
+    //using this publisher (even ones with independent sockets), adding needless lock
+    //contention on the order-request hot path without any extra safety.
+    private void send(Serializable message, ZeroMqConfiguration configuration, String topic, long timestamp,
                                    ZMQ.Socket socket) {
-        if (!counterMessagesSent.containsKey(configuration)) {
-            counterMessagesSent.put(configuration, new AtomicInteger(0));
-        }
-        if (!counterMessagesNotSent.containsKey(configuration)) {
-            counterMessagesNotSent.put(configuration, new AtomicInteger(0));
-        }
+        counterMessagesSent.computeIfAbsent(configuration, cfg -> new AtomicInteger(0));
+        counterMessagesNotSent.computeIfAbsent(configuration, cfg -> new AtomicInteger(0));
         boolean messageIsStringEmpty = message instanceof String && ((String) message).trim().length() == 0;
         if ((topic.trim().length() == 0) || messageIsStringEmpty)
             return;

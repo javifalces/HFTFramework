@@ -19,9 +19,11 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static com.lambda.investing.model.Util.fromJsonString;
@@ -35,6 +37,10 @@ public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implem
 	private ZeroMqProvider zeroMqProvider;
 
 	private List<String> instrumentPksList;
+	//O(1) lookup mirror of instrumentPksList, rebuilt whenever it is set. The hot path
+	//(processUpdate, on every depth/trade message) checks membership here instead of
+	//doing a linear List.contains scan.
+	private Set<String> instrumentPksSet;
 	private boolean listenER = false;
 
 	private Queue<String> ActiveOrderIdNotified = EvictingQueue.create(BUFFER_ER_ORDER_ID);
@@ -102,6 +108,7 @@ public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implem
 			logger.warn("setting zero size instrumentPksList!! -> filtering all");
 		}
 		this.instrumentPksList = instrumentPksList;
+		this.instrumentPksSet = new HashSet<>(instrumentPksList);
 	}
 
 	public ZeroMqMarketDataConnector(ZeroMqConfiguration zeroMqConfigurationIn, List<Instrument> instruments,
@@ -154,9 +161,9 @@ public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implem
 			Depth depth = fromObject(content, Depth.class);
 			depth.setTimestampAlgoConnector(timestampReceived);
 
-			if (instrumentPksList != null) {
-				//filtering
-				if (!instrumentPksList.contains(depth.getInstrument())) {
+			if (instrumentPksSet != null) {
+				//filtering - O(1) lookup
+				if (!instrumentPksSet.contains(depth.getInstrument())) {
 					return;
 				}
 			}
@@ -168,9 +175,9 @@ public class ZeroMqMarketDataConnector extends AbstractMarketDataProvider implem
 			//TRADE received
 			Trade trade = fromObject(content, Trade.class);
 			trade.setTimestampAlgoConnector(timestampReceived);
-			if (instrumentPksList != null) {
-				//filtering
-				if (!instrumentPksList.contains(trade.getInstrument())) {
+			if (instrumentPksSet != null) {
+				//filtering - O(1) lookup
+				if (!instrumentPksSet.contains(trade.getInstrument())) {
 					return;
 				}
 			}
