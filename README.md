@@ -402,20 +402,8 @@ metatrader.pull.port=32768
 * [Onnx](https://onnxruntime.ai/) 
 * [Weka](https://ml.cms.waikato.ac.nz/weka/)
 * [Autoweka](https://www.cs.ubc.ca/labs/algorithms/Projects/autoweka/)
+* [LMAX Disruptor](https://lmax-exchange.github.io/disruptor/)
 * ...and so on
-
-## TODO
-* Reduce/Measure live latency
-    * [Chronicle](https://github.com/OpenHFT)
-    * [LMAX Disruptor](https://lmax-exchange.github.io/disruptor/)
-    * [Aeron](https://github.com/real-logic/aeron)
-* Add support to Ray for Reinforcement Learning
-* Test with more exchanges
-* Add more connectors
-* Add more algorithms
-* Add more tests
-* Add more documentation
-* ....
 
 ### [Java documentation reference](/java/docs/Index.md)
 
@@ -449,6 +437,19 @@ Key features:
 * [WEB_UI_DOCUMENTATION.md](docs/web-ui.md)
 
 ![WebUi](fig/webBacktest.png?raw=true "webUI")
+
+## TODO
+* Reduce live latency
+    * [Chronicle](https://github.com/OpenHFT)    
+    * [Aeron](https://github.com/real-logic/aeron)
+* Add support to Ray for Reinforcement Learning
+* Test with more exchanges
+* Add more connectors
+* Add more algorithms
+* Add more tests
+* Add more documentation
+* ....
+* 
 ### Reference
 
 [A reinforcement learning approach to improve the performance of the Avellaneda-Stoikov market-making algorithm](https://journals.plos.org/plosone/article/authors?id=10.1371/journal.pone.0277042)<br>
