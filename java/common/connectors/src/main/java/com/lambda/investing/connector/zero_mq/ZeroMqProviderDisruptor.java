@@ -71,7 +71,23 @@ public class ZeroMqProviderDisruptor extends ZeroMqProvider {
 
     private static final Logger logger = LogManager.getLogger(ZeroMqProviderDisruptor.class);
 
-    private static final Map<String, ZeroMqProviderDisruptor> INSTANCES = new ConcurrentHashMap<>();
+    /**
+     * Keyed ONLY by the {@link ZeroMqConfiguration} (whose {@code equals}/{@code hashCode} are
+     * based on host+port+protocol – see {@link ZeroMqConfiguration#equals}), NOT by
+     * {@code threadsListening}/{@code isServer}/{@code connectorProviderType}.
+     * <p>
+     * A physical ZeroMq endpoint (host:port) must have exactly ONE socket / receiver thread.
+     * Previously the cache key also included {@code threadsListening}, so two call sites
+     * requesting the same endpoint with different {@code threadsListening} values (e.g.
+     * {@code ZeroMqMarketDataConnector} with {@code threadsListening=1} and
+     * {@code ZeroMqTradingEngineConnector} with {@code threadsListening=0}, both listening on
+     * the shared {@code marketDataAndERconnectorConfiguration}) produced two distinct
+     * {@code ZeroMqProviderDisruptor} instances, each opening its own SUB socket and
+     * {@code ZeroMqThreadReceiver} thread (visible as two threads named
+     * {@code "zeroMqThreadReceiverThreadName (0)-> host:port"} and
+     * {@code "zeroMqThreadReceiverThreadName (1)-> host:port"}), double-processing every message.
+     */
+    private static final Map<ZeroMqConfiguration, ZeroMqProviderDisruptor> INSTANCES = new ConcurrentHashMap<>();
 
     // -----------------------------------------------------------------------
     // Factory methods
@@ -79,15 +95,31 @@ public class ZeroMqProviderDisruptor extends ZeroMqProvider {
 
     /**
      * Returns a cached or new instance for the given configuration.
-     * Key is based on url, topic, threadsListening, isServer and connectorProviderType.
+     * Key is the {@link ZeroMqConfiguration} itself (host+port+protocol identity) so that
+     * every caller asking for the same physical endpoint reuses the same socket/receiver
+     * thread, regardless of the {@code threadsListening}/{@code isServer}/
+     * {@code connectorProviderType} values passed by later callers (first caller wins; a
+     * warning is logged if a later call requests different parameters).
      */
     public static ZeroMqProviderDisruptor getInstance(ZeroMqConfiguration zeroMqConfiguration,
                                                       int threadsListening,
                                                       boolean isServer,
                                                       Configuration.ConnectorProviderType connectorProviderType) {
-        String key = buildKey(zeroMqConfiguration, threadsListening, isServer, connectorProviderType);
-        return INSTANCES.computeIfAbsent(key,
+        ZeroMqProviderDisruptor output = INSTANCES.computeIfAbsent(zeroMqConfiguration,
                 k -> new ZeroMqProviderDisruptor(zeroMqConfiguration, threadsListening, isServer, connectorProviderType));
+
+        boolean differentParams = output.threadsListening != threadsListening
+                || output.isServerFlag() != isServer
+                || output.connectorProviderType != connectorProviderType;
+        if (differentParams) {
+            logger.warn(
+                    "Reusing existing ZeroMqProviderDisruptor for {} created with (threadsListening={}, isServer={}, connectorProviderType={}) "
+                            + "– ignoring differing parameters requested here (threadsListening={}, isServer={}, connectorProviderType={}) "
+                            + "to avoid opening a second socket/receiver thread for the same endpoint",
+                    zeroMqConfiguration, output.threadsListening, output.isServerFlag(), output.connectorProviderType,
+                    threadsListening, isServer, connectorProviderType);
+        }
+        return output;
     }
 
     /**
@@ -101,10 +133,6 @@ public class ZeroMqProviderDisruptor extends ZeroMqProvider {
                 Configuration.ConnectorProviderType.DISRUPTOR_LOW_LATENCY);
     }
 
-    private static String buildKey(ZeroMqConfiguration cfg, int threadsListening,
-                                   boolean isServer, Configuration.ConnectorProviderType type) {
-        return cfg.getUrl() + "#" + cfg.getTopic() + "#" + threadsListening + "#" + isServer + "#" + type;
-    }
 
     // -----------------------------------------------------------------------
     // Disruptor – delegated to the shared helper

@@ -135,6 +135,14 @@ public class ZeroMqProvider implements ConnectorProvider {
         }
     }
 
+    /**
+     * Exposes the current server/client role for subclasses (e.g. {@link ZeroMqProviderDisruptor}
+     * needs it to detect/log when a cached instance is being reused with different parameters).
+     */
+    protected boolean isServerFlag() {
+        return isServer;
+    }
+
     public void setParsedObjects(boolean parsedObjects) {
         this.parsedObjects = parsedObjects;
     }
@@ -176,7 +184,7 @@ public class ZeroMqProvider implements ConnectorProvider {
         start(true, true);
     }
     public void start(boolean hardTopicFilter, boolean sendAck) {
-        String threadName = Configuration.formatLog("zeroMqThreadReceiverThreadName ({})-> {}:{}", this.threadsListening, zeroMqConfiguration.getHost(), zeroMqConfiguration.getPort());
+        String threadName = Configuration.formatLog("zeroMqThreadReceiver({})-> {}:{}", this.threadsListening, zeroMqConfiguration.getHost(), zeroMqConfiguration.getPort());
         start(hardTopicFilter, sendAck, threadName);
     }
 
