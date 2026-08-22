@@ -1,6 +1,5 @@
 package com.lambda.investing.algorithmic_trading;
 
-import com.lambda.investing.Configuration;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
@@ -9,7 +8,6 @@ import com.lambda.investing.model.trading.OrderRequest;
 import com.lambda.investing.model.trading.Verb;
 import lombok.Getter;
 import lombok.Setter;
-import net.openhft.affinity.AffinityLock;
 import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -66,7 +64,8 @@ public class InstrumentAlgorithmManager {
         String instrumentPk = instrument.getPrimaryKey();
         InstrumentOrderWatchdog instrumentOrderWatchdog = SHARED_INSTRUMENT_ORDER_WATCHDOGS.computeIfAbsent(instrumentPk, pk -> {
             InstrumentOrderWatchdog newInstrumentOrderWatchdog = new InstrumentOrderWatchdog(pk);
-            Thread thread = new Thread(newInstrumentOrderWatchdog::runAffinity, pk + "_instrumentOrderWatchdog");
+
+            Thread thread = new Thread(newInstrumentOrderWatchdog::run, pk + "_instrumentOrderWatchdog");
             thread.setDaemon(true);
             thread.start();
             return newInstrumentOrderWatchdog;
@@ -102,6 +101,19 @@ public class InstrumentAlgorithmManager {
 
         private static final Logger LOGGER = LogManager.getLogger(InstrumentOrderWatchdog.class);
 
+        /**
+         * This is a low-frequency, best-effort reconciliation/self-healing check (cleans up stale
+         * entries left behind by races between request/active/trade maps). It is NOT on the
+         * order-sending/market-data hot path, so there is no need to busy-spin (Thread.onSpinWait())
+         * nor to pin the thread to a dedicated CPU core with AffinityLock: one instance of this
+         * watchdog is created per instrument primary key and shared across every algorithm instance
+         * trading that instrument, so a busy-spin/affinity approach would waste one full CPU core per
+         * quoted instrument in live trading for negligible benefit. Sleeping between checks lets the
+         * OS scheduler share the core with other work while still reconciling well within human/alert
+         * reaction times.
+         */
+        private static final long RECONCILE_INTERVAL_MS = 250;
+
         private final String instrumentPk;
         private final List<InstrumentAlgorithmManager> managedInstances = new CopyOnWriteArrayList<>();
         private volatile boolean enable = true;
@@ -114,28 +126,18 @@ public class InstrumentAlgorithmManager {
             managedInstances.add(instrumentAlgorithmManager);
         }
 
-        public void runAffinity() {
-            try (AffinityLock al = AffinityLock.acquireLock(Configuration.GET_AFFINITY_CPUS())) {
-                run();
-            } catch (Configuration.LambdaConfigurationException e) {
-                run();
-            } catch (Exception e) {
-                LOGGER.warn("error AffinityLock ", e);
-                if (Configuration.IS_LINUX) {
-                    System.err.println("error AffinityLock  -> " + e.toString());
-                }
-                run();
-            }
-        }
-
         @Override
         public void run() {
             while (enable) {
                 for (InstrumentAlgorithmManager instrumentAlgorithmManager : managedInstances) {
                     reconcile(instrumentAlgorithmManager);
                 }
-                Thread.onSpinWait();//to not occupy the cpu
-//					Thread.sleep(10);
+                try {
+                    Thread.sleep(RECONCILE_INTERVAL_MS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
             }
         }
 
