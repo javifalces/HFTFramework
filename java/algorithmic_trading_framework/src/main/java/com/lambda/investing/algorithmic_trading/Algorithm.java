@@ -117,7 +117,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         return algorithmInfo;
     }
 
-    protected static Map<String, InstrumentOrderManager> instrumentToManager;
+    protected Map<String, InstrumentOrderManager> instrumentToManager;
 
     protected long seed = 0;
 
@@ -1461,8 +1461,36 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         return false;
     }
 
+    /**
+     * Returns true if {@code instrumentPk} is one of the instruments this algorithm instance
+     * actually cares about (its own instrument plus any hedge/universe instruments).
+     * When {@link #instruments} is empty (not yet populated / algorithm that doesn't declare
+     * its universe) every instrument is accepted, preserving previous behaviour.
+     * <p>
+     * This check exists because {@link com.lambda.investing.market_data_connector.MarketDataProvider}
+     * implementations (e.g. the shared {@code ZeroMqMarketDataConnector} singleton used by
+     * {@link MultiAlgorithm}) broadcast every depth/trade to every registered listener regardless
+     * of instrument, so without this guard every algorithm instance would process (and count
+     * statistics for) market data belonging to OTHER algorithms' instruments.
+     */
+    protected boolean isMyInstrument(String instrumentPk) {
+        if (instruments == null || instruments.isEmpty()) {
+            return true;
+        }
+        for (Instrument owned : instruments) {
+            if (owned != null && owned.getPrimaryKey().equals(instrumentPk)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Override
     public boolean onDepthUpdate(Depth depth) {
+        if (!isMyInstrument(depth.getInstrument())) {
+            //not my instrument: shared/broadcast market data provider, ignore silently
+            return false;
+        }
         long depthTimestamp = depth.getTimestamp();
         try {
             if (depthTimestampAlreadyProccess(depth)) {
@@ -1554,6 +1582,10 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
     @Override
     public boolean onTradeUpdate(Trade trade) {
+        if (!isMyInstrument(trade.getInstrument())) {
+            //not my instrument: shared/broadcast market data provider, ignore silently
+            return false;
+        }
         long timestamp = trade.getTimestamp();
         trade.setTimestampStrategy(System.currentTimeMillis());
 
