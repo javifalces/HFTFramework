@@ -105,7 +105,7 @@ public class AlgorithmNotifier {
      * Non-blocking fire-and-forget publish to Disruptor. Drops event silently when ring buffer is full.
      */
     private void publishNotification(NotificationType notificationType, Object content) {
-        NotificationWrapper wrapper = new NotificationWrapper(notificationType, content);
+        NotificationWrapper wrapper = new NotificationWrapper(notificationType, content, this.algorithm);
         boolean published = false;
         if (this.algorithm.isBacktest) {
             //if so much info blocking
@@ -127,6 +127,19 @@ public class AlgorithmNotifier {
     private void handleNotification(ConnectorConfiguration config, long timestamp,
                                     TypeMessage typeMessage, Object content) {
         if (!(content instanceof NotificationWrapper wrapper)) {
+            return;
+        }
+
+        // When several algorithms share the same underlying Disruptor ring buffer
+        // (e.g. MultiAlgorithm children via useSharedNotifierDisruptor), every consumer
+        // registered on the buffer receives EVERY published event (fan-out semantics –
+        // see DisruptorConnectorHelper#dispatchEvent). Without this guard, a single trade
+        // published by one child algorithm would be re-delivered by every sibling child's
+        // AlgorithmNotifier consumer to that sibling's own registered observers, producing
+        // N duplicate notifications for a single event (N = number of sibling consumers
+        // sharing the buffer). Only process events that originated from THIS notifier's
+        // own algorithm.
+        if (wrapper.sourceAlgorithm != this.algorithm) {
             return;
         }
 
@@ -196,10 +209,17 @@ public class AlgorithmNotifier {
     private static class NotificationWrapper {
         final NotificationType type;
         final Object payload;
+        /**
+         * The {@link Algorithm} whose {@link AlgorithmNotifier} published this event.
+         * Used by {@link #handleNotification} to discard events that were fanned-out
+         * to it from a sibling algorithm sharing the same Disruptor ring buffer.
+         */
+        final Algorithm sourceAlgorithm;
 
-        NotificationWrapper(NotificationType type, Object payload) {
+        NotificationWrapper(NotificationType type, Object payload, Algorithm sourceAlgorithm) {
             this.type = type;
             this.payload = payload;
+            this.sourceAlgorithm = sourceAlgorithm;
         }
     }
 
