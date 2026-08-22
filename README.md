@@ -444,13 +444,7 @@ Key features:
     * [Chronicle](https://github.com/OpenHFT)    
     * [Aeron](https://github.com/real-logic/aeron)
 * Add support to Ray for Reinforcement Learning
-* Test with more exchanges
-* Add more connectors
-* Add more algorithms
-* Add more tests
-* Add more documentation
-* ....
-* 
+
 ### Reference
 
 [A reinforcement learning approach to improve the performance of the Avellaneda-Stoikov market-making algorithm](https://journals.plos.org/plosone/article/authors?id=10.1371/journal.pone.0277042)<br>
