@@ -26,8 +26,6 @@ import java.util.Collections;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.AlgorithmProvider;
@@ -135,29 +133,29 @@ public class AlgorithmWebServer {
     /**
      * Threading strategy used to build the underlying Netty {@link EventLoopGroup}(s).
      * <ul>
-     *   <li>{@link #SINGLE} – a single daemon, non-pinned, {@code MIN_PRIORITY} thread shared
+     *   <li>{@link #LIGHT} – a single daemon, non-pinned, {@code MIN_PRIORITY} thread shared
      *       for accept + I/O. This is the recommended default for a monitoring dashboard: it is a
      *       low-traffic, non-latency-critical endpoint, so it should not compete for dedicated CPU
      *       cores with the trading hot path.</li>
-     *   <li>{@link #MULTI_THREAD} – legacy behaviour: separate boss(1)/worker(2) groups built via
+     *   <li>{@link #HEAVY} – legacy behaviour: separate boss(1)/worker(2) groups built via
      *       {@link LambdaThreadFactory}, which (when {@code Configuration.USE_THREAD_AFFINITY} is
      *       enabled) pins each thread to its own dedicated CPU core. Use only if the dashboard needs
      *       to sustain heavy traffic/low-latency pushes and cores can be spared for it.</li>
      * </ul>
      */
     public enum ThreadingMode {
-        SINGLE,
-        MULTI_THREAD
+        LIGHT,
+        HEAVY
     }
 
     /**
      * Creates the server using the default, lightweight (non-CPU-pinned) threading strategy.
-     * Equivalent to {@code new AlgorithmWebServer(port, ThreadingMode.SINGLE)}.
+     * Equivalent to {@code new AlgorithmWebServer(port, ThreadingMode.LIGHT)}.
      *
      * @param port TCP port to listen on
      */
     public AlgorithmWebServer(int port) throws InterruptedException {
-        this(port, ThreadingMode.SINGLE);
+        this(port, ThreadingMode.LIGHT);
     }
 
 
@@ -168,15 +166,15 @@ public class AlgorithmWebServer {
     public AlgorithmWebServer(int port, ThreadingMode threadingMode) throws InterruptedException {
         this.port = port;
 
-        if (threadingMode == ThreadingMode.MULTI_THREAD) {
+        if (threadingMode == ThreadingMode.HEAVY) {
             bossGroup = new NioEventLoopGroup(1,
                     LambdaThreadFactory.createThreadFactory("AlgorithmWebServer-Boss", Thread.MIN_PRIORITY));
-            workerGroup = new NioEventLoopGroup(2,
+            workerGroup = new NioEventLoopGroup(0,
                     LambdaThreadFactory.createThreadFactory("AlgorithmWebServer-Worker", Thread.MIN_PRIORITY));
         } else {
             // Lightweight: a single shared group is enough for a low-traffic dashboard and avoids
             // wasting threads/CPU cores that should be reserved for the trading hot path.
-            EventLoopGroup shared = new NioEventLoopGroup(1,
+            EventLoopGroup shared = new NioEventLoopGroup(2,
                     LambdaThreadFactory.createThreadFactory("AlgorithmWebServer-IO", Thread.MIN_PRIORITY));
             bossGroup = shared;
             workerGroup = shared;
