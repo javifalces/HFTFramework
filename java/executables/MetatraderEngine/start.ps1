@@ -1,5 +1,5 @@
-$title = "AlgoTradingZeroMq"
-$innerCommand = "java -Xmx2048m -Duser.timezone=GMT -jar target\AlgoTradingZeroMq.jar parameters_rsi_dqn_eurusd.json"
+$title = "MetatraderEngine"
+$innerCommand = "set LAMBDA_LOGS_PATH=X:\logs && java -Xmx512m -Duser.timezone=GMT -jar target\MetatraderEngine.jar"
 
 try {
     # Reuse an existing Windows Terminal window if one is already running, instead of spawning a new one.
