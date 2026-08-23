@@ -162,6 +162,12 @@ public class ZeroMqProvider implements ConnectorProvider {
         socketReq.setLinger(0);
 
         //ThreadPool initialiting
+
+        initializeThreadPool(threadsListening);
+
+    }
+
+    protected void initializeThreadPool(int threadsListening) {
         ThreadFactory namedThreadFactory = LambdaThreadFactory.createThreadFactory("ZeroMqProvider-OnUpdate", Thread.NORM_PRIORITY);
         this.threadsListening = threadsListening;
         if (this.threadsListening > 0) {
@@ -171,9 +177,8 @@ public class ZeroMqProvider implements ConnectorProvider {
         if (this.threadsListening < 0) {
             onUpdateExecutorService = (ThreadPoolExecutor) Executors.newCachedThreadPool(namedThreadFactory);
         }
-
-
     }
+
 
     public void subscribeTopic(String topic) {
         if (topicListSubscribed.size() == 0)

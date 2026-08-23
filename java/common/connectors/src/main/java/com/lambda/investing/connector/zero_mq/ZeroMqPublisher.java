@@ -221,6 +221,12 @@ public class ZeroMqPublisher implements ConnectorPublisher {
 
     private class ZeroMqAckReqProvider implements Runnable {
 
+        //Not on the hot/low-latency path (just an ACK side-channel), so a small sleep
+        //between iterations is fine and avoids burning a CPU core spinning if the
+        //socket keeps throwing (e.g. context torn down) or replying instantly in a tight loop.
+        private static final long SLEEP_MS_AFTER_ACK = 1L;
+        private static final long SLEEP_MS_AFTER_ERROR = 50L;
+
         private ZMQ.Socket repSocket;
 
         public ZeroMqAckReqProvider(ZMQ.Socket repSocket) {
@@ -240,9 +246,20 @@ public class ZeroMqPublisher implements ConnectorPublisher {
 
                     String reply = "OK OK";
                     this.repSocket.send(reply.getBytes(), 0);
+                    Thread.sleep(SLEEP_MS_AFTER_ACK);
 
+                } catch (InterruptedException interruptedException) {
+                    Thread.currentThread().interrupt();
+                    return;
                 } catch (Exception e) {
                     logger.error("error receiving ACK publisher", e);
+                    try {
+                        //back off on repeated errors instead of tight-looping/log-flooding
+                        Thread.sleep(SLEEP_MS_AFTER_ERROR);
+                    } catch (InterruptedException interruptedException) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
                 }
 
             }

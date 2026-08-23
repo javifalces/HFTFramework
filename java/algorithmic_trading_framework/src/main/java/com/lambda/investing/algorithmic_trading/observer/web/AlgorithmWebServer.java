@@ -1,5 +1,6 @@
 package com.lambda.investing.algorithmic_trading.observer.web;
 
+import com.lambda.investing.LambdaThreadFactory;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
@@ -25,6 +26,8 @@ import java.util.Collections;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.AlgorithmProvider;
@@ -129,10 +132,55 @@ public class AlgorithmWebServer {
     private final EventLoopGroup bossGroup;
     private final EventLoopGroup workerGroup;
 
+    /**
+     * Threading strategy used to build the underlying Netty {@link EventLoopGroup}(s).
+     * <ul>
+     *   <li>{@link #SINGLE} – a single daemon, non-pinned, {@code MIN_PRIORITY} thread shared
+     *       for accept + I/O. This is the recommended default for a monitoring dashboard: it is a
+     *       low-traffic, non-latency-critical endpoint, so it should not compete for dedicated CPU
+     *       cores with the trading hot path.</li>
+     *   <li>{@link #MULTI_THREAD} – legacy behaviour: separate boss(1)/worker(2) groups built via
+     *       {@link LambdaThreadFactory}, which (when {@code Configuration.USE_THREAD_AFFINITY} is
+     *       enabled) pins each thread to its own dedicated CPU core. Use only if the dashboard needs
+     *       to sustain heavy traffic/low-latency pushes and cores can be spared for it.</li>
+     * </ul>
+     */
+    public enum ThreadingMode {
+        SINGLE,
+        MULTI_THREAD
+    }
+
+    /**
+     * Creates the server using the default, lightweight (non-CPU-pinned) threading strategy.
+     * Equivalent to {@code new AlgorithmWebServer(port, ThreadingMode.SINGLE)}.
+     *
+     * @param port TCP port to listen on
+     */
     public AlgorithmWebServer(int port) throws InterruptedException {
+        this(port, ThreadingMode.SINGLE);
+    }
+
+
+    /**
+     * @param port          TCP port to listen on
+     * @param threadingMode which {@link EventLoopGroup} strategy to build; see {@link ThreadingMode}
+     */
+    public AlgorithmWebServer(int port, ThreadingMode threadingMode) throws InterruptedException {
         this.port = port;
-        bossGroup  = new NioEventLoopGroup(1);
-        workerGroup = new NioEventLoopGroup(2);
+
+        if (threadingMode == ThreadingMode.MULTI_THREAD) {
+            bossGroup = new NioEventLoopGroup(1,
+                    LambdaThreadFactory.createThreadFactory("AlgorithmWebServer-Boss", Thread.MIN_PRIORITY));
+            workerGroup = new NioEventLoopGroup(2,
+                    LambdaThreadFactory.createThreadFactory("AlgorithmWebServer-Worker", Thread.MIN_PRIORITY));
+        } else {
+            // Lightweight: a single shared group is enough for a low-traffic dashboard and avoids
+            // wasting threads/CPU cores that should be reserved for the trading hot path.
+            EventLoopGroup shared = new NioEventLoopGroup(1,
+                    LambdaThreadFactory.createThreadFactory("AlgorithmWebServer-IO", Thread.MIN_PRIORITY));
+            bossGroup = shared;
+            workerGroup = shared;
+        }
 
         ServerBootstrap bootstrap = new ServerBootstrap();
         bootstrap.group(bossGroup, workerGroup)
@@ -151,14 +199,27 @@ public class AlgorithmWebServer {
                  .childOption(ChannelOption.TCP_NODELAY, true);
 
         ChannelFuture future = bootstrap.bind(new InetSocketAddress(port)).sync();
-        logger.info("AlgorithmWebServer (Netty) started on port {} (listening on all interfaces)", port);
+        logger.info("AlgorithmWebServer (Netty) started on port {} (listening on all interfaces, mode={})", port, threadingMode);
         logNetworkUrls(port);
 
         // Close the server when the JVM exits
-        future.channel().closeFuture().addListener(f -> {
+        future.channel().closeFuture().addListener(f -> shutdown());
+    }
+
+    /**
+     * Stops the server and releases its event-loop thread(s). Should be called when the owning
+     * algorithm/backtest run finishes, especially when multiple runs happen within the same JVM
+     * (e.g. parameter sweeps), to avoid accumulating idle server threads/ports.
+     */
+    public void shutdown() {
+        try {
             bossGroup.shutdownGracefully();
-            workerGroup.shutdownGracefully();
-        });
+            if (workerGroup != bossGroup) {
+                workerGroup.shutdownGracefully();
+            }
+        } catch (Exception e) {
+            logger.debug("Error shutting down AlgorithmWebServer on port {}: {}", port, e.getMessage());
+        }
     }
 
     // -----------------------------------------------------------------------

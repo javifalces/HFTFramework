@@ -1,6 +1,7 @@
 package com.lambda.investing.connector.zero_mq;
 
 import com.lambda.investing.Configuration;
+import com.lambda.investing.LambdaThreadFactory;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.disruptor.DisruptorConnectorHelper;
@@ -11,6 +12,9 @@ import org.apache.logging.log4j.Logger;
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 
 /**
  * Low-latency variant of {@link ZeroMqProvider} that replaces the
@@ -184,6 +188,10 @@ public class ZeroMqProviderDisruptor extends ZeroMqProvider {
         setServer(isServer);
         this.disruptorThreadName = "ZeroMqProviderDisruptor-" + zeroMqConfiguration.getPort();
         this.connectorProviderType = connectorProviderType;
+    }
+
+    protected void initializeThreadPool(int threadsListening) {
+//        initDisruptor();
     }
 
     /**
