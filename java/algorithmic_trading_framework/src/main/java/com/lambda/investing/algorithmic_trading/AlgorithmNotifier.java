@@ -11,10 +11,14 @@ import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.messaging.TypeMessage;
 import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.OrderRequest;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Asynchronous notifier for algorithm observers (UI / monitoring).
@@ -27,6 +31,8 @@ import java.util.Map;
  * - The background thread processes events asynchronously to avoid blocking the caller.
  */
 public class AlgorithmNotifier {
+
+    private static final Logger logger = LogManager.getLogger(AlgorithmNotifier.class);
 
     /**
      * Notification event types for algorithm observer callbacks.
@@ -41,6 +47,27 @@ public class AlgorithmNotifier {
         ORDER_REQUEST,
         EXECUTION_REPORT
     }
+
+    /**
+     * Notification types that must NEVER be silently dropped, even in live trading.
+     * <p>
+     * {@code DEPTH}, {@code PARAMETERS} and {@code CUSTOM_COLUMN} are high-frequency,
+     * UI-only ticks where losing an occasional update under load is acceptable (a newer
+     * update will arrive shortly after). {@code EXECUTION_REPORT}/{@code TRADE}/
+     * {@code PORTFOLIO_SNAPSHOT}/{@code ORDER_REQUEST}/{@code MESSAGE} are comparatively
+     * rare, high-value events (fills, portfolio state, alerts) whose loss silently breaks
+     * push/web dashboards — e.g. a {@code PartialFilled} execution report vanishing because
+     * the shared ring buffer (see {@link MultiAlgorithm#COMMON_ALGO_NOTIFIER_DISRUPTOR}) was
+     * momentarily saturated by depth ticks from sibling algorithms. These are published with
+     * the blocking {@link DisruptorConnectorHelper#publish} instead of {@code tryPublish} so
+     * they wait for a free slot rather than being dropped.
+     */
+    private static final Set<NotificationType> CRITICAL_TYPES = EnumSet.of(
+            NotificationType.EXECUTION_REPORT,
+            NotificationType.PORTFOLIO_SNAPSHOT,
+            NotificationType.ORDER_REQUEST,
+            NotificationType.MESSAGE
+    );
 
     private final DisruptorConnectorHelper disruptorHelper;
     private final ConnectorConfiguration dummyConfig = new DisruptorConnectorConfiguration();
@@ -102,22 +129,28 @@ public class AlgorithmNotifier {
     }
 
     /**
-     * Non-blocking fire-and-forget publish to Disruptor. Drops event silently when ring buffer is full.
+     * Non-blocking fire-and-forget publish to Disruptor for high-frequency, droppable
+     * notification types (DEPTH/PARAMETERS/CUSTOM_COLUMN). Critical types (see
+     * {@link #CRITICAL_TYPES}) always use the blocking {@link DisruptorConnectorHelper#publish}
+     * so they are never silently lost, even in live trading.
      */
     private void publishNotification(NotificationType notificationType, Object content) {
         NotificationWrapper wrapper = new NotificationWrapper(notificationType, content, this.algorithm);
-        boolean published = false;
-        if (this.algorithm.isBacktest) {
-            //if so much info blocking
+        boolean published;
+        boolean mustNotDrop = this.algorithm.isBacktest || CRITICAL_TYPES.contains(notificationType);
+        if (mustNotDrop) {
+            // Blocking publish: waits for a free ring-buffer slot instead of dropping.
+            // Safe here because critical events (fills, portfolio snapshots, order requests,
+            // messages) are comparatively rare compared to depth ticks, so the producer thread
+            // (trading engine / market data callback) should essentially never actually block.
             published = disruptorHelper.publish(dummyConfig, System.nanoTime(), TypeMessage.info, wrapper);
         } else {
             //avoid blocking , better to print
             published = disruptorHelper.tryPublish(dummyConfig, System.nanoTime(), TypeMessage.info, wrapper);
         }
-        // Additional logging at AlgorithmNotifier level if needed
         if (!published) {
-            // The DisruptorConnectorHelper already logs to System.err and logger,
-            // but we can add algorithm-specific context here if desired
+            logger.warn("[{}] Dropped {} notification – ring buffer not initialised or full (content={})",
+                    algorithmInfo, notificationType, content);
         }
     }
 
