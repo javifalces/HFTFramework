@@ -317,7 +317,9 @@ public class ZeroMqProvider implements ConnectorProvider {
         //  bind/connect when start() ran, and using the wrong server role because
         //  setServer() had not yet been invoked at construction time.)
         ZMQ.Socket subscribeSocket = context.createSocket(ZMQ.SUB);
-        subscribeSocket.setHWM(1);
+        // HWM is configurable per-endpoint (default 1, historical market-data behaviour) —
+        // see ZeroMqConfiguration#hwm javadoc. Trading channels raise it explicitly.
+        subscribeSocket.setHWM(configuration.getHwm());
         subscribeSocket.setLinger(0);
 
         return subscribeSocket;

@@ -81,7 +81,10 @@ public class ZeroMqPublisher implements ConnectorPublisher {
         ZMQ.Socket publishSocket = null;
         if (!PORTS_TAKEN_PUB.containsKey(pubKey)) {
             publishSocket = context.createSocket(ZMQ.PUB);
-            publishSocket.setHWM(1);
+            // HWM is configurable per-endpoint (default 1, historical market-data behaviour) —
+            // see ZeroMqConfiguration#hwm javadoc. Trading channels raise it explicitly so a
+            // burst of execution reports/order requests is never silently dropped by ZMQ.
+            publishSocket.setHWM(configuration.getHwm());
             publishSocket.setLinger(0);
             if (isServer) {
                 String url = configuration.getBindUrl();

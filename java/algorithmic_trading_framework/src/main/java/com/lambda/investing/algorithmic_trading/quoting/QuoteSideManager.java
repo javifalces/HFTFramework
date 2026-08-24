@@ -35,6 +35,14 @@ public class QuoteSideManager {
      * Volatile so the quoting thread can do a cheap read before entering synchronized.
      */
     private volatile String clientOrderIdSent;
+    /**
+     * OrderRequestAction (New/Modify/Cancel) associated with {@code clientOrderIdSent}.
+     * Needed so that, if the ER for it never arrives and the stuck-state timeout fires,
+     * we know whether the in-flight request we are abandoning was a Cancel. If it was,
+     * {@code activeClientOrderId} cannot be trusted anymore (the broker may have already
+     * cancelled it) and must not be used as the OrigClientOrderId of a subsequent Modify.
+     */
+    private volatile OrderRequestAction clientOrderIdSentAction;
     private volatile String activeClientOrderId;
     private volatile QuoteRequest lastQuoteSent;
     private volatile Double lastPrice, lastQuantity;
@@ -115,6 +123,7 @@ public class QuoteSideManager {
 
         clientOrderIdSent = null;
         clientOrderIdSentTimestamp = Long.MIN_VALUE;
+        clientOrderIdSentAction = null;
         activeClientOrderId = null;
         lastQuoteSent = null;
         lastPrice = null;
@@ -182,16 +191,32 @@ public class QuoteSideManager {
         final OrderRequest orderRequest;
         final QuoteRequest lastQuoteSentBackupLocal;
         final String clientOrderIdSentBackupLocal;
+        final OrderRequestAction clientOrderIdSentActionBackupLocal;
 
         synchronized (this) {
             if (clientOrderIdSent != null) {
                 long now = algorithm.getCurrentTimestamp();
                 if (clientOrderIdSentTimestamp != Long.MIN_VALUE
                         && now - clientOrderIdSentTimestamp > MAX_TIME_ERROR_MS) {
-                    logger.warn("[{}] {} clientOrderIdSent={} stuck >{}ms without ER — clearing stuck state",
-                            algorithm.getCurrentTime(), verb, clientOrderIdSent, MAX_TIME_ERROR_MS);
+                    logger.warn("[{}] {} clientOrderIdSent={} ({}) stuck >{}ms without ER — clearing stuck state",
+                            algorithm.getCurrentTime(), verb, clientOrderIdSent, clientOrderIdSentAction, MAX_TIME_ERROR_MS);
+                    if (clientOrderIdSentAction == OrderRequestAction.Cancel && activeClientOrderId != null) {
+                        // The stuck request was a Cancel of activeClientOrderId: we never got the ER,
+                        // so we cannot know for certain whether the broker accepted it or not. Since a
+                        // Modify against an order that the broker has (or is about to have) cancelled
+                        // will be rejected (as the broker no longer considers it "active"), it is safer
+                        // to assume the cancel went through and forget this order id. The next
+                        // quoteRequest() will then send a brand-new order instead of an invalid Modify.
+                        logger.warn("[{}] {} stuck request was a Cancel of {} — assuming it was accepted, "
+                                        + "dropping activeClientOrderId to avoid an invalid Modify",
+                                algorithm.getCurrentTime(), verb, activeClientOrderId);
+                        activeClientOrderId = null;
+                        lastPrice = null;
+                        lastQuantity = null;
+                    }
                     clientOrderIdSent = null;
                     clientOrderIdSentTimestamp = Long.MIN_VALUE;
+                    clientOrderIdSentAction = null;
                     clOrdIdPending = null;
                 } else {
                     return;
@@ -234,10 +259,12 @@ public class QuoteSideManager {
 
             lastQuoteSentBackupLocal = lastQuoteSent;
             clientOrderIdSentBackupLocal = clientOrderIdSent;
+            clientOrderIdSentActionBackupLocal = clientOrderIdSentAction;
 
             lastQuoteSent = quoteRequest;
             clientOrderIdSent = orderRequest.getClientOrderId();
             clientOrderIdSentTimestamp = algorithm.getCurrentTimestamp();
+            clientOrderIdSentAction = orderRequest.getOrderRequestAction();
             lastQuantity = quantity;
             lastPrice = price;
 
@@ -274,6 +301,7 @@ public class QuoteSideManager {
                 clOrdIdPending = null;
                 lastQuoteSent = lastQuoteSentBackupLocal;
                 clientOrderIdSent = clientOrderIdSentBackupLocal;
+                clientOrderIdSentAction = clientOrderIdSentActionBackupLocal;
                 lastQuantity = null;
                 lastPrice = null;
                 if (timestampError == Long.MIN_VALUE) {
@@ -329,6 +357,7 @@ public class QuoteSideManager {
                     clOrdIdPending = null;
                     clientOrderIdSent = null;
                     clientOrderIdSentTimestamp = Long.MIN_VALUE;
+                    clientOrderIdSentAction = null;
                 }
             } else {
                 return;
@@ -483,6 +512,7 @@ public class QuoteSideManager {
             if (clientOrderId.equalsIgnoreCase(clientOrderIdSent)) {
                 clientOrderIdSent = null;
                 clientOrderIdSentTimestamp = Long.MIN_VALUE;
+                clientOrderIdSentAction = null;
             }
         } // end critical section
 

@@ -49,6 +49,20 @@ public class ZeroMqTradingEngineConnector extends AbstractTradingEngineConnector
 	private ZeroMqProvider zeroMqExecutionReportProvider;
 	private ZeroMqPublisher zeroMqPublisher;
 
+	/**
+	 * HWM applied to the ER/order-request ZeroMQ channels when they still carry the low,
+	 * market-data-oriented default (1). Unlike a stale depth tick, a dropped ExecutionReport
+	 * can desync {@code QuoteSideManager}'s order-state machine forever, so these trading
+	 * channels must never silently drop a message under ZMQ backpressure.
+	 */
+	private static final int TRADING_CHANNEL_HWM = 1000;
+
+	private static void bumpHwmIfStillDefault(ZeroMqConfiguration configuration) {
+		if (configuration.getHwm() <= 1) {
+			configuration.setHwm(TRADING_CHANNEL_HWM);
+		}
+	}
+
 	/***
 	 * Trader engine for generic brokers
 	 * @param name
@@ -63,6 +77,9 @@ public class ZeroMqTradingEngineConnector extends AbstractTradingEngineConnector
 		super(name);
 
 		this.zeroMqConfigurationExecutionReportListening = zeroMqConfigurationExecutionReportListening;
+		// Must happen BEFORE ZeroMqProviderFactory.create(): the SUB socket's HWM is set at
+		// socket-creation time, so mutating the configuration after this point has no effect.
+		bumpHwmIfStillDefault(this.zeroMqConfigurationExecutionReportListening);
 		//listen the answers here
 		zeroMqExecutionReportProvider = ZeroMqProviderFactory
 				.create(this.zeroMqConfigurationExecutionReportListening, threadsListen);
@@ -73,6 +90,9 @@ public class ZeroMqTradingEngineConnector extends AbstractTradingEngineConnector
 
 		//publish the request here
 		this.zeroMqConfigurationOrderRequest = zeroMqConfigurationOrderRequest;
+		// ZeroMqPublisher's PUB socket is created lazily on first publish(), so this still
+		// takes effect even though the publisher object below is already constructed.
+		bumpHwmIfStillDefault(this.zeroMqConfigurationOrderRequest);
 		this.zeroMqPublisher = new ZeroMqPublisher(name, threadsPublish);
 		this.zeroMqPublisher.setServer(false);
 

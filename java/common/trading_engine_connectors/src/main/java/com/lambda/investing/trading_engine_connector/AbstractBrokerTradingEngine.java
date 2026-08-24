@@ -6,6 +6,7 @@ import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorListener;
 import com.lambda.investing.connector.ConnectorProvider;
 import com.lambda.investing.connector.ConnectorPublisher;
+import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.messaging.TypeMessage;
 import com.lambda.investing.model.portfolio.Portfolio;
@@ -28,6 +29,15 @@ import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_PORTFOLIO
 
 public abstract class AbstractBrokerTradingEngine implements TradingEngineConnector, ConnectorListener {
     protected static int QUEUE_SIZE = 300;
+    /**
+     * HWM applied to the order-request/execution-report ZeroMQ channels when they still carry
+     * the low, market-data-oriented default (1). Unlike a stale depth tick, a dropped
+     * ExecutionReport can desync the algorithm's order-state machine (e.g. {@code QuoteSideManager})
+     * forever — see the investigation that led to this fix: a Cancel was received and processed
+     * by this engine, but its resulting ExecutionReport never reached the algo side, consistent
+     * with a HWM=1 PUB/SUB socket silently dropping it under load.
+     */
+    protected static final int TRADING_CHANNEL_HWM = 1000;
     protected static String REJECT_ORIG_NOT_FOUND_FORMAT = "origClientOrderId %s not found for %s in %s";//origClientOrderId , action,instrument
     protected Logger logger = LogManager.getLogger(AbstractBrokerTradingEngine.class);
     protected ConnectorProvider orderRequestConnectorProvider;
@@ -58,12 +68,24 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
         this.orderRequestConnectorProvider = orderRequestConnectorProvider;
         this.executionReportConnectorConfiguration = executionReportConnectorConfiguration;
         this.executionReportConnectorPublisher = executionReportConnectorPublisher;
+        // Force a generous HWM on the trading channels before any socket/publish activity happens
+        // on them (ZeroMqPublisher's PUB socket is created lazily on first publish(), so mutating
+        // the configuration here still takes effect). Only raises it if still at the low
+        // market-data default, so an explicitly-configured value from bean wiring is respected.
+        bumpHwmIfStillDefault(this.orderRequestConnectorConfiguration);
+        bumpHwmIfStillDefault(this.executionReportConnectorConfiguration);
         portfolio = new Portfolio();//from file
         listenersManager = new ConcurrentHashMap<>();
         lastOrderRequestClOrdId = EvictingQueue.create(QUEUE_SIZE);
         CfERNotified = EvictingQueue.create(QUEUE_SIZE);
         latencyStatistics = new LatencyStatistics("AbstractBrokerTradingEngine", 60 * 1000);//to check latencies in orderRequests
         preTradeController = new PreTradeController();
+    }
+
+    private static void bumpHwmIfStillDefault(ConnectorConfiguration configuration) {
+        if (configuration instanceof ZeroMqConfiguration zeroMqConfiguration && zeroMqConfiguration.getHwm() <= 1) {
+            zeroMqConfiguration.setHwm(TRADING_CHANNEL_HWM);
+        }
     }
 
     @Override

@@ -28,6 +28,17 @@ public class ZeroMqConfiguration implements ConnectorConfiguration {
 	private int port;
 	private String ipAddress;
 	boolean ipcEnabled;
+	/**
+	 * ZeroMQ high-water-mark applied to the socket(s) created for this configuration
+	 * (see {@code ZeroMqProvider#getSubscribeSocket} / {@code ZeroMqPublisher#getPublishSocket}).
+	 * <p>
+	 * Defaults to {@code 1} — the historical value, appropriate for market-data streams where
+	 * dropping a stale tick under load is an acceptable trade-off for low latency. Trading
+	 * channels (order requests / execution reports) must never silently drop a message this way,
+	 * so connectors that own those channels (e.g. {@code AbstractBrokerTradingEngine},
+	 * {@code ZeroMqTradingEngineConnector}) raise this value before any socket is created.
+	 */
+	private int hwm = 1;
 	private static ZContext Z_CONTEXT;
 	private static final Object lockContext = new Object();
 
@@ -51,6 +62,7 @@ public class ZeroMqConfiguration implements ConnectorConfiguration {
 		this.port = zeroMqConfiguration.getPort();
 		this.protocol = zeroMqConfiguration.getProtocol();
 		this.ipAddress = zeroMqConfiguration.getIpAddress();
+		this.hwm = zeroMqConfiguration.getHwm();
 		if (zeroMqConfiguration.ipcEnabled) {
 			this.ipcEnabled = true;
 		}
