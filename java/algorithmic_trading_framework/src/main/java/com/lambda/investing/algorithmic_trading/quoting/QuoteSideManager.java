@@ -454,8 +454,15 @@ public class QuoteSideManager {
                         clientOrderId, status, executionReport);
             }
         } else if (status.equals(ExecutionReportStatus.Cancelled)) {
-            logger.warn("[{}] {}-{} order is no longer alive — a fill may still arrive for this clOrdId  {}",
-                    executionReport.getDateCreation(), clientOrderId, status, executionReport);
+            // If the in-flight request we sent for this clOrdId was itself a Cancel, this ER is the
+            // expected confirmation of that cancel and no further fill is possible — skip the warning.
+            boolean isExpectedCancelConfirmation = clientOrderIdSentAction == OrderRequestAction.Cancel
+                    && (clientOrderId.equalsIgnoreCase(clientOrderIdSent)
+                    || (origClientOrderId != null && origClientOrderId.equalsIgnoreCase(clientOrderIdSent)));
+            if (!isExpectedCancelConfirmation) {
+                logger.warn("[{}] {}-{} order is no longer alive — a fill may still arrive for this clOrdId  {}",
+                        executionReport.getDateCreation(), clientOrderId, status, executionReport);
+            }
         } else if (LOG_LEVEL > LogLevels.SOME_ITERATION_LOG.ordinal() && logger.isInfoEnabled()) {
             logger.info("[{}] {}-{}  {}", executionReport.getDateCreation(),
                     clientOrderId, status, executionReport);
