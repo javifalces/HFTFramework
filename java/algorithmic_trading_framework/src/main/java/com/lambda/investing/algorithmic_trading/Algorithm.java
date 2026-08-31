@@ -2063,8 +2063,12 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             for (Map.Entry<?, ?> entry : rawPositions.entrySet()) {
                 // FastJSON deserializes numbers as BigDecimal when target type is raw Map;
                 // use Number.doubleValue() to safely handle both BigDecimal and Double.
+                if (entry.getKey() == null || entry.getValue() == null) {
+                    continue;
+                }
                 positions.put((String) entry.getKey(), ((Number) entry.getValue()).doubleValue());
             }
+
             if (!positions.isEmpty()) {
                 logger.info("[{}] received position from broker {}", getCurrentTime(), message);
             }
