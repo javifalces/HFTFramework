@@ -1235,6 +1235,9 @@
                 <artifactId>turbo-maven-plugin</artifactId>
                 <version>${turbo-maven-plugin.version}</version>
                 <extensions>true</extensions>
+                <configuration>
+                    <enabled>true</enabled>
+                </configuration>
             </plugin>
 
             <plugin>
