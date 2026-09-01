@@ -85,6 +85,7 @@
         <release.plugin.version>2.5.3</release.plugin.version>
         <gpg.plugin.version>3.2.7</gpg.plugin.version>
         <codehaus.plugin.version>1.10</codehaus.plugin.version>
+        <turbo-maven-plugin.version>1.0.0</turbo-maven-plugin.version>
         <!-- common -->
         <mvn-assembly.version>1.0.2</mvn-assembly.version>
         <!--<powermock.version>2.0.0</powermock.version>-->
@@ -1227,6 +1228,14 @@
 
 
         <plugins>
+
+            <!-- Skips building modules whose sources haven't changed since the last install -->
+            <plugin>
+                <groupId>no.sparebank1</groupId>
+                <artifactId>turbo-maven-plugin</artifactId>
+                <version>${turbo-maven-plugin.version}</version>
+                <extensions>true</extensions>
+            </plugin>
 
             <plugin>
                 <artifactId>maven-assembly-plugin</artifactId>
