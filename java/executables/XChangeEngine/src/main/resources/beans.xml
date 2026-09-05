@@ -17,8 +17,8 @@
     </bean>
 
 <!--    <import resource="classpath:coinbase_beans.xml"></import>-->
-    <import resource="classpath:kraken_beans.xml"></import>
+    <!--    <import resource="classpath:kraken_beans.xml"></import>-->
     <!--    <import resource="classpath:bybit_beans.xml"></import>-->
-    <!--    <import resource="classpath:binance_beans.xml"></import>-->
+    <import resource="classpath:binance_beans.xml"></import>
 
 </beans>

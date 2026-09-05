@@ -3,17 +3,7 @@
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:util="http://www.springframework.org/schema/util"
        xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
     <!--    https://www.binance.com/en/fee/schedule-->
-    <bean id="btcusdt_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
-        <property name="symbol" value="btcusdt"></property>
-        <property name="market" value="binance"></property>
-        <property name="currency" value="USDT"></property>
-        <property name="priceTick" value="0.01"></property>
-        <property name="quantityTick" value="0.00001"></property>
 
-        <property name="makerFeePct" value="0.1"></property>
-        <property name="takerFeePct" value="0.1"></property>
-
-    </bean>
 
     <bean id="btceur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
         <property name="symbol" value="btceur"></property>
@@ -24,20 +14,9 @@
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
-
     </bean>
 
-    <bean id="ethusdt_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
-        <property name="symbol" value="ethusdt"></property>
-        <property name="market" value="binance"></property>
-        <property name="currency" value="USDT"></property>
-        <property name="priceTick" value="0.01"></property>
-        <property name="quantityTick" value="0.00001"></property>
 
-        <property name="makerFeePct" value="0.1"></property>
-        <property name="takerFeePct" value="0.1"></property>
-
-    </bean>
 
     <bean id="etheur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
         <property name="symbol" value="etheur"></property>
@@ -50,26 +29,334 @@
         <property name="takerFeePct" value="0.1"></property>
     </bean>
 
-    <bean id="ethbtc_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
-        <property name="symbol" value="ethbtc"></property>
+    <bean id="adaeur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="adaeur"></property>
         <property name="market" value="binance"></property>
-        <property name="currency" value="BTC"></property>
-        <property name="priceTick" value="0.01"></property>
-        <!--<property name="priceTick" value="0.0001"></property>-->
-        <!--<property name="quantityTick" value="0.0001"></property>-->
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.0001"></property>
+        <property name="quantityTick" value="0.00001"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
+    </bean>
 
+    <bean id="apteur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="apteur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="atomeur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="atomeur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="avaxeur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="avaxeur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.01"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="bcheur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="bcheur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.01"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="bnbeur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="bnbeur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.01"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="dogeeur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="dogeeur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.0001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="doteur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="doteur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.01"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="egldeur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="egldeur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.01"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="icpeur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="icpeur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.01"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="linkeur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="linkeur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="ltceur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="ltceur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.01"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="neareur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="neareur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.01"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="pepeeur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="pepeeur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.00000001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="poleur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="poleur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.0001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="rendereur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="rendereur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.01"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="seur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="seur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.0001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="shibeur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="shibeur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.00000001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="soleur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="soleur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.01"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="suieur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="suieur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.0001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="trxeur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="trxeur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.0001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="veteur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="veteur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="wineur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="wineur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.00000001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="wldeur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="wldeur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.0001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="wlfieur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="wlfieur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.0001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="xlmeur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="xlmeur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.0001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
+    </bean>
+
+    <bean id="xrpeur_binance" class="com.lambda.investing.model.asset.Instrument" init-method="addMap">
+        <property name="symbol" value="xrpeur"></property>
+        <property name="market" value="binance"></property>
+        <property name="currency" value="EUR"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.00001"></property>
+
+        <property name="makerFeePct" value="0.1"></property>
+        <property name="takerFeePct" value="0.1"></property>
     </bean>
 
 
     <util:list id="binance_instruments" value-type="com.lambda.investing.model.asset.Instrument">
-        <!--        <ref bean="btcusdt_binance"/>-->
-        <!--        <ref bean="ethusdt_binance"/>-->
-        <!--        <ref bean="ethbtc_binance"/>-->
         <ref bean="btceur_binance"/>
         <ref bean="etheur_binance"/>
+        <ref bean="adaeur_binance"/>
+        <ref bean="apteur_binance"/>
+        <ref bean="atomeur_binance"/>
+        <ref bean="avaxeur_binance"/>
+        <ref bean="bcheur_binance"/>
+        <ref bean="bnbeur_binance"/>
+        <ref bean="dogeeur_binance"/>
+        <ref bean="doteur_binance"/>
+        <ref bean="egldeur_binance"/>
+        <ref bean="icpeur_binance"/>
+        <ref bean="linkeur_binance"/>
+        <ref bean="ltceur_binance"/>
+        <ref bean="neareur_binance"/>
+        <ref bean="pepeeur_binance"/>
+        <ref bean="poleur_binance"/>
+        <ref bean="rendereur_binance"/>
+        <ref bean="seur_binance"/>
+        <ref bean="shibeur_binance"/>
+        <ref bean="soleur_binance"/>
+        <ref bean="suieur_binance"/>
+        <ref bean="trxeur_binance"/>
+        <ref bean="veteur_binance"/>
+        <ref bean="wineur_binance"/>
+        <ref bean="wldeur_binance"/>
+        <ref bean="wlfieur_binance"/>
+        <ref bean="xlmeur_binance"/>
+        <ref bean="xrpeur_binance"/>
     </util:list>
 
 </beans>
