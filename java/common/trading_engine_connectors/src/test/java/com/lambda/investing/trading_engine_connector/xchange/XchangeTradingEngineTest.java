@@ -44,12 +44,6 @@ import static com.lambda.investing.Configuration.RANDOM_GENERATOR;
 	protected static ExecutionReport lastER = null;
 
 	public void setUp() throws Exception {
-		//		coinbase.apikey=0fc81f2daaf56301808b8fe01b68f8c2
-		//		coinbase.secretkey=KXYMAQOtblVyAP4WSFj1WdSpfcwf7eEo7AV61G1ChAMz5CMgJ2n7qs1p+498DTJ9Gn+VrnrC09zNu8y/GT/jtQ==
-		//				kraken.apikey=yuagc5Bvbjx9thMIjcLZz2qtGR8w1k0t0VwmdYgnKCTAFZTkILv8mSbb
-		//		kraken.secretkey=Psh4NO5H2u6ELzcB9r4qijfBIeT718M44I9wT3fBIO8nGd7Px/AY9syEJoA5LD1e5XQh7OYsZ6S+ulCI+WHtzA==
-		//				binance.apikey=lBXdwzS9iIdYgGpnGSXD1HqpsqQyJxnysMDMtwQVgovTVcAdAyEdxq0GmRlaNonT
-		//		binance.secretkey=VOW8frSSLBcEmXeGWJIf3lX4lejIcfwD8WnHMZYdxSTqfaZSbMhcG9KnifHVCcDk
 		super.setUp();
 	}
 
@@ -229,8 +223,8 @@ import static com.lambda.investing.Configuration.RANDOM_GENERATOR;
 
 	@Test public void testBinance() {
 		String market = "binance";
-		String binanceApikey = "lBXdwzS9iIdYgGpnGSXD1HqpsqQyJxnysMDMtwQVgovTVcAdAyEdxq0GmRlaNonT";
-		String binanceSecretKey = "VOW8frSSLBcEmXeGWJIf3lX4lejIcfwD8WnHMZYdxSTqfaZSbMhcG9KnifHVCcDk";
+		String binanceApikey = "xxxx";
+		String binanceSecretKey = "xxxx";
 
 		MarketDataConfiguration marketDataConfiguration = new BinanceXchangeMarketDataConfiguration(binanceApikey,
 				binanceSecretKey);

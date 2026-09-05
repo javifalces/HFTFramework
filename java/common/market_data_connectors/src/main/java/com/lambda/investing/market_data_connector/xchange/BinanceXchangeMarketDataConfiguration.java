@@ -6,8 +6,8 @@ import lombok.Setter;
 
 @Getter @Setter public class BinanceXchangeMarketDataConfiguration implements MarketDataConfiguration {
 
-	private String apiKey;//c39e5863fc6488b64f4ff4715295767d
-	private String secretKey;//5T6YdCjE9HjYGulFh16Zf6XQ62M8cHZ9gQIJrrckrwX83O4tYwtsBH4Z52UwkSViHV3CewwYTxmh9xZ6vmLB+g==
+	private String apiKey;
+	private String secretKey;
 
 	public BinanceXchangeMarketDataConfiguration(String apiKey, String secretKey) {
 		this.apiKey = apiKey;
