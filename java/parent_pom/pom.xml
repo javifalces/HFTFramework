@@ -1229,17 +1229,6 @@
 
         <plugins>
 
-            <!-- Skips building modules whose sources haven't changed since the last install -->
-            <plugin>
-                <groupId>no.sparebank1</groupId>
-                <artifactId>turbo-maven-plugin</artifactId>
-                <version>${turbo-maven-plugin.version}</version>
-                <extensions>true</extensions>
-                <configuration>
-                    <enabled>true</enabled>
-                </configuration>
-            </plugin>
-
             <plugin>
                 <artifactId>maven-assembly-plugin</artifactId>
             </plugin>
@@ -1393,6 +1382,28 @@
                 <!-- keep, but CI also passes -Dgpg.skip=false explicitly -->
                 <gpg.skip>false</gpg.skip>
             </properties>
+        </profile>
+
+        <!-- Enabled by default; disable with -P '!turbo-maven-plugin' -->
+        <profile>
+            <id>turbo-maven-plugin</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <build>
+                <plugins>
+                    <!-- Skips building modules whose sources haven't changed since the last install -->
+                    <plugin>
+                        <groupId>no.sparebank1</groupId>
+                        <artifactId>turbo-maven-plugin</artifactId>
+                        <version>${turbo-maven-plugin.version}</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <enabled>true</enabled>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
         </profile>
     </profiles>
 
