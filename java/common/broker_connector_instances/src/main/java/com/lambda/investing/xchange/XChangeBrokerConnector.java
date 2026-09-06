@@ -140,6 +140,17 @@ public abstract class XChangeBrokerConnector {
     }
 
     /**
+     * Whether the connected exchange (including its authenticated user-data channels, when an
+     * API key is set) is reporting itself as alive. Callers that need authenticated channels
+     * (e.g. user trades/order changes) should check this before subscribing: a successful
+     * {@link #connectWebsocket} does not guarantee the authenticated login has completed, since
+     * Binance's user-data-stream login happens asynchronously right after the socket connects.
+     */
+    public boolean isConnectionAlive() {
+        return isAlive(this.getStreamingExchange());
+    }
+
+    /**
      * Connects the websocket subscribing to public (market data) and, when needed, authenticated
      * (user data: orders/userTrades/balances) channels.
      * <p>
@@ -172,7 +183,14 @@ public abstract class XChangeBrokerConnector {
             symbolsList.append(',');
 
             CurrencyPair currencyPair = XChangeBrokerConnector.getCurrencyPair(instrument.getPrimaryKey());
-            pairs.add(currencyPair);
+            // connectWebsocket() can be invoked more than once on the same shared/singleton connector
+            // (e.g. once from the market data publisher and once from the trading engine, or again when
+            // isAlive() falsely reports "not alive" - see isAlive() javadoc). Guard against re-adding the
+            // same pair, otherwise every subsequent call duplicates the subscriptions (and, downstream,
+            // every onUserTrades/onOrderChange/getTrades/getOrderBook subscription attempt) for each pair.
+            if (!pairs.contains(currencyPair)) {
+                pairs.add(currencyPair);
+            }
             currencyPairToInstrument.put(currencyPair, instrument);
 
             // Only subscribe to the channels actually consumed (market data + user order/trade updates).

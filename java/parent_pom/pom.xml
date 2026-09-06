@@ -95,6 +95,7 @@
         <lombok.version>1.18.20</lombok.version>
         <log4j2.version>2.25.2</log4j2.version>
         <slf4j.version>2.0.17</slf4j.version>
+        <jackson.version>2.19.2</jackson.version>
         <spring.version>6.2.15</spring.version>
         <spring.plugin.version>3.0.0</spring.plugin.version>
         <junit4.version>4.13.1</junit4.version>
@@ -130,6 +131,27 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- Pin Jackson modules to a single consistent version: several transitive dependencies
+                 (e.g. com.squareup.retrofit2:converter-jackson pulls jackson-databind 2.9.4) declare
+                 mismatched old Jackson versions, causing a split classpath and runtime
+                 NoSuchMethodError (e.g. ObjectMapper.treeToValue(TreeNode, TypeReference) used by
+                 xchange-stream-binance's Binance WS-API login response parsing). -->
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-core</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-annotations</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+
             <!--  my own          -->
             <dependency>
                 <groupId>io.github.javifalces</groupId>

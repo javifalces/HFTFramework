@@ -75,7 +75,60 @@ public class XChangeTradingEngine extends AbstractBrokerTradingEngine {
 	@Override public void start() {
 		super.start();
 		this.brokerConnector.connectWebsocket(instrumentSet);
+		awaitAuthenticatedConnection();
 		subscribeER();
+	}
+
+	/**
+	 * Number of attempts and delay between attempts when subscribing to the authenticated
+	 * user-trade/order-change streams right after connecting. Binance's user-data-stream
+	 * authentication (ed25519 login) completes asynchronously right after the websocket connects,
+	 * so subscribing immediately can transiently fail with "Not authenticated" even though the
+	 * connection is otherwise healthy; a short retry avoids leaving every pair unsubscribed.
+	 */
+	private static final int SUBSCRIBE_ER_MAX_ATTEMPTS = 5;
+	private static final long SUBSCRIBE_ER_RETRY_DELAY_MS = 1000L;
+
+	/**
+	 * How long to poll {@link XChangeBrokerConnector#isConnectionAlive()} before subscribing.
+	 */
+	private static final long AWAIT_CONNECTION_TIMEOUT_MS = 5000L;
+	private static final long AWAIT_CONNECTION_POLL_MS = 250L;
+
+	/**
+	 * Waits for the (authenticated) connection to come up before subscribing to user-trade/order
+	 * streams. If it never reports alive within the timeout, forces one full reconnect via
+	 * {@link XChangeBrokerConnector#resetClient()}: the shared/singleton connector's very first
+	 * connect can race with the underlying login handshake, leaving the connection permanently
+	 * unauthenticated; a clean reconnect works around that instead of retrying the same broken
+	 * socket in {@link #subscribeER()}.
+	 */
+	private void awaitAuthenticatedConnection() {
+		if (brokerConnector == null) {
+			return;
+		}
+		long deadline = System.currentTimeMillis() + AWAIT_CONNECTION_TIMEOUT_MS;
+		while (!brokerConnector.isConnectionAlive() && System.currentTimeMillis() < deadline) {
+			try {
+				Thread.sleep(AWAIT_CONNECTION_POLL_MS);
+			} catch (InterruptedException interruptedException) {
+				Thread.currentThread().interrupt();
+				return;
+			}
+		}
+		if (!brokerConnector.isConnectionAlive()) {
+			logger.warn("connection not alive after {} ms, forcing a reconnect before subscribing", AWAIT_CONNECTION_TIMEOUT_MS);
+			brokerConnector.resetClient();
+			deadline = System.currentTimeMillis() + AWAIT_CONNECTION_TIMEOUT_MS;
+			while (!brokerConnector.isConnectionAlive() && System.currentTimeMillis() < deadline) {
+				try {
+					Thread.sleep(AWAIT_CONNECTION_POLL_MS);
+				} catch (InterruptedException interruptedException) {
+					Thread.currentThread().interrupt();
+					return;
+				}
+			}
+		}
 	}
 
 	protected void subscribeER() {
@@ -86,33 +139,64 @@ public class XChangeTradingEngine extends AbstractBrokerTradingEngine {
 		for (CurrencyPair currencyPair : brokerConnector.getPairs()) {
 			Instrument instrument = brokerConnector.getCurrencyPairToInstrument()
 					.get(currencyPair);
+			subscribeUserTrades(currencyPair, instrument);
+			subscribeOrderChanges(currencyPair, instrument);
+		}
+	}
+
+	private void subscribeUserTrades(CurrencyPair currencyPair, Instrument instrument) {
+		for (int attempt = 1; attempt <= SUBSCRIBE_ER_MAX_ATTEMPTS; attempt++) {
 			try {
 				Disposable subscriptionTrade = webSocketClient.getStreamingTradeService().getUserTrades(currencyPair)
 						.subscribe(userTrade -> onUserTrades(instrument, userTrade),
 								throwable -> logger.error("Error in onUserTrades subscription", throwable));
 
 				subscriptionTrades.add(subscriptionTrade);
+				return;
 
 			} catch (Exception e) {
-				logger.error("error subscribing to onUserTrades on {} ", instrument, e);
-				System.err.println("error subscribing to onUserTrades " + e.getMessage());
-				//				e.printStackTrace();
+				if (attempt == SUBSCRIBE_ER_MAX_ATTEMPTS) {
+					logger.error("error subscribing to onUserTrades on {} after {} attempts", instrument, attempt, e);
+					System.err.println("error subscribing to onUserTrades " + e.getMessage());
+				} else {
+					logger.warn("error subscribing to onUserTrades on {} (attempt {}/{}), retrying: {}", instrument,
+							attempt, SUBSCRIBE_ER_MAX_ATTEMPTS, e.getMessage());
+					sleepBeforeRetry();
+				}
 			}
+		}
+	}
 
+	private void subscribeOrderChanges(CurrencyPair currencyPair, Instrument instrument) {
+		for (int attempt = 1; attempt <= SUBSCRIBE_ER_MAX_ATTEMPTS; attempt++) {
 			try {
 				Disposable subscriptionTrade = webSocketClient.getStreamingTradeService().getOrderChanges(currencyPair)
 						.subscribe(order -> onOrderChange(instrument, order),
 								throwable -> logger.error("Error in onOrderChange subscription", throwable));
 				subscriptionOrderChanges.add(subscriptionTrade);
+				return;
 
 			} catch (Exception e) {
-				logger.error("error subscribing to onOrderChange on {} ", instrument, e);
-				System.err.println("error subscribing to onOrderChange " + e.getMessage());
-				//				e.printStackTrace();
+				if (attempt == SUBSCRIBE_ER_MAX_ATTEMPTS) {
+					logger.error("error subscribing to onOrderChange on {} after {} attempts", instrument, attempt, e);
+					System.err.println("error subscribing to onOrderChange " + e.getMessage());
+				} else {
+					logger.warn("error subscribing to onOrderChange on {} (attempt {}/{}), retrying: {}", instrument,
+							attempt, SUBSCRIBE_ER_MAX_ATTEMPTS, e.getMessage());
+					sleepBeforeRetry();
+				}
 			}
-
 		}
 	}
+
+	private void sleepBeforeRetry() {
+		try {
+			Thread.sleep(SUBSCRIBE_ER_RETRY_DELAY_MS);
+		} catch (InterruptedException interruptedException) {
+			Thread.currentThread().interrupt();
+		}
+	}
+
 
 	public void reset() {
         for (Disposable disposable : subscriptionTrades) {
