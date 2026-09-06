@@ -23,7 +23,7 @@
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
         <property name="priceTick" value="0.01"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.0001"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -34,7 +34,7 @@
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
         <property name="priceTick" value="0.0001"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.1"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -45,7 +45,7 @@
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
         <property name="priceTick" value="0.001"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -56,7 +56,7 @@
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
         <property name="priceTick" value="0.001"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -66,8 +66,8 @@
         <property name="symbol" value="avaxeur"></property>
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
-        <property name="priceTick" value="0.01"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="priceTick" value="0.001"></property>
+        <property name="quantityTick" value="0.01"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -77,8 +77,8 @@
         <property name="symbol" value="bcheur"></property>
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
-        <property name="priceTick" value="0.01"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="priceTick" value="0.1"></property>
+        <property name="quantityTick" value="0.001"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -89,7 +89,7 @@
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
         <property name="priceTick" value="0.01"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.001"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -99,8 +99,8 @@
         <property name="symbol" value="dogeeur"></property>
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
-        <property name="priceTick" value="0.0001"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="1"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -110,8 +110,8 @@
         <property name="symbol" value="doteur"></property>
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
-        <property name="priceTick" value="0.01"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="priceTick" value="0.001"></property>
+        <property name="quantityTick" value="0.01"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -121,8 +121,8 @@
         <property name="symbol" value="egldeur"></property>
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
-        <property name="priceTick" value="0.01"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="priceTick" value="0.001"></property>
+        <property name="quantityTick" value="0.01"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -132,8 +132,8 @@
         <property name="symbol" value="icpeur"></property>
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
-        <property name="priceTick" value="0.01"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="priceTick" value="0.001"></property>
+        <property name="quantityTick" value="0.01"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -144,7 +144,7 @@
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
         <property name="priceTick" value="0.001"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.01"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -155,7 +155,7 @@
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
         <property name="priceTick" value="0.01"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.001"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -165,8 +165,8 @@
         <property name="symbol" value="neareur"></property>
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
-        <property name="priceTick" value="0.01"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="priceTick" value="0.001"></property>
+        <property name="quantityTick" value="0.1"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -177,7 +177,7 @@
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
         <property name="priceTick" value="0.00000001"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="quantityTick" value="1"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -187,8 +187,8 @@
         <property name="symbol" value="poleur"></property>
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
-        <property name="priceTick" value="0.0001"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.1"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -198,8 +198,8 @@
         <property name="symbol" value="rendereur"></property>
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
-        <property name="priceTick" value="0.01"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="priceTick" value="0.001"></property>
+        <property name="quantityTick" value="0.01"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -209,8 +209,8 @@
         <property name="symbol" value="seur"></property>
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
-        <property name="priceTick" value="0.0001"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="priceTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.1"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -221,7 +221,7 @@
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
         <property name="priceTick" value="0.00000001"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="quantityTick" value="1"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -232,7 +232,7 @@
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
         <property name="priceTick" value="0.01"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.001"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -243,7 +243,7 @@
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
         <property name="priceTick" value="0.0001"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.1"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -254,7 +254,7 @@
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
         <property name="priceTick" value="0.0001"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="quantityTick" value="1"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -264,8 +264,8 @@
         <property name="symbol" value="veteur"></property>
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
-        <property name="priceTick" value="0.00001"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="priceTick" value="0.000001"></property>
+        <property name="quantityTick" value="0.01"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -276,7 +276,7 @@
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
         <property name="priceTick" value="0.00000001"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="quantityTick" value="1"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -287,7 +287,7 @@
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
         <property name="priceTick" value="0.0001"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.1"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -298,7 +298,7 @@
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
         <property name="priceTick" value="0.0001"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="quantityTick" value="0.1"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -309,7 +309,7 @@
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
         <property name="priceTick" value="0.0001"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="quantityTick" value="1"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
@@ -319,8 +319,8 @@
         <property name="symbol" value="xrpeur"></property>
         <property name="market" value="binance"></property>
         <property name="currency" value="EUR"></property>
-        <property name="priceTick" value="0.00001"></property>
-        <property name="quantityTick" value="0.00001"></property>
+        <property name="priceTick" value="0.0001"></property>
+        <property name="quantityTick" value="0.1"></property>
 
         <property name="makerFeePct" value="0.1"></property>
         <property name="takerFeePct" value="0.1"></property>
