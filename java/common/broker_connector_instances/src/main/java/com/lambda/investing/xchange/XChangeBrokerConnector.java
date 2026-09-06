@@ -124,6 +124,22 @@ public abstract class XChangeBrokerConnector {
 
 
     /**
+     * Safe wrapper around {@link StreamingExchange#isAlive()}.
+     * <p>
+     * Some implementations (e.g. {@code BinanceStreamingExchange}) throw a {@link NullPointerException}
+     * when {@code isAlive()} is invoked before the underlying streaming service has ever been created,
+     * i.e. before the first successful {@code connect()}. In that situation the exchange is simply not
+     * connected, so treat the NPE as "not alive" instead of propagating it.
+     */
+    protected static boolean isAlive(StreamingExchange streamingExchange) {
+        try {
+            return streamingExchange.isAlive();
+        } catch (NullPointerException e) {
+            return false;
+        }
+    }
+
+    /**
      * Connects the websocket subscribing to public (market data) and, when needed, authenticated
      * (user data: orders/userTrades/balances) channels.
      * <p>
@@ -138,14 +154,14 @@ public abstract class XChangeBrokerConnector {
 
         if (lastInstrumentSetSubscribed != null) {
             if (lastInstrumentSetSubscribed.containsAll(instrumentSet)) {
-                if (this.getStreamingExchange().isAlive()) {
+                if (isAlive(this.getStreamingExchange())) {
                     return;
                 }
             } else {
                 instrumentSet.addAll(lastInstrumentSetSubscribed);
             }
         }
-        instrumentSet = instrumentSet.stream().distinct().collect(Collectors.toSet());
+
 
         StringBuilder symbolsList = new StringBuilder();
         ProductSubscription.ProductSubscriptionBuilder productSubscriptionBuilder = ProductSubscription.create();
@@ -159,13 +175,14 @@ public abstract class XChangeBrokerConnector {
             pairs.add(currencyPair);
             currencyPairToInstrument.put(currencyPair, instrument);
 
-            productSubscriptionBuilder.addAll(currencyPair);
-            //
-            //			productSubscriptionBuilder.addUserTrades(currencyPair);
-            //			productSubscriptionBuilder.addTrades(currencyPair);
-            //			productSubscriptionBuilder.addTicker(currencyPair);
-            //			productSubscriptionBuilder.addOrderbook(currencyPair);
-
+            // Only subscribe to the channels actually consumed (market data + user order/trade updates).
+            // NOTE: avoid ProductSubscriptionBuilder#addAll(): it also subscribes to funding rates and
+            // balances, which are unused here and, for funding rates on Binance spot pairs, NPE because
+            // the spot exchange has no BinanceFuturesAuthenticated REST client configured.
+            productSubscriptionBuilder.addOrderbook(currencyPair);
+            productSubscriptionBuilder.addTrades(currencyPair);
+            productSubscriptionBuilder.addUserTrades(currencyPair);
+            productSubscriptionBuilder.addOrders(currencyPair);
         }
 
         logger.info("subscribing to websocket on symbols {}", symbolsList.toString());
@@ -176,14 +193,14 @@ public abstract class XChangeBrokerConnector {
             logger.error("webSocketClient is null");
             return;
         }
-        if (!webSocketClient.isAlive()) {
+        if (!isAlive(webSocketClient)) {
             logger.info("connecting websocket ");
-            webSocketClient.connect(productSubscriptionBuilder.build()).blockingAwait();
+            connect(webSocketClient, productSubscriptionBuilder);
         } else {
             logger.info("disconnecting previous websocket ....");
             webSocketClient.disconnect();
 
-            while (webSocketClient.isAlive()) {
+            while (isAlive(webSocketClient)) {
                 try {
                     Thread.sleep(100);
                 } catch (InterruptedException e) {
@@ -191,9 +208,32 @@ public abstract class XChangeBrokerConnector {
                 }
             }
             logger.info("connecting websocket ...");
-            webSocketClient.connect(productSubscriptionBuilder.build()).blockingAwait();
+            connect(webSocketClient, productSubscriptionBuilder);
         }
         lastInstrumentSetSubscribed = instrumentSet;
+    }
+
+    /**
+     * Connects a (possibly already connected) {@link StreamingExchange}, tolerating implementations
+     * whose {@link StreamingExchange#isAlive()} unreliably reports {@code false} for an already
+     * connected exchange.
+     * <p>
+     * {@code BinanceStreamingExchange.isAlive()} requires the authenticated user-data services to be
+     * non-null and authorized once an API key is set; those services are only created when the
+     * {@code ed25519} exchange-specific parameter is enabled, which this connector does not set. As a
+     * result {@code isAlive()} can NPE (see {@link #isAlive}) right after a successful connect, making
+     * this method believe a (re)connect is needed. Since the underlying exchange only supports a single
+     * connection, retrying then throws {@link UnsupportedOperationException}, which is safe to ignore:
+     * it means the exchange is already connected (e.g. shared singleton with the market data publisher).
+     */
+    private void connect(StreamingExchange streamingExchange,
+                         ProductSubscription.ProductSubscriptionBuilder productSubscriptionBuilder) {
+        try {
+            streamingExchange.connect(productSubscriptionBuilder.build()).blockingAwait();
+        } catch (UnsupportedOperationException e) {
+            logger.warn("{} is already connected (isAlive() falsely reported not-alive): {}",
+                    streamingExchange.getClass().getSimpleName(), e.getMessage());
+        }
     }
 
 }
