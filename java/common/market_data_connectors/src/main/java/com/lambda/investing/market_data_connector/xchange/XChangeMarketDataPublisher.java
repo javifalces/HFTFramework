@@ -1,10 +1,8 @@
 package com.lambda.investing.market_data_connector.xchange;
 
-import com.lambda.investing.Configuration;
 import com.lambda.investing.LatencyStatistics;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorPublisher;
-import com.lambda.investing.connector.ThreadUtils;
 import com.lambda.investing.market_data_connector.AbstractMarketDataConnectorPublisher;
 import com.lambda.investing.market_data_connector.MarketDataConfiguration;
 import com.lambda.investing.Statistics;
@@ -37,7 +35,7 @@ public class XChangeMarketDataPublisher extends AbstractMarketDataConnectorPubli
 	protected Logger logger = LogManager.getLogger(XChangeMarketDataPublisher.class);
 
 	protected XChangeBrokerConnector brokerConnector;
-	protected List<Instrument> instrumentList;
+	protected Set<Instrument> instrumentSet;
 	protected MarketDataConfiguration marketDataConfiguration;
 	protected Map<String, Instrument> symbolToInstrument;
 	protected Map<Instrument, Long> lastDepthSent;
@@ -54,10 +52,10 @@ public class XChangeMarketDataPublisher extends AbstractMarketDataConnectorPubli
 
 	public XChangeMarketDataPublisher(ConnectorConfiguration connectorConfiguration,
 			ConnectorPublisher connectorPublisher, MarketDataConfiguration marketDataConfiguration,
-			List<Instrument> instrumentList) {
+			                          Set<Instrument> instrumentSet) {
 		super(connectorConfiguration, connectorPublisher);
 		this.marketDataConfiguration = marketDataConfiguration;
-		this.instrumentList = instrumentList;
+		this.instrumentSet = instrumentSet;
 		symbolToInstrument = new ConcurrentHashMap<>();
 		lastDepthSent = new ConcurrentHashMap<>();
 		lastTradeSent = new ConcurrentHashMap<>();
@@ -68,10 +66,10 @@ public class XChangeMarketDataPublisher extends AbstractMarketDataConnectorPubli
 
 	public XChangeMarketDataPublisher(String name, ConnectorConfiguration connectorConfiguration,
 			ConnectorPublisher connectorPublisher, MarketDataConfiguration marketDataConfiguration,
-			List<Instrument> instrumentList) {
+			                          Set<Instrument> instrumentSet) {
 		super(name, connectorConfiguration, connectorPublisher);
 		this.marketDataConfiguration = marketDataConfiguration;
-		this.instrumentList = instrumentList;
+		this.instrumentSet = instrumentSet;
 		symbolToInstrument = new ConcurrentHashMap<>();
 		lastDepthSent = new ConcurrentHashMap<>();
 		lastTradeSent = new ConcurrentHashMap<>();
@@ -285,7 +283,7 @@ public class XChangeMarketDataPublisher extends AbstractMarketDataConnectorPubli
 	@Override public void start() {
 		threadCheckConnection = new Thread(this, "threadCheckConnection");
 		super.start();
-		brokerConnector.connectWebsocket(instrumentList);
+		brokerConnector.connectWebsocket(instrumentSet);
 		subscribeMarketData();
 		threadCheckConnection.start();
 	}

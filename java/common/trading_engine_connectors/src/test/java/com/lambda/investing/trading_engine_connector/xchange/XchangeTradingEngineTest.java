@@ -23,9 +23,7 @@ import org.junit.Assert;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 import static com.lambda.investing.Configuration.RANDOM_GENERATOR;
 
@@ -53,7 +51,7 @@ import static com.lambda.investing.Configuration.RANDOM_GENERATOR;
 		lastER = null;
 	}
 
-	public List<Instrument> getInstrument(String market) {
+	public Set<Instrument> getInstrument(String market) {
 		Instrument instrument = new Instrument();
 		instrument.setMarket(market);
 		instrument.setCurrency(Currency.USDT);
@@ -61,15 +59,15 @@ import static com.lambda.investing.Configuration.RANDOM_GENERATOR;
 		instrument.setPriceTick(0.01);
 		instrument.setPriceStep(0.01);
 		instrument.setQuantityTick(0.00001);
-		List<Instrument> output = new ArrayList<>();
+		Set<Instrument> output = new HashSet<>();
 		output.add(instrument);
 		return output;
 	}
 
 	public Depth updateMD(String market) {
 		//publisher
-		List<Instrument> instruments = getInstrument(market);
-		Instrument instrument = instruments.get(0);
+		Set<Instrument> instruments = getInstrument(market);
+		Instrument instrument = instruments.iterator().next();
 
 		//subscriber
 
@@ -236,8 +234,8 @@ import static com.lambda.investing.Configuration.RANDOM_GENERATOR;
 
 		Depth depth = updateMD(market);
 
-		List<Instrument> instruments = getInstrument(market);
-		Instrument instrument = instruments.get(0);
+		Set<Instrument> instruments = new HashSet<>(getInstrument(market));
+		Instrument instrument = instruments.iterator().next();
 
 		BinanceXchangeTradingEngineConfiguration tradingEngineConfiguration = new BinanceXchangeTradingEngineConfiguration(
 				binanceApikey, binanceSecretKey);

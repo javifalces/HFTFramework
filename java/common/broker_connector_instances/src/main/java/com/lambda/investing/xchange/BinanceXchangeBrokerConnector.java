@@ -4,9 +4,7 @@ import info.bitrich.xchangestream.binance.BinanceStreamingExchange;
 import info.bitrich.xchangestream.core.StreamingExchangeFactory;
 import lombok.Getter;
 import org.knowm.xchange.ExchangeFactory;
-import org.knowm.xchange.ExchangeSpecification;
 import org.knowm.xchange.binance.BinanceExchange;
-import org.knowm.xchange.coinbasepro.CoinbaseProExchange;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -16,14 +14,8 @@ import java.util.concurrent.ConcurrentHashMap;
 	private static Map<String, BinanceXchangeBrokerConnector> instances = new ConcurrentHashMap<>();
 
 	public static BinanceXchangeBrokerConnector getInstance(String apiKey, String secretKey) {
-
 		String key = apiKey + secretKey;
-		BinanceXchangeBrokerConnector coinbaseBrokerConnector = new BinanceXchangeBrokerConnector(apiKey, secretKey);
-
-		BinanceXchangeBrokerConnector output = instances.getOrDefault(key, coinbaseBrokerConnector);
-		instances.put(key, output);
-
-		return output;
+		return instances.computeIfAbsent(key, k -> new BinanceXchangeBrokerConnector(apiKey, secretKey));
 	}
 
 	private BinanceXchangeBrokerConnector(String apiKey, String secretKey) {
@@ -48,7 +40,8 @@ import java.util.concurrent.ConcurrentHashMap;
 		exchangeSpecification.setApiKey(apiKey);
 		exchangeSpecification.setSecretKey(secretKey);
 
-		///recreate with api accounts
+		logger.info("Binance REST apiKey={} secretKey=***{}", apiKey, lastChars(secretKey, 4));
+		//REST exchange (orders, account, market data)
 		streamingExchange = (BinanceStreamingExchange) StreamingExchangeFactory.INSTANCE
 				.createExchange(exchangeSpecification);
 		exchange = ExchangeFactory.INSTANCE.createExchange(exchangeSpecification);
@@ -60,7 +53,7 @@ import java.util.concurrent.ConcurrentHashMap;
 		webSocketClient.disconnect().subscribe(() -> logger.info("Disconnected from the Exchange"));
 		streamingExchange.disconnect();
 
-		connectWebsocket(lastInstrumentListSubscribed);
+		connectWebsocket(lastInstrumentSetSubscribed);
 		streamingExchange = StreamingExchangeFactory.INSTANCE.createExchange(BinanceStreamingExchange.class);
 		exchange = ExchangeFactory.INSTANCE.createExchange(BinanceExchange.class);
 		marketDataService = exchange.getMarketDataService();

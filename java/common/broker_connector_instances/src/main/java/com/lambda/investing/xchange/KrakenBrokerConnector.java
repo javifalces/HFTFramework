@@ -1,12 +1,9 @@
 package com.lambda.investing.xchange;
 
-import info.bitrich.xchangestream.coinbasepro.CoinbaseProStreamingExchange;
 import info.bitrich.xchangestream.core.StreamingExchangeFactory;
 import info.bitrich.xchangestream.kraken.KrakenStreamingExchange;
 import lombok.Getter;
 import org.knowm.xchange.ExchangeFactory;
-import org.knowm.xchange.ExchangeSpecification;
-import org.knowm.xchange.coinbasepro.CoinbaseProExchange;
 import org.knowm.xchange.kraken.KrakenExchange;
 
 import java.util.Map;
@@ -55,7 +52,7 @@ import java.util.concurrent.ConcurrentHashMap;
 		webSocketClient.disconnect().subscribe(() -> logger.info("Disconnected from the Exchange"));
 		streamingExchange.disconnect();
 
-		connectWebsocket(lastInstrumentListSubscribed);
+		connectWebsocket(lastInstrumentSetSubscribed);
 		streamingExchange = StreamingExchangeFactory.INSTANCE.createExchange(KrakenStreamingExchange.class);
 		exchange = ExchangeFactory.INSTANCE.createExchange(KrakenExchange.class);
 		marketDataService = exchange.getMarketDataService();

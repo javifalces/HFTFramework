@@ -1,6 +1,5 @@
 package com.lambda.investing.xchange;
 
-import com.binance.api.client.BinanceApiClientFactory;
 import com.lambda.investing.Configuration;
 import com.lambda.investing.model.asset.Instrument;
 import info.bitrich.xchangestream.core.ProductSubscription;
@@ -10,9 +9,7 @@ import lombok.Setter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.knowm.xchange.Exchange;
-import org.knowm.xchange.ExchangeFactory;
 import org.knowm.xchange.ExchangeSpecification;
-import org.knowm.xchange.bitmex.BitmexExchange;
 import org.knowm.xchange.currency.CurrencyPair;
 import org.knowm.xchange.currency.Currency;
 import org.knowm.xchange.service.marketdata.MarketDataService;
@@ -50,7 +47,7 @@ public abstract class XChangeBrokerConnector {
     protected Map<String, Instrument> symbolToInstrument = new ConcurrentHashMap<>();
     protected List<CurrencyPair> pairs = new ArrayList<>();
     Map<CurrencyPair, Instrument> currencyPairToInstrument = new HashMap<>();
-    List<Instrument> lastInstrumentListSubscribed = null;
+    Set<Instrument> lastInstrumentSetSubscribed = null;
 
     public static Currency getCurrency(String currency) {
         return getCurrency(currency, true);
@@ -111,22 +108,49 @@ public abstract class XChangeBrokerConnector {
 
     }
 
-    public synchronized void connectWebsocket(List<Instrument> instrumentList) {
-        if (lastInstrumentListSubscribed != null) {
-            if (lastInstrumentListSubscribed.containsAll(instrumentList)) {
+    /**
+     * Returns only the last {@code visibleChars} characters of a secret, for safe logging
+     * (never log full API secrets/private keys).
+     */
+    protected static String lastChars(String secret, int visibleChars) {
+        if (secret == null) {
+            return "null";
+        }
+        if (secret.length() <= visibleChars) {
+            return secret;
+        }
+        return secret.substring(secret.length() - visibleChars);
+    }
+
+
+    /**
+     * Connects the websocket subscribing to public (market data) and, when needed, authenticated
+     * (user data: orders/userTrades/balances) channels.
+     * <p>
+     * Authenticated channels require Binance to open a user-data-stream (listenKey), which is only
+     * needed by trading engines that listen to order/trade updates. Market-data-only publishers
+     * must not request them to avoid unnecessary private API calls (and failures on accounts/keys
+     * that cannot open a user-data-stream).
+     */
+    public synchronized void connectWebsocket(Set<Instrument> instrumentSet) {
+        logger.info("connecting {} websocket apiKey={} secretKey=***{}", getClass().getSimpleName(),
+                apiKey, lastChars(secretKey, 4));
+
+        if (lastInstrumentSetSubscribed != null) {
+            if (lastInstrumentSetSubscribed.containsAll(instrumentSet)) {
                 if (this.getStreamingExchange().isAlive()) {
                     return;
                 }
             } else {
-                instrumentList.addAll(lastInstrumentListSubscribed);
+                instrumentSet.addAll(lastInstrumentSetSubscribed);
             }
         }
-        instrumentList = instrumentList.stream().distinct().collect(Collectors.toList());
+        instrumentSet = instrumentSet.stream().distinct().collect(Collectors.toSet());
 
         StringBuilder symbolsList = new StringBuilder();
         ProductSubscription.ProductSubscriptionBuilder productSubscriptionBuilder = ProductSubscription.create();
 
-        for (Instrument instrument : instrumentList) {
+        for (Instrument instrument : instrumentSet) {
             symbolsList.append(instrument.getPrimaryKey().toLowerCase());
             symbolToInstrument.put(instrument.getSymbol().toLowerCase(), instrument);
             symbolsList.append(',');
@@ -169,7 +193,7 @@ public abstract class XChangeBrokerConnector {
             logger.info("connecting websocket ...");
             webSocketClient.connect(productSubscriptionBuilder.build()).blockingAwait();
         }
-        lastInstrumentListSubscribed = instrumentList;
+        lastInstrumentSetSubscribed = instrumentSet;
     }
 
 }

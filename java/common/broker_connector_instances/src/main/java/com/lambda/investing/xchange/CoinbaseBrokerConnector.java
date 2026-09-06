@@ -1,15 +1,9 @@
 package com.lambda.investing.xchange;
 
-import info.bitrich.xchangestream.bitmex.BitmexStreamingExchange;
 import info.bitrich.xchangestream.coinbasepro.CoinbaseProStreamingExchange;
 import info.bitrich.xchangestream.core.StreamingExchangeFactory;
 import lombok.Getter;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.knowm.xchange.ExchangeFactory;
-import org.knowm.xchange.ExchangeSpecification;
-import org.knowm.xchange.bitmex.BitmexExchange;
-import org.knowm.xchange.coinbasepro.CoinbasePro;
 import org.knowm.xchange.coinbasepro.CoinbaseProExchange;
 
 
@@ -61,7 +55,7 @@ import java.util.concurrent.ConcurrentHashMap;
 		webSocketClient.disconnect().subscribe(() -> logger.info("Disconnected from the Exchange"));
 		streamingExchange.disconnect();
 		//connect again
-		connectWebsocket(lastInstrumentListSubscribed);
+		connectWebsocket(lastInstrumentSetSubscribed);
 		streamingExchange = StreamingExchangeFactory.INSTANCE.createExchange(CoinbaseProStreamingExchange.class);
 		exchange = ExchangeFactory.INSTANCE.createExchange(CoinbaseProExchange.class);
 		marketDataService = exchange.getMarketDataService();

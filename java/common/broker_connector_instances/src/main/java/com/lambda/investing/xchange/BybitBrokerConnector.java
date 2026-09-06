@@ -1,10 +1,7 @@
 package com.lambda.investing.xchange;
 
-import info.bitrich.xchangestream.binance.BinanceStreamingExchange;
 import info.bitrich.xchangestream.bybit.BybitStreamingExchange;
-import info.bitrich.xchangestream.core.StreamingExchange;
 import info.bitrich.xchangestream.core.StreamingExchangeFactory;
-import info.bitrich.xchangestream.kraken.KrakenStreamingExchange;
 import lombok.Getter;
 import org.knowm.xchange.ExchangeFactory;
 import org.knowm.xchange.bybit.BybitExchange;
@@ -15,10 +12,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.knowm.xchange.ExchangeSpecification;
 import org.knowm.xchange.bybit.dto.BybitCategory;
-import org.knowm.xchange.bybit.dto.account.walletbalance.BybitAccountType;
 
 import static org.knowm.xchange.Exchange.USE_SANDBOX;
-import static org.knowm.xchange.bybit.BybitExchange.SPECIFIC_PARAM_ACCOUNT_TYPE;
 
 @Getter
 public class BybitBrokerConnector extends XChangeBrokerConnector {
@@ -79,7 +74,7 @@ public class BybitBrokerConnector extends XChangeBrokerConnector {
         webSocketClient.disconnect().subscribe(() -> logger.info("Disconnected from the Exchange"));
         streamingExchange.disconnect();
 
-        connectWebsocket(lastInstrumentListSubscribed);
+        connectWebsocket(lastInstrumentSetSubscribed);
 //		streamingExchange = StreamingExchangeFactory.INSTANCE.createExchange(KrakenStreamingExchange.class);
         exchange = ExchangeFactory.INSTANCE.createExchange(BybitExchange.class);
         marketDataService = exchange.getMarketDataService();

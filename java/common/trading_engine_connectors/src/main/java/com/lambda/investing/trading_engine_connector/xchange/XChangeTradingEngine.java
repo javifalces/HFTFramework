@@ -49,13 +49,13 @@ public class XChangeTradingEngine extends AbstractBrokerTradingEngine {
 
 	protected List<Disposable> subscriptionTrades = new ArrayList<>();
 	protected List<Disposable> subscriptionOrderChanges = new ArrayList<>();
-	protected List<Instrument> instrumentList;
+	protected Set<Instrument> instrumentSet;
 
 	public XChangeTradingEngine(ConnectorConfiguration orderRequestConnectorConfiguration,
 			ConnectorProvider orderRequestConnectorProvider,
 			ConnectorConfiguration executionReportConnectorConfiguration,
 			ConnectorPublisher executionReportConnectorPublisher, TradingEngineConfiguration tradingEngineConfiguration,
-			List<Instrument> instrumentList) {
+			                    Set<Instrument> instrumentSet) {
 		super(orderRequestConnectorConfiguration, orderRequestConnectorProvider, executionReportConnectorConfiguration,
 				executionReportConnectorPublisher);
 		this.tradingEngineConfiguration = tradingEngineConfiguration;
@@ -68,13 +68,13 @@ public class XChangeTradingEngine extends AbstractBrokerTradingEngine {
 		modificationCancelIdGenerated = new ConcurrentHashMap<>();
 		listenersManager = new HashMap<>();
 
-		this.instrumentList = instrumentList;
+		this.instrumentSet = instrumentSet;
 
 	}
 
 	@Override public void start() {
 		super.start();
-		this.brokerConnector.connectWebsocket(instrumentList);
+		this.brokerConnector.connectWebsocket(instrumentSet);
 		subscribeER();
 	}
 
