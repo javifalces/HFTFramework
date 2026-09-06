@@ -15,7 +15,7 @@
     <artifactId>broker_connector_instances</artifactId>
     <properties>
         <com.squareup.retrofit2.version>2.5.0</com.squareup.retrofit2.version>
-        <xchange.version>5.2.2</xchange.version>
+        <xchange.version>5.2.5</xchange.version>
     </properties>
 
 
@@ -202,6 +202,14 @@
                     <artifactId>*</artifactId>
                 </exclusion>
             </exclusions>
+        </dependency>
+
+        <!--required at runtime by xchange-stream-binance's Ed25519 WebSocket API user-data-stream
+        authentication (BinanceUserDataSpotStreamingService); not declared as a transitive dep-->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>1.78.1</version>
         </dependency>
 
         <dependency>
