@@ -107,7 +107,7 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
         }
     }
 
-    private void setInstruments() {
+    protected void setInstruments() {
         List<Instrument> instruments = AbstractFactorInvestingAlgorithm.getInstrumentsModel(modelName);
         if (instruments == null) {
             return;
