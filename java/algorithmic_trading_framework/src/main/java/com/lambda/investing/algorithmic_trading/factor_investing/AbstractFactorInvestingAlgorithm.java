@@ -52,6 +52,13 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
 
     protected Map<String, LastMarketDataSnapshot> instrumentsPkToLastMarketDataSnapshot = new ConcurrentHashMap<>();
 
+    /**
+     * Minimum weight change (in percentage, e.g. 0.01 == 1%) required to trigger a rebalance
+     * of an instrument on {@link #onWeightsUpdate(long, Map)}. Defaults to 0.0 (always update).
+     */
+    protected double weightChangeTolerance = 0.0;
+    protected Map<String, Double> instrumentPkToLastWeight = new ConcurrentHashMap<>();
+
     public AbstractFactorInvestingAlgorithm(AlgorithmConnectorConfiguration algorithmConnectorConfiguration, String algorithmInfo, Map<String, Object> parameters) {
         super(algorithmConnectorConfiguration, algorithmInfo, parameters);
         setParameters(parameters);
@@ -334,6 +341,15 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
                         logger.info("ignore {} with weight {}", instrumentPk, weight);
                         continue;
                     }
+
+                    Double lastWeight = instrumentPkToLastWeight.get(instrumentPk);
+                    if (lastWeight != null && Math.abs(weight - lastWeight) < weightChangeTolerance) {
+                        logger.info("not updating {} : weight change {} -> {} is below tolerance {} -> skip it",
+                                instrumentPk, lastWeight, weight, weightChangeTolerance);
+                        continue;
+                    }
+                    instrumentPkToLastWeight.put(instrumentPk, weight);
+
                     double expectedPosition = Math.round(getQuantity(weight, instrument) * 1E6) / 1E6;
                     double currentPosition = getPosition(instrument);
                     double quantityWithSide = expectedPosition - currentPosition;
@@ -370,6 +386,7 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
                         }
                         continue;
                     }
+
 
                     try {
                         output &= getExecutor(instrumentPk).increasePosition(getCurrentTimestamp(), verb, quantityToExecute, price);

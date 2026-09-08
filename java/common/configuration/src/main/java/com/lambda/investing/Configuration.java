@@ -90,6 +90,14 @@ public class Configuration {
      * Resolution order: JVM system property {@code loki.port} → env var {@code LOKI_PORT}.
      */
     public static String LOKI_PORT = getSysPropOrEnvOrDefault("loki.port", "LOKI_PORT", "");
+
+
+    /**
+     * Path to the directory where log files are written. Empty = no file logging.
+     */
+    public static String LOG_PATH = getSysPropOrEnvOrDefault("log.path", "LAMBDA_LOGS_PATH", "");
+
+
     /**
      * Application label sent with every log entry to Loki / Prometheus.
      */
