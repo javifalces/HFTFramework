@@ -4,6 +4,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.slf4j.helpers.MessageFormatter;
 
+import java.io.File;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -92,12 +93,17 @@ public class Configuration {
     public static String LOKI_PORT = getSysPropOrEnvOrDefault("loki.port", "LOKI_PORT", "");
 
 
+    private static final String LOG_PATH_DAY = new SimpleDateFormat("yyMMdd").format(new Date(System.currentTimeMillis()));
+
     /**
      * Path to the directory where log files are written. Empty = no file logging.
      */
-    public static String LOG_PATH = getSysPropOrEnvOrDefault("log.path", "LAMBDA_LOGS_PATH", "");
+    public static final String LOG_PATH_BASE = getSysPropOrEnvOrDefault("log.path", "LAMBDA_LOGS_PATH", "");
 
-
+    /**
+     * Path to the directory where log files are written . Empty = no file logging.
+     */
+    public static final String LOG_PATH = LOG_PATH_BASE + File.separator + LOG_PATH_DAY;
     /**
      * Application label sent with every log entry to Loki / Prometheus.
      */

@@ -23,6 +23,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public abstract class AbstractFactorInvestingAlgorithm extends Algorithm implements FactorListener {
 
+    @Getter
+    protected boolean backtestRequiredFactorParquet = true;
+
     @AllArgsConstructor
     @Getter
     protected class LastMarketDataSnapshot {

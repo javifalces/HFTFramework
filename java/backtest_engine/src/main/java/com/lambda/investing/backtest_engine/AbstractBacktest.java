@@ -119,20 +119,23 @@ public abstract class AbstractBacktest {
 		Algorithm backtestAlgorith = backtestConfiguration.getAlgorithm();
 		FactorProvider factorProvider = null;
 		if (backtestAlgorith instanceof AbstractFactorInvestingAlgorithm) {
-			AbstractFactorInvestingAlgorithm factorInvestingAlgorithm = (AbstractFactorInvestingAlgorithm) backtestAlgorith;
-			String modelName = factorInvestingAlgorithm.getModelName();
 
-			if (mockIt) {
-				//returns a random weight each factorProviderPeriodMs
-				long factorProviderPeriodMs = 15000;
-				List<String> instrumentPkList = new ArrayList<>();
-				for (Instrument instrument : instrumentList) {
-					instrumentPkList.add(instrument.getPrimaryKey());
+			AbstractFactorInvestingAlgorithm factorInvestingAlgorithm = (AbstractFactorInvestingAlgorithm) backtestAlgorith;
+			if (factorInvestingAlgorithm.isBacktestRequiredFactorParquet()) {
+				String modelName = factorInvestingAlgorithm.getModelName();
+
+				if (mockIt) {
+					//returns a random weight each factorProviderPeriodMs
+					long factorProviderPeriodMs = 15000;
+					List<String> instrumentPkList = new ArrayList<>();
+					for (Instrument instrument : instrumentList) {
+						instrumentPkList.add(instrument.getPrimaryKey());
+					}
+					factorProvider = new MockFactorProvider(getAlgorithmMarketDataProvider(), factorProviderPeriodMs, instrumentPkList);
+				} else {
+					//read persitance data
+					factorProvider = new BacktestFactorProvider(getAlgorithmMarketDataProvider(), instrumentList, modelName, backtestConfiguration.getStartTime(), backtestConfiguration.getEndTime());
 				}
-				factorProvider = new MockFactorProvider(getAlgorithmMarketDataProvider(), factorProviderPeriodMs, instrumentPkList);
-			} else {
-				//read persitance data
-				factorProvider = new BacktestFactorProvider(getAlgorithmMarketDataProvider(), instrumentList, modelName, backtestConfiguration.getStartTime(), backtestConfiguration.getEndTime());
 			}
 		}
 
