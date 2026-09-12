@@ -35,6 +35,8 @@ public abstract class XChangeBrokerConnector {
 
     protected static Map<String, XChangeBrokerConnector> instances = new ConcurrentHashMap<>();
 
+    private static final int MAX_CONNECT_RETRIES = 3;
+
     protected String userName, apiKey, secretKey;
 
     protected abstract void setPrivateAccountInfo();
@@ -160,8 +162,23 @@ public abstract class XChangeBrokerConnector {
      * that cannot open a user-data-stream).
      */
     public synchronized void connectWebsocket(Set<Instrument> instrumentSet) {
-        logger.info("connecting {} websocket apiKey={} secretKey=***{}", getClass().getSimpleName(),
-                apiKey, lastChars(secretKey, 4));
+
+        if (instrumentSet == null || instrumentSet.isEmpty()) {
+            logger.warn("connectWebsocket() called with empty instrument set");
+            return;
+        }
+
+        if (lastInstrumentSetSubscribed != null && lastInstrumentSetSubscribed.containsAll(instrumentSet)
+                && isAlive(this.getStreamingExchange())) {
+            logger.info("connectWebsocket() called with same instrument set and websocket is alive, returning");
+            return;
+        }
+
+        logger.info("Connecting {} : userName={} apiKey={} secretKey=***{}", getClass().getSimpleName(),
+                userName, apiKey, lastChars(secretKey, 4));
+        System.out.println(Configuration.formatLog("Connecting {} : userName={} apiKey={} secretKey=***{}",
+                getClass().getSimpleName(), userName, apiKey, lastChars(secretKey, 4)));
+
 
         if (lastInstrumentSetSubscribed != null) {
             if (lastInstrumentSetSubscribed.containsAll(instrumentSet)) {
@@ -207,27 +224,43 @@ public abstract class XChangeBrokerConnector {
 
         webSocketClient = this.getStreamingExchange();
         if (webSocketClient == null) {
-
             logger.error("webSocketClient is null");
             return;
         }
-        if (!isAlive(webSocketClient)) {
-            logger.info("connecting websocket ");
-            connect(webSocketClient, productSubscriptionBuilder);
-        } else {
-            logger.info("disconnecting previous websocket ....");
-            webSocketClient.disconnect();
 
-            while (isAlive(webSocketClient)) {
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-            logger.info("connecting websocket ...");
+        if (!isAlive(webSocketClient)) {
             connect(webSocketClient, productSubscriptionBuilder);
+
+            // Don't return until the websocket is actually up: connect(...) above can return before the
+            // underlying connection is fully established, so callers subscribing right after connectWebsocket()
+            // would otherwise race with the connection handshake.
+            int retries = 0;
+            while (!isAlive(webSocketClient)) {
+                if (retries >= MAX_CONNECT_RETRIES) {
+                    String errorMsg = Configuration.formatLog(
+                            "Cant connect {} websocket after {} retries : userName={} apiKey={}",
+                            getClass().getSimpleName(), MAX_CONNECT_RETRIES, userName, apiKey);
+                    logger.error(errorMsg);
+                    System.out.println(errorMsg);
+                    throw new IllegalStateException(errorMsg);
+                }
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    logger.warn("interrupted waiting for websocket to connect");
+                    return;
+                }
+                retries++;
+            }
         }
+
+
+        logger.info("Connected {} : userName={} apiKey={} secretKey=***{}", getClass().getSimpleName(),
+                userName, apiKey, lastChars(secretKey, 4));
+        System.out.println(Configuration.formatLog("Connected {} : userName={} apiKey={} secretKey=***{}",
+                getClass().getSimpleName(), userName, apiKey, lastChars(secretKey, 4)));
+
         lastInstrumentSetSubscribed = instrumentSet;
     }
 
