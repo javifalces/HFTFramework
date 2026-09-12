@@ -1407,26 +1407,26 @@
         </profile>
 
         <!-- Enabled by default; disable with -P '!turbo-maven-plugin' -->
-        <profile>
-            <id>turbo-maven-plugin</id>
-            <activation>
-                <activeByDefault>true</activeByDefault>
-            </activation>
-            <build>
-                <plugins>
-                    <!-- Skips building modules whose sources haven't changed since the last install -->
-                    <plugin>
-                        <groupId>no.sparebank1</groupId>
-                        <artifactId>turbo-maven-plugin</artifactId>
-                        <version>${turbo-maven-plugin.version}</version>
-                        <extensions>true</extensions>
-                        <configuration>
-                            <enabled>true</enabled>
-                        </configuration>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
+        <!--        <profile>-->
+        <!--            <id>turbo-maven-plugin</id>-->
+        <!--            <activation>-->
+        <!--                <activeByDefault>true</activeByDefault>-->
+        <!--            </activation>-->
+        <!--            <build>-->
+        <!--                <plugins>-->
+        <!--                    &lt;!&ndash; Skips building modules whose sources haven't changed since the last install &ndash;&gt;-->
+        <!--                    <plugin>-->
+        <!--                        <groupId>no.sparebank1</groupId>-->
+        <!--                        <artifactId>turbo-maven-plugin</artifactId>-->
+        <!--                        <version>${turbo-maven-plugin.version}</version>-->
+        <!--                        <extensions>true</extensions>-->
+        <!--                        <configuration>-->
+        <!--                            <enabled>true</enabled>-->
+        <!--                        </configuration>-->
+        <!--                    </plugin>-->
+        <!--                </plugins>-->
+        <!--            </build>-->
+        <!--        </profile>-->
     </profiles>
 
     <distributionManagement>

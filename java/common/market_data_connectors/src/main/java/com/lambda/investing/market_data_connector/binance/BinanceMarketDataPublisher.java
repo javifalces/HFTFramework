@@ -1,10 +1,11 @@
 package com.lambda.investing.market_data_connector.binance;
 
 import com.binance.api.client.BinanceApiCallback;
+import com.binance.api.client.BinanceApiRestClient;
 import com.binance.api.client.BinanceApiWebSocketClient;
 import com.binance.api.client.domain.event.AggTradeEvent;
 import com.binance.api.client.domain.event.DepthEvent;
-import com.binance.api.client.domain.market.OrderBookEntry;
+import com.binance.api.client.domain.market.OrderBook;
 import com.lambda.investing.binance.BinanceBrokerConnector;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorPublisher;
@@ -13,13 +14,14 @@ import com.lambda.investing.market_data_connector.MarketDataConfiguration;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
-import org.apache.commons.lang3.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -28,8 +30,9 @@ import java.util.concurrent.atomic.AtomicLong;
 public class BinanceMarketDataPublisher extends AbstractMarketDataConnectorPublisher implements Runnable {
 
 	private static boolean CHECK_SEND_TIMESTAMP = false;//send all to persist it!
-	private static int MIN_VALID_DEPTH = 2;
-	private static int MAX_DEPTH = 10;
+	private static int MAX_DEPTH = Depth.MAX_DEPTH;
+	//max levels allowed by Binance REST snapshot endpoint are 5,10,20,50,100,500,1000,5000
+	private static int SNAPSHOT_DEPTH_LIMIT = 100;
 	protected Logger logger = LogManager.getLogger(BinanceMarketDataPublisher.class);
 	private BinanceBrokerConnector binanceConnector;
 	private List<Instrument> instrumentList;
@@ -37,6 +40,9 @@ public class BinanceMarketDataPublisher extends AbstractMarketDataConnectorPubli
 	private Map<String, Instrument> symbolToInstrument;
 	private Map<Instrument, Long> lastDepthSent;
 	private Map<Instrument, Long> lastTradeSent;
+	private Map<Instrument, BinanceLocalOrderBook> localOrderBooks;
+	private ExecutorService snapshotExecutor = Executors
+			.newCachedThreadPool(r -> new Thread(r, "binanceOrderBookSnapshotFetcher"));
 
 	private AtomicLong counterReceives = new AtomicLong();
 	private Long lastTimestampReceived = 0L;
@@ -58,6 +64,7 @@ public class BinanceMarketDataPublisher extends AbstractMarketDataConnectorPubli
 		symbolToInstrument = new ConcurrentHashMap<>();
 		lastDepthSent = new ConcurrentHashMap<>();
 		lastTradeSent = new ConcurrentHashMap<>();
+		localOrderBooks = new ConcurrentHashMap<>();
 
 	}
 
@@ -78,6 +85,7 @@ public class BinanceMarketDataPublisher extends AbstractMarketDataConnectorPubli
 		symbolToInstrument = new ConcurrentHashMap<>();
 		lastDepthSent = new ConcurrentHashMap<>();
 		lastTradeSent = new ConcurrentHashMap<>();
+		localOrderBooks = new ConcurrentHashMap<>();
 
 	}
 
@@ -136,6 +144,12 @@ public class BinanceMarketDataPublisher extends AbstractMarketDataConnectorPubli
 		threadCheckConnection.start();
 	}
 
+	@Override
+	public void stop() {
+		super.stop();
+		snapshotExecutor.shutdownNow();
+	}
+
 	private synchronized void onBinanceTradeUpdate(Instrument instrument, AggTradeEvent aggTradeEvent) {
 		//change from AddTradeEvent to Trade and notify
 		try {
@@ -146,8 +160,8 @@ public class BinanceMarketDataPublisher extends AbstractMarketDataConnectorPubli
 
 			Trade tradeToNotify = Trade.getInstance();
 			tradeToNotify.setInstrument(instrument.getPrimaryKey());
-			//			tradeToNotify.setTimestamp(System.currentTimeMillis());
 			tradeToNotify.setTimestamp(aggTradeEvent.getEventTime());
+			tradeToNotify.setTimestampBrokerConnector(System.currentTimeMillis());
 			try {
 				tradeToNotify.setPrice(
 						BinanceBrokerConnector.NUMBER_FORMAT.parse(aggTradeEvent.getPrice().toUpperCase())
@@ -168,92 +182,76 @@ public class BinanceMarketDataPublisher extends AbstractMarketDataConnectorPubli
 
 	}
 
-	private synchronized void onBinanceDepthUpdate(Instrument instrument, DepthEvent depthEvent) {
-		//change from depthEvent to Depth and notify
+	/**
+	 * depthEvent carries a delta update, not a full book; it is applied on a per-instrument
+	 * {@link BinanceLocalOrderBook} that is kept in sync with the exchange (REST snapshot +
+	 * ordered replay of buffered updates, following Binance's official procedure), and the
+	 * resulting full snapshot is what gets published downstream.
+	 */
+	private void onBinanceDepthUpdate(Instrument instrument, DepthEvent depthEvent) {
 		try {
+			BinanceLocalOrderBook localOrderBook = localOrderBooks
+					.computeIfAbsent(instrument, i -> new BinanceLocalOrderBook(i.getSymbol()));
+
+			if (!localOrderBook.isInitialized()) {
+				localOrderBook.bufferEvent(depthEvent);
+				requestSnapshotIfNeeded(instrument, localOrderBook);
+				return;
+			}
+
+			boolean applied = localOrderBook.applyUpdate(depthEvent);
+			if (!applied) {
+				//gap detected -> event already buffered inside localOrderBook, trigger a resync
+				requestSnapshotIfNeeded(instrument, localOrderBook);
+				return;
+			}
+
 			Long lastDepthSentTimestamp = lastDepthSent.getOrDefault(instrument, 0L);
 			if (CHECK_SEND_TIMESTAMP && depthEvent.getEventTime() < lastDepthSentTimestamp) {
 				return;
 			}
+
 			Depth depth = Depth.getInstancePool();
 			depth.setInstrument(instrument.getPrimaryKey());
 			depth.setTimestamp(depthEvent.getEventTime());
-			//			depth.setTimestamp(System.currentTimeMillis());
-			boolean anyError = false;
-			int askDepth = Math.min(depthEvent.getAsks().size(), MAX_DEPTH);
-            double[] asks = new double[askDepth];
-            double[] askQtys = new double[askDepth];
-			int indexAsk = 0;
-			try {
-				for (OrderBookEntry askEntry : depthEvent.getAsks()) {
-					if (indexAsk >= MAX_DEPTH) {
-						break;
-					}
-					double qty = BinanceBrokerConnector.NUMBER_FORMAT.parse(askEntry.getQty().toUpperCase())
-							.doubleValue();
-					if (qty == 0) {
-						continue;
-					}
-					asks[indexAsk] = BinanceBrokerConnector.NUMBER_FORMAT.parse(askEntry.getPrice().toUpperCase())
-							.doubleValue();
-					askQtys[indexAsk] = qty;
-					indexAsk++;
-				}
-			} catch (Exception e) {
-				logger.error("Error parsing ask depth event -> no more levels than {}", indexAsk, e);
-				anyError = true;
-			}
+			depth.setTimestampBrokerConnector(System.currentTimeMillis());
+			depth.setAsks(localOrderBook.getTopAskPrices(MAX_DEPTH));
+			depth.setAsksQuantities(localOrderBook.getTopAskQuantities(MAX_DEPTH));
+			depth.setBids(localOrderBook.getTopBidPrices(MAX_DEPTH));
+			depth.setBidsQuantities(localOrderBook.getTopBidQuantities(MAX_DEPTH));
 
-			if (indexAsk < askQtys.length) {
-				askQtys = ArrayUtils.subarray(askQtys, 0, indexAsk);
-				asks = ArrayUtils.subarray(asks, 0, indexAsk);
-			}
-
-			int bidDepth = Math.min(depthEvent.getBids().size(), MAX_DEPTH);
-            double[] bids = new double[bidDepth];
-            double[] bidQtys = new double[bidDepth];
-			int indexBid = 0;
-			try {
-				for (OrderBookEntry bidEntry : depthEvent.getBids()) {
-					if (indexBid >= MAX_DEPTH) {
-						break;
-					}
-					double qty = BinanceBrokerConnector.NUMBER_FORMAT.parse(bidEntry.getQty().toUpperCase())
-							.doubleValue();
-					if (qty == 0) {
-						continue;
-					}
-
-					bids[indexBid] = BinanceBrokerConnector.NUMBER_FORMAT.parse(bidEntry.getPrice().toUpperCase())
-							.doubleValue();
-					bidQtys[indexBid] = qty;
-					indexBid++;
-				}
-			} catch (Exception e) {
-				logger.error("Error parsing bid depth event  -> no more levels than {}", indexBid, e);
-				anyError = true;
-			}
-			if (indexBid < bidQtys.length) {
-				bidQtys = ArrayUtils.subarray(bidQtys, 0, indexBid);
-				bids = ArrayUtils.subarray(bids, 0, indexBid);
-			}
-
-
-			if (anyError && (indexAsk < MIN_VALID_DEPTH || indexBid < MIN_VALID_DEPTH)) {
-				logger.error("Depth is very small with errors bid_depth:{}  ask_depth:{} ", indexBid, indexAsk);
-				return;
-			}
-
-			depth.setAsks(asks);
-			depth.setAsksQuantities(askQtys);
-			depth.setBids(bids);
-			depth.setBidsQuantities(bidQtys);
 
 			notifyDepth(instrument.getPrimaryKey(), depth);
 			lastDepthSent.put(instrument, depthEvent.getEventTime());
 		} catch (Exception ex) {
 			logger.error("Error onDepthUpdate {} ", instrument, ex);
 		}
+	}
+
+	/**
+	 * Fetches a REST snapshot to (re)build the local order book, buffering live depth events
+	 * meanwhile so none are lost while the snapshot request is in flight.
+	 */
+	private void requestSnapshotIfNeeded(Instrument instrument, BinanceLocalOrderBook localOrderBook) {
+		if (localOrderBook.isSnapshotRequestInFlight()) {
+			return;
+		}
+		localOrderBook.markSnapshotRequested();
+		snapshotExecutor.submit(() -> {
+			try {
+				BinanceApiRestClient restClient = binanceConnector.getRestClient();
+				OrderBook snapshot = restClient.getOrderBook(instrument.getSymbol().toUpperCase(),
+						SNAPSHOT_DEPTH_LIMIT);
+				localOrderBook.initFromSnapshot(snapshot);
+				if (!localOrderBook.isInitialized()) {
+					//gap between snapshot and buffered events -> retry immediately
+					requestSnapshotIfNeeded(instrument, localOrderBook);
+				}
+			} catch (Exception e) {
+				logger.error("Error fetching order book snapshot for {}", instrument, e);
+				localOrderBook.resetSnapshotRequest();
+			}
+		});
 	}
 
 	@Override public void run() {
@@ -266,6 +264,7 @@ public class BinanceMarketDataPublisher extends AbstractMarketDataConnectorPubli
 			if (conditionToReconnect) {
 				logger.warn("reconnecting  websocket -> conditions met to launch again");
 				this.binanceConnector.resetClient();
+				localOrderBooks.clear(); //force a fresh snapshot resync for every instrument
 				connectWebsocket();
 			}
 
