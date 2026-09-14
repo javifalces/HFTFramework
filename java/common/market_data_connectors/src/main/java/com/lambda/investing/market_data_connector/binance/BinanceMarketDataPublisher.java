@@ -141,7 +141,22 @@ public class BinanceMarketDataPublisher extends AbstractMarketDataConnectorPubli
 		threadCheckConnection = new Thread(this, "threadCheckConnection");
 		super.start();
 		connectWebsocket();
+		requestInitialSnapshots();
 		threadCheckConnection.start();
+	}
+
+	/**
+	 * On startup, eagerly fetch a REST snapshot for every configured instrument and publish it
+	 * right away, instead of waiting for the lazy fetch triggered by the first buffered depth
+	 * event. The websocket subscription must already be active (see {@link #connectWebsocket()})
+	 * so depth events received while the snapshot request is in flight get buffered and replayed.
+	 */
+	private void requestInitialSnapshots() {
+		for (Instrument instrument : instrumentList) {
+			BinanceLocalOrderBook localOrderBook = localOrderBooks
+					.computeIfAbsent(instrument, i -> new BinanceLocalOrderBook(i.getSymbol()));
+			requestSnapshotIfNeeded(instrument, localOrderBook);
+		}
 	}
 
 	@Override
@@ -163,12 +178,12 @@ public class BinanceMarketDataPublisher extends AbstractMarketDataConnectorPubli
 			tradeToNotify.setTimestamp(aggTradeEvent.getEventTime());
 			tradeToNotify.setTimestampBrokerConnector(System.currentTimeMillis());
 			try {
-				tradeToNotify.setPrice(
-						BinanceBrokerConnector.NUMBER_FORMAT.parse(aggTradeEvent.getPrice().toUpperCase())
-								.doubleValue());
-				tradeToNotify.setQuantity(
-						BinanceBrokerConnector.NUMBER_FORMAT.parse(aggTradeEvent.getQuantity().toUpperCase())
-								.doubleValue());
+				//Binance sends plain US-format decimal strings ('.' separator); Double.parseDouble
+				//is locale-independent and always parses '.' as the decimal point (matching
+				//Locale.US), and also handles the occasional scientific notation for tiny values,
+				//unlike the locale-based NumberFormat.
+				tradeToNotify.setPrice(Double.parseDouble(aggTradeEvent.getPrice()));
+				tradeToNotify.setQuantity(Double.parseDouble(aggTradeEvent.getQuantity()));
 			} catch (Exception e) {
 				logger.error("Error parsing trade event {} ", instrument, e);
 				return;
@@ -211,32 +226,36 @@ public class BinanceMarketDataPublisher extends AbstractMarketDataConnectorPubli
 				return;
 			}
 
-			Depth depth = Depth.getInstancePool();
-			depth.setInstrument(instrument.getPrimaryKey());
-			depth.setTimestamp(depthEvent.getEventTime());
-			depth.setTimestampBrokerConnector(System.currentTimeMillis());
-			depth.setAsks(localOrderBook.getTopAskPrices(MAX_DEPTH));
-			depth.setAsksQuantities(localOrderBook.getTopAskQuantities(MAX_DEPTH));
-			depth.setBids(localOrderBook.getTopBidPrices(MAX_DEPTH));
-			depth.setBidsQuantities(localOrderBook.getTopBidQuantities(MAX_DEPTH));
-
-
-			notifyDepth(instrument.getPrimaryKey(), depth);
-			lastDepthSent.put(instrument, depthEvent.getEventTime());
+			publishDepth(instrument, localOrderBook, depthEvent.getEventTime());
 		} catch (Exception ex) {
 			logger.error("Error onDepthUpdate {} ", instrument, ex);
 		}
 	}
 
+	private void publishDepth(Instrument instrument, BinanceLocalOrderBook localOrderBook, long timestamp) {
+		Depth depth = Depth.getInstancePool();
+		depth.setInstrument(instrument.getPrimaryKey());
+		depth.setTimestamp(timestamp);
+		depth.setTimestampBrokerConnector(System.currentTimeMillis());
+		depth.setAsks(localOrderBook.getTopAskPrices(MAX_DEPTH));
+		depth.setAsksQuantities(localOrderBook.getTopAskQuantities(MAX_DEPTH));
+		depth.setBids(localOrderBook.getTopBidPrices(MAX_DEPTH));
+		depth.setBidsQuantities(localOrderBook.getTopBidQuantities(MAX_DEPTH));
+
+		notifyDepth(instrument.getPrimaryKey(), depth);
+		lastDepthSent.put(instrument, timestamp);
+	}
+
 	/**
 	 * Fetches a REST snapshot to (re)build the local order book, buffering live depth events
-	 * meanwhile so none are lost while the snapshot request is in flight.
+	 * meanwhile so none are lost while the snapshot request is in flight. Once the book is
+	 * initialized, its snapshot state is published immediately so consumers don't wait for the
+	 * next live depth event.
 	 */
 	private void requestSnapshotIfNeeded(Instrument instrument, BinanceLocalOrderBook localOrderBook) {
-		if (localOrderBook.isSnapshotRequestInFlight()) {
+		if (!localOrderBook.startSnapshotRequestIfNeeded()) {
 			return;
 		}
-		localOrderBook.markSnapshotRequested();
 		snapshotExecutor.submit(() -> {
 			try {
 				BinanceApiRestClient restClient = binanceConnector.getRestClient();
@@ -246,7 +265,9 @@ public class BinanceMarketDataPublisher extends AbstractMarketDataConnectorPubli
 				if (!localOrderBook.isInitialized()) {
 					//gap between snapshot and buffered events -> retry immediately
 					requestSnapshotIfNeeded(instrument, localOrderBook);
+					return;
 				}
+				publishDepth(instrument, localOrderBook, System.currentTimeMillis());
 			} catch (Exception e) {
 				logger.error("Error fetching order book snapshot for {}", instrument, e);
 				localOrderBook.resetSnapshotRequest();
@@ -266,6 +287,7 @@ public class BinanceMarketDataPublisher extends AbstractMarketDataConnectorPubli
 				this.binanceConnector.resetClient();
 				localOrderBooks.clear(); //force a fresh snapshot resync for every instrument
 				connectWebsocket();
+				requestInitialSnapshots();
 			}
 
 			lastSeeReceiverCounter = counterReceives.get();

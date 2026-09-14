@@ -10,6 +10,7 @@ import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.messaging.Command;
 import com.lambda.investing.model.messaging.TypeMessage;
+import lombok.Setter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -26,7 +27,11 @@ public abstract class AbstractMarketDataConnectorPublisher implements MarketData
     protected Statistics statistics;
     protected Logger logger = LogManager.getLogger(AbstractMarketDataConnectorPublisher.class);
     private boolean isZeroMq = false;
+
     private boolean isDisruptor = false;
+    @Setter
+    private boolean deleteFromPool = true;
+
     protected String outputPath;
     private List<MarketDataConnectorPublisherListener> listenerList;
 
@@ -60,6 +65,7 @@ public abstract class AbstractMarketDataConnectorPublisher implements MarketData
         }
         if (connectorPublisher instanceof DisruptorConnectorPublisherProvider) {
             isDisruptor = true;
+            deleteFromPool = false;
         }
         listenerList = new ArrayList<>();
     }
@@ -164,6 +170,7 @@ public abstract class AbstractMarketDataConnectorPublisher implements MarketData
         }
         if (connectorPublisher instanceof DisruptorConnectorPublisherProvider) {
             isDisruptor = true;
+            deleteFromPool = false;
         }
         listenerList = new ArrayList<>();
     }
@@ -209,7 +216,7 @@ public abstract class AbstractMarketDataConnectorPublisher implements MarketData
             statistics.addStatistics(topic);
         }
 
-        if (!isDisruptor) {
+        if (deleteFromPool) {
             depth.delete();//return to the pool
         }
         // when isDisruptor, delete() is called by DisruptorConnectorPublisherProvider.onEvent after processing
@@ -225,7 +232,8 @@ public abstract class AbstractMarketDataConnectorPublisher implements MarketData
         if (statistics != null) {
             statistics.addStatistics(topic);
         }
-        if (!isDisruptor) {
+
+        if (deleteFromPool) {
             trade.delete();//return to the pool
         }
         // when isDisruptor, delete() is called by DisruptorConnectorPublisherProvider.onEvent after processing

@@ -17,6 +17,7 @@ import com.lambda.investing.algorithmic_trading.observer.LiveTradeReport;
 import com.lambda.investing.algorithmic_trading.observer.PrometheusAlgorithmObserver;
 import com.lambda.investing.algorithmic_trading.observer.push.PushService;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshot;
+import com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshotOrders;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioManager;
 import com.lambda.investing.algorithmic_trading.quoting.QuoteManager;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.SingleInstrumentRLAlgorithm;
@@ -2010,13 +2011,15 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             }
 
             PnlSnapshot pnlSnapshot = portfolioManager.getLastPnlSnapshot(instrumentPK);
-            if (Math.abs(pnlSnapshot.netPosition - position) > 1e-6) {
+            if (pnlSnapshot == null) {
+                //instrument not yet in portfolioManager, will be added later when first trade is processed
+                continue;
+            } else if (Math.abs(pnlSnapshot.netPosition - position) > 1e-6) {
                 String messagePrint = Configuration.formatLog("onPosition {} = {} but pnlSnapshot.netPosition={} -> update it", instrumentPK, position, pnlSnapshot.netPosition);
                 logger.warn(messagePrint);
                 System.out.println("WARNING: " + messagePrint);
                 pnlSnapshot.netPosition = position;
                 algorithmNotifier.notifyObserversOnUpdatePortfolioSnapshot(portfolioManager.getPortfolioSnapshot());
-
             }
         }
 

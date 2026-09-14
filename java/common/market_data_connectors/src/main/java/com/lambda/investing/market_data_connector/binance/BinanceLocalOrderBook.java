@@ -3,7 +3,6 @@ package com.lambda.investing.market_data_connector.binance;
 import com.binance.api.client.domain.event.DepthEvent;
 import com.binance.api.client.domain.market.OrderBook;
 import com.binance.api.client.domain.market.OrderBookEntry;
-import com.lambda.investing.binance.BinanceBrokerConnector;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -46,12 +45,19 @@ class BinanceLocalOrderBook {
         return initialized;
     }
 
-    synchronized boolean isSnapshotRequestInFlight() {
-        return snapshotRequestInFlight;
-    }
-
-    synchronized void markSnapshotRequested() {
+    /**
+     * Atomically checks and marks a snapshot request as in-flight, returning true only for the
+     * single caller that must actually perform it. Prevents concurrent depth events for the same
+     * instrument from racing past a separate check-then-act and firing duplicate REST snapshot
+     * fetches, which would otherwise both drain the pending-event queue and corrupt each other's
+     * {@link #initFromSnapshot} replay.
+     */
+    synchronized boolean startSnapshotRequestIfNeeded() {
+        if (snapshotRequestInFlight) {
+            return false;
+        }
         snapshotRequestInFlight = true;
+        return true;
     }
 
     synchronized void resetSnapshotRequest() {
@@ -138,8 +144,13 @@ class BinanceLocalOrderBook {
 
     private void putLevel(Map<Double, Double> book, OrderBookEntry entry) {
         try {
-            double price = BinanceBrokerConnector.NUMBER_FORMAT.parse(entry.getPrice().toUpperCase()).doubleValue();
-            double qty = BinanceBrokerConnector.NUMBER_FORMAT.parse(entry.getQty().toUpperCase()).doubleValue();
+            //Binance sends plain US-format decimal strings ('.' separator, occasional scientific
+            //notation for tiny quantities e.g. "5E-8"); Double.parseDouble is locale-independent
+            //and always parses '.' as the decimal point, so it matches Locale.US without relying
+            //on the default JVM locale (unlike NumberFormat.getInstance(Locale.US), which
+            //mis-parses scientific notation).
+            double price = Double.parseDouble(entry.getPrice());
+            double qty = Double.parseDouble(entry.getQty());
             if (qty == 0) {
                 book.remove(price);
             } else {

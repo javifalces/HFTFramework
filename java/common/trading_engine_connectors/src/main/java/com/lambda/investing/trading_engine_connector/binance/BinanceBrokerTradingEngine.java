@@ -1,10 +1,13 @@
 package com.lambda.investing.trading_engine_connector.binance;
 
 import com.binance.api.client.BinanceApiCallback;
+import com.binance.api.client.BinanceApiRestClient;
 import com.binance.api.client.domain.ExecutionType;
 import com.binance.api.client.domain.OrderSide;
 import com.binance.api.client.domain.OrderType;
 import com.binance.api.client.domain.TimeInForce;
+import com.binance.api.client.domain.account.Account;
+import com.binance.api.client.domain.account.AssetBalance;
 import com.binance.api.client.domain.account.NewOrder;
 import com.binance.api.client.domain.account.NewOrderResponse;
 import com.binance.api.client.domain.account.request.CancelOrderRequest;
@@ -17,6 +20,7 @@ import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorProvider;
 import com.lambda.investing.connector.ConnectorPublisher;
 import com.lambda.investing.model.asset.Instrument;
+import com.lambda.investing.model.messaging.TypeMessage;
 import com.lambda.investing.model.portfolio.Portfolio;
 import com.lambda.investing.model.trading.*;
 import com.lambda.investing.trading_engine_connector.*;
@@ -24,8 +28,14 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.File;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+
+import static com.lambda.investing.model.Util.toJsonString;
+import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_PORTFOLIO_INFO;
+import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_POSITION_INFO;
 
 public class BinanceBrokerTradingEngine extends AbstractBrokerTradingEngine
 		implements BinanceApiCallback<UserDataUpdateEvent> {
@@ -90,6 +100,16 @@ public class BinanceBrokerTradingEngine extends AbstractBrokerTradingEngine
 		super.start();
 		this.binanceBrokerConnector.getWebSocketClient()
 				.onUserDataUpdateEvent(binanceTradingEngineConfiguration.getApiKey(), this);
+	}
+
+	/**
+	 * Fetches the current real position of an instrument directly from the Binance account via
+	 * REST (free + locked balance of the instrument's base asset).
+	 */
+	public List<AssetBalance> getPositionFromRest() {
+		BinanceApiRestClient restClient = binanceBrokerConnector.getRestClient();
+		Account account = restClient.getAccount();
+		return account.getBalances();
 	}
 
 	private OrderType getOrderType(OrderRequest orderRequest) {
@@ -289,10 +309,28 @@ public class BinanceBrokerTradingEngine extends AbstractBrokerTradingEngine
 	}
 
 	@Override public void requestInfo(String info) {
-		super.requestInfo(info);
-		//		//todo asking broker
-		//		if (info.endsWith(REQUESTED_PORTFOLIO_INFO)) {
-		//
-		//		}
+		logger.info("requestInfo: {} ", info);
+		if (info.endsWith(REQUESTED_POSITION_INFO)) {
+			Map<String, Double> lastPosition = new HashMap<>();
+			try {
+				List<AssetBalance> assetBalances = getPositionFromRest();
+				for (AssetBalance assetBalance : assetBalances) {
+					double free = Double.parseDouble(assetBalance.getFree());
+					double locked = Double.parseDouble(assetBalance.getLocked());
+					if (free + locked > 0) {
+						lastPosition.put(assetBalance.getAsset(), free + locked);
+					}
+				}
+
+			} catch (Exception e) {
+				logger.error("Error getting positions from PolymarketPosition, maybe the API is down? ", e);
+				return;
+			}
+
+			String message = toJsonString(lastPosition);
+			String topic = Configuration.formatLog("{}.{}", REQUESTED_POSITION_INFO, TypeMessage.info.name());
+			this.executionReportConnectorPublisher
+					.publish(executionReportConnectorConfiguration, TypeMessage.info, topic, message);
+		}
 	}
 }
