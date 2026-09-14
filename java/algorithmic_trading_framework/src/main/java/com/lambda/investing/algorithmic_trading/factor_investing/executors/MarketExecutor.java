@@ -35,6 +35,7 @@ public class MarketExecutor extends AbstractExecutor {
         double ask = lastDepth.getBestAsk();
         double sentPrice = verb == Verb.Buy ? ask : bid;
         logger.info("{} {} [bid:{} ask:{}] increasePosition {} {}@{} of verb {}", getCurrentTime(), instrument, bid, ask, orderRequest.getOrderType().toString(), quantity, price, verb);
+        logger.info("[{}] {}", getCurrentTime(), instrument, orderRequest.toString());
         this.tradingEngineConnector.orderRequest(orderRequest);
         notifyExecutionStarted(verb, sentPrice);
         return true;

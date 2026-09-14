@@ -208,18 +208,18 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
      * Lotes a comprar = 55,000 euros / (100,000 unidades/lote x 1.0955 dólares/euro)
      * Lotes a comprar = 55,000 euros / 109,550 dólares
      * Lotes a comprar = 0.5015 lotes (redondeado)
-     *
+     * <p>
      * Para calcular cuántos lotes debes comprar en el par de divisas EUR/JPY con una inversión de 2500 euros, asumiendo que estás operando con un lote estándar de 100,000 unidades, puedes utilizar la siguiente fórmula:
-     *
+     * <p>
      * Lotes a comprar = (Cantidad a invertir) / (Tamaño de un lote estándar x Precio actual del EUR/JPY)
-     *
+     * <p>
      * Donde:
      * Cantidad a invertir: 2500 euros
      * Precio actual del EUR/JPY: 147.535
      * Tamaño de un lote estándar: 100,000 unidades
-     *
+     * <p>
      * Sustituyendo los valores en la fórmula:
-     *
+     * <p>
      * Lotes a comprar = 2500 euros / (100,000 unidades/lote x 147.535)
      * Lotes a comprar = 2500 euros / 14,753,500 unidades
      * Lotes a comprar = 0.000169 lotes (redondeado)
@@ -392,6 +392,7 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
 
 
                     try {
+                        logger.info("{} weight: {} - {} -> {} {}€ (quantity:{} price:{} expected_position:{}) ", instrumentPk, lastWeight != null ? lastWeight : 0, weight, verb, quantityToExecute * price, quantityToExecute, price, expectedPosition);
                         output &= getExecutor(instrumentPk).increasePosition(getCurrentTimestamp(), verb, quantityToExecute, price);
                     } catch (Exception e) {
                         String message = Configuration.formatLog("Error executing {} verb:{} quantity:{} price:{} {}", instrumentPk, verb, quantityToExecute, price, e.getMessage());
