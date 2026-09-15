@@ -392,7 +392,7 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
 
 
                     try {
-                        logger.info("{} weight: {} - {} -> {} {}€ (quantity:{} price:{} expected_position:{}) ", instrumentPk, lastWeight != null ? lastWeight : 0, weight, verb, quantityToExecute * price, quantityToExecute, price, expectedPosition);
+                        logger.info("{} weight: {} - {} -> {} {}€ (quantity:{} price:{} position:{} expected_position:{}) ", instrumentPk, lastWeight != null ? lastWeight : 0, weight, verb, quantityToExecute * price, quantityToExecute, price, currentPosition, expectedPosition);
                         output &= getExecutor(instrumentPk).increasePosition(getCurrentTimestamp(), verb, quantityToExecute, price);
                     } catch (Exception e) {
                         String message = Configuration.formatLog("Error executing {} verb:{} quantity:{} price:{} {}", instrumentPk, verb, quantityToExecute, price, e.getMessage());
