@@ -2022,10 +2022,10 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             }
 
             double position = positions.getOrDefault(instrumentPK, 0.0);
-            if (!isBacktest && Math.abs(position) > 1e-6) {
-                logger.info("onPosition {} = {}", instrumentPK, position);
-                System.out.println(Configuration.formatLog("onPosition {} = {}", instrumentPK, position));
-            }
+//            if (!isBacktest && Math.abs(position) > 1e-6) {
+//                logger.info("onPosition {} = {}", instrumentPK, position);
+//                System.out.println(Configuration.formatLog("onPosition {} = {}", instrumentPK, position));
+//            }
 
             PnlSnapshot pnlSnapshot = portfolioManager.getLastPnlSnapshot(instrumentPK);
             if (pnlSnapshot == null) {
