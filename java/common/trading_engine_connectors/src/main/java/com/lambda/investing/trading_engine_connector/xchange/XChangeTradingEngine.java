@@ -35,11 +35,18 @@ public class XChangeTradingEngine extends AbstractBrokerTradingEngine {
 	protected TradeService tradeService;
 
 	private Map<String, OrderRequest> marketOrderIdToOrderRequest;///todo clean it
-	private Map<String, ExecutionReport> marketOrderIdToER;///todo clean it
+	//cumulative filled quantity per market order id, used to compute lastQuantity on (partial) fills.
+	//NOTE: each notified ExecutionReport must be a fresh instance (see onOrderChange) -
+	//notifyExecutionReport() dispatches synchronously and by reference to registered listeners, so
+	//reusing/mutating a cached ExecutionReport instance across statuses would let a later mutation
+	//(eg. Active -> CompletelyFilled) retroactively corrupt an already-notified report still held by a listener.
+	private Map<String, Double> marketOrderIdToCumulativeQtyFilled;
 
 	private Map<String, String> clOrdIdToMarketOrderId;
 
 	private Map<String, String> modificationCancelIdGenerated;
+
+	private Set<String> activeNotifiedOrderIds;
 
 	protected Map<String, Map<ExecutionReportListener, String>> listenersManager;
 
@@ -63,9 +70,10 @@ public class XChangeTradingEngine extends AbstractBrokerTradingEngine {
 
 		marketOrderIdToOrderRequest = new ConcurrentHashMap<>();
 		clOrdIdToMarketOrderId = new ConcurrentHashMap<>();
-		marketOrderIdToER = new ConcurrentHashMap<>();
+		marketOrderIdToCumulativeQtyFilled = new ConcurrentHashMap<>();
 
 		modificationCancelIdGenerated = new ConcurrentHashMap<>();
+		activeNotifiedOrderIds = ConcurrentHashMap.newKeySet();
 		listenersManager = new HashMap<>();
 
 		this.instrumentSet = instrumentSet;
@@ -170,9 +178,17 @@ public class XChangeTradingEngine extends AbstractBrokerTradingEngine {
 	private void subscribeOrderChanges(CurrencyPair currencyPair, Instrument instrument) {
 		for (int attempt = 1; attempt <= SUBSCRIBE_ER_MAX_ATTEMPTS; attempt++) {
 			try {
+				//an uncaught exception in onOrderChange would call the Rx onError handler below and
+				//permanently terminate this subscription (no more order updates for the pair), so any
+				//unexpected exception must be swallowed here and only logged.
 				Disposable subscriptionTrade = webSocketClient.getStreamingTradeService().getOrderChanges(currencyPair)
-						.subscribe(order -> onOrderChange(instrument, order),
-								throwable -> logger.error("Error in onOrderChange subscription", throwable));
+						.subscribe(order -> {
+							try {
+								onOrderChange(instrument, order);
+							} catch (Exception e) {
+								logger.error("unexpected error in onOrderChange for {} {}", instrument, order, e);
+							}
+						}, throwable -> logger.error("Error in onOrderChange subscription", throwable));
 				subscriptionOrderChanges.add(subscriptionTrade);
 				return;
 
@@ -209,49 +225,109 @@ public class XChangeTradingEngine extends AbstractBrokerTradingEngine {
         subscribeER();
     }
 
+	/**
+	 * onOrderChange runs on the websocket thread and can race with the REST call thread that is
+	 * still populating {@link #marketOrderIdToOrderRequest} for the very same order id (eg. Kraken
+	 * pushes the CANCELED/NEW websocket updates of a replace before the blocking cancelOrder/
+	 * placeLimitOrder REST calls making up {@link #orderRequest} have returned). Retry briefly
+	 * instead of immediately treating the order id as unknown.
+	 */
+	private static final int ON_ORDER_CHANGE_UNKNOWN_RETRY_ATTEMPTS = 20;
+	private static final long ON_ORDER_CHANGE_UNKNOWN_RETRY_DELAY_MS = 100L;
+
 	public void onOrderChange(Instrument instrument, Order order) {
 		String orderId = order.getId();
 		OrderRequest orderRequest = marketOrderIdToOrderRequest.get(orderId);
+		for (int attempt = 1; orderRequest == null && attempt <= ON_ORDER_CHANGE_UNKNOWN_RETRY_ATTEMPTS; attempt++) {
+			try {
+				Thread.sleep(ON_ORDER_CHANGE_UNKNOWN_RETRY_DELAY_MS);
+			} catch (InterruptedException interruptedException) {
+				Thread.currentThread().interrupt();
+				break;
+			}
+			orderRequest = marketOrderIdToOrderRequest.get(orderId);
+		}
 		if (orderRequest == null) {
-			logger.warn("onOrderChange received uknown orderid {} {}", orderId, order.toString());
+			logger.warn("onOrderChange received unknown orderid {} {}", orderId, order.toString());
 			return;
 		}
 
-		ExecutionReport executionReport = marketOrderIdToER.getOrDefault(orderId, new ExecutionReport(orderRequest));
+		if (order.getStatus() == null) {
+			//some exchanges (eg. Kraken) push order-change events without a status (eg. amend
+			//acknowledgements); nothing actionable to report, just ignore them.
+			logger.debug("onOrderChange received orderid {} with null status {}", orderId, order);
+			return;
+		}
+
+		//always build a fresh ExecutionReport per notification: notifyExecutionReport() dispatches
+		//synchronously and by reference to registered listeners, so reusing/mutating a single cached
+		//instance across statuses would let a later mutation (eg. FILLED) retroactively corrupt an
+		//already-notified report (eg. Active) still held by a listener.
+		ExecutionReport executionReport = new ExecutionReport(orderRequest);
 		switch (order.getStatus()) {
 			case NEW:
 			case REPLACED:
 				executionReport.setExecutionReportStatus(ExecutionReportStatus.Active);
 				notifyExecutionReport(executionReport);
+				activeNotifiedOrderIds.add(orderId);
 				break;
 			case CANCELED:
+				//some exchanges (eg. Kraken) emit CANCELED for the old order id right before NEW/REPLACED
+				//for the new order id when replacing an order; that CANCELED is an implementation detail
+				//of the replace and must not be forwarded as a real cancellation.
+				if (modificationCancelIdGenerated.remove(orderId) != null) {
+					logger.debug("ignoring CANCELED on {} generated by a replace", orderId);
+					break;
+				}
 				executionReport.setExecutionReportStatus(ExecutionReportStatus.Cancelled);
 				notifyExecutionReport(executionReport);
+				activeNotifiedOrderIds.remove(orderId);
+				marketOrderIdToCumulativeQtyFilled.remove(orderId);
 				break;
-			case FILLED:
-				executionReport.setExecutionReportStatus(ExecutionReportStatus.CompletelyFilled);
-				executionReport.setLastQuantity(executionReport.getQuantity() - executionReport.getQuantityFill());
-				executionReport.setQuantityFill(order.getCumulativeAmount().doubleValue());//should be equal to qty
-				notifyExecutionReport(executionReport);
-				break;
-			case PARTIALLY_FILLED:
-				executionReport.setExecutionReportStatus(ExecutionReportStatus.PartialFilled);
-				double previousCumQty = executionReport.getQuantityFill();
+			case FILLED: {
+				notifyActiveIfMissing(orderId, orderRequest);
+				double previousCumQty = marketOrderIdToCumulativeQtyFilled.getOrDefault(orderId, 0.0);
 				double newCumQty = order.getCumulativeAmount().doubleValue();
-				double lastQty = newCumQty - previousCumQty;
-				executionReport.setLastQuantity(lastQty);
-				executionReport.setQuantityFill(order.getCumulativeAmount().doubleValue());//ess than qty
+				executionReport.setExecutionReportStatus(ExecutionReportStatus.CompletelyFilled);
+				executionReport.setLastQuantity(newCumQty - previousCumQty);
+				executionReport.setQuantityFill(newCumQty);//should be equal to qty
 				notifyExecutionReport(executionReport);
+				activeNotifiedOrderIds.remove(orderId);
+				marketOrderIdToCumulativeQtyFilled.remove(orderId);
 				break;
+			}
+			case PARTIALLY_FILLED: {
+				notifyActiveIfMissing(orderId, orderRequest);
+				double previousCumQty = marketOrderIdToCumulativeQtyFilled.getOrDefault(orderId, 0.0);
+				double newCumQty = order.getCumulativeAmount().doubleValue();
+				executionReport.setExecutionReportStatus(ExecutionReportStatus.PartialFilled);
+				executionReport.setLastQuantity(newCumQty - previousCumQty);
+				executionReport.setQuantityFill(newCumQty);//less than qty
+				notifyExecutionReport(executionReport);
+				marketOrderIdToCumulativeQtyFilled.put(orderId, newCumQty);
+				break;
+			}
 		}
-		marketOrderIdToER.put(orderId, executionReport);
+	}
+
+	/**
+	 * Some exchanges (eg. Kraken) can fill a marketable replace/limit order so fast that the
+	 * NEW/REPLACED (Active) websocket update is skipped or arrives after the fill; downstream
+	 * consumers still expect to observe an Active report before a fill, so synthesize one here.
+	 */
+	private void notifyActiveIfMissing(String orderId, OrderRequest orderRequest) {
+		if (activeNotifiedOrderIds.add(orderId)) {
+			ExecutionReport activeExecutionReport = new ExecutionReport(orderRequest);
+			activeExecutionReport.setExecutionReportStatus(ExecutionReportStatus.Active);
+			notifyExecutionReport(activeExecutionReport);
+		}
 	}
 
 	public void onUserTrades(Instrument instrument, UserTrade userTrade) {
 		//		String orderId = userTrade.getOrderId();
 		//		OrderRequest orderRequest = marketOrderIdToOrderRequest.get(orderId);
 		//		if(orderRequest==null){
-		//			logger.warn("onUserTrades received uknown orderid {} {}",orderId,userTrade.toString());
+		//			logger.warn("onUserTrades received unknown orderid {} {}",orderId,userTrade.toString());
 		//			return;
 		//		}
 		//not needed?
@@ -293,6 +369,7 @@ public class XChangeTradingEngine extends AbstractBrokerTradingEngine {
 	}
 
 	@Override public boolean orderRequest(OrderRequest orderRequest) {
+		Instrument instrumentModel = Instrument.getInstrument(orderRequest.getInstrument());
 		//send new order
 		if (orderRequest.getOrderRequestAction().equals(OrderRequestAction.Send)) {
 			if (orderRequest.getOrderType().equals(OrderType.Market)) {
@@ -300,7 +377,8 @@ public class XChangeTradingEngine extends AbstractBrokerTradingEngine {
 						Order.OrderType.BID :
 						Order.OrderType.ASK;
 				CurrencyPair instrument = XChangeBrokerConnector.getCurrencyPair(orderRequest.getInstrument());
-				MarketOrder marketOrder = new MarketOrder(orderType, BigDecimal.valueOf(orderRequest.getQuantity()),
+				BigDecimal quantity = BigDecimal.valueOf(instrumentModel.roundQty(orderRequest.getQuantity()));
+				MarketOrder marketOrder = new MarketOrder(orderType, quantity,
 						instrument);
 				try {
 					String orderId = tradeService.placeMarketOrder(marketOrder);
@@ -328,8 +406,11 @@ public class XChangeTradingEngine extends AbstractBrokerTradingEngine {
 						Order.OrderType.ASK;
 				CurrencyPair instrument = XChangeBrokerConnector.getCurrencyPair(orderRequest.getInstrument());
 
-				LimitOrder limitOrder = new LimitOrder(orderType, BigDecimal.valueOf(orderRequest.getQuantity()),
-						instrument, null, null, BigDecimal.valueOf(orderRequest.getPrice()));
+				//round to the instrument tick to avoid sending double-precision artifacts (eg. 70581.099999999999)
+				//that the exchange rejects for having too many decimals
+				BigDecimal quantity = BigDecimal.valueOf(instrumentModel.roundQty(orderRequest.getQuantity()));
+				BigDecimal price = BigDecimal.valueOf(instrumentModel.roundPrice(orderRequest.getPrice()));
+				LimitOrder limitOrder = new LimitOrder(orderType, quantity, instrument, null, null, price);
 				try {
 					String orderId = tradeService.placeLimitOrder(limitOrder);
 					marketOrderIdToOrderRequest.put(orderId, orderRequest);
@@ -370,6 +451,10 @@ public class XChangeTradingEngine extends AbstractBrokerTradingEngine {
 			///
 
 			if (orderRequest.getOrderRequestAction().equals(OrderRequestAction.Cancel)) {
+				//register before calling cancelOrder: the exchange can push the CANCELED websocket
+				//event concurrently with (or even before) the blocking REST call returning, so the
+				//execution report must already reflect this cancel request when onOrderChange fires.
+				marketOrderIdToOrderRequest.put(marketOrderId, orderRequest);
 				try {
 					tradeService.cancelOrder(marketOrderId);
 					//					ExecutionReport executionReport = new ExecutionReport(orderRequest);
@@ -387,24 +472,33 @@ public class XChangeTradingEngine extends AbstractBrokerTradingEngine {
 			//
 			if (orderRequest.getOrderRequestAction().equals(OrderRequestAction.Modify)) {
 
+				//register before calling changeOrder: Kraken's changeOrder cancels the old order then
+				//places a new one, and the CANCELED websocket push for the old order id can race ahead
+				//of this REST call returning, so it must already be ignorable when it arrives.
+				modificationCancelIdGenerated.put(marketOrderId, "");
 				try {
 					CurrencyPair instrument = XChangeBrokerConnector.getCurrencyPair(orderRequest.getInstrument());
 					Order.OrderType orderType = orderRequest.getVerb().equals(Verb.Buy) ?
 							Order.OrderType.BID :
 							Order.OrderType.ASK;
 
-					LimitOrder limitOrder = new LimitOrder(orderType, BigDecimal.valueOf(orderRequest.getQuantity()),
-							instrument, marketOrderId, null, BigDecimal.valueOf(orderRequest.getPrice()));
+					//round to the instrument tick to avoid sending double-precision artifacts that the
+					//exchange rejects for having too many decimals
+					BigDecimal quantity = BigDecimal.valueOf(instrumentModel.roundQty(orderRequest.getQuantity()));
+					BigDecimal price = BigDecimal.valueOf(instrumentModel.roundPrice(orderRequest.getPrice()));
+					LimitOrder limitOrder = new LimitOrder(orderType, quantity, instrument, marketOrderId, null, price);
 
 					String newOrderId = tradeService.changeOrder(limitOrder);
 					marketOrderIdToOrderRequest.put(newOrderId, orderRequest);
 					clOrdIdToMarketOrderId.put(orderRequest.getClientOrderId(), newOrderId);
+					modificationCancelIdGenerated.put(marketOrderId, newOrderId);
 
 					//					ExecutionReport executionReport = new ExecutionReport(orderRequest);
 					//					executionReport.setExecutionReportStatus(ExecutionReportStatus.Active);
 					//					notifyExecutionReportById(executionReport);
 					return true;
 				} catch (Exception e) {
+					modificationCancelIdGenerated.remove(marketOrderId);
 					logger.error("cant get order {} for {}", marketOrderId, orderRequest.getOrigClientOrderId(), e);
 					ExecutionReport executionReportRej = createRejectionExecutionReport(orderRequest, e.getMessage());
 					executionReportRej.setExecutionReportStatus(ExecutionReportStatus.Rejected);

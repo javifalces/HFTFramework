@@ -45,8 +45,8 @@ public class KrakenBrokerTradingEngineTest {
         System.out.println("Logger configured to INFO level with console output");
     }
 
-    private static String API_KEY = "TODO set a valid one";
-    private static String SECRET_KEY = "TODO set a valid one";
+    private static String API_KEY = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+    private static String SECRET_KEY = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
     private static String SYMBOL = "btceur";
 
     private static KrakenBrokerConnector brokerConnector;
@@ -60,7 +60,7 @@ public class KrakenBrokerTradingEngineTest {
     private Instrument instrument;
     double lastBid;
     double lastAsk;
-    double amount = 0.001;
+    double amount;
 
     private class MockExecutionReportListener implements ConnectorListener {
         @Override
@@ -76,9 +76,10 @@ public class KrakenBrokerTradingEngineTest {
         instrument = new Instrument();
         instrument.setSymbol(SYMBOL);
         instrument.setMarket("kraken");
-        instrument.setPriceTick(0.01);
-        instrument.setQuantityTick(0.00001);
+        instrument.setPriceTick(0.1);
+        instrument.setQuantityTick(0.00000001);
         instrument.addMap();
+        amount = 0.00005;//0.00005 BTC ~ 3.5 EUR now
 
         this.brokerConnector = KrakenBrokerConnector.getInstance(API_KEY, SECRET_KEY);
 
@@ -122,7 +123,7 @@ public class KrakenBrokerTradingEngineTest {
     @Test
     public void sendNewLimitTestBuyCancelAll() throws InterruptedException {
         double price = lastBid - instrument.getPriceStep() * 10;//send very low to avoid filling
-        double quantity = instrument.roundQty(amount / price);
+        double quantity = amount;
         //new order
         OrderRequest orderRequest = OrderRequest.createLimitOrderRequest(System.currentTimeMillis(), algorithmName, instrument, Verb.Buy, quantity, price);
         lastExecutionReport.clear();
@@ -151,14 +152,21 @@ public class KrakenBrokerTradingEngineTest {
         }
         assertEquals(ExecutionReportStatus.Cancelled, lastExecutionReport.get(0).getExecutionReportStatus());
 
+        //Kraken's open orders REST endpoint can lag briefly behind the websocket CANCELED confirmation
         List<LimitOrder> openOrdersAfterCancel = getOpenOrders();
+        int attempts = 0;
+        while (!openOrdersAfterCancel.isEmpty() && attempts < 10) {
+            Thread.sleep(1000);
+            openOrdersAfterCancel = getOpenOrders();
+            attempts++;
+        }
         assertEquals(0, openOrdersAfterCancel.size());
     }
 
     @Test
     public void sendNewLimitTestBuy() throws InterruptedException {
-        double price = lastBid - instrument.getPriceStep() * 10;//send very low to avoid filling
-        double quantity = instrument.roundQty(amount / price);
+        double price = lastBid - instrument.getPriceStep() * 1000;//send very low to avoid filling
+        double quantity = amount;
         //new order
         OrderRequest orderRequest = OrderRequest.createLimitOrderRequest(System.currentTimeMillis(), algorithmName, instrument, Verb.Buy, quantity, price);
         lastExecutionReport.clear();
@@ -180,7 +188,7 @@ public class KrakenBrokerTradingEngineTest {
         assertEquals(1, openOrders.size());
 
         //replace it
-        OrderRequest orderRequestReplace = OrderRequest.modifyOrder(System.currentTimeMillis(), orderRequest.getAlgorithmInfo(), instrument, orderRequest.getVerb(), orderRequest.getQuantity(), price - instrument.getPriceStep(), orderRequest.getClientOrderId());
+        OrderRequest orderRequestReplace = OrderRequest.modifyOrder(System.currentTimeMillis(), orderRequest.getAlgorithmInfo(), instrument, orderRequest.getVerb(), orderRequest.getQuantity(), price - 10 * instrument.getPriceStep(), orderRequest.getClientOrderId());
         lastExecutionReport.clear();
         System.out.println("orderRequestReplace: " + orderRequestReplace);
         tradingEngine.orderRequest(orderRequestReplace);
@@ -220,8 +228,8 @@ public class KrakenBrokerTradingEngineTest {
 
     @Test
     public void sendNewLimitTestSell() throws InterruptedException {
-        double price = lastAsk + instrument.getPriceStep() * 10;//send very high to avoid filling
-        double quantity = instrument.roundQty(amount / price);
+        double price = lastAsk + instrument.getPriceStep() * 1000;//send very high to avoid filling
+        double quantity = amount;
         //new order
         OrderRequest orderRequest = OrderRequest.createLimitOrderRequest(System.currentTimeMillis(), algorithmName, instrument, Verb.Sell, quantity, price);
         lastExecutionReport.clear();
@@ -277,10 +285,11 @@ public class KrakenBrokerTradingEngineTest {
         assertEquals(orderRequestCancel.getAlgorithmInfo(), lastExecutionReport.get(0).getAlgorithmInfo());
     }
 
+    @Ignore("This test is making trades")
     @Test
     public void sendNewLimitFillTest() throws InterruptedException {
-        double price = lastBid - instrument.getPriceStep() * 10;//send very low to avoid filling
-        double quantity = instrument.roundQty(amount / price);
+        double price = lastBid - instrument.getPriceStep() * 1000;//send very low to avoid filling
+        double quantity = amount;
         //new order
         OrderRequest orderRequest = OrderRequest.createLimitOrderRequest(System.currentTimeMillis(), algorithmName, instrument, Verb.Buy, quantity, price);
         lastExecutionReport.clear();
@@ -293,7 +302,7 @@ public class KrakenBrokerTradingEngineTest {
         assertEquals(orderRequest.getClientOrderId(), lastExecutionReport.get(0).getClientOrderId());
 
         //replace it to cross the spread and fill
-        OrderRequest orderRequestReplace = OrderRequest.modifyOrder(System.currentTimeMillis(), orderRequest.getAlgorithmInfo(), instrument, orderRequest.getVerb(), orderRequest.getQuantity(), lastAsk + instrument.getPriceStep(), orderRequest.getClientOrderId());
+        OrderRequest orderRequestReplace = OrderRequest.modifyOrder(System.currentTimeMillis(), orderRequest.getAlgorithmInfo(), instrument, orderRequest.getVerb(), orderRequest.getQuantity(), lastAsk + instrument.getPriceStep() * 5, orderRequest.getClientOrderId());
         lastExecutionReport.clear();
         System.out.println("orderRequestReplace to fill: " + orderRequestReplace);
         tradingEngine.orderRequest(orderRequestReplace);
@@ -310,7 +319,7 @@ public class KrakenBrokerTradingEngineTest {
         assertEquals(orderRequestReplace.getClientOrderId(), lastExecutionReport.get(1).getClientOrderId());
 
         //undo it: send sell at bid to flatten the position again
-        OrderRequest orderRequestUndo = OrderRequest.createLimitOrderRequest(System.currentTimeMillis(), algorithmName, instrument, Verb.Sell, quantity, lastBid - instrument.getPriceStep());
+        OrderRequest orderRequestUndo = OrderRequest.createLimitOrderRequest(System.currentTimeMillis(), algorithmName, instrument, Verb.Sell, quantity, lastBid - instrument.getPriceStep() * 5);
         lastExecutionReport.clear();
         System.out.println("orderRequestUndo to fill: " + orderRequestUndo);
         tradingEngine.orderRequest(orderRequestUndo);
