@@ -418,6 +418,15 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
      * registration {@link #containsExecutionReport(ExecutionReport)} never recognizes the resulting
      * ExecutionReports as belonging to this algorithm instance, so {@link #onExecutionReportUpdate(ExecutionReport)}
      * silently ignores them and portfolio/pnl tracking (netInvestment, realizedPnl, ...) never updates.
+     * <p>
+     * Besides the per-instrument {@code requestOrders} bookkeeping (mirroring {@link #sendOrderRequest(OrderRequest)}),
+     * this MUST also register in {@link #historicalOrdersRequestSent}: {@link #updateAllActiveOrders(ExecutionReport)}
+     * unconditionally removes the clientOrderId from the per-instrument {@code requestOrders} map as soon as the
+     * FIRST (e.g. {@code Active}) ExecutionReport for it is processed. Without the permanent
+     * {@code historicalOrdersRequestSent} record, {@link #containsInstrumentOrder(String, String)} would then fail
+     * for every SUBSEQUENT ExecutionReport of that same order (e.g. {@code PartialFilled}/{@code CompletelyFilled}),
+     * so fills would be silently dropped and {@link com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioManager#addTrade(ExecutionReport)}
+     * would never run -&gt; {@code PortfolioSnapshot}/{@code PnlSnapshotOrders} would stay stale forever.
      *
      * @param orderRequest the order request already sent (or about to be sent) to the trading engine
      */
@@ -426,6 +435,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         Map<String, OrderRequest> requestOrders = getRequestOrders(instrument);
         requestOrders.put(orderRequest.getClientOrderId(), orderRequest);
         setAllRequestOrders(instrument, requestOrders);
+        historicalOrdersRequestSent.put(orderRequest.getClientOrderId(), orderRequest);
     }
 
     public void register(AlgorithmObserver algorithmObserver) {
