@@ -145,7 +145,7 @@ public class VWAPExecutor extends AbstractExecutor {
         logger.info("{} {} VWAP child order {}@{} verb={} filled={}/{}",
                 getCurrentTime(), instrument, qty, price, currentVerb,
                 totalFilledQuantity, totalQuantity);
-        this.tradingEngineConnector.orderRequest(orderRequest);
+        this.sendOrderRequest(orderRequest);
     }
 
     @Override
@@ -250,11 +250,11 @@ public class VWAPExecutor extends AbstractExecutor {
         if (activeConfirmedClientOrderId != null) {
             logger.info("VWAP cancelling activeConfirmedClientOrderId {}", activeConfirmedClientOrderId);
             OrderRequest cancel = OrderRequest.createCancel(timestamp, algorithmInfo, instrument, activeConfirmedClientOrderId);
-            this.tradingEngineConnector.orderRequest(cancel);
+            this.sendOrderRequest(cancel);
         } else if (activeClientOrderId != null) {
             logger.info("VWAP cancelling activeClientOrderId {}", activeClientOrderId);
             OrderRequest cancel = OrderRequest.createCancel(timestamp, algorithmInfo, instrument, activeClientOrderId);
-            this.tradingEngineConnector.orderRequest(cancel);
+            this.sendOrderRequest(cancel);
         }
         finish();
         return true;

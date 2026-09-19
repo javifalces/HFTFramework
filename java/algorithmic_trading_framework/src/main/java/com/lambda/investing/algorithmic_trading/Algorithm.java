@@ -411,6 +411,23 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         instrumentAlgorithmManager.setAllRequestOrders(requestOrders);
     }
 
+    /**
+     * Registers an {@link OrderRequest} that was sent to the {@link com.lambda.investing.trading_engine_connector.TradingEngineConnector}
+     * outside of {@link #sendOrderRequest(OrderRequest)} (e.g. by a per-instrument {@code Executor} in
+     * {@code factor_investing.executors}, which talks to the trading engine directly). Without this
+     * registration {@link #containsExecutionReport(ExecutionReport)} never recognizes the resulting
+     * ExecutionReports as belonging to this algorithm instance, so {@link #onExecutionReportUpdate(ExecutionReport)}
+     * silently ignores them and portfolio/pnl tracking (netInvestment, realizedPnl, ...) never updates.
+     *
+     * @param orderRequest the order request already sent (or about to be sent) to the trading engine
+     */
+    public void registerSentOrderRequest(OrderRequest orderRequest) {
+        Instrument instrument = Instrument.getInstrument(orderRequest.getInstrument());
+        Map<String, OrderRequest> requestOrders = getRequestOrders(instrument);
+        requestOrders.put(orderRequest.getClientOrderId(), orderRequest);
+        setAllRequestOrders(instrument, requestOrders);
+    }
+
     public void register(AlgorithmObserver algorithmObserver) {
         if (algorithmObservers.contains(algorithmObserver)) {
             logger.warn("Observer {} already registered - skipping", algorithmObserver.getClass().getSimpleName());

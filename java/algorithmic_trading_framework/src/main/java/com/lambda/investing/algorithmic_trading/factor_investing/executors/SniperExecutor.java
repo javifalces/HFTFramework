@@ -59,7 +59,7 @@ public class SniperExecutor extends AbstractExecutor {
         double bid = lastDepth.getBestBid();
         double ask = lastDepth.getBestAsk();
         logger.info("{} {} [bid:{} ask:{}] increasePosition {} {}@{} of verb {}", getCurrentTime(), instrument, bid, ask, orderRequest.getOrderType().toString(), quantity, price, verb);
-        this.tradingEngineConnector.orderRequest(orderRequest);
+        this.sendOrderRequest(orderRequest);
         notifyExecutionStarted(verb, price);
         return true;
     }
@@ -73,12 +73,12 @@ public class SniperExecutor extends AbstractExecutor {
             if (lastClientOrderIdConfirmed != null) {
                 logger.info("cancelling lastClientOrderIdConfirmed {}", lastClientOrderIdConfirmed);
                 OrderRequest cancelOrderRequest = OrderRequest.createCancel(timestamp, this.algorithmInfo, this.instrument, lastClientOrderIdConfirmed);
-                this.tradingEngineConnector.orderRequest(cancelOrderRequest);
+                this.sendOrderRequest(cancelOrderRequest);
             }
             if (lastClientOrderIdSent != null && !sendSameAsConfirmed) {
                 logger.info("cancelling lastClientOrderIdSent {}", lastClientOrderIdSent);
                 OrderRequest cancelOrderRequest1 = OrderRequest.createCancel(timestamp, this.algorithmInfo, this.instrument, lastClientOrderIdSent);
-                this.tradingEngineConnector.orderRequest(cancelOrderRequest1);
+                this.sendOrderRequest(cancelOrderRequest1);
             }
         }
         finish();
@@ -173,7 +173,7 @@ public class SniperExecutor extends AbstractExecutor {
                             modifyOrder.getClientOrderId(), depth.getBestBid(), depth.getBestAsk(),
                             modifyOrder.getOrderType().toString(), modifyOrder.getQuantity(), modifyOrder.getPrice(),
                             modifyOrder.getVerb());
-                    this.tradingEngineConnector.orderRequest(modifyOrder);
+                    this.sendOrderRequest(modifyOrder);
                     isExecutingSince = getCurrentTime();
                 } else {
                     //timeout -> market execution
@@ -194,7 +194,7 @@ public class SniperExecutor extends AbstractExecutor {
                             depth.getBestBid(), depth.getBestAsk(),
                             modifyOrder.getOrderType().toString(), modifyOrder.getQuantity(), modifyOrder.getPrice(),
                             modifyOrder.getVerb());
-                    this.tradingEngineConnector.orderRequest(modifyOrder);
+                    this.sendOrderRequest(modifyOrder);
                     isExecutingSince = getCurrentTime();
 
                 }

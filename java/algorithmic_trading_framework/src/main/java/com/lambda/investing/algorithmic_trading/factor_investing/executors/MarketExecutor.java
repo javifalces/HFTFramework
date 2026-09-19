@@ -36,7 +36,7 @@ public class MarketExecutor extends AbstractExecutor {
         double sentPrice = verb == Verb.Buy ? ask : bid;
         logger.info("{} {} [bid:{} ask:{}] increasePosition {} {}@{} of verb {}", getCurrentTime(), instrument, bid, ask, orderRequest.getOrderType().toString(), quantity, price, verb);
         logger.info("[{}] {}", getCurrentTime(), instrument, orderRequest.toString());
-        this.tradingEngineConnector.orderRequest(orderRequest);
+        this.sendOrderRequest(orderRequest);
         notifyExecutionStarted(verb, sentPrice);
         return true;
     }
@@ -50,12 +50,12 @@ public class MarketExecutor extends AbstractExecutor {
             if (lastClientOrderIdConfirmed != null) {
                 logger.info("cancelling lastClientOrderIdConfirmed {}", lastClientOrderIdConfirmed);
                 OrderRequest cancelOrderRequest = OrderRequest.createCancel(timestamp, this.algorithmInfo, this.instrument, lastClientOrderIdConfirmed);
-                this.tradingEngineConnector.orderRequest(cancelOrderRequest);
+                this.sendOrderRequest(cancelOrderRequest);
             }
             if (lastClientOrderIdSent != null && !sendSameAsConfirmed) {
                 logger.info("cancelling lastClientOrderIdSent {}", lastClientOrderIdSent);
                 OrderRequest cancelOrderRequest1 = OrderRequest.createCancel(timestamp, this.algorithmInfo, this.instrument, lastClientOrderIdSent);
-                this.tradingEngineConnector.orderRequest(cancelOrderRequest1);
+                this.sendOrderRequest(cancelOrderRequest1);
             }
         }
         finish();

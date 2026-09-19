@@ -5,6 +5,7 @@ import com.lambda.investing.Statistics;
 import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorPublisher;
 import com.lambda.investing.connector.disruptor.DisruptorConnectorPublisherProvider;
+import com.lambda.investing.connector.ordinary.OrdinaryConnectorPublisherProvider;
 import com.lambda.investing.connector.zero_mq.ZeroMqPublisher;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
@@ -63,11 +64,27 @@ public abstract class AbstractMarketDataConnectorPublisher implements MarketData
         if (connectorPublisher instanceof ZeroMqPublisher) {
             isZeroMq = true;
         }
+        configureDeferredPoolDelete(connectorPublisher);
+        listenerList = new ArrayList<>();
+    }
+
+    /**
+     * {@link DisruptorConnectorPublisherProvider} and {@link OrdinaryConnectorPublisherProvider} may deliver
+     * Depth/Trade to listeners asynchronously (worker thread / thread-pool submit) after {@link #notifyDepth}
+     * /{@link #notifyTrade} already returned from {@code connectorPublisher.publish(...)}. Returning the pooled
+     * object to {@code Depth.DEPTH_POOL}/{@code Trade} pool right after publish() would race with that async
+     * read and corrupt it (fields reset mid-read). For those providers, deletion is deferred to the actual
+     * consumer once it has safely copied the data out (see {@code DisruptorConnectorPublisherProvider.onEvent}
+     * and {@code OrdinaryMarketDataProvider.onUpdate}).
+     */
+    private void configureDeferredPoolDelete(ConnectorPublisher connectorPublisher) {
         if (connectorPublisher instanceof DisruptorConnectorPublisherProvider) {
             isDisruptor = true;
             deleteFromPool = false;
         }
-        listenerList = new ArrayList<>();
+        if (connectorPublisher instanceof OrdinaryConnectorPublisherProvider) {
+            deleteFromPool = false;
+        }
     }
 
     public static boolean isBacktestReady() {
@@ -168,10 +185,7 @@ public abstract class AbstractMarketDataConnectorPublisher implements MarketData
         if (connectorPublisher instanceof ZeroMqPublisher) {
             isZeroMq = true;
         }
-        if (connectorPublisher instanceof DisruptorConnectorPublisherProvider) {
-            isDisruptor = true;
-            deleteFromPool = false;
-        }
+        configureDeferredPoolDelete(connectorPublisher);
         listenerList = new ArrayList<>();
     }
 

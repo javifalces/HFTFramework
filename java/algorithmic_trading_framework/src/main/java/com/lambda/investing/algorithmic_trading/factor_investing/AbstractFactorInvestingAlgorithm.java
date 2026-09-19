@@ -104,6 +104,7 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
             Instrument instrument = Instrument.getInstrument(instrumentPk);
             logger.warn("executor not created for instrument {}", instrumentPk);
             executor = createExecutor(instrument);
+            executor.setAlgorithm(this);
             executorsPerInstrument.put(instrumentPk, executor);
         }
         return executor;
@@ -113,6 +114,7 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
         executorsPerInstrument = new HashMap<>();
         for (Instrument instrument : getInstruments()) {
             Executor executor = createExecutor(instrument);
+            executor.setAlgorithm(this);
             executorsPerInstrument.put(instrument.getPrimaryKey(), executor);
         }
     }
@@ -263,6 +265,13 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
         if (!depth.isDepthValid()) {
             return false;
         }
+        //this depth (and everything derived from it: executors, candle updaters, InstrumentAlgorithmManager) can
+        //outlive this call (e.g. cached as lastDepth and reused later on onWeightsUpdate/candle close).
+        //Take a pool-independent snapshot so a concurrent AbstractMarketDataConnectorPublisher.deleteFromPool
+        //returning the original Depth to the pool (and it being reset/reused for another update) can't turn
+        //those cached fields null downstream. No pool cleanup is needed for this copy: it is never checked
+        //out of Depth's pool, so there is nothing to return/cleanFromPool.
+        depth = Depth.copyFromWithoutPool(depth);
         //get best Bid
         Double bestBid = Double.NaN;
         Double bestBidQty = Double.NaN;

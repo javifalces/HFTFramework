@@ -1,5 +1,6 @@
 package com.lambda.investing.algorithmic_trading.factor_investing.executors;
 
+import com.lambda.investing.algorithmic_trading.Algorithm;
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
 import com.lambda.investing.algorithmic_trading.time_service.TimeServiceIfc;
 import com.lambda.investing.market_data_connector.MarketDataListener;
@@ -8,6 +9,7 @@ import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.messaging.Command;
 import com.lambda.investing.model.trading.ExecutionReport;
+import com.lambda.investing.model.trading.OrderRequest;
 import com.lambda.investing.model.trading.Verb;
 import com.lambda.investing.trading_engine_connector.ExecutionReportListener;
 import com.lambda.investing.trading_engine_connector.TradingEngineConnector;
@@ -30,6 +32,13 @@ public abstract class AbstractExecutor implements Executor, ExecutionReportListe
     protected TimeServiceIfc timeService;
     protected ExecutorStatistics executorStatistics;
 
+    /**
+     * Owning algorithm, wired via {@link #setAlgorithm(Algorithm)}. May stay {@code null} (e.g. in unit
+     * tests that construct executors directly): in that case order requests are still sent to the trading
+     * engine but not registered with any Algorithm, matching the pre-existing behaviour.
+     */
+    protected Algorithm algorithm;
+
     public AbstractExecutor(TimeServiceIfc timeServiceIfc, String algorithmInfo, Instrument instrument, AlgorithmConnectorConfiguration algorithmConnectorConfiguration) {
         this.timeService = timeServiceIfc;
         this.algorithmInfo = algorithmInfo;
@@ -40,6 +49,26 @@ public abstract class AbstractExecutor implements Executor, ExecutionReportListe
         this.algorithmConnectorConfiguration.getMarketDataProvider().register(this);
         isExecuting = false;
         this.executorStatistics = new ExecutorStatistics(algorithmInfo + "." + instrument.getPrimaryKey(), instrument);
+    }
+
+    @Override
+    public void setAlgorithm(Algorithm algorithm) {
+        this.algorithm = algorithm;
+    }
+
+    /**
+     * Sends an order request to the trading engine, first registering it with the owning {@link #algorithm}
+     * (if any) via {@link Algorithm#registerSentOrderRequest(OrderRequest)}. Executors bypass
+     * {@link Algorithm#sendOrderRequest(OrderRequest)} (which would also register the order) because they
+     * send/cancel/modify orders on their own execution schedule; without this explicit registration the
+     * algorithm's {@code onExecutionReportUpdate} won't recognize the resulting fills and portfolio/pnl
+     * tracking (netInvestment, realizedPnl, ...) stays at 0.0.
+     */
+    protected void sendOrderRequest(OrderRequest orderRequest) {
+        if (algorithm != null) {
+            algorithm.registerSentOrderRequest(orderRequest);
+        }
+        this.tradingEngineConnector.orderRequest(orderRequest);
     }
 
     public void setTimeoutIsExecutingMs(long timeoutIsExecutingMs) {

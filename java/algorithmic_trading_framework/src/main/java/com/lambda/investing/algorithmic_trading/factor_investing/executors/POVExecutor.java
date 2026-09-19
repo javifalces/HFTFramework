@@ -171,7 +171,7 @@ public class POVExecutor extends AbstractExecutor {
         logger.info("{} {} POV child order {}@{} verb={} filled={}/{}",
                 getCurrentTime(), instrument, qty, price, currentVerb,
                 totalFilledQuantity, totalQuantity);
-        this.tradingEngineConnector.orderRequest(orderRequest);
+        this.sendOrderRequest(orderRequest);
     }
 
     @Override
@@ -246,11 +246,11 @@ public class POVExecutor extends AbstractExecutor {
         if (activeConfirmedClientOrderId != null) {
             logger.info("POV cancelling activeConfirmedClientOrderId {}", activeConfirmedClientOrderId);
             OrderRequest cancel = OrderRequest.createCancel(timestamp, algorithmInfo, instrument, activeConfirmedClientOrderId);
-            this.tradingEngineConnector.orderRequest(cancel);
+            this.sendOrderRequest(cancel);
         } else if (activeClientOrderId != null) {
             logger.info("POV cancelling activeClientOrderId {}", activeClientOrderId);
             OrderRequest cancel = OrderRequest.createCancel(timestamp, algorithmInfo, instrument, activeClientOrderId);
-            this.tradingEngineConnector.orderRequest(cancel);
+            this.sendOrderRequest(cancel);
         }
         finish();
         return true;

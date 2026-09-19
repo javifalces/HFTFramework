@@ -121,7 +121,7 @@ public class TWAPExecutor extends AbstractExecutor {
 
         logger.info("{} {} TWAP slice {}/{} {}@{} verb={}",
                 getCurrentTime(), instrument, slicesSent, numberOfSlices, qty, slicePrice, currentVerb);
-        this.tradingEngineConnector.orderRequest(orderRequest);
+        this.sendOrderRequest(orderRequest);
     }
 
     @Override
@@ -193,11 +193,11 @@ public class TWAPExecutor extends AbstractExecutor {
         if (activeConfirmedClientOrderId != null) {
             logger.info("TWAP cancelling activeConfirmedClientOrderId {}", activeConfirmedClientOrderId);
             OrderRequest cancel = OrderRequest.createCancel(timestamp, algorithmInfo, instrument, activeConfirmedClientOrderId);
-            this.tradingEngineConnector.orderRequest(cancel);
+            this.sendOrderRequest(cancel);
         } else if (activeClientOrderId != null) {
             logger.info("TWAP cancelling activeClientOrderId {}", activeClientOrderId);
             OrderRequest cancel = OrderRequest.createCancel(timestamp, algorithmInfo, instrument, activeClientOrderId);
-            this.tradingEngineConnector.orderRequest(cancel);
+            this.sendOrderRequest(cancel);
         }
         finish();
         return true;
@@ -231,7 +231,7 @@ public class TWAPExecutor extends AbstractExecutor {
                 logger.info("{} {} TWAP slice interval expired, cancelling {} and re-submitting",
                         getCurrentTime(), instrument, idToCancel);
                 OrderRequest cancel = OrderRequest.createCancel(depth.getTimestamp(), algorithmInfo, instrument, idToCancel);
-                this.tradingEngineConnector.orderRequest(cancel);
+                this.sendOrderRequest(cancel);
                 activeClientOrderId = null;
                 activeConfirmedClientOrderId = null;
                 slicesFailed++;

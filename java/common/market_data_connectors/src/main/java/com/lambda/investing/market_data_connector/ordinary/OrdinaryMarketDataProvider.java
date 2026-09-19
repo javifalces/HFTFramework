@@ -41,16 +41,23 @@ import static com.lambda.investing.model.Util.fromObject;
 								   TypeMessage typeMessage, Object content) {
 
 		if (typeMessage.equals(TypeMessage.depth)) {
-			Depth depth = Depth.copyFrom(fromObject(content, Depth.class));//new copy from pool
+			//content is the producer's own (possibly pooled) Depth: when OrdinaryConnectorPublisherProvider
+			//publishes asynchronously (publishThreads!=0), AbstractMarketDataConnectorPublisher defers its
+			//delete()/checkIn to us (see its constructor) precisely to avoid the producer's object being reset
+			//and reused for a new update while this task is still reading it here. Copy its data out into an
+			//independent pooled Depth first, then it's safe to return the producer's original to the pool.
+			Depth originalDepth = fromObject(content, Depth.class);
+			Depth depth = Depth.copyFrom(originalDepth);//new copy from pool
 			depth.setLevelsFromData();
             depth.setTimestampAlgoConnector(timestampReceived);
-			notifyDepth(depth);
-			depth.delete();//delete from pool
+			notifyDepth(depth);//already returns depth to the pool internally, don't delete it again here
+			originalDepth.delete();//now safe: its data has already been copied out
 		} else if (typeMessage.equals(TypeMessage.trade)) {
-			Trade trade = Trade.copyFrom(fromObject(content, Trade.class));
+			Trade originalTrade = fromObject(content, Trade.class);
+			Trade trade = Trade.copyFrom(originalTrade);
             trade.setTimestampAlgoConnector(timestampReceived);
-			notifyTrade(trade);
-			trade.delete();
+			notifyTrade(trade);//already returns trade to the pool internally, don't delete it again here
+			originalTrade.delete();//now safe: its data has already been copied out
 		} else if (typeMessage.equals(TypeMessage.command)) {
 			Command command = fromJsonString((String) content, Command.class);
 			notifyCommand(command);

@@ -150,7 +150,7 @@ public class ImplementationShortfallExecutor extends AbstractExecutor {
                 timestamp, algorithmInfo, instrument, currentVerb, qty, price);
         activeClientOrderId = orderRequest.getClientOrderId();
         activeOrderPrice = price;
-        this.tradingEngineConnector.orderRequest(orderRequest);
+        this.sendOrderRequest(orderRequest);
     }
 
     @Override
@@ -232,7 +232,7 @@ public class ImplementationShortfallExecutor extends AbstractExecutor {
             activeClientOrderId = modifyOrder.getClientOrderId();
             activeConfirmedClientOrderId = null;
             activeOrderPrice = newPrice;
-            this.tradingEngineConnector.orderRequest(modifyOrder);
+            this.sendOrderRequest(modifyOrder);
         }
 
         // Force market execution at end of window
@@ -256,7 +256,7 @@ public class ImplementationShortfallExecutor extends AbstractExecutor {
             activeClientOrderId = finalOrder.getClientOrderId();
             activeConfirmedClientOrderId = null;
             activeOrderPrice = marketPrice;
-            this.tradingEngineConnector.orderRequest(finalOrder);
+            this.sendOrderRequest(finalOrder);
         }
 
         return output;
@@ -282,11 +282,11 @@ public class ImplementationShortfallExecutor extends AbstractExecutor {
         if (activeConfirmedClientOrderId != null) {
             logger.info("IS cancelling activeConfirmedClientOrderId {}", activeConfirmedClientOrderId);
             OrderRequest cancel = OrderRequest.createCancel(timestamp, algorithmInfo, instrument, activeConfirmedClientOrderId);
-            this.tradingEngineConnector.orderRequest(cancel);
+            this.sendOrderRequest(cancel);
         } else if (activeClientOrderId != null) {
             logger.info("IS cancelling activeClientOrderId {}", activeClientOrderId);
             OrderRequest cancel = OrderRequest.createCancel(timestamp, algorithmInfo, instrument, activeClientOrderId);
-            this.tradingEngineConnector.orderRequest(cancel);
+            this.sendOrderRequest(cancel);
         }
         finish();
         return true;
