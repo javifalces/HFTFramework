@@ -17,7 +17,6 @@ import com.lambda.investing.algorithmic_trading.observer.LiveTradeReport;
 import com.lambda.investing.algorithmic_trading.observer.PrometheusAlgorithmObserver;
 import com.lambda.investing.algorithmic_trading.observer.push.PushService;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshot;
-import com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshotOrders;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioManager;
 import com.lambda.investing.algorithmic_trading.quoting.QuoteManager;
 import com.lambda.investing.algorithmic_trading.reinforcement_learning.SingleInstrumentRLAlgorithm;
@@ -127,6 +126,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
     protected ExecutionReportManager executionReportManager;
 
+    protected boolean sendTradePushMessage = true;
+
     public QuoteManager getQuoteManager(String instrumentPk) {
 
         QuoteManager quoteManager = instrumentQuoteManagerMap.get(instrumentPk);
@@ -160,6 +161,21 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     public void addCurrentCustomColumn(String instrumentPk, String key, Double value) {
         portfolioManager.addCurrentCustomColumn(instrumentPk, key, value);
         algorithmNotifier.notifyObserversCustomColumns(getCurrentTimestamp(), instrumentPk, key, value);
+    }
+
+    /**
+     * Sends a custom notification message to all registered {@link AlgorithmObserver}s, including
+     * push-notification observers such as
+     * {@link com.lambda.investing.algorithmic_trading.observer.push.PushService}. Unlike
+     * {@link com.lambda.investing.algorithmic_trading.observer.push.PushService#onExecutionReportUpdate}
+     * (which keeps sending its default trade notification), this lets the algorithm itself decide
+     * what to notify and when, instead of the observer deciding on its own.
+     *
+     * @param name short name/title of the message
+     * @param body message body/content
+     */
+    public void sendNotificationMessage(String name, String body) {
+        algorithmNotifier.notifyObserversOnUpdateMessage(name, body);
     }
 
     @Getter
@@ -1900,10 +1916,28 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             algorithmNotifier.notifyObserversOnExecutionReportUpdate(executionReport);
 
             hedgeManager.onExecutionReportUpdate(executionReport);
-
+            sendTradePushMessage(executionReport);
             return true;
         }
 
+    }
+
+    protected void sendTradePushMessage(ExecutionReport executionReport) {
+        if (!ExecutionReport.isTradeStatus(executionReport)) {
+            return;
+        }
+        if (!sendTradePushMessage) {
+            return;
+        }
+
+        String title = Configuration.formatLog("{} {} {}@{}", executionReport.getVerb(), executionReport.getInstrument(), executionReport.getLastQuantity(), executionReport.getPrice());
+        String message = Configuration.formatLog("{}", executionReport.getAlgorithmInfo());
+        try {
+            sendNotificationMessage(title, message);
+            logger.info("Push trade notification sent: {} {}", title, message);
+        } catch (Exception e) {
+            logger.error("Error sending push trade notification: {}", e.getMessage());
+        }
     }
 
 

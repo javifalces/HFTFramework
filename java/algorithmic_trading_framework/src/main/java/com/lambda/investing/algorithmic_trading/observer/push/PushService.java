@@ -217,8 +217,20 @@ public abstract class PushService implements AlgorithmObserver {
     public void onUpdateParams(String algorithmInfo, Map<String, Object> newParams) {
     }
 
+    /**
+     * Sends a push notification for a message explicitly triggered by the algorithm via
+     * {@link Algorithm#sendNotificationMessage(String, String)}. This is how the algorithm - rather
+     * than this observer - decides what/when to push, on top of the default
+     * {@link #onExecutionReportUpdate} trade notification.
+     */
     @Override
     public void onUpdateMessage(String algorithmInfo, String name, String body) {
+        try {
+            sendMessage(name, body);
+            logger.info("Push message sent (algorithm-triggered): {} {}", name, body);
+        } catch (Exception e) {
+            logger.error("Error sending algorithm-triggered push message: {}", e.getMessage());
+        }
     }
 
     @Override
@@ -236,17 +248,6 @@ public abstract class PushService implements AlgorithmObserver {
      */
     @Override
     public void onExecutionReportUpdate(String algorithmInfo, ExecutionReport executionReport) {
-        if (!ExecutionReport.isTradeStatus(executionReport)) {
-            return;
-        }
 
-        String title = Configuration.formatLog("{} {} {}@{}", executionReport.getVerb(), executionReport.getInstrument(), executionReport.getLastQuantity(), executionReport.getPrice());
-        String message = Configuration.formatLog("{}", executionReport.getAlgorithmInfo());
-        try {
-            sendMessage(title, message);
-            logger.info("Push trade notification sent: {} {}", title, message);
-        } catch (Exception e) {
-            logger.error("Error sending push trade notification: {}", e.getMessage());
-        }
     }
 }
