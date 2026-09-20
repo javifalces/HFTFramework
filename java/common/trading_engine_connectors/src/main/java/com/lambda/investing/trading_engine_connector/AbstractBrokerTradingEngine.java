@@ -8,6 +8,9 @@ import com.lambda.investing.connector.ConnectorProvider;
 import com.lambda.investing.connector.ConnectorPublisher;
 import com.lambda.investing.connector.zero_mq.ZeroMqConfiguration;
 import com.lambda.investing.model.asset.Instrument;
+import com.lambda.investing.model.candle.Candle;
+import com.lambda.investing.model.candle.CandleType;
+import com.lambda.investing.model.candle.CandlesInfoRequest;
 import com.lambda.investing.model.messaging.TypeMessage;
 import com.lambda.investing.model.portfolio.Portfolio;
 import com.lambda.investing.model.trading.ExecutionReport;
@@ -18,12 +21,15 @@ import org.apache.curator.shaded.com.google.common.collect.EvictingQueue;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static com.lambda.investing.model.Util.*;
+import static com.lambda.investing.model.candle.Candle.REQUESTED_CANDLES_INFO;
 import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_PORTFOLIO_INFO;
 
 
@@ -101,6 +107,11 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
 
     @Override
     public List<OrderRequest> activeOrders() {
+        return null;
+    }
+
+    public Map<String, List<Candle>> requestCandles(Date startDate, Date endDate, Set<String> instruments,
+                                                    CandleType candleType, int secondsCandles) {
         return null;
     }
 
@@ -245,10 +256,18 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
 
     }
 
+    /**
+     * The ZeroMQ wire topic used to publish info responses is hardcoded to {@link TypeMessage#info}
+     * (required so {@code TopicUtils.getTypeMessage} classifies the message correctly on the
+     * subscriber side), so {@code topic} can't be propagated as the actual wire topic. Instead it is
+     * embedded as a prefix of the message content ({@code "<topic>|<message>"}) and decoded back into
+     * a header on the receiving side (see {@code AbstractTradingEngineConnector#onUpdate}).
+     */
     protected void notifyInfo(String topic, String message) {
         logger.info("notifyInfo {} : {} ", topic, message);
+        String wireMessage = topic + "|" + message;
         this.executionReportConnectorPublisher
-                .publish(executionReportConnectorConfiguration, TypeMessage.info, TypeMessage.info.toString(), message);
+                .publish(executionReportConnectorConfiguration, TypeMessage.info, TypeMessage.info.toString(), wireMessage);
     }
 
     @Override
@@ -257,7 +276,32 @@ public abstract class AbstractBrokerTradingEngine implements TradingEngineConnec
         logger.info("requestInfo: {} ", info);
         if (info.endsWith(REQUESTED_PORTFOLIO_INFO)) {
             //return portfolio on execution Report
-            notifyInfo(info, toJsonString(portfolio));
+            String algorithmInfo = info.split("[.]")[0];
+            String header = Configuration.formatLog("{}.{}", REQUESTED_PORTFOLIO_INFO, algorithmInfo);
+            notifyInfo(header, toJsonString(portfolio));
+        }
+        if (info.contains(REQUESTED_CANDLES_INFO)) {
+            //info format: "<algorithmInfo>.candles|<CandlesInfoRequest json>"
+            int payloadSeparatorIdx = info.indexOf('|');
+            String headerPart = payloadSeparatorIdx >= 0 ? info.substring(0, payloadSeparatorIdx) : info;
+            String payload = payloadSeparatorIdx >= 0 ? info.substring(payloadSeparatorIdx + 1) : "";
+            String algorithmInfo = headerPart.split("[.]")[0];
+
+            Map<String, List<Candle>> candles = null;
+            if (!payload.isEmpty()) {
+                try {
+                    CandlesInfoRequest candlesInfoRequest = fromJsonString(payload, CandlesInfoRequest.class);
+                    candles = requestCandles(candlesInfoRequest.getStartDate(), candlesInfoRequest.getEndDate(),
+                            candlesInfoRequest.getInstrumentPks(), candlesInfoRequest.getCandleType(),
+                            candlesInfoRequest.getSecondsCandles());
+                } catch (Exception e) {
+                    logger.error("Error parsing candles info request {}", payload, e);
+                }
+            }
+            if (candles != null) {
+                String header = Configuration.formatLog("{}.{}", REQUESTED_CANDLES_INFO, algorithmInfo);
+                notifyInfo(header, toJsonString(candles));
+            }
         }
     }
 }

@@ -17,6 +17,8 @@ import static com.lambda.investing.model.Util.toJsonString;
 @Setter
 public class Candle extends CSVable {
 
+	public static String REQUESTED_CANDLES_INFO = "candles";
+
 	private CandleType candleType;
 	private String instrumentPk;
 	private double high, low, open, close;

@@ -4,6 +4,8 @@ import com.lambda.investing.connector.ConnectorConfiguration;
 import com.lambda.investing.connector.ConnectorProvider;
 import com.lambda.investing.connector.ConnectorPublisher;
 import com.lambda.investing.model.asset.Instrument;
+import com.lambda.investing.model.candle.Candle;
+import com.lambda.investing.model.candle.CandleType;
 import com.lambda.investing.model.trading.*;
 import com.lambda.investing.trading_engine_connector.AbstractBrokerTradingEngine;
 import com.lambda.investing.trading_engine_connector.ExecutionReportListener;
@@ -86,6 +88,7 @@ public class XChangeTradingEngine extends AbstractBrokerTradingEngine {
 		awaitAuthenticatedConnection();
 		subscribeER();
 	}
+
 
 	/**
 	 * Number of attempts and delay between attempts when subscribing to the authenticated

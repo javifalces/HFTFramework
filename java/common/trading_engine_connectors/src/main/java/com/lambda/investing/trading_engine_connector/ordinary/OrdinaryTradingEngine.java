@@ -10,6 +10,8 @@ import com.lambda.investing.connector.ConnectorProvider;
 import com.lambda.investing.connector.ordinary.OrdinaryConnectorConfiguration;
 import com.lambda.investing.market_data_connector.MarketDataConnectorPublisherListener;
 import com.lambda.investing.model.asset.Instrument;
+import com.lambda.investing.model.candle.Candle;
+import com.lambda.investing.model.candle.CandleType;
 import com.lambda.investing.model.messaging.TypeMessage;
 import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.OrderRequest;
@@ -21,8 +23,10 @@ import com.lambda.investing.trading_engine_connector.paper.PaperTradingEngine;
 import static com.lambda.investing.model.Util.fromObject;
 import static net.openhft.affinity.AffinityStrategies.*;
 
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.*;
 
 import static com.lambda.investing.Configuration.logger;
@@ -79,6 +83,11 @@ public class OrdinaryTradingEngine implements TradingEngineConnector, ConnectorL
     @Override
     public List<OrderRequest> activeOrders() {
         //TODO implement activeOrders for ordinary trading engine
+        return null;
+    }
+
+    public Map<String, List<Candle>> requestCandles(Date startDate, Date endDate, Set<String> instruments,
+                                                    CandleType candleType, int secondsCandles) {
         return null;
     }
 

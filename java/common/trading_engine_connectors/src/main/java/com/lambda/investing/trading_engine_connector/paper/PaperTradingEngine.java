@@ -11,6 +11,8 @@ import com.lambda.investing.market_data_connector.AbstractMarketDataProvider;
 import com.lambda.investing.market_data_connector.MarketDataConnectorPublisher;
 import com.lambda.investing.market_data_connector.MarketDataProvider;
 import com.lambda.investing.model.asset.Instrument;
+import com.lambda.investing.model.candle.Candle;
+import com.lambda.investing.model.candle.CandleType;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.messaging.Command;
@@ -40,6 +42,7 @@ import java.util.concurrent.*;
 import static com.lambda.investing.Configuration.DELAY_ORDER_BACKTEST_MS;
 import static com.lambda.investing.Configuration.RANDOM_SEED;
 import static com.lambda.investing.model.Util.toJsonString;
+import static com.lambda.investing.model.candle.Candle.REQUESTED_CANDLES_INFO;
 import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_PORTFOLIO_INFO;
 import static com.lambda.investing.model.portfolio.Portfolio.REQUESTED_POSITION_INFO;
 import static com.lambda.investing.trading_engine_connector.AbstractTradingEngineConnector.ALL_ALGORITHMS_SUBSCRIPTION;
@@ -371,6 +374,19 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
 
             String header = Configuration.formatLog("{}.{}", REQUESTED_POSITION_INFO, algorithmInfo);
             this.marketDataProviderIn.notifyInfo(header, toJsonString(portfolio.getPositions()));
+        }
+        if (info.contains(REQUESTED_CANDLES_INFO)) {
+            //info format: "<algorithmInfo>.candles|<CandlesInfoRequest json>" -> relay the (still
+            //unresolved) request downstream; AbstractTradingEngineConnector.notifyInfo resolves it
+            //via TradingEngineConnector.requestCandles.
+            int payloadSeparatorIdx = info.indexOf('|');
+            String headerPart = payloadSeparatorIdx >= 0 ? info.substring(0, payloadSeparatorIdx) : info;
+            String payload = payloadSeparatorIdx >= 0 ? info.substring(payloadSeparatorIdx + 1) : "";
+            String algorithmInfo = headerPart.split("[.]")[0];
+
+            //TODO search into real broker if
+            String header = Configuration.formatLog("{}.{}", REQUESTED_CANDLES_INFO, algorithmInfo);
+            this.marketDataProviderIn.notifyInfo(header, payload);
         }
     }
 

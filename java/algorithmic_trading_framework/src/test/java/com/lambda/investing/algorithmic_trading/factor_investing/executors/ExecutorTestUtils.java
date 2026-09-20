@@ -3,15 +3,19 @@ package com.lambda.investing.algorithmic_trading.factor_investing.executors;
 import com.lambda.investing.market_data_connector.MarketDataListener;
 import com.lambda.investing.market_data_connector.MarketDataProvider;
 import com.lambda.investing.model.asset.Instrument;
+import com.lambda.investing.model.candle.Candle;
+import com.lambda.investing.model.candle.CandleType;
 import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.OrderRequest;
 import com.lambda.investing.trading_engine_connector.ExecutionReportListener;
 import com.lambda.investing.trading_engine_connector.TradingEngineConnector;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Shared test infrastructure for executor unit tests.
@@ -73,6 +77,11 @@ public class ExecutorTestUtils {
 
         @Override
         public List<OrderRequest> activeOrders() {
+            return null;
+        }
+
+        public Map<String, List<Candle>> requestCandles(Date startDate, Date endDate, Set<String> instruments,
+                                                        CandleType candleType, int secondsCandles) {
             return null;
         }
 

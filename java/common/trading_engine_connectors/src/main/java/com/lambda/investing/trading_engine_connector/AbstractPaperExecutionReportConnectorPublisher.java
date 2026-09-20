@@ -8,7 +8,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Getter
 public abstract class AbstractPaperExecutionReportConnectorPublisher implements ExecutionReportPublisher {
 
-	private TradingEngineConnector tradingEngineConnector;
+	protected TradingEngineConnector tradingEngineConnector;
 
 	public AbstractPaperExecutionReportConnectorPublisher(TradingEngineConnector tradingEngineConnector) {
 		this.tradingEngineConnector = tradingEngineConnector;

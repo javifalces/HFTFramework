@@ -1,5 +1,7 @@
 package com.lambda.investing.algorithmic_trading;
 
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.TypeReference;
 import com.formdev.flatlaf.FlatDarculaLaf;
 import com.formdev.flatlaf.FlatIntelliJLaf;
 import com.formdev.flatlaf.FlatLaf;
@@ -29,6 +31,7 @@ import com.lambda.investing.Statistics;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.candle.Candle;
 import com.lambda.investing.model.candle.CandleType;
+import com.lambda.investing.model.candle.CandlesInfoRequest;
 import com.lambda.investing.model.exception.LambdaTradingException;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
@@ -59,6 +62,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static com.lambda.investing.Configuration.*;
 import static com.lambda.investing.model.Util.fromJsonString;
 import static com.lambda.investing.model.Util.fromObject;
+import static com.lambda.investing.model.Util.toJsonString;
+import static com.lambda.investing.model.candle.Candle.REQUESTED_CANDLES_INFO;
 import static com.lambda.investing.model.portfolio.Portfolio.*;
 import static org.jfree.chart.ChartFactory.getChartTheme;
 
@@ -112,6 +117,11 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
     protected final Object lockLatchPosition = new Object();
     protected CountDownLatch lastPositionUpdateCountDown = new CountDownLatch(1);
+
+    private static final long REQUESTED_CANDLES_TIMEOUT_SECONDS = 30;
+    private final Object lockLatchCandles = new Object();
+    private CountDownLatch lastCandlesUpdateCountDown;
+    private Map<String, List<Candle>> lastCandlesReceived;
 
     public String getAlgorithmInfo() {
         return algorithmInfo;
@@ -2147,14 +2157,68 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             setPortfolio(portfolio);
             return true;
         }
+        if (header.contains(REQUESTED_CANDLES_INFO)) {
+            Map<String, List<Candle>> candles = null;
+            String messageStr = fromObject(message, String.class);
+            if (messageStr != null && !messageStr.isEmpty()) {
+                try {
+                    candles = JSON.parseObject(messageStr, new TypeReference<Map<String, List<Candle>>>() {
+                    }.getType());
+                } catch (Exception e) {
+                    logger.error("[{}] error parsing candles received from broker on {}", getCurrentTime(), header, e);
+                }
+            }
+            synchronized (lockLatchCandles) {
+                lastCandlesReceived = candles;
+                if (lastCandlesUpdateCountDown != null) {
+                    lastCandlesUpdateCountDown.countDown();
+                }
+            }
+            return true;
+        }
         logger.warn("unknown onInfoUpdate header {} -> return false", header);
         return false;
+    }
+
+    /**
+     * Requests candles to the broker (TradingEngineConnector) and blocks until either the response
+     * arrives or {@link #REQUESTED_CANDLES_TIMEOUT_SECONDS} elapses.
+     *
+     * @return the candles received from the broker, or {@code null} if none/timeout/error.
+     */
+    private Map<String, List<Candle>> requestCandlesFromBroker(Date startDate, Date endDate, Set<String> instrumentPks,
+                                                               CandleType candleType, int secondsCandles) {
+        CandlesInfoRequest candlesRequest = new CandlesInfoRequest(startDate, endDate, instrumentPks, candleType, secondsCandles);
+
+        synchronized (lockLatchCandles) {
+            lastCandlesUpdateCountDown = new CountDownLatch(1);
+            lastCandlesReceived = null;
+        }
+
+        requestInfo(algorithmInfo + "." + REQUESTED_CANDLES_INFO + "|" + toJsonString(candlesRequest));
+
+        try {
+            lastCandlesUpdateCountDown.await(REQUESTED_CANDLES_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        synchronized (lockLatchCandles) {
+            return lastCandlesReceived;
+        }
     }
 
     public Map<String, List<Candle>> downloadCandles(Date startDate, Date endDate, Set<Instrument> instruments, CandleType candleType, int secondsCandles) {
         Set<String> instrumentPks = new HashSet<>();
         for (Instrument instrument : instruments) {
             instrumentPks.add(instrument.getPrimaryKey());
+        }
+
+        if (!isBacktest) {
+            Map<String, List<Candle>> candlesFromBroker = requestCandlesFromBroker(startDate, endDate, instrumentPks, candleType, secondsCandles);
+            if (candlesFromBroker != null) {
+                return candlesFromBroker;
+            }
         }
         return candleData.downloadCandles(startDate, endDate, instrumentPks, candleType, secondsCandles);
 
