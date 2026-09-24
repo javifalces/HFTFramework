@@ -27,6 +27,8 @@ public class KrakenXChangeTradingEngine extends XChangeTradingEngine {
     @Override
     public Map<String, List<Candle>> requestCandles(Date startDate, Date endDate, Set<String> instruments,
                                                     CandleType candleType, int secondsCandles) {
+        logger.info("requesting candles for instruments {} from {} to {} with candleType {} and secondsCandles {}", instruments, startDate, endDate, candleType, secondsCandles);
+
 
         //TODO implement candles request for kraken
         return null;

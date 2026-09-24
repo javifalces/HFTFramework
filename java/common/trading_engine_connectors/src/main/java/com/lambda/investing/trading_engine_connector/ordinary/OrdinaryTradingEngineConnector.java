@@ -13,8 +13,11 @@ import com.lambda.investing.trading_engine_connector.ExecutionReportListener;
 import com.lambda.investing.trading_engine_connector.paper.PaperConnectorPublisher;
 import com.lambda.investing.trading_engine_connector.paper.PaperTradingEngine;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+
+import static com.lambda.investing.model.candle.Candle.REQUESTED_CANDLES_INFO;
 
 /**
  * In-process (same JVM) counterpart of {@link com.lambda.investing.trading_engine_connector.ZeroMqTradingEngineConnector}.
@@ -83,12 +86,22 @@ public class OrdinaryTradingEngineConnector extends AbstractTradingEngineConnect
 
     @Override
     public void requestInfo(String info) {
-        if (isPaperTrading && paperTradingEngine != null) {
+        if (shouldSimulateInfo(info)) {
             this.paperTradingEngine.requestInfo(info);//simulate portfolio and position
             return;
         }
         this.orderRequestConnectorPublisherProvider
                 .publish(orderRequestConnectorConfiguration, TypeMessage.info, TypeMessage.info.toString(), info);
+    }
+
+
+    private static final List<String> INFO_PAPER_SIMULATED_TOPICS = List.of(REQUESTED_CANDLES_INFO);
+
+    private boolean shouldSimulateInfo(String info) {
+        if (!isPaperTrading || paperTradingEngine == null) {
+            return false;
+        }
+        return INFO_PAPER_SIMULATED_TOPICS.stream().noneMatch(info::contains);
     }
 
     @Override

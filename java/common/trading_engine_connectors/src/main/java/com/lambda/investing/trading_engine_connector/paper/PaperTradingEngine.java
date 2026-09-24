@@ -376,17 +376,8 @@ public class PaperTradingEngine extends AbstractPaperExecutionReportConnectorPub
             this.marketDataProviderIn.notifyInfo(header, toJsonString(portfolio.getPositions()));
         }
         if (info.contains(REQUESTED_CANDLES_INFO)) {
-            //info format: "<algorithmInfo>.candles|<CandlesInfoRequest json>" -> relay the (still
-            //unresolved) request downstream; AbstractTradingEngineConnector.notifyInfo resolves it
-            //via TradingEngineConnector.requestCandles.
-            int payloadSeparatorIdx = info.indexOf('|');
-            String headerPart = payloadSeparatorIdx >= 0 ? info.substring(0, payloadSeparatorIdx) : info;
-            String payload = payloadSeparatorIdx >= 0 ? info.substring(payloadSeparatorIdx + 1) : "";
-            String algorithmInfo = headerPart.split("[.]")[0];
-
-            //TODO search into real broker if
-            String header = Configuration.formatLog("{}.{}", REQUESTED_CANDLES_INFO, algorithmInfo);
-            this.marketDataProviderIn.notifyInfo(header, payload);
+            //ask in the real broken
+            tradingEngineConnector.requestInfo(info);
         }
     }
 
