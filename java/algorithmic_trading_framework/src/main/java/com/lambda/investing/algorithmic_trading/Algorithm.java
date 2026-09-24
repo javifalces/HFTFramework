@@ -2038,7 +2038,14 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         }
     }
 
+    private void setTimeLive() {
+        if (!isBacktest) {
+            long currentTime = System.currentTimeMillis();
+            timeService.setCurrentTimestamp(currentTime);
+        }
+    }
     public Date getCurrentTime() {
+        setTimeLive();
         return timeService.getCurrentTime();
     }
 
@@ -2047,22 +2054,22 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     }
 
     public long getCurrentTimestamp() {
-        if (!this.isBacktest) {
-            long currentTime = System.currentTimeMillis();
-            timeService.setCurrentTimestamp(currentTime);
-        }
+        setTimeLive();
         return timeService.getCurrentTimestamp();
     }
 
     protected int getCurrentTimeHour() {
+        setTimeLive();
         return timeService.getCurrentTimeHour();
     }
 
     protected int getCurrentTimeDay() {
+        setTimeLive();
         return timeService.getCurrentTimeDay();
     }
 
     protected int getCurrentTimeMinute() {
+        setTimeLive();
         return timeService.getCurrentTimeMinute();
     }
 
