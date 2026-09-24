@@ -20,6 +20,9 @@ import java.io.IOException;
 import java.math.RoundingMode;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public abstract class AbstractFactorInvestingAlgorithm extends Algorithm implements FactorListener {
 
@@ -61,6 +64,15 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
      */
     protected double weightChangeTolerance = 0.0;
     protected Map<String, Double> instrumentPkToLastWeight = new ConcurrentHashMap<>();
+
+    /**
+     * Interval (seconds) at which {@link #generateWeightsReport()} is scheduled in live trading;
+     * 0/negative disables the wall-clock scheduler (the report is still generated once per
+     * {@link #onWeightsUpdate(long, Map)} call, backtest included). Defaults to 60.
+     */
+    protected int reportIntervalSeconds;
+    private volatile ScheduledExecutorService weightsReportScheduler;
+    private final FactorInvestingWeightsReport weightsReport = new FactorInvestingWeightsReport();
 
     public AbstractFactorInvestingAlgorithm(AlgorithmConnectorConfiguration algorithmConnectorConfiguration, String algorithmInfo, Map<String, Object> parameters) {
         super(algorithmConnectorConfiguration, algorithmInfo, parameters);
@@ -254,7 +266,99 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
         super.setParameters(parameters);
         this.modelName = getParameterString(parameters, "modelName");
         this.capital = getParameterDouble(parameters, "capital");
+        this.reportIntervalSeconds = getParameterIntOrDefault(parameters, "reportIntervalSeconds", 60);
         this.setInstruments();
+    }
+
+    @Override
+    public void start() {
+        super.start();
+        if (!isBacktest && !isPaper && isReady()) {
+            startWeightsReportScheduler();
+        }
+    }
+
+    @Override
+    public void stop() {
+        super.stop();
+        stopWeightsReportScheduler();
+    }
+
+    private void startWeightsReportScheduler() {
+        if (reportIntervalSeconds > 0) {
+            if (weightsReportScheduler == null || weightsReportScheduler.isShutdown()) {
+                weightsReportScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+                    Thread t = new Thread(r, "FactorInvestingWeightsReport-Scheduler");
+                    t.setDaemon(true);
+                    t.setPriority(Thread.MIN_PRIORITY);
+                    return t;
+                });
+                weightsReportScheduler.scheduleAtFixedRate(() -> {
+                    try {
+                        generateWeightsReport();
+                    } catch (Exception e) {
+                        logger.error("Error generating factor investing weights report", e);
+                    }
+                }, reportIntervalSeconds, reportIntervalSeconds, TimeUnit.SECONDS);
+                logger.info("Weights report scheduler started with interval {} seconds", reportIntervalSeconds);
+            }
+        }
+    }
+
+    private void stopWeightsReportScheduler() {
+        ScheduledExecutorService scheduler = this.weightsReportScheduler;
+        if (scheduler != null && !scheduler.isShutdown()) {
+            scheduler.shutdown();
+            try {
+                if (!scheduler.awaitTermination(2, TimeUnit.SECONDS)) {
+                    scheduler.shutdownNow();
+                }
+            } catch (InterruptedException ie) {
+                scheduler.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    /**
+     * Snapshots, per instrument, the last requested weight, expected position (from that weight),
+     * current position and its mark-to-market investment, plus the model's total investment; then
+     * publishes each as an {@link #addCurrentCustomColumn(String, String, Double)} (for live
+     * GUI/dashboard/Prometheus consumption) and appends a row per instrument to the
+     * {@link FactorInvestingWeightsReport} CSV file, so instrument-level allocation can be followed
+     * and audited over time.
+     */
+    protected void generateWeightsReport() {
+        if (instrumentsPkToInstrument == null || instrumentsPkToInstrument.isEmpty()) {
+            return;
+        }
+
+        Map<String, FactorInvestingWeightsReport.InstrumentReportRow> rowsPerInstrument = new LinkedHashMap<>();
+        double totalInvestment = 0.0;
+        for (Instrument instrument : instrumentsPkToInstrument.values()) {
+            String instrumentPk = instrument.getPrimaryKey();
+            double weight = instrumentPkToLastWeight.getOrDefault(instrumentPk, 0.0);
+            double currentPosition = getPosition(instrument);
+            double price = getPrice(instrumentPk);
+            double expectedPosition = Double.isNaN(price) ? 0.0 : getQuantity(weight, instrument);
+            double investment = Double.isNaN(price) ? 0.0 : currentPosition * price * instrument.getQuantityMultiplier();
+            totalInvestment += investment;
+            rowsPerInstrument.put(instrumentPk,
+                    new FactorInvestingWeightsReport.InstrumentReportRow(weight, expectedPosition, currentPosition, investment));
+        }
+
+        long timestamp = getCurrentTimestamp();
+        for (Map.Entry<String, FactorInvestingWeightsReport.InstrumentReportRow> entry : rowsPerInstrument.entrySet()) {
+            String instrumentPk = entry.getKey();
+            FactorInvestingWeightsReport.InstrumentReportRow row = entry.getValue();
+            addCurrentCustomColumn(instrumentPk, "weight", row.weight);
+            addCurrentCustomColumn(instrumentPk, "expectedPosition", row.expectedPosition);
+            addCurrentCustomColumn(instrumentPk, "currentPosition", row.currentPosition);
+            addCurrentCustomColumn(instrumentPk, "investment", row.investment);
+            addCurrentCustomColumn(instrumentPk, "totalInvestment", totalInvestment);
+        }
+
+        weightsReport.report(timestamp, modelName, capital, totalInvestment, rowsPerInstrument);
     }
 
     @Override
@@ -417,6 +521,12 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
             logger.info(message);
             if (!isBacktest) {
                 System.out.println(message);
+            }
+
+            try {
+                generateWeightsReport();
+            } catch (Exception e) {
+                logger.error("Error generating factor investing weights report on onWeightsUpdate", e);
             }
 
             return output;
