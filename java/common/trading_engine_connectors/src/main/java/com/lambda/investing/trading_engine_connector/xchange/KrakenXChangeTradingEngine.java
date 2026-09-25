@@ -134,7 +134,8 @@ public class KrakenXChangeTradingEngine extends XChangeTradingEngine {
                     break;
                 }
 
-                List<Candle> pageCandles = KrakenCandleConverter.toCandles(response, candleType, instrumentPk);
+                List<Candle> pageCandles = KrakenCandleConverter.toCandles(response, candleType, instrumentPk,
+                        intervalMinutes);
                 if (pageCandles.isEmpty()) {
                     break;
                 }

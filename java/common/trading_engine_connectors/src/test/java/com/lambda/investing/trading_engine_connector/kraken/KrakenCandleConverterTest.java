@@ -38,11 +38,11 @@ public class KrakenCandleConverterTest {
     @Test
     public void toCandles_mapsOhlcRowsToCandles() {
         KrakenOhlcResponse response = KrakenOhlcResponse.parse(SAMPLE_OHLC_JSON);
-        List<Candle> candles = KrakenCandleConverter.toCandles(response, CandleType.time_1_min, "btcusd");
+        List<Candle> candles = KrakenCandleConverter.toCandles(response, CandleType.time_1_min, "btcusd", 1);
 
         assertEquals(2, candles.size());
         Candle first = candles.get(0);
-        assertEquals(1688671200000L, first.getTimestamp());
+        assertEquals(1688671260000L, first.getTimestamp());
         assertEquals(30306.1, first.getOpen(), 1e-9);
         assertEquals(30306.2, first.getHigh(), 1e-9);
         assertEquals(30305.7, first.getLow(), 1e-9);

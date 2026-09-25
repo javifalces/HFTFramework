@@ -72,16 +72,20 @@ public class KrakenCandleConverter {
      * Maps the OHLC rows of a {@link KrakenOhlcResponse} to {@link Candle}s.
      * Row shape: [time, open, high, low, close, vwap, volume, count]. Kraken doesn't report per-tick
      * open/high/low/close volumes, so the traded volume of the bar is used for all volume fields.
+     * Kraken's "time" field is the bar's <b>open</b> timestamp; the live {@code CandleFromTickUpdaterInstrument}
+     * stamps candles with their <b>close</b> timestamp, so {@code intervalMinutes} is added to keep both aligned.
      */
-    public static List<Candle> toCandles(KrakenOhlcResponse response, CandleType candleType, String instrumentPk) {
+    public static List<Candle> toCandles(KrakenOhlcResponse response, CandleType candleType, String instrumentPk,
+                                         int intervalMinutes) {
         List<Candle> candles = new ArrayList<>();
         JSONArray rawCandles = response.getCandles();
         if (rawCandles == null) {
             return candles;
         }
+        long periodMillis = intervalMinutes * 60_000L;
         for (int i = 0; i < rawCandles.size(); i++) {
             JSONArray entry = rawCandles.getJSONArray(i);
-            long timestampMillis = entry.getLongValue(0) * 1000L;
+            long timestampMillis = entry.getLongValue(0) * 1000L + periodMillis;
             double open = entry.getDoubleValue(1);
             double high = entry.getDoubleValue(2);
             double low = entry.getDoubleValue(3);
