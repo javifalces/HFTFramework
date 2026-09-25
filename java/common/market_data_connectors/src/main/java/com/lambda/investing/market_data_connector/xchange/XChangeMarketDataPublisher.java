@@ -239,6 +239,11 @@ public class XChangeMarketDataPublisher extends AbstractMarketDataConnectorPubli
 
 	}
 
+	// Delay between per-pair subscribe requests so we don't burst more "subscribe" websocket frames
+	// than the exchange's message-rate limit allows (e.g. Kraken silently drops a random subset of
+	// subscriptions and replies "Exceeded msg rate" once a connection sends too many too fast).
+	private static final long SUBSCRIBE_PACING_MS = 150L;
+
 	protected void subscribeMarketData() {
 		//connect to websocket depth trade updates
 		if (this.brokerConnector != null) {
@@ -256,7 +261,7 @@ public class XChangeMarketDataPublisher extends AbstractMarketDataConnectorPubli
 			} catch (Exception e) {
 				logger.error("error subscribing to trades on {} ", instrument, e);
 			}
-
+			sleepBeforeNextSubscription();
 		}
 
 		//register to depth
@@ -271,9 +276,17 @@ public class XChangeMarketDataPublisher extends AbstractMarketDataConnectorPubli
 			} catch (Exception e) {
 				logger.error("error subscribing to depth on {} ", instrument, e);
 			}
-
+			sleepBeforeNextSubscription();
 		}
 
+	}
+
+	private void sleepBeforeNextSubscription() {
+		try {
+			Thread.sleep(SUBSCRIBE_PACING_MS);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		}
 	}
 
 	@Override public void init() {

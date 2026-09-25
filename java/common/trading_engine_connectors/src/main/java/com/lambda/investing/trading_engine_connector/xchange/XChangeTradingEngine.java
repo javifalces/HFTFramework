@@ -142,6 +142,13 @@ public class XChangeTradingEngine extends AbstractBrokerTradingEngine {
 		}
 	}
 
+	/**
+	 * Delay between per-pair subscribe requests so we don't burst more "subscribe" websocket frames
+	 * than the exchange's message-rate limit allows (e.g. Kraken silently drops a random subset of
+	 * subscriptions and replies "Exceeded msg rate" once a connection sends too many too fast).
+	 */
+	private static final long SUBSCRIBE_ER_PACING_MS = 150L;
+
 	protected void subscribeER() {
 		if (this.brokerConnector != null) {
 			this.webSocketClient = this.brokerConnector.getWebSocketClient();
@@ -152,6 +159,12 @@ public class XChangeTradingEngine extends AbstractBrokerTradingEngine {
 					.get(currencyPair);
 			subscribeUserTrades(currencyPair, instrument);
 			subscribeOrderChanges(currencyPair, instrument);
+			try {
+				Thread.sleep(SUBSCRIBE_ER_PACING_MS);
+			} catch (InterruptedException interruptedException) {
+				Thread.currentThread().interrupt();
+				return;
+			}
 		}
 	}
 

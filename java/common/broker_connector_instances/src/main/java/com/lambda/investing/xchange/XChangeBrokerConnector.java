@@ -51,6 +51,24 @@ public abstract class XChangeBrokerConnector {
     Map<CurrencyPair, Instrument> currencyPairToInstrument = new HashMap<>();
     Set<Instrument> lastInstrumentSetSubscribed = null;
 
+    /**
+     * Whether {@link #connectWebsocket} should eagerly pre-subscribe every public/private channel
+     * for every pair in the single {@code connect(ProductSubscription)} call.
+     * <p>
+     * Both {@code XChangeMarketDataPublisher} (book/trades) and {@code XChangeTradingEngine}
+     * (userTrades/orderChanges) already subscribe individually per pair right after
+     * {@code connectWebsocket()} returns, so this pre-subscription is redundant by construction.
+     * For exchanges whose streaming client fires the whole {@code ProductSubscription} as one
+     * burst of "subscribe" websocket frames, doing this for every channel x every pair can exceed
+     * the exchange's message-rate limit once the instrument count grows, causing a random subset
+     * of pairs to be silently dropped (e.g. Kraken replies {@code "Exceeded msg rate"}). Subclasses
+     * for such exchanges should override this to {@code false} and rely solely on the explicit
+     * per-pair subscriptions performed by the callers above.
+     */
+    protected boolean shouldPreSubscribeChannels() {
+        return true;
+    }
+
     public static Currency getCurrency(String currency) {
         return getCurrency(currency, true);
     }
@@ -95,6 +113,22 @@ public abstract class XChangeBrokerConnector {
      * @return
      */
     public static CurrencyPair getCurrencyPair(String instrumentPk) {
+        // Prefer the registered Instrument (symbol + declared quote currency) when available: it lets us
+        // split base/quote exactly instead of guessing via Currency.getAvailableCurrencies() prefix/suffix
+        // scanning below, which silently mismatches (e.g. AVAXEUR -> AVA/EUR) or fails outright for
+        // currencies unknown to XChange's static currency list (e.g. newly listed tokens like WLFI).
+        Instrument instrument = Instrument.getInstrument(instrumentPk);
+        if (instrument != null && instrument.getSymbol() != null && instrument.getCurrency() != null) {
+            String symbolUpper = instrument.getSymbol().toUpperCase();
+            String quoteCode = instrument.getCurrency().name().toUpperCase();
+            if (symbolUpper.endsWith(quoteCode) && symbolUpper.length() > quoteCode.length()) {
+                String baseCode = symbolUpper.substring(0, symbolUpper.length() - quoteCode.length());
+                Currency currencyBaseObj = Currency.getInstance(baseCode);
+                Currency currencyQuoteObj = Currency.getInstance(quoteCode);
+                return new CurrencyPair(currencyBaseObj, currencyQuoteObj);
+            }
+        }
+
         String instrumentSymbol = instrumentPk.toUpperCase();
         if (instrumentPk.contains("_")) {
             instrumentSymbol = instrumentPk.split("_")[0].toUpperCase();
@@ -210,14 +244,16 @@ public abstract class XChangeBrokerConnector {
             }
             currencyPairToInstrument.put(currencyPair, instrument);
 
-            // Only subscribe to the channels actually consumed (market data + user order/trade updates).
-            // NOTE: avoid ProductSubscriptionBuilder#addAll(): it also subscribes to funding rates and
-            // balances, which are unused here and, for funding rates on Binance spot pairs, NPE because
-            // the spot exchange has no BinanceFuturesAuthenticated REST client configured.
-            productSubscriptionBuilder.addOrderbook(currencyPair);
-            productSubscriptionBuilder.addTrades(currencyPair);
-            productSubscriptionBuilder.addUserTrades(currencyPair);
-            productSubscriptionBuilder.addOrders(currencyPair);
+            if (shouldPreSubscribeChannels()) {
+                // Only subscribe to the channels actually consumed (market data + user order/trade updates).
+                // NOTE: avoid ProductSubscriptionBuilder#addAll(): it also subscribes to funding rates and
+                // balances, which are unused here and, for funding rates on Binance spot pairs, NPE because
+                // the spot exchange has no BinanceFuturesAuthenticated REST client configured.
+                productSubscriptionBuilder.addOrderbook(currencyPair);
+                productSubscriptionBuilder.addTrades(currencyPair);
+                productSubscriptionBuilder.addUserTrades(currencyPair);
+                productSubscriptionBuilder.addOrders(currencyPair);
+            }
         }
 
         logger.info("subscribing to websocket on symbols {}", symbolsList.toString());

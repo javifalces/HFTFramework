@@ -34,6 +34,21 @@ import java.util.concurrent.ConcurrentHashMap;
 
 	}
 
+	/**
+	 * Kraken's WS v1 streaming client fires every channel of the {@code ProductSubscription} passed
+	 * to {@code connect()} as one burst of "subscribe" frames. With enough instruments this burst
+	 * exceeds Kraken's message-rate limit and Kraken silently rejects a random subset of them
+	 * ({@code {"event":"subscriptionStatus","status":"error","errorMessage":"Exceeded msg rate"}}),
+	 * which looked like some instruments simply never receiving market data. Kraken fully supports
+	 * subscribing per pair/channel dynamically after the connection is up, which is exactly what
+	 * {@code XChangeMarketDataPublisher}/{@code XChangeTradingEngine} already do right after
+	 * {@code connectWebsocket()} returns, so skip the redundant, burst-prone pre-subscription here.
+	 */
+	@Override
+	protected boolean shouldPreSubscribeChannels() {
+		return false;
+	}
+
 	@Override protected void setPrivateAccountInfo() {
 		exchangeSpecification = streamingExchange.getDefaultExchangeSpecification();
 		exchangeSpecification.setUserName(userName);
