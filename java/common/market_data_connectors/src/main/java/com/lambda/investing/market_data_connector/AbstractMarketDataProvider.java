@@ -10,6 +10,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public abstract class AbstractMarketDataProvider implements MarketDataProvider {
 
@@ -24,9 +25,9 @@ public abstract class AbstractMarketDataProvider implements MarketDataProvider {
     protected Map<MarketDataListener, String> listenersManager;
 
     public AbstractMarketDataProvider() {
-        listenersManager = new HashMap<>();
-        lastDepthReceived = new HashMap<>();
-        lastTradeSentReceived = new HashMap<>();
+        listenersManager = new ConcurrentHashMap<>();
+        lastDepthReceived = new ConcurrentHashMap<>();
+        lastTradeSentReceived = new ConcurrentHashMap<>();
     }
 
     public void reset() {
