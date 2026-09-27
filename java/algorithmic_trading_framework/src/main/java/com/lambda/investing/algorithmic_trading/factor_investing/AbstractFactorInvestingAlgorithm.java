@@ -23,6 +23,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 public abstract class AbstractFactorInvestingAlgorithm extends Algorithm implements FactorListener {
 
@@ -73,6 +75,45 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
     protected int reportIntervalSeconds;
     private volatile ScheduledExecutorService weightsReportScheduler;
     private final FactorInvestingWeightsReport weightsReport = new FactorInvestingWeightsReport();
+
+    /**
+     * Holds an {@link #onWeightsUpdate(long, Map)} call that arrived while {@link #weAreReady()} was
+     * false (e.g. the warm-up factor computed from {@code JavaFactorPublisher.initializeCandleHistory()}
+     * during {@code init()}, before any depth update has populated {@link #instrumentsPkToLastMarketDataSnapshot}).
+     * Without this, that first set of weights was silently dropped and, depending on {@code secondsCandles},
+     * positions could stay unrebalanced for hours until the next candle cycle. Retried from
+     * {@link #onDepthUpdate(Depth)} once market data makes {@link #weAreReady()} true.
+     */
+    private static final class PendingWeightsUpdate {
+        private final long timestamp;
+        private final Map<String, Double> instrumentPkWeights;
+
+        private PendingWeightsUpdate(long timestamp, Map<String, Double> instrumentPkWeights) {
+            this.timestamp = timestamp;
+            this.instrumentPkWeights = instrumentPkWeights;
+        }
+    }
+
+    private final AtomicReference<PendingWeightsUpdate> pendingWeightsUpdate = new AtomicReference<>();
+
+    /**
+     * True once {@link #weAreReady()} has been observed true but the retry hasn't fired yet. Needed
+     * because {@link com.lambda.investing.algorithmic_trading.factor_investing.executors.AbstractExecutor}
+     * registers itself as its own, independent {@code MarketDataListener} with the market data provider
+     * (after the algorithm), so on the very depth tick that makes an instrument's
+     * {@link #instrumentsPkWithDepthReceived} entry (and hence {@link #weAreReady()}) become true for the
+     * first time, that same instrument's executor has not processed this depth yet and its
+     * {@code lastDepth} is still null. Arming here and only retrying on a later tick lets this depth
+     * finish propagating to every listener (executors included) first.
+     */
+    private final AtomicBoolean retryArmed = new AtomicBoolean(false);
+
+    /**
+     * Instruments that have received at least one (valid) {@link #onDepthUpdate(Depth)} call.
+     * Backs {@link #weAreReady()}, which now requires every instrument to have spoken at least
+     * once, and in turn gates {@link #retryPendingWeightsUpdateIfReady()}.
+     */
+    private final Set<String> instrumentsPkWithDepthReceived = ConcurrentHashMap.newKeySet();
 
     public AbstractFactorInvestingAlgorithm(AlgorithmConnectorConfiguration algorithmConnectorConfiguration, String algorithmInfo, Map<String, Object> parameters) {
         super(algorithmConnectorConfiguration, algorithmInfo, parameters);
@@ -195,13 +236,7 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
     }
 
     protected boolean weAreReady() {
-        boolean weAreReady = true;
-        for (String instrumentPk : instrumentsPkToInstrument.keySet()) {
-            double price = getPrice(instrumentPk);
-            boolean instrumentIsReady = !Double.isNaN(price);
-            weAreReady &= instrumentIsReady;
-        }
-        return weAreReady;
+        return instrumentsPkWithDepthReceived.containsAll(instrumentsPkToInstrument.keySet());
     }
 
     protected double getPrice(String instrumentPk) {
@@ -369,6 +404,7 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
         if (!depth.isDepthValid()) {
             return false;
         }
+        instrumentsPkWithDepthReceived.add(depth.getInstrument());
         //this depth (and everything derived from it: executors, candle updaters, InstrumentAlgorithmManager) can
         //outlive this call (e.g. cached as lastDepth and reused later on onWeightsUpdate/candle close).
         //Take a pool-independent snapshot so a concurrent AbstractMarketDataConnectorPublisher.deleteFromPool
@@ -414,7 +450,35 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
             instrumentsPkToLastMarketDataSnapshot.put(depth.getInstrument(), lastMarketDataSnapshot);
         }
 
+        retryPendingWeightsUpdateIfReady();
+
         return super.onDepthUpdate(depth);
+    }
+
+    /**
+     * Cheap on the hot depth path: a single volatile read when there is nothing pending, only
+     * paying the {@link #weAreReady()} scan (now backed by {@link #instrumentsPkWithDepthReceived})
+     * once a deferred update actually exists.
+     * <p>
+     * Deliberately waits one extra armed tick (see {@link #retryArmed}) before actually calling
+     * {@link #onWeightsUpdate(long, Map)}: on the exact depth tick that first makes
+     * {@link #weAreReady()} true, that instrument's {@code Executor} (a separately registered market
+     * data listener, notified after the algorithm) may not have processed this depth yet, leaving its
+     * {@code lastDepth} null and crashing {@code increasePosition}.
+     */
+    private void retryPendingWeightsUpdateIfReady() {
+        PendingWeightsUpdate pending = pendingWeightsUpdate.get();
+        if (pending == null || !weAreReady()) {
+            return;
+        }
+        if (retryArmed.compareAndSet(false, true)) {
+            return;
+        }
+        if (pendingWeightsUpdate.compareAndSet(pending, null)) {
+            retryArmed.set(false);
+            logger.info("{} market data ready -> retrying deferred onWeightsUpdate from {}", getCurrentTime(), new Date(pending.timestamp));
+            onWeightsUpdate(pending.timestamp, pending.instrumentPkWeights);
+        }
     }
 
     protected double getPriceIncreasePosition(String instrumentPk) {
@@ -441,9 +505,12 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
         weightsUpdate.append(Configuration.formatLog("{} onWeightsUpdate {}(capital:{}€)\n", this.getCurrentTime(), modelName, capital));
 
         if (!weAreReady()) {
-            logger.warn("{} instruments are not ready -> return", instrumentPkWeights.size());
+            logger.warn("{} instruments are not ready -> caching weights from {} to retry once market data is ready",
+                    instrumentPkWeights.size(), getCurrentTime());
+            pendingWeightsUpdate.set(new PendingWeightsUpdate(timestamp, instrumentPkWeights));
             return false;
         }
+        pendingWeightsUpdate.set(null);
 
         requestUpdatePosition(true);
 

@@ -227,7 +227,6 @@ public abstract class PushService implements AlgorithmObserver {
     public void onUpdateMessage(String algorithmInfo, String name, String body) {
         try {
             sendMessage(name, body);
-            logger.info("Push message sent (algorithm-triggered): {} {}", name, body);
         } catch (Exception e) {
             logger.error("Error sending algorithm-triggered push message: {}", e.getMessage());
         }

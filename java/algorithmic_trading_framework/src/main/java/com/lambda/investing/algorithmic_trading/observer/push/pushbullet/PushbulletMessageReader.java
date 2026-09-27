@@ -215,8 +215,6 @@ public class PushbulletMessageReader {
             String title = pushNode.has("title") ? pushNode.get("title").asText() : "";
             String body = pushNode.has("body") ? pushNode.get("body").asText() : "";
 
-            logger.info("Received Pushbullet message - Title: '{}', Body: '{}'", title, body);
-
             // Notify all registered listeners
             notifyListeners(title, body);
 
