@@ -59,7 +59,7 @@ public class KrakenXChangeTradingEngine extends XChangeTradingEngine {
 
         ExecutorService executorService = newCandleDownloadExecutor(totalInstruments);
         try {
-            printProgress(0, totalInstruments);
+            printProgress(0, totalInstruments, intervalMinutes);
             List<CompletableFuture<Void>> downloads = instruments.stream()
                     .map(instrumentPk -> CompletableFuture.runAsync(() -> downloadInstrumentCandles(instrumentPk,
                             candleType, intervalMinutes, startSeconds, endSeconds, candlesByInstrument,
@@ -94,7 +94,7 @@ public class KrakenXChangeTradingEngine extends XChangeTradingEngine {
                         endSeconds);
 
         candlesByInstrument.put(instrumentPk, candles);
-        printProgress(completedInstruments.incrementAndGet(), totalInstruments);
+        printProgress(completedInstruments.incrementAndGet(), totalInstruments, intervalMinutes);
     }
 
     private List<Candle> onUnmappableInstrument(String instrumentPk) {
@@ -102,15 +102,15 @@ public class KrakenXChangeTradingEngine extends XChangeTradingEngine {
         return new ArrayList<>();
     }
 
-    private void printProgress(int completed, int total) {
+    private void printProgress(int completed, int total, int intervalMinutes) {
         if (total == 0) {
             return;
         }
         double ratio = (double) completed / total;
         int filled = (int) Math.round(ratio * PROGRESS_BAR_WIDTH);
         String bar = "=".repeat(filled) + " ".repeat(PROGRESS_BAR_WIDTH - filled);
-        System.out.print(String.format("\rKraken candles download [%s] %d/%d instruments (%.0f%%)", bar, completed,
-                total, ratio * 100));
+        System.out.print(String.format("\rKraken candles download (interval=%dm) [%s] %d/%d instruments (%.0f%%)",
+                intervalMinutes, bar, completed, total, ratio * 100));
         System.out.flush();
     }
 
