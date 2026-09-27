@@ -158,6 +158,15 @@ public class XChangeTradingEngine extends AbstractBrokerTradingEngine {
 			Instrument instrument = brokerConnector.getCurrencyPairToInstrument()
 					.get(currencyPair);
 			subscribeUserTrades(currencyPair, instrument);
+			//each of these triggers its own private-channel auth REST call (eg. Kraken's
+			//getKrakenWebsocketToken(), consuming a fresh nonce) - pace them apart too, not just once
+			//per pair, to avoid hammering the auth endpoint back-to-back.
+			try {
+				Thread.sleep(SUBSCRIBE_ER_PACING_MS);
+			} catch (InterruptedException interruptedException) {
+				Thread.currentThread().interrupt();
+				return;
+			}
 			subscribeOrderChanges(currencyPair, instrument);
 			try {
 				Thread.sleep(SUBSCRIBE_ER_PACING_MS);
@@ -169,56 +178,131 @@ public class XChangeTradingEngine extends AbstractBrokerTradingEngine {
 	}
 
 	private void subscribeUserTrades(CurrencyPair currencyPair, Instrument instrument) {
-		for (int attempt = 1; attempt <= SUBSCRIBE_ER_MAX_ATTEMPTS; attempt++) {
-			try {
-				Disposable subscriptionTrade = webSocketClient.getStreamingTradeService().getUserTrades(currencyPair)
-						.subscribe(userTrade -> onUserTrades(instrument, userTrade),
-								throwable -> logger.error("Error in onUserTrades subscription", throwable));
+		subscribeUserTrades(currencyPair, instrument, 1);
+	}
 
-				subscriptionTrades.add(subscriptionTrade);
-				return;
+	/**
+	 * Kraken (and any exchange whose private-channel subscribe triggers a fresh REST auth call, e.g.
+	 * {@code KrakenAccountServiceRaw.getKrakenWebsocketToken()}) can transiently reject the request
+	 * with {@link org.knowm.xchange.exceptions.NonceException} ("Invalid nonce"). Since that call is
+	 * wired through RxJava's cold {@code Observable.create}, the exception surfaces asynchronously in
+	 * the {@code onError} callback below rather than being thrown back to the caller of
+	 * {@code .subscribe(...)}, so the plain try/catch retry loop never sees it; retry explicitly from
+	 * {@code onError} instead. A subsequent attempt reuses the same (single, shared) nonce factory,
+	 * whose next value is always greater than the one Kraken just rejected, so the retry is expected
+	 * to self-heal.
+	 */
+	private void subscribeUserTrades(CurrencyPair currencyPair, Instrument instrument, int attempt) {
+		try {
+			//Kraken's auth-token fetch failures surface synchronously through this .subscribe() call
+			//(see class javadoc above), so by the time .subscribe() returns we already know whether
+			//onError fired for this attempt; only log "connected" when it didn't.
+			java.util.concurrent.atomic.AtomicBoolean failed = new java.util.concurrent.atomic.AtomicBoolean(false);
+			Disposable subscriptionTrade = webSocketClient.getStreamingTradeService().getUserTrades(currencyPair)
+					.subscribe(userTrade -> onUserTrades(instrument, userTrade), throwable -> {
+						failed.set(true);
+						onSubscriptionError("onUserTrades", currencyPair, instrument, attempt, throwable,
+								this::subscribeUserTrades);
+					});
 
-			} catch (Exception e) {
-				if (attempt == SUBSCRIBE_ER_MAX_ATTEMPTS) {
-					logger.error("error subscribing to onUserTrades on {} after {} attempts", instrument, attempt, e);
-					System.err.println("error subscribing to onUserTrades " + e.getMessage());
-				} else {
-					logger.warn("error subscribing to onUserTrades on {} (attempt {}/{}), retrying: {}", instrument,
-							attempt, SUBSCRIBE_ER_MAX_ATTEMPTS, e.getMessage());
-					sleepBeforeRetry();
-				}
+			subscriptionTrades.add(subscriptionTrade);
+			if (!failed.get()) {
+				logger.info("connected: subscribed to onUserTrades on {}", instrument);
+			}
+
+		} catch (Exception e) {
+			if (attempt == SUBSCRIBE_ER_MAX_ATTEMPTS) {
+				logger.error("error subscribing to onUserTrades on {} after {} attempts", instrument, attempt, e);
+				System.err.println("error subscribing to onUserTrades " + e.getMessage());
+			} else {
+				logger.warn("error subscribing to onUserTrades on {} (attempt {}/{}), retrying: {}", instrument,
+						attempt, SUBSCRIBE_ER_MAX_ATTEMPTS, e.getMessage());
+				sleepBeforeRetry();
+				subscribeUserTrades(currencyPair, instrument, attempt + 1);
 			}
 		}
 	}
 
 	private void subscribeOrderChanges(CurrencyPair currencyPair, Instrument instrument) {
-		for (int attempt = 1; attempt <= SUBSCRIBE_ER_MAX_ATTEMPTS; attempt++) {
-			try {
-				//an uncaught exception in onOrderChange would call the Rx onError handler below and
-				//permanently terminate this subscription (no more order updates for the pair), so any
-				//unexpected exception must be swallowed here and only logged.
-				Disposable subscriptionTrade = webSocketClient.getStreamingTradeService().getOrderChanges(currencyPair)
-						.subscribe(order -> {
-							try {
-								onOrderChange(instrument, order);
-							} catch (Exception e) {
-								logger.error("unexpected error in onOrderChange for {} {}", instrument, order, e);
-							}
-						}, throwable -> logger.error("Error in onOrderChange subscription", throwable));
-				subscriptionOrderChanges.add(subscriptionTrade);
-				return;
+		subscribeOrderChanges(currencyPair, instrument, 1);
+	}
 
-			} catch (Exception e) {
-				if (attempt == SUBSCRIBE_ER_MAX_ATTEMPTS) {
-					logger.error("error subscribing to onOrderChange on {} after {} attempts", instrument, attempt, e);
-					System.err.println("error subscribing to onOrderChange " + e.getMessage());
-				} else {
-					logger.warn("error subscribing to onOrderChange on {} (attempt {}/{}), retrying: {}", instrument,
-							attempt, SUBSCRIBE_ER_MAX_ATTEMPTS, e.getMessage());
-					sleepBeforeRetry();
-				}
+	private void subscribeOrderChanges(CurrencyPair currencyPair, Instrument instrument, int attempt) {
+		try {
+			//an uncaught exception in onOrderChange would call the Rx onError handler below and
+			//permanently terminate this subscription (no more order updates for the pair), so any
+			//unexpected exception must be swallowed here and only logged.
+			java.util.concurrent.atomic.AtomicBoolean failed = new java.util.concurrent.atomic.AtomicBoolean(false);
+			Disposable subscriptionTrade = webSocketClient.getStreamingTradeService().getOrderChanges(currencyPair)
+					.subscribe(order -> {
+						try {
+							onOrderChange(instrument, order);
+						} catch (Exception e) {
+							logger.error("unexpected error in onOrderChange for {} {}", instrument, order, e);
+						}
+					}, throwable -> {
+						failed.set(true);
+						onSubscriptionError("onOrderChange", currencyPair, instrument, attempt, throwable,
+								this::subscribeOrderChanges);
+					});
+			subscriptionOrderChanges.add(subscriptionTrade);
+			if (!failed.get()) {
+				logger.info("connected: subscribed to onOrderChange on {}", instrument);
+			}
+
+		} catch (Exception e) {
+			if (attempt == SUBSCRIBE_ER_MAX_ATTEMPTS) {
+				logger.error("error subscribing to onOrderChange on {} after {} attempts", instrument, attempt, e);
+				System.err.println("error subscribing to onOrderChange " + e.getMessage());
+			} else {
+				logger.warn("error subscribing to onOrderChange on {} (attempt {}/{}), retrying: {}", instrument,
+						attempt, SUBSCRIBE_ER_MAX_ATTEMPTS, e.getMessage());
+				sleepBeforeRetry();
+				subscribeOrderChanges(currencyPair, instrument, attempt + 1);
 			}
 		}
+	}
+
+	@FunctionalInterface
+	private interface SubscribeRetry {
+		void retry(CurrencyPair currencyPair, Instrument instrument, int attempt);
+	}
+
+	private void onSubscriptionError(String channelName, CurrencyPair currencyPair, Instrument instrument,
+	                                 int attempt, Throwable throwable, SubscribeRetry retry) {
+		boolean isNonce = isNonceException(throwable);
+		if (isNonce && attempt < SUBSCRIBE_ER_MAX_ATTEMPTS) {
+			logger.warn("nonce rejected subscribing to {} on {} (attempt {}/{}), retrying: {}", channelName,
+					instrument, attempt, SUBSCRIBE_ER_MAX_ATTEMPTS, throwable.getMessage());
+			/*
+			 * Kraken's auth failure is delivered synchronously through this onError callback while we
+			 * are still nested inside NettyStreamingService's ConcurrentHashMap#computeIfAbsent for
+			 * this exact channel key. Re-subscribing to the same channel right here would recurse into
+			 * that same computeIfAbsent call and blow up with "IllegalStateException: Recursive
+			 * update" - which itself then gets logged as the subscription error, silently leaving the
+			 * pair unsubscribed. Retry from a brand-new thread instead, so it runs after this call
+			 * stack (and the map's per-key lock) has fully unwound.
+			 */
+			Thread retryThread = new Thread(() -> {
+				sleepBeforeRetry();
+				retry.retry(currencyPair, instrument, attempt + 1);
+			}, "xchange-subscribe-retry-" + instrument + "-" + channelName + "-" + (attempt + 1));
+			retryThread.setDaemon(true);
+			retryThread.start();
+			return;
+		}
+		logger.error("Error in {} subscription", channelName, throwable);
+	}
+
+	private boolean isNonceException(Throwable throwable) {
+		Throwable current = throwable;
+		while (current != null) {
+			if (current instanceof org.knowm.xchange.exceptions.NonceException) {
+				return true;
+			}
+			current = current.getCause();
+		}
+		return false;
 	}
 
 	private void sleepBeforeRetry() {

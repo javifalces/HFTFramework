@@ -13,13 +13,31 @@ import java.util.concurrent.ConcurrentHashMap;
 
 	private static Map<String, KrakenBrokerConnector> instances = new ConcurrentHashMap<>();
 
+	/**
+	 * Each {@code KrakenBrokerConnector} owns its own {@code streamingExchange}/{@code exchange}
+	 * (and therefore its own nonce factory). Kraken's REST API rejects a request as
+	 * {@code NonceException: EAPI:Invalid nonce} if it sees a nonce lower than one already used for
+	 * the same API key, so two independent connector instances sharing one API key must never both
+	 * be "live" - the previous implementation always eagerly constructed a brand-new connector (with
+	 * its own nonce factory) before consulting the cache, which is not only wasteful but, under
+	 * concurrent callers (eg. market-data publisher and trading engine beans initializing around the
+	 * same time), race-prone: two threads could each see an empty cache slot and each "win" with a
+	 * different object, leaving one caller's requests permanently interleaving nonces against the
+	 * other's. Compute-if-absent under a lock so exactly one instance is ever created per key.
+	 */
 	public static KrakenBrokerConnector getInstance(String apiKey, String secretKey) {
-
 		String key = apiKey + secretKey;
-		KrakenBrokerConnector krakenBrokerConnector = new KrakenBrokerConnector(apiKey, secretKey);
-
-		KrakenBrokerConnector output = instances.getOrDefault(key, krakenBrokerConnector);
-		instances.put(key, output);
+		KrakenBrokerConnector output = instances.get(key);
+		if (output != null) {
+			return output;
+		}
+		synchronized (instances) {
+			output = instances.get(key);
+			if (output == null) {
+				output = new KrakenBrokerConnector(apiKey, secretKey);
+				instances.put(key, output);
+			}
+		}
 		return output;
 	}
 
