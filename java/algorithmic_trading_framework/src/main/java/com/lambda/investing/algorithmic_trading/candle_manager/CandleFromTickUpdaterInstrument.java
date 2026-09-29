@@ -142,12 +142,12 @@ public class CandleFromTickUpdaterInstrument {
         Date date = new Date(truncatedTime);
 
         if (openPriceMinuteMid == -1) {
-            //first candle
+            //no tick was ever seen for this period (e.g. the very first depth tick already closes a
+            //period): fall back to a degenerate open/high/low = current price instead of silently
+            //skipping the candle, so the boundary close is never lost.
             openPriceMinuteMid = depth.getMidPrice();
             maxPriceMinuteMid = depth.getMidPrice();
             minPriceMinuteMid = depth.getMidPrice();
-            lastTimestampMinuteMidCandle = date;
-            return;
         }
 
         maxPriceMinuteMid = Math.max(maxPriceMinuteMid, depth.getMidPrice());
@@ -173,12 +173,11 @@ public class CandleFromTickUpdaterInstrument {
         Date date = new Date(truncatedTime);
 
         if (openPriceMinuteBid == -1) {
-            //first candle
+            //no tick was ever seen for this period: fall back to a degenerate open/high/low = current
+            //price instead of silently skipping the candle.
             openPriceMinuteBid = depth.getBestBid();
             maxPriceMinuteBid = depth.getBestBid();
             minPriceMinuteBid = depth.getBestBid();
-            lastTimestampMinuteBidCandle = date;
-            return;
         }
 
         maxPriceMinuteBid = Math.max(maxPriceMinuteBid, depth.getBestBid());
@@ -205,12 +204,11 @@ public class CandleFromTickUpdaterInstrument {
         Date date = new Date(truncatedTime);
 
         if (openPriceMinuteAsk == -1) {
-            //first candle
+            //no tick was ever seen for this period: fall back to a degenerate open/high/low = current
+            //price instead of silently skipping the candle.
             openPriceMinuteAsk = depth.getBestAsk();
             maxPriceMinuteAsk = depth.getBestAsk();
             minPriceMinuteAsk = depth.getBestAsk();
-            lastTimestampMinuteAskCandle = date;
-            return;
         }
 
         maxPriceMinuteAsk = Math.max(maxPriceMinuteAsk, depth.getBestAsk());
@@ -341,6 +339,17 @@ public class CandleFromTickUpdaterInstrument {
         } else {
             TimeCandleClosed = false;
             try {
+                //seed the open price on the first tick of a new period (instead of only at close time),
+                //so the very first close after (re)start still has a real open and gets emitted
+                if (openPriceMinuteMid == -1) {
+                    openPriceMinuteMid = depth.getMidPrice();
+                }
+                if (openPriceMinuteAsk == -1) {
+                    openPriceMinuteAsk = depth.getBestAsk();
+                }
+                if (openPriceMinuteBid == -1) {
+                    openPriceMinuteBid = depth.getBestBid();
+                }
                 maxPriceMinuteMid = Math.max(maxPriceMinuteMid, depth.getMidPrice());
                 minPriceMinuteMid = Math.min(minPriceMinuteMid, depth.getMidPrice());
                 maxPriceMinuteAsk = Math.max(maxPriceMinuteAsk, depth.getBestAsk());

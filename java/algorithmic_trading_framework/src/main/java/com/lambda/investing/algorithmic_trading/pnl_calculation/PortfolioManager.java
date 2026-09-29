@@ -9,7 +9,6 @@ import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.portfolio.Portfolio;
 import com.lambda.investing.model.portfolio.PortfolioInstrument;
 import com.lambda.investing.model.trading.ExecutionReport;
-import lombok.Getter;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -41,7 +40,8 @@ public class PortfolioManager {
     private boolean isPaper;
 
 
-    @Getter
+    //not @Getter: getPortfolioSnapshot() below must rebuild it from the live instrumentPnlSnapshotMap on
+    //every call, since the individual PnlSnapshot objects keep mutating after this field is first set
     private PortfolioSnapshot portfolioSnapshot;
 
     public long numberOfTrades = 0;
@@ -60,6 +60,21 @@ public class PortfolioManager {
     public PnlSnapshot getLastPnlSnapshot(String instrumentPk) {
         String key = linkCustomPk.getOrDefault(instrumentPk, instrumentPk);
         return instrumentPnlSnapshotMap.get(key);
+    }
+
+    /**
+     * Returns an up-to-date {@link PortfolioSnapshot} aggregated from the current
+     * {@link #instrumentPnlSnapshotMap}. The aggregate totals (realized/unrealized/total pnl, fees,
+     * net position, ...) are only computed inside {@link PortfolioSnapshot}'s constructor, so this
+     * rebuilds the snapshot on every call instead of returning the stale instance created once in
+     * {@link #reset()} (when {@link #instrumentPnlSnapshotMap} was still empty) -- otherwise every
+     * consumer (factor-update logging, RL reward scoring, portfolio-snapshot observers) would keep
+     * seeing pnl frozen at its startup value even though the individual {@link PnlSnapshot}s keep
+     * being updated on every depth/trade.
+     */
+    public PortfolioSnapshot getPortfolioSnapshot() {
+        this.portfolioSnapshot = new PortfolioSnapshot(algorithm.getAlgorithmInfo(), instrumentPnlSnapshotMap);
+        return this.portfolioSnapshot;
     }
 
     public void linkInstruments(String instrumentPk, String customInstrumentPk) {

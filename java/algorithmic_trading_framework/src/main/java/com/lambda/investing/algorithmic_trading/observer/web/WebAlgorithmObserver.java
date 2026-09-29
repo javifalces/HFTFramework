@@ -120,6 +120,26 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
     private PortfolioSnapshot lastPortfolioSnapshot;
 
     /**
+     * Minimum milliseconds between consecutive {@link #refreshState()} rebuilds.
+     * <p>
+     * {@code refreshState()} fully re-serialises the entire dashboard state (all
+     * instruments' latest depths, portfolio, params, custom columns, active orders)
+     * across several independent JSON payloads (STATE, portfolio-snapshot, parameters,
+     * instruments, custom-metrics endpoints). It is invoked from high-frequency callbacks
+     * ({@link #onUpdateDepth}, {@link #onUpdateTrade}, {@link #onUpdateParams},
+     * {@link #onCustomColumns}, order updates) which, for a {@code MultiAlgorithm} running
+     * many instruments, can fire hundreds of times per second. Without throttling this
+     * becomes O(instruments) work repeated on every single tick, which can make the
+     * single-threaded Disruptor notifier consumer fall behind and overflow its ring buffer
+     * (see {@code DisruptorConnectorHelper} "RING BUFFER FULL" drops). The real-time
+     * per-event WebSocket broadcast (the actual DEPTH/TRADE/... push) is unaffected by this
+     * throttle; only the REST {@code /api/state} snapshot (used mainly on client
+     * reconnect/poll) is debounced.
+     */
+    private static final long STATE_REFRESH_THROTTLE_MS = 200;
+    private volatile long lastStateRefreshMs = 0;
+
+    /**
      * Overrides the minimum interval between backend PnL samples.
      * Call before the algorithm starts producing data. Default is 10 000 ms (10 s).
      *
@@ -499,6 +519,17 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
      * Rebuilds the REST state snapshot from the latest known values.
      */
     private void refreshState() {
+        long now = currentTimeMs();
+        long last = lastStateRefreshMs;
+        if (now - last < STATE_REFRESH_THROTTLE_MS) {
+            // Debounced: a very recent rebuild already reflects (close to) the latest
+            // state, and the next qualifying event will trigger a fresh rebuild. This
+            // keeps refreshState() off the hot per-tick path when many instruments are
+            // streaming depth/trade updates concurrently.
+            return;
+        }
+        lastStateRefreshMs = now;
+
         // Clean up any stale orders before building state
         cleanupStaleLiveOrders();
 
