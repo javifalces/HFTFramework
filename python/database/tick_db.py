@@ -437,6 +437,9 @@ class TickDB:
 
             df = pd.DataFrame(index=resampled.index, columns=unit_candles.columns)
             df['date_time'] = resampled['date_time']['open']  # time must be closing candle time
+            period_seconds = {'D': 86400, 'H': 3600, 'MIN': 60, 'S': 1}[resolution] * num_units
+            df['openTime'] = df['date_time'] - period_seconds
+            df['closeTime'] = df['date_time']
 
             df['open'] = resampled['open']['open']
             df['close'] = resampled['close']['close']
