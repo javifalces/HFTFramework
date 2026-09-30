@@ -4,6 +4,7 @@ import com.lambda.investing.algorithmic_trading.Algorithm;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
@@ -11,8 +12,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Registry of {@link WebFrontendProvider}s used to choose the web UI frontend depending on the algorithm type.
- * Providers are checked in registration order (explicit {@link #addProvider} first, then {@link ServiceLoader}
- * ones); if none matches, {@link ClasspathWebFrontend#DEFAULT} is returned.
+ * Providers registered with {@link #addProvider} are checked first (in registration order), then the
+ * {@link ServiceLoader} ones; if none matches, {@link ClasspathWebFrontend#DEFAULT} is returned.
  */
 public class WebFrontendRegistry {
 
@@ -21,6 +22,7 @@ public class WebFrontendRegistry {
     private static final WebFrontendRegistry INSTANCE = new WebFrontendRegistry();
 
     private final List<WebFrontendProvider> providers = new CopyOnWriteArrayList<>();
+    private final List<WebFrontendProvider> serviceLoaderProviders = new CopyOnWriteArrayList<>();
     private volatile boolean serviceLoaderProvidersLoaded = false;
 
     public static WebFrontendRegistry getInstance() {
@@ -40,6 +42,7 @@ public class WebFrontendRegistry {
 
     public void removeProvider(WebFrontendProvider provider) {
         providers.remove(provider);
+        serviceLoaderProviders.remove(provider);
     }
 
     /**
@@ -48,24 +51,33 @@ public class WebFrontendRegistry {
      */
     public WebFrontend getFrontend(Algorithm algorithm) {
         loadServiceLoaderProviders();
-        if (algorithm != null) {
-            for (WebFrontendProvider provider : providers) {
-                try {
-                    if (provider.supports(algorithm)) {
-                        WebFrontend frontend = provider.getFrontend(algorithm);
-                        if (frontend != null) {
-                            logger.info("Using web frontend '{}' from {} for algorithm {}", frontend.getName(),
-                                    provider.getClass().getSimpleName(), algorithm.getAlgorithmInfo());
-                            return frontend;
-                        }
+        if (algorithm == null) {
+            return ClasspathWebFrontend.DEFAULT;
+        }
+        WebFrontend frontend = findFrontend(providers, algorithm);
+        if (frontend == null) {
+            frontend = findFrontend(serviceLoaderProviders, algorithm);
+        }
+        return frontend != null ? frontend : ClasspathWebFrontend.DEFAULT;
+    }
+
+    private static WebFrontend findFrontend(List<WebFrontendProvider> candidates, Algorithm algorithm) {
+        for (WebFrontendProvider provider : candidates) {
+            try {
+                if (provider.supports(algorithm)) {
+                    WebFrontend frontend = provider.getFrontend(algorithm);
+                    if (frontend != null) {
+                        logger.info("Using web frontend '{}' from {} for algorithm {}", frontend.getName(),
+                                provider.getClass().getSimpleName(), algorithm.getAlgorithmInfo());
+                        return frontend;
                     }
-                } catch (Exception e) {
-                    logger.error("WebFrontendProvider {} failed for algorithm {} -> skipping",
-                            provider.getClass().getSimpleName(), algorithm.getAlgorithmInfo(), e);
                 }
+            } catch (Exception e) {
+                logger.error("WebFrontendProvider {} failed for algorithm {} -> skipping",
+                        provider.getClass().getSimpleName(), algorithm.getAlgorithmInfo(), e);
             }
         }
-        return ClasspathWebFrontend.DEFAULT;
+        return null;
     }
 
     private void loadServiceLoaderProviders() {
@@ -76,12 +88,18 @@ public class WebFrontendRegistry {
             if (serviceLoaderProvidersLoaded) {
                 return;
             }
-            try {
-                for (WebFrontendProvider provider : ServiceLoader.load(WebFrontendProvider.class)) {
-                    addProvider(provider);
+            Iterator<WebFrontendProvider> iterator = ServiceLoader.load(WebFrontendProvider.class).iterator();
+            while (true) {
+                try {
+                    if (!iterator.hasNext()) {
+                        break;
+                    }
+                    WebFrontendProvider provider = iterator.next();
+                    serviceLoaderProviders.add(provider);
+                    logger.info("WebFrontendProvider loaded from ServiceLoader: {}", provider.getClass().getSimpleName());
+                } catch (ServiceConfigurationError e) {
+                    logger.error("Error loading a WebFrontendProvider service -> skipping", e);
                 }
-            } catch (ServiceConfigurationError e) {
-                logger.error("Error loading WebFrontendProvider services", e);
             }
             serviceLoaderProvidersLoaded = true;
         }
