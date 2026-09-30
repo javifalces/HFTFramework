@@ -159,7 +159,7 @@ public class App {
             int uiWebPort = inputConfiguration.backtest.getUiWebPort();
             if (uiWebPort > 0) {
                 try {
-                    WebAlgorithmObserver webObserver = new WebAlgorithmObserver(uiWebPort);
+                    WebAlgorithmObserver webObserver = new WebAlgorithmObserver(uiWebPort, backtestConfiguration.getAlgorithm());
                     backtestConfiguration.getAlgorithm().register(webObserver);
                     webObserver.setProvider(AlgorithmProviderImpl.getInstanceOrCreate(backtestConfiguration.getAlgorithm()));
                     webObserver.setBacktest(true);

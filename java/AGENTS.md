@@ -74,7 +74,9 @@ Maven multi-module build. Toolchain: **Java 17**, Maven. Root reactor is `java/p
   `executables/AlgoTradingZeroMq/parameters_constant_spread.json`).
 - Live trading separates the **algorithm process** from the **market engine process**; they
   communicate over ZeroMQ ports that must match on both sides.
-- Optional Web Monitoring UI: add `"uiWebPort": <port>` to a config; Grafana/Prometheus
+- Optional Web Monitoring UI: add `"uiWebPort": <port>` to a config. The frontend can be replaced per
+  algorithm type from external libraries via `WebFrontendProvider` / `WebFrontendRegistry`
+  (default: bundled dashboard). Grafana/Prometheus
   observability is documented in `java/docs/MONITORING_DOCUMENTATION.md`.
 
 ## Build / test

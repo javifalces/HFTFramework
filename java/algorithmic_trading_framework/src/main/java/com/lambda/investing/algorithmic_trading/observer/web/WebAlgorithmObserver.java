@@ -1,6 +1,7 @@
 package com.lambda.investing.algorithmic_trading.observer.web;
 
 import com.lambda.investing.Configuration;
+import com.lambda.investing.algorithmic_trading.Algorithm;
 import com.lambda.investing.algorithmic_trading.AlgorithmObserver;
 import com.lambda.investing.algorithmic_trading.AlgorithmProvider;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.MultiAlgoPortfolioAggregator;
@@ -175,6 +176,28 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
                 + "  password: " + Configuration.WEB_UI_PASSWORD);
 
 
+    }
+
+    /**
+     * Creates and starts the web server on the given port, serving the frontend selected for the
+     * algorithm type by {@link WebFrontendRegistry} (default bundled dashboard if none matches).
+     *
+     * @param port      TCP port to listen on (e.g. 9001)
+     * @param algorithm root algorithm used to select the frontend
+     * @throws InterruptedException if the thread is interrupted while the server binds
+     */
+    public WebAlgorithmObserver(int port, Algorithm algorithm) throws InterruptedException {
+        this(port);
+        setFrontend(WebFrontendRegistry.getInstance().getFrontend(algorithm));
+    }
+
+    /**
+     * Overrides the frontend served by the web UI.
+     *
+     * @param frontend frontend to serve; {@code null} restores the default bundled dashboard
+     */
+    public void setFrontend(WebFrontend frontend) {
+        server.setFrontend(frontend);
     }
 
     /**
