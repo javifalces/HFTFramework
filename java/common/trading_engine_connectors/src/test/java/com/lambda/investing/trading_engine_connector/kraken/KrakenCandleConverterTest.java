@@ -42,7 +42,9 @@ public class KrakenCandleConverterTest {
 
         assertEquals(2, candles.size());
         Candle first = candles.get(0);
-        assertEquals(1688671260000L, first.getTimestamp());
+        assertEquals(1688671200000L, first.getTimestamp());
+        assertEquals(1688671200000L, first.getOpenTimestamp());
+        assertEquals(1688671260000L, first.getCloseTimestamp());
         assertEquals(30306.1, first.getOpen(), 1e-9);
         assertEquals(30306.2, first.getHigh(), 1e-9);
         assertEquals(30305.7, first.getLow(), 1e-9);

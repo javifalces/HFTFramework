@@ -24,10 +24,19 @@ public class Candle extends CSVable {
 	private double high, low, open, close;
 	private double highVolume, lowVolume, openVolume, closeVolume;
 	private long timestamp;
+	private long openTimestamp;
+	private long closeTimestamp;
 
 
 	public Candle(CandleType candleType, String instrumentPk, double open, double high, double low, double close,
 				  double highVolume, double lowVolume, double openVolume, double closeVolume, long timestamp) {
+		this(candleType, instrumentPk, open, high, low, close, highVolume, lowVolume, openVolume, closeVolume,
+				timestamp, timestamp, timestamp);
+	}
+
+	public Candle(CandleType candleType, String instrumentPk, double open, double high, double low, double close,
+				  double highVolume, double lowVolume, double openVolume, double closeVolume, long timestamp,
+				  long openTimestamp, long closeTimestamp) {
 		this.instrumentPk = instrumentPk;
 		this.candleType = candleType;
 		this.high = high;
@@ -39,18 +48,27 @@ public class Candle extends CSVable {
 		this.lowVolume = lowVolume;
 		this.openVolume = openVolume;
 		this.closeVolume = closeVolume;
-		this.timestamp = timestamp;
+		this.timestamp = openTimestamp;
+		this.openTimestamp = openTimestamp;
+		this.closeTimestamp = closeTimestamp;
 
 	}
 
 	public Candle(CandleType candleType, String instrumentPk, double open, double high, double low, double close, long timestamp) {
+		this(candleType, instrumentPk, open, high, low, close, timestamp, timestamp, timestamp);
+	}
+
+	public Candle(CandleType candleType, String instrumentPk, double open, double high, double low, double close,
+				  long timestamp, long openTimestamp, long closeTimestamp) {
 		this.instrumentPk = instrumentPk;
 		this.candleType = candleType;
 		this.high = high;
 		this.low = low;
 		this.open = open;
 		this.close = close;
-		this.timestamp = timestamp;
+		this.timestamp = openTimestamp;
+		this.openTimestamp = openTimestamp;
+		this.closeTimestamp = closeTimestamp;
 	}
 
 	public static StringBuilder headerCSV() {

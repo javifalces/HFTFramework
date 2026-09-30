@@ -38,6 +38,14 @@ class TestCandlesTickDb(unittest.TestCase):
             num_units=self.num_units_generated,
         )
         self.assertIsNotNone(candles_midprice_5)
+        self.assertIn('openTimestamp', candles_midprice_5.columns)
+        self.assertIn('closeTimestamp', candles_midprice_5.columns)
+        self.assertEqual(
+            candles_midprice_5['closeTimestamp'].iloc[0] - candles_midprice_5['openTimestamp'].iloc[0],
+            TestCandlesTickDb.num_units_generated * 60,
+        )
+        self.assertEqual(candles_midprice_5['date_time'].iloc[0],
+                         candles_midprice_5['openTimestamp'].iloc[0])
 
         candles_midprice_1 = self.tick.get_candles_midprice_time(
             instrument_pk=self.instrument_test,
@@ -47,6 +55,8 @@ class TestCandlesTickDb(unittest.TestCase):
             num_units=1,
         )
         self.assertIsNotNone(candles_midprice_1)
+        self.assertIn('openTimestamp', candles_midprice_1.columns)
+        self.assertIn('closeTimestamp', candles_midprice_1.columns)
 
         num_unit_generated = self.tick._try_regenerate_period_one(
             instrument_pk=self.instrument_test,

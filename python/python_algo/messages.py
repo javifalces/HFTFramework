@@ -141,6 +141,8 @@ class CandleMsg:
     high: float
     low: float
     close: float
+    open_timestamp: int = 0    # epoch ms
+    close_timestamp: int = 0   # epoch ms
     candle_type: str = ""
     open_volume: float = 0.0
     high_volume: float = 0.0
@@ -149,13 +151,17 @@ class CandleMsg:
 
     @staticmethod
     def from_dict(d: dict) -> "CandleMsg":
+        open_timestamp = int(d.get("openTimestamp", d.get("openTime", d.get("timestamp", 0))))
+        close_timestamp = int(d.get("closeTimestamp", d.get("closeTime", d.get("timestamp", open_timestamp))))
         return CandleMsg(
             instrument=d.get("instrumentPk", ""),
-            timestamp=int(d.get("timestamp", 0)),
+            timestamp=open_timestamp,
             open=float(d.get("open", 0.0)),
             high=float(d.get("high", 0.0)),
             low=float(d.get("low", 0.0)),
             close=float(d.get("close", 0.0)),
+            open_timestamp=open_timestamp,
+            close_timestamp=close_timestamp,
             candle_type=d.get("candleType", ""),
             open_volume=float(d.get("openVolume", 0.0)),
             high_volume=float(d.get("highVolume", 0.0)),

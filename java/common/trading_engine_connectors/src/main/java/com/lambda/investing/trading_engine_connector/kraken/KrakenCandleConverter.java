@@ -85,14 +85,15 @@ public class KrakenCandleConverter {
         long periodMillis = intervalMinutes * 60_000L;
         for (int i = 0; i < rawCandles.size(); i++) {
             JSONArray entry = rawCandles.getJSONArray(i);
-            long timestampMillis = entry.getLongValue(0) * 1000L + periodMillis;
+            long openTimeMillis = entry.getLongValue(0) * 1000L;
+            long closeTimeMillis = openTimeMillis + periodMillis;
             double open = entry.getDoubleValue(1);
             double high = entry.getDoubleValue(2);
             double low = entry.getDoubleValue(3);
             double close = entry.getDoubleValue(4);
             double volume = entry.getDoubleValue(6);
             candles.add(new Candle(candleType, instrumentPk, open, high, low, close, volume, volume, volume, volume,
-                    timestampMillis));
+                    openTimeMillis, openTimeMillis, closeTimeMillis));
         }
         return candles;
     }

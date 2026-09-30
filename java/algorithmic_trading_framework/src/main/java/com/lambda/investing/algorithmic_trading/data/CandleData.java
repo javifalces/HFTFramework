@@ -89,6 +89,18 @@ public class CandleData {
                             } catch (IllegalArgumentException e) {
                                 timestamp = (long) row.getDouble("date_time") * 1000L;
                             }
+                            long openTimestamp = timestamp;
+                            long closeTimestamp = timestamp;
+                            if (table.columnNames().contains("openTimestamp")) {
+                                openTimestamp = getTimeMillis(row, "openTimestamp", timestamp);
+                            } else if (table.columnNames().contains("openTime")) {
+                                openTimestamp = getTimeMillis(row, "openTime", timestamp);
+                            }
+                            if (table.columnNames().contains("closeTimestamp")) {
+                                closeTimestamp = getTimeMillis(row, "closeTimestamp", timestamp);
+                            } else if (table.columnNames().contains("closeTime")) {
+                                closeTimestamp = getTimeMillis(row, "closeTime", timestamp);
+                            }
                             Date dateTime = new Date(timestamp);
 
                             if (dateTime.before(startDate) || dateTime.after(endDate)) {
@@ -100,7 +112,9 @@ public class CandleData {
                                     row.getDouble("high"),
                                     row.getDouble("low"),
                                     row.getDouble("close"),
-                                    timestamp);
+                                    timestamp,
+                                    openTimestamp,
+                                    closeTimestamp);
                             candles.putIfAbsent(instrumentPk, new ArrayList<>());
                             candles.get(candle.getInstrumentPk()).add(candle);
                         }
@@ -113,5 +127,19 @@ public class CandleData {
         return candles;
     }
 
+    private long getTimeMillis(Row row, String columnName, long fallback) {
+        try {
+            long value = row.getLong(columnName);
+            return Math.abs(value) < 100_000_000_000L ? value * 1000L : value;
+        } catch (IllegalArgumentException e) {
+            try {
+                double value = row.getDouble(columnName);
+                long timestamp = (long) value;
+                return Math.abs(timestamp) < 100_000_000_000L ? timestamp * 1000L : timestamp;
+            } catch (IllegalArgumentException ignored) {
+                return fallback;
+            }
+        }
+    }
 
 }
