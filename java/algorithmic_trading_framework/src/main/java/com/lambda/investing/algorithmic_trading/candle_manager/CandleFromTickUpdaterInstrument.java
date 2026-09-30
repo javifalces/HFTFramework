@@ -55,6 +55,7 @@ public class CandleFromTickUpdaterInstrument {
 
     private double openPriceVolumeDepthCandle = -1.;
     private double openVolumeVolumeDepthCandle = -1.;
+    private long openTimeVolumeDepthCandle;
 
 
     private final String instrumentPk;
@@ -128,7 +129,7 @@ public class CandleFromTickUpdaterInstrument {
         assert minPriceMinuteTrade <= trade.getPrice();
 
         Candle candle = new Candle(CandleType.time_1_min, instrumentPk, openPriceMinuteTrade, maxPriceMinuteTrade,
-                minPriceMinuteTrade, trade.getPrice(), date.getTime());
+                minPriceMinuteTrade, trade.getPrice(), date.getTime(), date.getTime() - 60_000L, date.getTime());
         notifyListeners(candle);
         //		algorithmToNotify.onUpdateCandle(candle);
         lastTimestampMinuteTradeCandle = date;
@@ -159,7 +160,8 @@ public class CandleFromTickUpdaterInstrument {
         assert minPriceMinuteMid <= depth.getMidPrice();
 
         Candle candle = new Candle(CandleType.mid_time_seconds_threshold, instrumentPk, openPriceMinuteMid,
-                maxPriceMinuteMid, minPriceMinuteMid, depth.getMidPrice(), date.getTime());
+                maxPriceMinuteMid, minPriceMinuteMid, depth.getMidPrice(), date.getTime(),
+                date.getTime() - secondsThreshold * 1000L, date.getTime());
         //		algorithmToNotify.onUpdateCandle(candle);
         notifyListeners(candle);
         lastTimestampMinuteMidCandle = date;
@@ -189,7 +191,8 @@ public class CandleFromTickUpdaterInstrument {
         assert minPriceMinuteBid <= depth.getBestBid();
 
         Candle candle = new Candle(CandleType.bid_time_seconds_threshold, instrumentPk, openPriceMinuteBid,
-                maxPriceMinuteBid, minPriceMinuteBid, depth.getBestBid(), date.getTime());
+                maxPriceMinuteBid, minPriceMinuteBid, depth.getBestBid(), date.getTime(),
+                date.getTime() - secondsThreshold * 1000L, date.getTime());
 
         //		algorithmToNotify.onUpdateCandle(candle);
         notifyListeners(candle);
@@ -220,7 +223,8 @@ public class CandleFromTickUpdaterInstrument {
         assert minPriceMinuteAsk <= depth.getBestAsk();
 
         Candle candle = new Candle(CandleType.ask_time_seconds_threshold, instrumentPk, openPriceMinuteAsk,
-                maxPriceMinuteAsk, minPriceMinuteAsk, depth.getBestAsk(), date.getTime());
+                maxPriceMinuteAsk, minPriceMinuteAsk, depth.getBestAsk(), date.getTime(),
+                date.getTime() - secondsThreshold * 1000L, date.getTime());
 
         //		algorithmToNotify.onUpdateCandle(candle);
         notifyListeners(candle);
@@ -240,6 +244,7 @@ public class CandleFromTickUpdaterInstrument {
             minPriceVolumeDepthCandle = depth.getMidPrice();
 
             openVolumeVolumeDepthCandle = depth.getTotalVolume();
+            openTimeVolumeDepthCandle = depth.getTimestamp();
             maxVolumeDepthCandle = depth.getTotalVolume();
             minVolumeDepthCandle = depth.getTotalVolume();
 
@@ -267,12 +272,14 @@ public class CandleFromTickUpdaterInstrument {
 
         Candle candle = new Candle(CandleType.volume_threshold_depth, instrumentPk, openPriceVolumeDepthCandle,
                 maxPriceVolumeDepthCandle, minPriceVolumeDepthCandle, depth.getMidPrice(), maxVolumeDepthCandle,
-                minVolumeDepthCandle, openVolumeVolumeDepthCandle, depth.getTotalVolume(), depth.getTimestamp());
+                minVolumeDepthCandle, openVolumeVolumeDepthCandle, depth.getTotalVolume(), depth.getTimestamp(),
+                openTimeVolumeDepthCandle, depth.getTimestamp());
 
         //		algorithmToNotify.onUpdateCandle(candle);
         notifyListeners(candle);
         lastCumVolumeCandle = 0;
         openVolumeVolumeDepthCandle = depth.getTotalVolume();
+        openTimeVolumeDepthCandle = depth.getTimestamp();
         maxVolumeDepthCandle = depth.getTotalVolume();
         minVolumeDepthCandle = depth.getTotalVolume();
 
@@ -302,7 +309,7 @@ public class CandleFromTickUpdaterInstrument {
         assert minPriceHourTrade <= trade.getPrice();
 
         Candle candle = new Candle(CandleType.time_1_hour, instrumentPk, openPriceHourTrade, maxPriceHourTrade,
-                minPriceHourTrade, trade.getPrice(), date.getTime());
+                minPriceHourTrade, trade.getPrice(), date.getTime(), date.getTime() - 3_600_000L, date.getTime());
 
         //		algorithmToNotify.onUpdateCandle(candle);
         notifyListeners(candle);
