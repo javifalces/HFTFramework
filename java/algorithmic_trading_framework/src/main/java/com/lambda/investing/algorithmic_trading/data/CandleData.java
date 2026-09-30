@@ -89,13 +89,17 @@ public class CandleData {
                             } catch (IllegalArgumentException e) {
                                 timestamp = (long) row.getDouble("date_time") * 1000L;
                             }
-                            long openTime = timestamp;
-                            long closeTime = timestamp;
-                            if (table.columnNames().contains("openTime")) {
-                                openTime = getTimeMillis(row, "openTime", timestamp);
+                            long openTimestamp = timestamp;
+                            long closeTimestamp = timestamp;
+                            if (table.columnNames().contains("openTimestamp")) {
+                                openTimestamp = getTimeMillis(row, "openTimestamp", timestamp);
+                            } else if (table.columnNames().contains("openTime")) {
+                                openTimestamp = getTimeMillis(row, "openTime", timestamp);
                             }
-                            if (table.columnNames().contains("closeTime")) {
-                                closeTime = getTimeMillis(row, "closeTime", timestamp);
+                            if (table.columnNames().contains("closeTimestamp")) {
+                                closeTimestamp = getTimeMillis(row, "closeTimestamp", timestamp);
+                            } else if (table.columnNames().contains("closeTime")) {
+                                closeTimestamp = getTimeMillis(row, "closeTime", timestamp);
                             }
                             Date dateTime = new Date(timestamp);
 
@@ -109,8 +113,8 @@ public class CandleData {
                                     row.getDouble("low"),
                                     row.getDouble("close"),
                                     timestamp,
-                                    openTime,
-                                    closeTime);
+                                    openTimestamp,
+                                    closeTimestamp);
                             candles.putIfAbsent(instrumentPk, new ArrayList<>());
                             candles.get(candle.getInstrumentPk()).add(candle);
                         }

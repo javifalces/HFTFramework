@@ -10,24 +10,40 @@ from utils.pandas_utils.dataframe_utils import reduce_memory_usage
 
 def _add_candle_times(df: pd.DataFrame, period_seconds: int = None) -> pd.DataFrame:
     if df.empty:
-        df['openTime'] = pd.Series(index=df.index, dtype='int64')
-        df['closeTime'] = pd.Series(index=df.index, dtype='int64')
+        df['openTimestamp'] = pd.Series(index=df.index, dtype='int64')
+        df['closeTimestamp'] = pd.Series(index=df.index, dtype='int64')
         return df
 
-    close_times = df['closeTime'] if 'closeTime' in df.columns else (
+    if 'openTimestamp' not in df.columns and 'openTime' in df.columns:
+        df['openTimestamp'] = df['openTime']
+    if 'closeTimestamp' not in df.columns and 'closeTime' in df.columns:
+        df['closeTimestamp'] = df['closeTime']
+    close_timestamps = df['closeTimestamp'] if 'closeTimestamp' in df.columns else (
         df['date_time'] if 'date_time' in df.columns else pd.Series(df.index, index=df.index)
     )
-    if 'openTime' not in df.columns:
+    if 'openTimestamp' not in df.columns:
         if period_seconds is not None:
-            if pd.api.types.is_datetime64_any_dtype(close_times):
-                open_times = close_times - pd.to_timedelta(period_seconds, unit='s')
+            if pd.api.types.is_datetime64_any_dtype(close_timestamps):
+                open_timestamps = close_timestamps - pd.to_timedelta(period_seconds, unit='s')
             else:
-                open_times = close_times - period_seconds
+                open_timestamps = close_timestamps - period_seconds
         else:
-            open_times = close_times.shift(1).fillna(close_times.iloc[0])
-        df['openTime'] = open_times
-    if 'closeTime' not in df.columns:
-        df['closeTime'] = close_times
+            open_timestamps = close_timestamps.shift(1).fillna(close_timestamps.iloc[0])
+        df['openTimestamp'] = open_timestamps
+    if 'closeTimestamp' not in df.columns:
+        df['closeTimestamp'] = close_timestamps
+    if 'date_time' in df.columns:
+        df['date_time'] = df['openTimestamp']
+    if 'timestamp' in df.columns:
+        df['timestamp'] = df['openTimestamp']
+    if df.index.name == 'date_time':
+        df.index = pd.Index(df['openTimestamp'], name='date_time')
+    elif df.index.name == 'datetime':
+        open_index = df['openTimestamp']
+        if not pd.api.types.is_datetime64_any_dtype(open_index):
+            open_index = pd.to_datetime(open_index, unit='s')
+        df.index = pd.DatetimeIndex(open_index, name='datetime')
+    df.drop(columns=['openTime', 'closeTime'], errors='ignore', inplace=True)
     return df
 
 
@@ -68,8 +84,8 @@ def generate_candle_time_legacy(
     output_df['cum_ticks'] = output_df['cum_ticks'].fillna(0.0)
 
     # set datetime as timestamp[ns]
-    output_df['datetime'] = pd.to_datetime(output_df['date_time'] * 1000000000, unit='ns')
     output_df = _add_candle_times(output_df, _resolution_seconds(resolution, num_units))
+    output_df['datetime'] = pd.to_datetime(output_df['date_time'] * 1000000000, unit='ns')
     # if resolution == 'D':
     #     output_df['datetime'] = output_df['datetime'] - datetime.timedelta(days=num_units)
 
@@ -169,10 +185,10 @@ def generate_candle_time(
     out_df['tick_num'] = out_df['cum_ticks'].fillna(0.0)
     out_df['tick_num'] = out_df['tick_num'].cumsum()
 
-    out_df['datetime'] = pd.to_datetime(out_df['date_time'])
     out_df['date_time'] = pd.to_numeric(out_df['date_time']) / 1E9
     out_df['date_time'] = out_df['date_time'].astype('int64', copy=False, errors='ignore')
     out_df = _add_candle_times(out_df, _resolution_seconds(resolution, num_units))
+    out_df['datetime'] = pd.to_datetime(out_df['date_time'] * 1E9)
     out_df.set_index('datetime', inplace=True)
     out_df.sort_index(inplace=True)
     out_df = reduce_memory_usage(out_df)  # reduce memory size before processing

@@ -61,9 +61,9 @@ class TimeCandlePublisher(BaseCandlePublisher):
 
             publish_dict = {
                 "instrument": self.instrument_pk,
-                "timestamp": date_to_send.timestamp() * 1e3,  # need to have 13 digits
-                "openTime": date_to_send.timestamp() * 1e3 - self.seconds_threshold * 1e3,
-                "closeTime": date_to_send.timestamp() * 1e3,
+                "timestamp": date_to_send.timestamp() * 1e3 - self.seconds_threshold * 1e3,
+                "openTimestamp": date_to_send.timestamp() * 1e3 - self.seconds_threshold * 1e3,
+                "closeTimestamp": date_to_send.timestamp() * 1e3,
                 "open": self.open_price,
                 "close": self.close_price,
                 "high": self.high_price,

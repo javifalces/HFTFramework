@@ -443,8 +443,9 @@ class TickDB:
             df = pd.DataFrame(index=resampled.index, columns=unit_candles.columns)
             df['date_time'] = resampled['date_time']['open']  # time must be closing candle time
             period_seconds = {'D': 86400, 'H': 3600, 'MIN': 60, 'S': 1}[resolution] * num_units
-            df['openTime'] = df['date_time'] - period_seconds
-            df['closeTime'] = df['date_time']
+            df['openTimestamp'] = df['date_time'] - period_seconds
+            df['closeTimestamp'] = df['date_time']
+            df['date_time'] = df['openTimestamp']
 
             df['open'] = resampled['open']['open']
             df['close'] = resampled['close']['close']
@@ -457,7 +458,7 @@ class TickDB:
             df['cum_ticks'] = agg['cum_ticks']
             df['cum_dollar_value'] = agg['cum_dollar_value']
             df.reset_index(inplace=True)
-            df['datetime'] = df['datetime'].shift(-1).ffill()
+            df['datetime'] = pd.to_datetime(df['openTimestamp'] * 1E9)
             df = df.set_index('datetime')
             # drop duplicates index and keep first
             df = df[~df.index.duplicated(keep='first')].sort_index()
@@ -672,7 +673,7 @@ class TickDB:
             )
             all_columns = ['date_time', 'tick_num', 'open', 'high', 'low', 'close', 'volume',
                            'cum_buy_volume', 'cum_ticks', 'cum_dollar_value', 'date',
-                           'openTime', 'closeTime']
+                           'openTimestamp', 'closeTimestamp', 'openTime', 'closeTime']
             all_columns = [column for column in all_columns if column in dataset.schema.names]
             table = dataset.read(columns=all_columns)
             df = table.to_pandas()

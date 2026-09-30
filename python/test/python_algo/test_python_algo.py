@@ -233,8 +233,8 @@ class TestPythonStrategyDispatch(unittest.TestCase):
         candle_data = {
             "instrumentPk": "btcusdt_binance",
             "timestamp": 1000,
-            "openTime": 500,
-            "closeTime": 1000,
+            "openTimestamp": 500,
+            "closeTimestamp": 1000,
             "open": 99.0,
             "high": 102.0,
             "low": 98.0,
@@ -244,13 +244,21 @@ class TestPythonStrategyDispatch(unittest.TestCase):
         strategy.step()
         self.assertEqual(len(strategy.candles), 1)
         self.assertAlmostEqual(strategy.candles[0].close, 101.0)
-        self.assertEqual(strategy.candles[0].open_time, 500)
-        self.assertEqual(strategy.candles[0].close_time, 1000)
+        self.assertEqual(strategy.candles[0].timestamp, 500)
+        self.assertEqual(strategy.candles[0].open_timestamp, 500)
+        self.assertEqual(strategy.candles[0].close_timestamp, 1000)
 
     def test_dispatch_candle_defaults_times_for_legacy_payload(self):
         candle = CandleMsg.from_dict({"timestamp": 1000})
-        self.assertEqual(candle.open_time, 1000)
-        self.assertEqual(candle.close_time, 1000)
+        self.assertEqual(candle.timestamp, 1000)
+        self.assertEqual(candle.open_timestamp, 1000)
+        self.assertEqual(candle.close_timestamp, 1000)
+
+    def test_dispatch_candle_accepts_previous_boundary_names(self):
+        candle = CandleMsg.from_dict({"timestamp": 1000, "openTime": 500, "closeTime": 1000})
+        self.assertEqual(candle.timestamp, 500)
+        self.assertEqual(candle.open_timestamp, 500)
+        self.assertEqual(candle.close_timestamp, 1000)
 
     def test_dispatch_execution_report(self):
         strategy, transport = self._make_strategy()

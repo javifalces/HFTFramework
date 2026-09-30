@@ -93,7 +93,7 @@ public class KrakenCandleConverter {
             double close = entry.getDoubleValue(4);
             double volume = entry.getDoubleValue(6);
             candles.add(new Candle(candleType, instrumentPk, open, high, low, close, volume, volume, volume, volume,
-                    closeTimeMillis, openTimeMillis, closeTimeMillis));
+                    openTimeMillis, openTimeMillis, closeTimeMillis));
         }
         return candles;
     }

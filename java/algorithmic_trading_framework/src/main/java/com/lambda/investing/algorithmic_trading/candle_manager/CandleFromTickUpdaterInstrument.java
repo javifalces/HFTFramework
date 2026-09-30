@@ -55,7 +55,7 @@ public class CandleFromTickUpdaterInstrument {
 
     private double openPriceVolumeDepthCandle = -1.;
     private double openVolumeVolumeDepthCandle = -1.;
-    private long openTimeVolumeDepthCandle;
+    private long openTimestampVolumeDepthCandle;
 
 
     private final String instrumentPk;
@@ -244,7 +244,7 @@ public class CandleFromTickUpdaterInstrument {
             minPriceVolumeDepthCandle = depth.getMidPrice();
 
             openVolumeVolumeDepthCandle = depth.getTotalVolume();
-            openTimeVolumeDepthCandle = depth.getTimestamp();
+            openTimestampVolumeDepthCandle = depth.getTimestamp();
             maxVolumeDepthCandle = depth.getTotalVolume();
             minVolumeDepthCandle = depth.getTotalVolume();
 
@@ -272,14 +272,14 @@ public class CandleFromTickUpdaterInstrument {
 
         Candle candle = new Candle(CandleType.volume_threshold_depth, instrumentPk, openPriceVolumeDepthCandle,
                 maxPriceVolumeDepthCandle, minPriceVolumeDepthCandle, depth.getMidPrice(), maxVolumeDepthCandle,
-                minVolumeDepthCandle, openVolumeVolumeDepthCandle, depth.getTotalVolume(), depth.getTimestamp(),
-                openTimeVolumeDepthCandle, depth.getTimestamp());
+                minVolumeDepthCandle, openVolumeVolumeDepthCandle, depth.getTotalVolume(), openTimestampVolumeDepthCandle,
+                openTimestampVolumeDepthCandle, depth.getTimestamp());
 
         //		algorithmToNotify.onUpdateCandle(candle);
         notifyListeners(candle);
         lastCumVolumeCandle = 0;
         openVolumeVolumeDepthCandle = depth.getTotalVolume();
-        openTimeVolumeDepthCandle = depth.getTimestamp();
+        openTimestampVolumeDepthCandle = depth.getTimestamp();
         maxVolumeDepthCandle = depth.getTotalVolume();
         minVolumeDepthCandle = depth.getTotalVolume();
 
