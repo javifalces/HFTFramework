@@ -374,6 +374,11 @@ class TickDB:
 
             day_to_persist = next_day
 
+    def _ensure_candle_times(self, df: pd.DataFrame, period_seconds: int = None) -> pd.DataFrame:
+        from database.candle_generation import _add_candle_times
+
+        return _add_candle_times(df, period_seconds)
+
     def _check_all_candles_exist(
             self,
             df: pd.DataFrame,
@@ -666,7 +671,9 @@ class TickDB:
                 validate_schema=False
             )
             all_columns = ['date_time', 'tick_num', 'open', 'high', 'low', 'close', 'volume',
-                           'cum_buy_volume', 'cum_ticks', 'cum_dollar_value', 'date']
+                           'cum_buy_volume', 'cum_ticks', 'cum_dollar_value', 'date',
+                           'openTime', 'closeTime']
+            all_columns = [column for column in all_columns if column in dataset.schema.names]
             table = dataset.read(columns=all_columns)
             df = table.to_pandas()
             df['date_time'] = df['date_time'].astype('int64')
@@ -815,7 +822,9 @@ class TickDB:
         df.sort_index(inplace=True)
         df = df[start_date:end_date]
 
-        return df
+        return self._ensure_candle_times(
+            df, {'D': 86400, 'H': 3600, 'MIN': 60, 'S': 1}[resolution] * num_units
+        )
 
     def _get_manual_pandas(
             self,
@@ -945,7 +954,9 @@ class TickDB:
             )
         df.index = pd.to_datetime(df.index)
         df.sort_index(inplace=True)
-        return df
+        return self._ensure_candle_times(
+            df, {'D': 86400, 'H': 3600, 'MIN': 60, 'S': 1}[resolution] * num_units
+        )
 
     def get_candles_tick(
             self,
@@ -1010,7 +1021,7 @@ class TickDB:
                 is_error_call=True,
             )
         df = df[start_date:end_date]
-        return df
+        return self._ensure_candle_times(df)
 
     def get_candles_volume(
             self,
@@ -1075,7 +1086,7 @@ class TickDB:
                 is_error_call=True,
             )
         df = df[start_date:end_date]
-        return df
+        return self._ensure_candle_times(df)
 
     def get_candles_dollar_value(
             self,
@@ -1139,7 +1150,7 @@ class TickDB:
                 is_error_call=True,
             )
         df = df[start_date:end_date]
-        return df
+        return self._ensure_candle_times(df)
 
 
 if __name__ == '__main__':

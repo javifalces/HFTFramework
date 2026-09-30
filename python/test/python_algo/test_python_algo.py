@@ -233,6 +233,8 @@ class TestPythonStrategyDispatch(unittest.TestCase):
         candle_data = {
             "instrumentPk": "btcusdt_binance",
             "timestamp": 1000,
+            "openTime": 500,
+            "closeTime": 1000,
             "open": 99.0,
             "high": 102.0,
             "low": 98.0,
@@ -242,6 +244,8 @@ class TestPythonStrategyDispatch(unittest.TestCase):
         strategy.step()
         self.assertEqual(len(strategy.candles), 1)
         self.assertAlmostEqual(strategy.candles[0].close, 101.0)
+        self.assertEqual(strategy.candles[0].open_time, 500)
+        self.assertEqual(strategy.candles[0].close_time, 1000)
 
     def test_dispatch_execution_report(self):
         strategy, transport = self._make_strategy()

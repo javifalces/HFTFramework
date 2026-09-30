@@ -9,16 +9,25 @@ from utils.pandas_utils.dataframe_utils import reduce_memory_usage
 
 
 def _add_candle_times(df: pd.DataFrame, period_seconds: int = None) -> pd.DataFrame:
-    close_times = df['date_time'] if 'date_time' in df.columns else pd.Series(df.index, index=df.index)
-    if period_seconds is not None:
-        if pd.api.types.is_datetime64_any_dtype(close_times):
-            open_times = close_times - pd.to_timedelta(period_seconds, unit='s')
+    if df.empty:
+        df['openTime'] = pd.Series(index=df.index, dtype='int64')
+        df['closeTime'] = pd.Series(index=df.index, dtype='int64')
+        return df
+
+    close_times = df['closeTime'] if 'closeTime' in df.columns else (
+        df['date_time'] if 'date_time' in df.columns else pd.Series(df.index, index=df.index)
+    )
+    if 'openTime' not in df.columns:
+        if period_seconds is not None:
+            if pd.api.types.is_datetime64_any_dtype(close_times):
+                open_times = close_times - pd.to_timedelta(period_seconds, unit='s')
+            else:
+                open_times = close_times - period_seconds
         else:
-            open_times = close_times - period_seconds
-    else:
-        open_times = close_times.shift(1).fillna(close_times.iloc[0])
-    df['openTime'] = open_times
-    df['closeTime'] = close_times
+            open_times = close_times.shift(1).fillna(close_times.iloc[0])
+        df['openTime'] = open_times
+    if 'closeTime' not in df.columns:
+        df['closeTime'] = close_times
     return df
 
 
