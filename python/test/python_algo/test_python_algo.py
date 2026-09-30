@@ -247,6 +247,11 @@ class TestPythonStrategyDispatch(unittest.TestCase):
         self.assertEqual(strategy.candles[0].open_time, 500)
         self.assertEqual(strategy.candles[0].close_time, 1000)
 
+    def test_dispatch_candle_defaults_times_for_legacy_payload(self):
+        candle = CandleMsg.from_dict({"timestamp": 1000})
+        self.assertEqual(candle.open_time, 1000)
+        self.assertEqual(candle.close_time, 1000)
+
     def test_dispatch_execution_report(self):
         strategy, transport = self._make_strategy()
         er_data = {
