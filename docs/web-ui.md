@@ -213,3 +213,45 @@ Java process
     ├─ onUpdateParams()         → broadcasts PARAMS
     └─ onCustomColumns()        → broadcasts CUSTOM_COLUMN
 ```
+
+---
+
+## Custom Frontend per Algorithm Type
+
+By default the bundled dashboard (`dashboard.html`, `css/`, `js/` in `algorithmic_trading_framework`) is served.
+A different frontend can be served depending on the algorithm type, packaged in any external library
+(same approach as `AlgorithmProvider` / `AlgorithmCreationUtils` for trading algorithms).
+
+1. Put the frontend in the library resources, e.g. `src/main/resources/web/my_algo/dashboard.html`
+   (optionally `web/my_algo/css/...`, `web/my_algo/js/...`). Assets not found there fall back to the default
+   `css/` and `js/` files, so the default ones can be reused.
+2. Implement `WebFrontendProvider` and register it in `WebFrontendRegistry`:
+
+```java
+@Component
+public class MyWebFrontendProvider implements WebFrontendProvider {
+    private final WebFrontend frontend = new ClasspathWebFrontend("myAlgo", "web/my_algo");
+
+    @PostConstruct
+    public void init() {
+        WebFrontendRegistry.getInstance().addProvider(this);
+    }
+
+    @Override
+    public boolean supports(Algorithm algorithm) {
+        return algorithm instanceof MyAlgorithm; // or algorithm.getAlgorithmInfo().startsWith("MyAlgo")
+    }
+
+    @Override
+    public WebFrontend getFrontend(Algorithm algorithm) {
+        return frontend;
+    }
+}
+```
+
+   Without Spring, register it through `ServiceLoader` by listing the class in
+   `META-INF/services/com.lambda.investing.algorithmic_trading.observer.web.WebFrontendProvider`.
+
+The backtest and live-trading executables create the observer with
+`new WebAlgorithmObserver(uiWebPort, algorithm)`, which picks the first matching provider or the default frontend.
+A frontend can also be forced with `WebAlgorithmObserver.setFrontend(...)`.

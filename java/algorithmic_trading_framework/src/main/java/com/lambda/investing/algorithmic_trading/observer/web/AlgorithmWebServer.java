@@ -16,12 +16,9 @@ import io.netty.util.concurrent.GlobalEventExecutor;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.NetworkInterface;
-import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Set;
 import java.util.UUID;
@@ -122,6 +119,10 @@ public class AlgorithmWebServer {
      * Optional AlgorithmProvider for manual start/stop from the web UI.
      */
     private volatile AlgorithmProvider algorithmProvider = null;
+    /**
+     * Frontend served on {@code /} and for static assets; defaults to the bundled dashboard.
+     */
+    private volatile WebFrontend frontend = ClasspathWebFrontend.DEFAULT;
     /**
      * Active session tokens – cleared when credentials are changed.
      */
@@ -382,6 +383,20 @@ public class AlgorithmWebServer {
         this.algorithmProvider = provider;
     }
 
+    /**
+     * Sets the frontend (dashboard HTML + static assets) served by this server.
+     *
+     * @param frontend the frontend; {@code null} restores {@link ClasspathWebFrontend#DEFAULT}
+     */
+    public void setFrontend(WebFrontend frontend) {
+        this.frontend = (frontend == null) ? ClasspathWebFrontend.DEFAULT : frontend;
+        logger.info("AlgorithmWebServer on port {} serving frontend '{}'", port, this.frontend.getName());
+    }
+
+    public WebFrontend getFrontend() {
+        return frontend;
+    }
+
     // -----------------------------------------------------------------------
     // Netty channel handler
     // -----------------------------------------------------------------------
@@ -476,7 +491,7 @@ public class AlgorithmWebServer {
             FullHttpResponse response;
             if ("/".equals(uri) || "/index.html".equals(uri)) {
                 response = new DefaultFullHttpResponse(HTTP_1_1, OK,
-                        Unpooled.copiedBuffer(DASHBOARD_HTML, CharsetUtil.UTF_8));
+                        Unpooled.copiedBuffer(frontend.getDashboardHtml(), CharsetUtil.UTF_8));
                 response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
             } else if ("/api/mode".equals(uri)) {
                 // Unauthenticated – returns the current operating mode so the frontend
@@ -609,7 +624,8 @@ public class AlgorithmWebServer {
         }
 
         /**
-         * Attempts to load a static file (CSS, JS) from the classpath.
+         * Attempts to load a static file (CSS, JS) from the current {@link WebFrontend},
+         * falling back to the default bundled assets.
          * Only paths under {@code /css/} and {@code /js/} are permitted.
          * Path traversal ({@code ..}) is rejected.
          *
@@ -620,19 +636,18 @@ public class AlgorithmWebServer {
             if (uri == null || uri.isEmpty() || uri.contains("..")) return null;
             if (!uri.startsWith("/css/") && !uri.startsWith("/js/")) return null;
             String resource = uri.substring(1); // strip leading '/'
-            try (InputStream is = AlgorithmWebServer.class.getClassLoader().getResourceAsStream(resource)) {
-                if (is == null) return null;
-                byte[] bytes = is.readAllBytes();
-                String contentType = uri.endsWith(".css") ? "text/css; charset=UTF-8"
-                        : uri.endsWith(".js") ? "application/javascript; charset=UTF-8"
-                          : "application/octet-stream";
-                FullHttpResponse res = new DefaultFullHttpResponse(HTTP_1_1, OK, Unpooled.wrappedBuffer(bytes));
-                res.headers().set(HttpHeaderNames.CONTENT_TYPE, contentType);
-                return res;
-            } catch (IOException e) {
-                logger.debug("Could not serve static asset {}: {}", uri, e.getMessage());
-                return null;
+            WebFrontend currentFrontend = frontend;
+            byte[] bytes = currentFrontend.getStaticAsset(resource);
+            if (bytes == null && currentFrontend != ClasspathWebFrontend.DEFAULT) {
+                bytes = ClasspathWebFrontend.DEFAULT.getStaticAsset(resource);
             }
+            if (bytes == null) return null;
+            String contentType = uri.endsWith(".css") ? "text/css; charset=UTF-8"
+                    : uri.endsWith(".js") ? "application/javascript; charset=UTF-8"
+                      : "application/octet-stream";
+            FullHttpResponse res = new DefaultFullHttpResponse(HTTP_1_1, OK, Unpooled.wrappedBuffer(bytes));
+            res.headers().set(HttpHeaderNames.CONTENT_TYPE, contentType);
+            return res;
         }
 
         private void handlePostRequest(ChannelHandlerContext ctx, FullHttpRequest req, String uri) {
@@ -980,24 +995,6 @@ public class AlgorithmWebServer {
         @Override
         public void channelInactive(ChannelHandlerContext ctx) {
             wsChannels.remove(ctx.channel());
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // HTML dashboard loaded from classpath resource dashboard.html
-    // -----------------------------------------------------------------------
-
-    static final String DASHBOARD_HTML = loadDashboardHtml();
-
-    private static String loadDashboardHtml() {
-        try (InputStream is = AlgorithmWebServer.class.getClassLoader()
-                .getResourceAsStream("dashboard.html")) {
-            if (is == null) {
-                throw new IllegalStateException("dashboard.html not found in classpath");
-            }
-            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to load dashboard.html", e);
         }
     }
 

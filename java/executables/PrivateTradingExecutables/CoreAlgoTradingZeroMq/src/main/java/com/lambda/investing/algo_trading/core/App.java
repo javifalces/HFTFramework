@@ -435,7 +435,7 @@ public class App {
         int uiWebPort = zeroMqTradingConfiguration.getUiWebPort();
         if (uiWebPort > 0) {
             try {
-                WebAlgorithmObserver webObserver = new WebAlgorithmObserver(uiWebPort);
+                WebAlgorithmObserver webObserver = new WebAlgorithmObserver(uiWebPort, algorithm);
                 algorithm.register(webObserver);
                 webObserver.setProvider(AlgorithmProviderImpl.getInstanceOrCreate(algorithm));//add provider
                 webObserver.setPaperTrading(zeroMqTradingConfiguration.isPaperTrading());
