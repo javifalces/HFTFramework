@@ -432,7 +432,7 @@ class TickDB:
         if unit_candles is not None and len(unit_candles) > 0:
             resolution_used = resolution.lower()
             # group unit_candles by num_units take close price
-            resampled = unit_candles[['close', 'low', 'high', 'open', 'date_time']].shift(-1).resample(
+            resampled = unit_candles[['close', 'low', 'high', 'open', 'date_time']].resample(
                 f"{num_units}{resolution_used}").ohlc()
             agg = unit_candles[
                 ['tick_num', 'volume', 'cum_buy_volume', 'cum_ticks', 'cum_dollar_value']].resample(
@@ -441,11 +441,10 @@ class TickDB:
                 f"{num_units}{resolution_used}").last()
 
             df = pd.DataFrame(index=resampled.index, columns=unit_candles.columns)
-            df['date_time'] = resampled['date_time']['open']  # time must be closing candle time
+            df['date_time'] = resampled['date_time']['open']
             period_seconds = {'D': 86400, 'H': 3600, 'MIN': 60, 'S': 1}[resolution] * num_units
-            df['openTimestamp'] = df['date_time'] - period_seconds
-            df['closeTimestamp'] = df['date_time']
-            df['date_time'] = df['openTimestamp']
+            df['openTimestamp'] = df['date_time']
+            df['closeTimestamp'] = df['date_time'] + period_seconds
 
             df['open'] = resampled['open']['open']
             df['close'] = resampled['close']['close']
