@@ -70,5 +70,7 @@ class TestCandlesTickDb(unittest.TestCase):
         self.assertEqual(len(num_unit_generated), len(candles_midprice_5))
         self.assertEqual(len(num_unit_generated), len(candles_midprice_1) // 5)
 
-        sum_diff = (candles_midprice_1['close'] - num_unit_generated['close']).sum()
+        one_minute_closes = candles_midprice_1.set_index('closeTimestamp')['close']
+        regenerated_closes = num_unit_generated.set_index('closeTimestamp')['close']
+        sum_diff = (one_minute_closes - regenerated_closes).sum()
         self.assertTrue(sum_diff == 0)
