@@ -16,7 +16,9 @@ import com.lambda.investing.trading_engine_connector.TradingEngineConnector;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 public abstract class AbstractExecutor implements Executor, ExecutionReportListener, MarketDataListener {
     protected static Logger logger = LogManager.getLogger(AbstractExecutor.class);
@@ -31,6 +33,12 @@ public abstract class AbstractExecutor implements Executor, ExecutionReportListe
     protected Depth lastDepth;
     protected TimeServiceIfc timeService;
     protected ExecutorStatistics executorStatistics;
+
+    /**
+     * All {@link ExecutorStatistics.ExecutionOutcome}s captured so far via {@link #notifyExecutionFinished(ExecutionReport)},
+     * kept so aggregated (cumulative) custom columns can be reported in addition to the per-execution ones.
+     */
+    protected final List<ExecutorStatistics.ExecutionOutcome> executionOutcomes = new ArrayList<>();
 
     /**
      * Owning algorithm, wired via {@link #setAlgorithm(Algorithm)}. May stay {@code null} (e.g. in unit
@@ -54,6 +62,16 @@ public abstract class AbstractExecutor implements Executor, ExecutionReportListe
     @Override
     public void setAlgorithm(Algorithm algorithm) {
         this.algorithm = algorithm;
+    }
+
+    /**
+     * Clears the per-day captured {@link #executionOutcomes}, so aggregated custom columns
+     * ({@code timeToExecuteMsAgg}, {@code slippageCostAgg}, {@code feesCostAgg}) start fresh on new day.
+     * Subclasses overriding this should call {@code super.reset()}.
+     */
+    @Override
+    public void reset() {
+        executionOutcomes.clear();
     }
 
     /**
@@ -107,12 +125,42 @@ public abstract class AbstractExecutor implements Executor, ExecutionReportListe
     /**
      * Notifies the {@link ExecutorStatistics} that an execution has finished.
      * Subclasses should call this when they receive a terminal execution report (completely filled or rejected).
+     * <p>
+     * On a successful fill, the resulting {@link ExecutorStatistics.ExecutionOutcome} is captured in
+     * {@link #executionOutcomes} and published as both per-execution ({@code timeToExecuteMs},
+     * {@code slippageCost}, {@code feesCost}) and cumulative-aggregated ({@code timeToExecuteMsAgg},
+     * {@code slippageCostAgg}, {@code feesCostAgg}) custom columns on the owning {@link #algorithm} (if any),
+     * so both the latest fill and the running totals across all executions can be followed in live
+     * GUI/dashboard/Prometheus reporting.
      *
      * @param executionReport the terminal execution report
      */
     protected void notifyExecutionFinished(ExecutionReport executionReport) {
         double midPrice = (lastDepth != null) ? lastDepth.getMidPrice() : Double.NaN;
-        executorStatistics.onExecutionFinished(timeService.getCurrentTimestamp(), executionReport, midPrice);
+        ExecutorStatistics.ExecutionOutcome outcome = executorStatistics.onExecutionFinished(timeService.getCurrentTimestamp(), executionReport, midPrice);
+        if (outcome != null) {
+            executionOutcomes.add(outcome);
+            if (algorithm != null) {
+                String instrumentPk = instrument.getPrimaryKey();
+
+
+                long timeToExecuteMsAgg = 0L;
+                double slippageCostAgg = 0.0;
+                double feesCostAgg = 0.0;
+                for (ExecutorStatistics.ExecutionOutcome capturedOutcome : executionOutcomes) {
+                    timeToExecuteMsAgg += capturedOutcome.getTimeToExecuteMs();
+                    slippageCostAgg += capturedOutcome.getSlippageCost();
+                    feesCostAgg += capturedOutcome.getFeesCost();
+                }
+                algorithm.addCurrentCustomColumn(instrumentPk, "timeToExecuteMsAgg", (double) timeToExecuteMsAgg);
+                algorithm.addCurrentCustomColumn(instrumentPk, "slippageCostAgg", slippageCostAgg);
+                algorithm.addCurrentCustomColumn(instrumentPk, "feesCostAgg", feesCostAgg);
+                double openPnl = algorithm.getPortfolioManager().getPortfolioSnapshot().getUnrealizedPnl();
+                double idealPnl = openPnl - slippageCostAgg - feesCostAgg;
+                algorithm.addCurrentCustomColumn(instrumentPk, "idealPnl", idealPnl);
+
+            }
+        }
     }
 
     @Override

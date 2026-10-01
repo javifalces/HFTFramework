@@ -22,4 +22,10 @@ public interface Executor {
      */
     void setAlgorithm(Algorithm algorithm);
 
+    /**
+     * Called when a new trading day starts (see {@link Algorithm#resetAlgorithm()}), so executors can clear
+     * any per-day accumulated state (e.g. captured execution outcomes used for aggregated custom columns).
+     */
+    void reset();
+
 }

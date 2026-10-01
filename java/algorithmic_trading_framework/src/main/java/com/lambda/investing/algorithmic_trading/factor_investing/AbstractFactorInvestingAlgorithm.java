@@ -172,6 +172,20 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
         }
     }
 
+    /**
+     * On top of the base per-day reset, also resets all {@link #executorsPerInstrument}
+     * (e.g. clears their captured execution outcomes used for aggregated custom columns).
+     */
+    @Override
+    public void resetAlgorithm() {
+        super.resetAlgorithm();
+        if (executorsPerInstrument != null) {
+            for (Executor executor : executorsPerInstrument.values()) {
+                executor.reset();
+            }
+        }
+    }
+
     protected void setInstruments() {
         List<Instrument> instruments = AbstractFactorInvestingAlgorithm.getInstrumentsModel(modelName);
         if (instruments == null) {
