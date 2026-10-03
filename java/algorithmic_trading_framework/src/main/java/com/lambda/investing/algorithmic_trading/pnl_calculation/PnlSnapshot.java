@@ -648,6 +648,11 @@ public class PnlSnapshot {
         clone.realizedFees = this.realizedFees;
         clone.unrealizedFees = this.unrealizedFees;
         clone.algorithmInfo = this.algorithmInfo;
+        clone.lastTimestampUpdate = this.lastTimestampUpdate;
+        // new AtomicIntegers so summing in MultiAlgoPortfolioAggregator never mutates the source
+        clone.numberOfTrades = new AtomicInteger(this.numberOfTrades.get());
+        clone.numberOfAggressorTrades = new AtomicInteger(this.numberOfAggressorTrades.get());
+        clone.numberOfAggressedTrades = new AtomicInteger(this.numberOfAggressedTrades.get());
         //historical data is not cloned because we are going to sum it later
         return clone;
     }
