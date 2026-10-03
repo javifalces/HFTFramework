@@ -156,7 +156,7 @@ public abstract class AbstractExecutor implements Executor, ExecutionReportListe
                 algorithm.addCurrentCustomColumn(instrumentPk, "slippageCostAgg", slippageCostAgg);
                 algorithm.addCurrentCustomColumn(instrumentPk, "feesCostAgg", feesCostAgg);
                 double openPnl = algorithm.getPortfolioManager().getPortfolioSnapshot().getUnrealizedPnl();
-                double idealPnl = openPnl - slippageCostAgg - feesCostAgg;
+                double idealPnl = openPnl + slippageCostAgg + feesCostAgg;
                 algorithm.addCurrentCustomColumn(instrumentPk, "idealPnl", idealPnl);
 
             }

@@ -59,8 +59,8 @@ public class SniperExecutor extends AbstractExecutor {
         double bid = lastDepth.getBestBid();
         double ask = lastDepth.getBestAsk();
         logger.info("{} {} [bid:{} ask:{}] increasePosition {} {}@{} of verb {}", getCurrentTime(), instrument, bid, ask, orderRequest.getOrderType().toString(), quantity, price, verb);
-        this.sendOrderRequest(orderRequest);
         notifyExecutionStarted(verb, price);
+        this.sendOrderRequest(orderRequest);
         return true;
     }
 

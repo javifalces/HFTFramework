@@ -36,8 +36,8 @@ public class MarketExecutor extends AbstractExecutor {
         double sentPrice = verb == Verb.Buy ? ask : bid;
         logger.info("{} {} [bid:{} ask:{}] increasePosition {} {}@{} of verb {}", getCurrentTime(), instrument, bid, ask, orderRequest.getOrderType().toString(), quantity, price, verb);
         logger.info("[{}] {}", getCurrentTime(), instrument, orderRequest.toString());
-        this.sendOrderRequest(orderRequest);
         notifyExecutionStarted(verb, sentPrice);
+        this.sendOrderRequest(orderRequest);
         return true;
     }
 
