@@ -8,6 +8,7 @@ import com.lambda.investing.data_manager.FileDataUtils;
 import com.lambda.investing.factor_investing_connector.FactorListener;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.market_data.Depth;
+import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.Verb;
 import lombok.Getter;
 import lombok.AllArgsConstructor;
@@ -500,6 +501,11 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
         return getPrice(instrumentPk);
     }
 
+    @Override
+    protected void printRowTrade(ExecutionReport executionReport) {
+        //override in other implementations if required
+    }
+
     public boolean onWeightsUpdate(long timestamp, Map<String, Double> instrumentPkWeights) {
         try {
             if (timestamp != 0 && isBacktest) {
@@ -529,6 +535,8 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
         requestUpdatePosition(true);
 
         boolean output = true;
+        double sumPositiveWeights = 0.0;
+        double sumNegativeWeights = 0.0;
         try {
             for (String instrumentPk : instrumentPkWeights.keySet()) {
                 try {
@@ -546,6 +554,11 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
                         continue;
                     }
                     instrumentPkToLastWeight.put(instrumentPk, weight);
+                    if (weight > 0) {
+                        sumPositiveWeights += weight;
+                    } else {
+                        sumNegativeWeights += weight;
+                    }
 
                     double expectedPosition = Math.round(getQuantity(weight, instrument) * 1E6) / 1E6;
                     double currentPosition = getPosition(instrument);
@@ -598,6 +611,10 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
                     logger.error("Error rebalancing instrument {} ", instrumentPk, e);
                 }
             }
+            weightsUpdate.append(Configuration
+                    .formatLog("Sum positive weights: {}, negative weights: {}, total weights: {}\n",
+                            sumPositiveWeights, sumNegativeWeights, sumPositiveWeights + sumNegativeWeights));
+
             String message = weightsUpdate.toString();
             logger.info(message);
             if (!isBacktest) {
