@@ -542,10 +542,6 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
                 try {
                     Instrument instrument = Instrument.getInstrument(instrumentPk);
                     double weight = Math.round(instrumentPkWeights.get(instrumentPk) * 100.0) / 100.0;
-                    if (Math.abs(weight) < 1E-6) {
-                        logger.info("ignore {} with weight {}", instrumentPk, weight);
-                        continue;
-                    }
 
                     Double lastWeight = instrumentPkToLastWeight.get(instrumentPk);
                     if (lastWeight != null && Math.abs(weight - lastWeight) < weightChangeTolerance) {
