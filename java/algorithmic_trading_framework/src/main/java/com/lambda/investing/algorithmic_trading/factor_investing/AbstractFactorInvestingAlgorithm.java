@@ -538,7 +538,7 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
         double sumPositiveWeights = 0.0;
         double sumNegativeWeights = 0.0;
         try {
-            for (String instrumentPk : instrumentPkWeights.keySet()) {
+            for (String instrumentPk : instrumentPkWeights.keySet().stream().sorted().toList()) {
                 try {
                     Instrument instrument = Instrument.getInstrument(instrumentPk);
                     double weight = Math.round(instrumentPkWeights.get(instrumentPk) * 100.0) / 100.0;
