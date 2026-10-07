@@ -141,30 +141,43 @@ public abstract class AbstractExecutor implements Executor, ExecutionReportListe
         ExecutorStatistics.ExecutionOutcome outcome = executorStatistics.onExecutionFinished(timeService.getCurrentTimestamp(), executionReport, midPrice);
         if (outcome != null) {
             executionOutcomes.add(outcome);
-            if (algorithm != null) {
-                String instrumentPk = instrument.getPrimaryKey();
-
-
-                long timeToExecuteMsAgg = 0L;
-                double slippageCostAgg = 0.0;
-                double feesCostAgg = 0.0;
-                double midPriceMovementCostAgg = 0.0;
-                for (ExecutorStatistics.ExecutionOutcome capturedOutcome : executionOutcomes) {
-                    timeToExecuteMsAgg += capturedOutcome.getTimeToExecuteMs();
-                    slippageCostAgg += capturedOutcome.getSlippageCost();
-                    feesCostAgg += capturedOutcome.getFeesCost();
-                    midPriceMovementCostAgg += capturedOutcome.getMidPriceMovementCost();
-                }
-                algorithm.addCurrentCustomColumn(instrumentPk, "timeToExecuteMsAgg", (double) timeToExecuteMsAgg);
-                algorithm.addCurrentCustomColumn(instrumentPk, "slippageCostAgg", slippageCostAgg);
-                algorithm.addCurrentCustomColumn(instrumentPk, "feesCostAgg", feesCostAgg);
-                algorithm.addCurrentCustomColumn(instrumentPk, "midPriceMovementCostAgg", midPriceMovementCostAgg);
-                double openPnl = algorithm.getPortfolioManager().getPortfolioSnapshot().getUnrealizedPnl();
-                double idealPnl = openPnl + slippageCostAgg + midPriceMovementCostAgg;
-                algorithm.addCurrentCustomColumn(instrumentPk, "idealPnl", idealPnl);
-
-            }
+            publishExecutionCostColumns();
         }
+    }
+
+    /**
+     * (Re)publishes the {@code timeToExecuteMsAgg}/{@code slippageCostAgg}/{@code feesCostAgg}/
+     * {@code midPriceMovementCostAgg}/{@code idealPnl} custom columns from the currently captured
+     * {@link #executionOutcomes}.
+     * <p>
+     * Called both when a new {@link ExecutorStatistics.ExecutionOutcome} is captured (so the aggregated
+     * execution-cost columns themselves move) and on every {@link #onDepthUpdate(Depth)} (so {@code idealPnl},
+     * which also depends on the live mark-to-market {@code openPnl}, doesn't stay frozen at its value from the
+     * last fill between executions while the market keeps moving).
+     */
+    private void publishExecutionCostColumns() {
+        if (algorithm == null || executionOutcomes.isEmpty()) {
+            return;
+        }
+        String instrumentPk = instrument.getPrimaryKey();
+
+        long timeToExecuteMsAgg = 0L;
+        double slippageCostAgg = 0.0;
+        double feesCostAgg = 0.0;
+        double midPriceMovementCostAgg = 0.0;
+        for (ExecutorStatistics.ExecutionOutcome capturedOutcome : executionOutcomes) {
+            timeToExecuteMsAgg += capturedOutcome.getTimeToExecuteMs();
+            slippageCostAgg += capturedOutcome.getSlippageCost();
+            feesCostAgg += capturedOutcome.getFeesCost();
+            midPriceMovementCostAgg += capturedOutcome.getMidPriceMovementCost();
+        }
+        algorithm.addCurrentCustomColumn(instrumentPk, "timeToExecuteMsAgg", (double) timeToExecuteMsAgg);
+        algorithm.addCurrentCustomColumn(instrumentPk, "slippageCostAgg", slippageCostAgg);
+        algorithm.addCurrentCustomColumn(instrumentPk, "feesCostAgg", feesCostAgg);
+        algorithm.addCurrentCustomColumn(instrumentPk, "midPriceMovementCostAgg", midPriceMovementCostAgg);
+        double openPnl = algorithm.getPortfolioManager().getPortfolioSnapshot().getUnrealizedPnl();
+        double idealPnl = openPnl + slippageCostAgg + midPriceMovementCostAgg;
+        algorithm.addCurrentCustomColumn(instrumentPk, "idealPnl", idealPnl);
     }
 
     @Override
@@ -179,6 +192,9 @@ public abstract class AbstractExecutor implements Executor, ExecutionReportListe
     public boolean onDepthUpdate(Depth depth) {
         if (depth.getInstrument().equals(instrument.getPrimaryKey())) {
             lastDepth = depth;
+            //keep idealPnl (and the other execution-cost columns) marked-to-market: openPnl moves with every
+            //depth tick, so without this refresh idealPnl would stay frozen at its value from the last fill.
+            publishExecutionCostColumns();
         }
 
         if (isExecuting) {

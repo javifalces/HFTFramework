@@ -547,6 +547,11 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
                     if (lastWeight != null && Math.abs(weight - lastWeight) < weightChangeTolerance) {
                         logger.info("not updating {} : weight change {} -> {} is below tolerance {} -> skip it",
                                 instrumentPk, lastWeight, weight, weightChangeTolerance);
+                        if (!isBacktest) {
+                            String message = Configuration.formatLog("WARNING [capital:{}] not updating {} : weight change {} -> {} is below tolerance {} -> skip it",
+                                    capital, instrumentPk, lastWeight, weight, weightChangeTolerance);
+                            System.out.println(message);
+                        }
                         continue;
                     }
                     instrumentPkToLastWeight.put(instrumentPk, weight);

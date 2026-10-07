@@ -103,6 +103,20 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     private int requestPositionScheduleSeconds;
     private volatile ScheduledExecutorService positionRequestScheduler;
 
+    /**
+     * Minimum interval between {@code onUpdatePortfolioSnapshot} broadcasts (to {@link AlgorithmObserver}s,
+     * e.g. {@code WebAlgorithmObserver}) that are triggered from the depth-update hot path (see
+     * {@link #onDepthUpdate(Depth)}). Without this throttle, portfolio/PnL (realizedPnl/unrealizedPnl/totalPnl)
+     * shown on e.g. the dashboard's instrument cards would only refresh on trades/registration/backtest-end
+     * (the other {@code notifyObserversOnUpdatePortfolioSnapshot} call sites), staying stale mark-to-market
+     * between fills even though the underlying {@link PortfolioManager#updateDepth(Depth)} mark-to-market
+     * recompute (and thus {@code unrealizedPnl}) happens on every single depth tick. Configurable via the
+     * {@code portfolioSnapshotBroadcastIntervalMs} parameter so callers that don't want this extra broadcast
+     * fan-out on a very hot live feed can raise it (or effectively disable it with a very large value).
+     */
+    private long portfolioSnapshotBroadcastIntervalMs = 1000L;
+    private volatile long lastPortfolioSnapshotBroadcastTs = 0L;
+
     protected Logger logger = LogManager.getLogger(Algorithm.class);
     protected boolean manualStop = false;
 
@@ -520,6 +534,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         }
 
         this.requestPositionScheduleSeconds = getParameterIntOrDefault(parameters, "requestPositionScheduleSeconds", 60);
+        this.portfolioSnapshotBroadcastIntervalMs = (long) getParameterDoubleOrDefault(parameters,
+                "portfolioSnapshotBroadcastIntervalMs", 1000.0);
 
         uiEnabled = getParameterIntOrDefault(parameters, "ui", 0) == 1;
         if (uiEnabled) {
@@ -1539,6 +1555,22 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         return false;
     }
 
+    /**
+     * Rate-limited (every {@link #portfolioSnapshotBroadcastIntervalMs}) re-broadcast of the current
+     * {@link PortfolioManager#getPortfolioSnapshot()} to all registered {@link AlgorithmObserver}s, called from
+     * the depth-update hot path right after {@link PortfolioManager#updateDepth(Depth)} so mark-to-market
+     * {@code unrealizedPnl}/{@code totalPnl} keep flowing to live consumers (e.g. the web dashboard's
+     * instrument cards) as the market moves, not just on the next trade.
+     */
+    private void maybeBroadcastPortfolioSnapshot() {
+        long now = System.currentTimeMillis();
+        if (now - lastPortfolioSnapshotBroadcastTs < portfolioSnapshotBroadcastIntervalMs) {
+            return;
+        }
+        lastPortfolioSnapshotBroadcastTs = now;
+        algorithmNotifier.notifyObserversOnUpdatePortfolioSnapshot(portfolioManager.getPortfolioSnapshot());
+    }
+
     @Override
     public boolean onDepthUpdate(Depth depth) {
         if (!isMyInstrument(depth.getInstrument())) {
@@ -1555,6 +1587,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             depth.setTimestampStrategy(System.currentTimeMillis());
             try {
                 portfolioManager.updateDepth(depth);//update before remove me
+                maybeBroadcastPortfolioSnapshot();
                 candleFromTickUpdater.onDepthUpdate(depth);//can be some logic , better to update portfolio first -> taker logic
             } catch (IndexOutOfBoundsException e) {
                 //no one of the sides
