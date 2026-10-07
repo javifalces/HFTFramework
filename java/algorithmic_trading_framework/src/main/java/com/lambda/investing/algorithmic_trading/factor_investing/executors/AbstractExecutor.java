@@ -128,10 +128,11 @@ public abstract class AbstractExecutor implements Executor, ExecutionReportListe
      * <p>
      * On a successful fill, the resulting {@link ExecutorStatistics.ExecutionOutcome} is captured in
      * {@link #executionOutcomes} and published as both per-execution ({@code timeToExecuteMs},
-     * {@code slippageCost}, {@code feesCost}) and cumulative-aggregated ({@code timeToExecuteMsAgg},
-     * {@code slippageCostAgg}, {@code feesCostAgg}) custom columns on the owning {@link #algorithm} (if any),
-     * so both the latest fill and the running totals across all executions can be followed in live
-     * GUI/dashboard/Prometheus reporting.
+     * {@code slippageCost}, {@code feesCost}, {@code midPriceMovementCost}) and cumulative-aggregated
+     * ({@code timeToExecuteMsAgg}, {@code slippageCostAgg}, {@code feesCostAgg},
+     * {@code midPriceMovementCostAgg}) custom columns on the owning {@link #algorithm} (if any), so both the
+     * latest fill and the running totals across all executions can be followed in live GUI/dashboard/Prometheus
+     * reporting.
      *
      * @param executionReport the terminal execution report
      */
@@ -147,16 +148,19 @@ public abstract class AbstractExecutor implements Executor, ExecutionReportListe
                 long timeToExecuteMsAgg = 0L;
                 double slippageCostAgg = 0.0;
                 double feesCostAgg = 0.0;
+                double midPriceMovementCostAgg = 0.0;
                 for (ExecutorStatistics.ExecutionOutcome capturedOutcome : executionOutcomes) {
                     timeToExecuteMsAgg += capturedOutcome.getTimeToExecuteMs();
                     slippageCostAgg += capturedOutcome.getSlippageCost();
                     feesCostAgg += capturedOutcome.getFeesCost();
+                    midPriceMovementCostAgg += capturedOutcome.getMidPriceMovementCost();
                 }
                 algorithm.addCurrentCustomColumn(instrumentPk, "timeToExecuteMsAgg", (double) timeToExecuteMsAgg);
                 algorithm.addCurrentCustomColumn(instrumentPk, "slippageCostAgg", slippageCostAgg);
                 algorithm.addCurrentCustomColumn(instrumentPk, "feesCostAgg", feesCostAgg);
+                algorithm.addCurrentCustomColumn(instrumentPk, "midPriceMovementCostAgg", midPriceMovementCostAgg);
                 double openPnl = algorithm.getPortfolioManager().getPortfolioSnapshot().getUnrealizedPnl();
-                double idealPnl = openPnl + slippageCostAgg + feesCostAgg;
+                double idealPnl = openPnl + slippageCostAgg + midPriceMovementCostAgg;
                 algorithm.addCurrentCustomColumn(instrumentPk, "idealPnl", idealPnl);
 
             }

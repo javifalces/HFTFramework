@@ -27,6 +27,12 @@ public class TimeseriesUtils {
         return spreadArr;
     }
 
+    public static Long[] GetArrayInputLong(List<Long> input) {
+        Long[] spreadArr = new Long[input.size()];
+        spreadArr = input.toArray(spreadArr);
+        return spreadArr;
+    }
+
     public static double GetMean(TimeSeriesQueue<Double> serie) {
         return GetMean(serie.toArray(new Double[serie.size()]));
     }
@@ -87,6 +93,86 @@ public class TimeseriesUtils {
     }
     public static double GetWeightedMeanVariance(Double[] serie) {
         return GetWeightedMeanVariance(serie, false);
+    }
+
+    public static double GetAverage(List<Double> values) {
+        if (values.isEmpty()) {
+            return 0.0;
+        }
+        return GetMean(GetArrayInput(values));
+    }
+
+    public static double GetSum(Double[] serie) {
+        double sum = 0.;
+        for (int i = 0; i < serie.length; i++) {
+            sum += serie[i];
+        }
+        return sum;
+    }
+
+    public static double GetSum(List<Double> values) {
+        return GetSum(GetArrayInput(values));
+    }
+
+    public static double GetMax(Double[] serie) {
+        return Arrays.stream(serie).mapToDouble(Double::doubleValue).max().orElse(0.0);
+    }
+
+    public static double GetMax(List<Double> values) {
+        return GetMax(GetArrayInput(values));
+    }
+
+    public static double GetAverageLong(Long[] serie) {
+        if (serie.length == 0) {
+            return 0.0;
+        }
+        long sum = 0L;
+        for (int i = 0; i < serie.length; i++) {
+            sum += serie[i];
+        }
+        return (double) sum / serie.length;
+    }
+
+    public static double GetAverageLong(List<Long> values) {
+        return GetAverageLong(GetArrayInputLong(values));
+    }
+
+    public static long GetMaxLong(Long[] serie) {
+        return Arrays.stream(serie).mapToLong(Long::longValue).max().orElse(0L);
+    }
+
+    public static long GetMaxLong(List<Long> values) {
+        return GetMaxLong(GetArrayInputLong(values));
+    }
+
+    /**
+     * Computes the given percentile (0.0-1.0) of a sample using linear interpolation on the sorted values,
+     * the variant commonly used for latency / TCA distribution reporting (e.g. median, p95).
+     */
+    public static double GetPercentile(Long[] serie, double percentile) {
+        if (serie.length == 0) {
+            return 0.0;
+        }
+        double[] sorted = new double[serie.length];
+        for (int i = 0; i < serie.length; i++) {
+            sorted[i] = serie[i];
+        }
+        Arrays.sort(sorted);
+        if (sorted.length == 1) {
+            return sorted[0];
+        }
+        double rank = percentile * (sorted.length - 1);
+        int lowIndex = (int) Math.floor(rank);
+        int highIndex = (int) Math.ceil(rank);
+        if (lowIndex == highIndex) {
+            return sorted[lowIndex];
+        }
+        double weight = rank - lowIndex;
+        return sorted[lowIndex] * (1 - weight) + sorted[highIndex] * weight;
+    }
+
+    public static double GetPercentile(List<Long> values, double percentile) {
+        return GetPercentile(GetArrayInputLong(values), percentile);
     }
 
     public static double GetMedian(Double[] serie) {
