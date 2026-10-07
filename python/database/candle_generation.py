@@ -169,7 +169,7 @@ def generate_candle_time(
             pl.col('midprice').last().alias('close'),
             pl.col('volume').sum().alias('volume'),
             (pl.col('midprice') * pl.col('volume')).sum().alias('cum_dollar_value'),
-            pl.count().alias('cum_ticks')
+            pl.len().alias('cum_ticks')
         )
         .sort('date_time')
     )
