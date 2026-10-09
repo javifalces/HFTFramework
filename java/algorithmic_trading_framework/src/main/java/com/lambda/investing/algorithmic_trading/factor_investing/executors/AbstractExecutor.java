@@ -2,6 +2,7 @@ package com.lambda.investing.algorithmic_trading.factor_investing.executors;
 
 import com.lambda.investing.algorithmic_trading.Algorithm;
 import com.lambda.investing.algorithmic_trading.AlgorithmConnectorConfiguration;
+import com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshot;
 import com.lambda.investing.algorithmic_trading.time_service.TimeServiceIfc;
 import com.lambda.investing.market_data_connector.MarketDataListener;
 import com.lambda.investing.model.asset.Instrument;
@@ -179,7 +180,12 @@ public abstract class AbstractExecutor implements Executor, ExecutionReportListe
         //reflects the pnl we would have if fills had happened at the sent price with no fees. midPriceMovementCost
         //is pure market drift (already reflected in openPnl) and must NOT be added back here, otherwise it would
         //be double counted.
-        double openPnl = algorithm.getPortfolioManager().getPortfolioSnapshot().getUnrealizedPnl();
+        //NOTE: must use this executor's own instrument unrealizedPnl, not
+        //getPortfolioManager().getPortfolioSnapshot().getUnrealizedPnl(), which aggregates across ALL
+        //instruments in the portfolio: using the portfolio-wide figure here made idealPnl wildly out of
+        //scale (off by roughly the number of instruments) once an algorithm traded more than one instrument.
+        PnlSnapshot pnlSnapshot = algorithm.getPortfolioManager().getLastPnlSnapshot(instrumentPk);
+        double openPnl = (pnlSnapshot != null) ? pnlSnapshot.unrealizedPnl : 0.0;
         double idealPnl = openPnl + slippageCostAgg + feesCostAgg;
         algorithm.addCurrentCustomColumn(instrumentPk, "idealPnl", idealPnl);
     }
