@@ -175,8 +175,12 @@ public abstract class AbstractExecutor implements Executor, ExecutionReportListe
         algorithm.addCurrentCustomColumn(instrumentPk, "slippageCostAgg", slippageCostAgg);
         algorithm.addCurrentCustomColumn(instrumentPk, "feesCostAgg", feesCostAgg);
         algorithm.addCurrentCustomColumn(instrumentPk, "midPriceMovementCostAgg", midPriceMovementCostAgg);
+        //idealPnl adds back the execution costs (fees+slippage) incurred to reach the current position, so it
+        //reflects the pnl we would have if fills had happened at the sent price with no fees. midPriceMovementCost
+        //is pure market drift (already reflected in openPnl) and must NOT be added back here, otherwise it would
+        //be double counted.
         double openPnl = algorithm.getPortfolioManager().getPortfolioSnapshot().getUnrealizedPnl();
-        double idealPnl = openPnl + slippageCostAgg + midPriceMovementCostAgg;
+        double idealPnl = openPnl + slippageCostAgg + feesCostAgg;
         algorithm.addCurrentCustomColumn(instrumentPk, "idealPnl", idealPnl);
     }
 
