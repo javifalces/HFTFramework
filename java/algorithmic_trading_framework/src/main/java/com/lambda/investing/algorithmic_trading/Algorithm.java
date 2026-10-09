@@ -104,6 +104,16 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     private volatile ScheduledExecutorService positionRequestScheduler;
 
     /**
+     * Max time {@link #requestUpdatePosition(boolean)} will block waiting for the broker's answer to
+     * the {@code REQUESTED_POSITION_INFO} request before giving up and letting the caller proceed with
+     * the last-known position. Without a bound, a broker that never answers would hang the calling
+     * thread (e.g. {@code onWeightsUpdate}) forever. Configurable via the
+     * {@code positionRequestTimeoutSeconds} parameter.
+     */
+    private static final int REQUESTED_POSITION_TIMEOUT_SECONDS_DEFAULT = 10;
+    private int requestPositionTimeoutSeconds = REQUESTED_POSITION_TIMEOUT_SECONDS_DEFAULT;
+
+    /**
      * Minimum interval between {@code onUpdatePortfolioSnapshot} broadcasts (to {@link AlgorithmObserver}s,
      * e.g. {@code WebAlgorithmObserver}) that are triggered from the depth-update hot path (see
      * {@link #onDepthUpdate(Depth)}). Without this throttle, portfolio/PnL (realizedPnl/unrealizedPnl/totalPnl)
@@ -534,6 +544,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         }
 
         this.requestPositionScheduleSeconds = getParameterIntOrDefault(parameters, "requestPositionScheduleSeconds", 60);
+        this.requestPositionTimeoutSeconds = getParameterIntOrDefault(parameters, "positionRequestTimeoutSeconds",
+                REQUESTED_POSITION_TIMEOUT_SECONDS_DEFAULT);
         this.portfolioSnapshotBroadcastIntervalMs = (long) getParameterDoubleOrDefault(parameters,
                 "portfolioSnapshotBroadcastIntervalMs", 1000.0);
 
@@ -2158,9 +2170,15 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
         if (synchronous) {
             try {
-                lastPositionUpdateCountDown.await();
-            } catch (Exception e) {
-                ;
+                boolean answered = lastPositionUpdateCountDown.await(requestPositionTimeoutSeconds, TimeUnit.SECONDS);
+                if (!answered) {
+                    System.err.println(Configuration.formatLog("[{}] timed out after {}s waiting for {} answer -> proceeding with last-known position",
+                            algorithmInfo, requestPositionTimeoutSeconds, REQUESTED_POSITION_INFO));
+                    logger.warn("[{}] timed out after {}s waiting for {} answer -> proceeding with last-known position",
+                            algorithmInfo, requestPositionTimeoutSeconds, REQUESTED_POSITION_INFO);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             }
         }
 
