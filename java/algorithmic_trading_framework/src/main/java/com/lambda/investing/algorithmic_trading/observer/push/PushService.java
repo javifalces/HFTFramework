@@ -3,10 +3,8 @@ package com.lambda.investing.algorithmic_trading.observer.push;
 import com.lambda.investing.Configuration;
 import com.lambda.investing.algorithmic_trading.Algorithm;
 import com.lambda.investing.algorithmic_trading.AlgorithmObserver;
-import com.lambda.investing.algorithmic_trading.AlgorithmParameters;
 import com.lambda.investing.algorithmic_trading.AlgorithmProviderImpl;
 import com.lambda.investing.algorithmic_trading.observer.push.pushbullet.PushbulletAlgorithmObserver;
-import com.lambda.investing.algorithmic_trading.pnl_calculation.PnlSnapshot;
 import com.lambda.investing.algorithmic_trading.pnl_calculation.PortfolioSnapshot;
 import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
@@ -219,7 +217,7 @@ public abstract class PushService implements AlgorithmObserver {
 
     /**
      * Sends a push notification for a message explicitly triggered by the algorithm via
-     * {@link Algorithm#sendNotificationMessage(String, String)}. This is how the algorithm - rather
+     * {@link Algorithm#sendPushNotificationMessage(String, String)}. This is how the algorithm - rather
      * than this observer - decides what/when to push, on top of the default
      * {@link #onExecutionReportUpdate} trade notification.
      */

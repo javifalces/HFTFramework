@@ -110,6 +110,15 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
     private final AtomicBoolean retryArmed = new AtomicBoolean(false);
 
     /**
+     * True once an {@link #onWeightsUpdate(long, Map)} call has been fully processed (i.e. past the
+     * {@link #weAreReady()} gate) at least once. Used to avoid sending a push notification for the very
+     * first ("initial") calibration, where every instrument is necessarily a new position and the
+     * notification would be noisy/redundant; only subsequent recalibrations that actually send new
+     * orders are notified.
+     */
+    private final AtomicBoolean initialCalibrationDone = new AtomicBoolean(false);
+
+    /**
      * Instruments that have received at least one (valid) {@link #onDepthUpdate(Depth)} call.
      * Backs {@link #weAreReady()}, which now requires every instrument to have spoken at least
      * once, and in turn gates {@link #retryPendingWeightsUpdateIfReady()}.
@@ -532,11 +541,16 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
         }
         pendingWeightsUpdate.set(null);
 
+        //the very first onWeightsUpdate that passes weAreReady() is the initial calibration: every
+        //instrument is a brand-new position, so we don't push-notify it; only later recalibrations are.
+        boolean isInitialCalibration = initialCalibrationDone.compareAndSet(false, true);
+
         requestUpdatePosition(true);
 
         boolean output = true;
         double sumPositiveWeights = 0.0;
         double sumNegativeWeights = 0.0;
+        StringBuilder recalibrationOrders = new StringBuilder();
         try {
             for (String instrumentPk : instrumentPkWeights.keySet().stream().sorted().toList()) {
                 try {
@@ -601,7 +615,12 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
 
                     try {
                         logger.info("{} weight: {} - {} -> {} {}€ (quantity:{} price:{} position:{} expected_position:{}) ", instrumentPk, lastWeight != null ? lastWeight : 0, weight, verb, quantityToExecute * price, quantityToExecute, price, currentPosition, expectedPosition);
-                        output &= getExecutor(instrumentPk).increasePosition(getCurrentTimestamp(), verb, quantityToExecute, price);
+                        boolean orderSent = getExecutor(instrumentPk).increasePosition(getCurrentTimestamp(), verb, quantityToExecute, price);
+                        output &= orderSent;
+                        if (orderSent && !isInitialCalibration) {
+                            recalibrationOrders.append(Configuration.formatLog("\t- {}:{} {} quantity:{}@{}(position:{}->{})\n",
+                                    instrumentPk, weight, verb, quantityToExecute, price, currentPosition, expectedPositionRounded));
+                        }
                     } catch (Exception e) {
                         String message = Configuration.formatLog("Error executing {} verb:{} quantity:{} price:{} {}", instrumentPk, verb, quantityToExecute, price, e.getMessage());
                         logger.error(message, e);
@@ -620,6 +639,17 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
             logger.info(message);
             if (!isBacktest) {
                 System.out.println(message);
+            }
+
+            if (!isInitialCalibration && !isBacktest && recalibrationOrders.length() > 0) {
+                try {
+                    String pushTitle = Configuration.formatLog("{} recalibration orders", modelName);
+                    String pushBody = recalibrationOrders.toString();
+                    sendPushNotificationMessage(pushTitle, pushBody);
+                    logger.info("Push recalibration notification sent: {} {}", pushTitle, pushBody);
+                } catch (Exception e) {
+                    logger.error("Error sending push recalibration notification: {}", e.getMessage());
+                }
             }
 
             try {

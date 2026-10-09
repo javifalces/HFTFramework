@@ -208,7 +208,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
      * @param name short name/title of the message
      * @param body message body/content
      */
-    public void sendNotificationMessage(String name, String body) {
+    public void sendPushNotificationMessage(String name, String body) {
         algorithmNotifier.notifyObserversOnUpdateMessage(name, body);
     }
 
@@ -1988,7 +1988,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         String title = Configuration.formatLog("{} {} {}@{}", executionReport.getVerb(), executionReport.getInstrument(), executionReport.getLastQuantity(), executionReport.getPrice());
         String message = Configuration.formatLog("{}", executionReport.getAlgorithmInfo());
         try {
-            sendNotificationMessage(title, message);
+            sendPushNotificationMessage(title, message);
             logger.info("Push trade notification sent: {} {}", title, message);
         } catch (Exception e) {
             logger.error("Error sending push trade notification: {}", e.getMessage());
