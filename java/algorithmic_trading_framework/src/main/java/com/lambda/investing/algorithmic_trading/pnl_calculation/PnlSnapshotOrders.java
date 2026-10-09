@@ -229,8 +229,11 @@ public class PnlSnapshotOrders extends PnlSnapshot {
 			}
 		}
 
-		//			net investment
-		netInvestment = Math.abs(newPosition * avgOpenPrice);
+		//			net investment : nets buys (added) against sells (discounted)
+		double tradeNotional = Math.abs(executionReport.getLastQuantity()) * lastPrice;
+		netInvestment += quantityWithDirection * lastPrice;
+		//			gross investment : buys and sells both added in positive
+		grossInvestment += tradeNotional;
 		//net position
 		netPosition = newPosition;
 

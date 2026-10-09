@@ -840,7 +840,7 @@ public class PythonAlgorithm extends Algorithm {
      * the configured codec.
      *
      * To reduce payload size, only essential fields from PnlSnapshot are included:
-     * netPosition, avgOpenPrice, netInvestment, realizedPnl, unrealizedPnl, totalPnl,
+     * netPosition, avgOpenPrice, netInvestment, grossInvestment, realizedPnl, unrealizedPnl, totalPnl,
      * totalFees, lastPriceForUnrealized, spread, realizedFees, unrealizedFees.
      * 
      * The response envelope structure:
@@ -851,6 +851,7 @@ public class PythonAlgorithm extends Algorithm {
      *   "data": {
      *     "algorithmInfo": "...",
      *     "netInvestment": 0.0,
+     *     "grossInvestment": 0.0,
      *     "realizedPnl": 0.0,
      *     "unrealizedPnl": 0.0,
      *     "totalPnl": 0.0,
@@ -889,6 +890,7 @@ public class PythonAlgorithm extends Algorithm {
      * - netPosition
      * - avgOpenPrice
      * - netInvestment
+     * - grossInvestment
      * - realizedPnl
      * - unrealizedPnl
      * - totalPnl
@@ -905,6 +907,7 @@ public class PythonAlgorithm extends Algorithm {
         Map<String, Object> reducedSnapshot = new LinkedHashMap<>();
         reducedSnapshot.put("algorithmInfo", snapshot.getAlgorithmInfo());
         reducedSnapshot.put("netInvestment", snapshot.netInvestment);
+        reducedSnapshot.put("grossInvestment", snapshot.grossInvestment);
         reducedSnapshot.put("realizedPnl", snapshot.realizedPnl);
         reducedSnapshot.put("unrealizedPnl", snapshot.unrealizedPnl);
         reducedSnapshot.put("totalPnl", snapshot.totalPnl);
@@ -922,6 +925,7 @@ public class PythonAlgorithm extends Algorithm {
             reducedPnl.put("netPosition", pnl.netPosition);
             reducedPnl.put("avgOpenPrice", pnl.avgOpenPrice);
             reducedPnl.put("netInvestment", pnl.netInvestment);
+            reducedPnl.put("grossInvestment", pnl.grossInvestment);
             reducedPnl.put("realizedPnl", pnl.realizedPnl);
             reducedPnl.put("unrealizedPnl", pnl.unrealizedPnl);
             reducedPnl.put("totalPnl", pnl.totalPnl);

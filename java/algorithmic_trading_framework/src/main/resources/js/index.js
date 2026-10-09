@@ -369,11 +369,11 @@ function applyState(msg) {
     if (msg.backtest === true) {
         backtestMode = true;
         hideLoginOverlay();
-        document.documentElement.classList.remove('light-theme');
+        document.documentElement.classList.add('light-theme');
     }
     if (msg.backtest === false) {
         backtestMode = false;
-        document.documentElement.classList.add('light-theme');
+        document.documentElement.classList.remove('light-theme');
     }
     if (typeof msg.algoRunning === 'boolean') {
         algoRunning = msg.algoRunning;
@@ -430,6 +430,8 @@ function updatePortfolio(p) {
     if (fe) fe.textContent = fmt(p.totalFees);
     const iv = document.getElementById('pnl-investment');
     if (iv) iv.textContent = fmt(p.netInvestment);
+    const giv = document.getElementById('pnl-gross-investment');
+    if (giv) giv.textContent = fmt(p.grossInvestment);
     const tb = document.getElementById('instruments-body');
     if (tb && p.instrumentPnlSnapshotMap) {
         tb.innerHTML = '';
@@ -856,12 +858,12 @@ async function checkModeAndConnect() {
             if (mode.backtest === true) {
                 backtestMode = true;
                 hideLoginOverlay();
-                document.documentElement.classList.remove('light-theme');
+                document.documentElement.classList.add('light-theme');
                 connect();
                 return;
             } else if (mode.backtest === false) {
                 backtestMode = false;
-                document.documentElement.classList.add('light-theme');
+                document.documentElement.classList.remove('light-theme');
             }
         }
     } catch (e) {

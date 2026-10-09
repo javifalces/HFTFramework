@@ -514,6 +514,7 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
         m.put("netPosition", ps.netPosition);
         m.put("totalFees", ps.totalFees);
         m.put("netInvestment", ps.netInvestment);
+        m.put("grossInvestment", ps.grossInvestment);
 
         Map<String, Object> instrMap = new LinkedHashMap<>();
         if (ps.getInstrumentPnlSnapshotMap() != null) {
@@ -528,6 +529,7 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
                 sm.put("netPosition", s.netPosition);
                 sm.put("totalFees", s.totalFees);
                 sm.put("netInvestment", s.netInvestment);
+                sm.put("grossInvestment", s.grossInvestment);
                 sm.put("numberOfTrades", s.numberOfTrades.get());
                 sm.put("numberOfAggressorTrades", s.numberOfAggressorTrades.get());
                 sm.put("numberOfAggressedTrades", s.numberOfAggressedTrades.get());
@@ -657,6 +659,7 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
                     sm.put("netPosition", s.netPosition);
                     sm.put("totalFees", s.totalFees);
                     sm.put("netInvestment", s.netInvestment);
+                    sm.put("grossInvestment", s.grossInvestment);
                     sm.put("numberOfTrades", s.numberOfTrades != null ? s.numberOfTrades.get() : 0);
                     sm.put("numberOfAggressorTrades", s.numberOfAggressorTrades != null ? s.numberOfAggressorTrades.get() : 0);
                     sm.put("numberOfAggressedTrades", s.numberOfAggressedTrades != null ? s.numberOfAggressedTrades.get() : 0);

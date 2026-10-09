@@ -74,6 +74,7 @@ public class PnlSnapshotTest {
 		//buy 100@101
 		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Buy, 101, 100));
 		Assert.assertEquals(10100, pnlSnapshot.netInvestment, 0.0001);
+        Assert.assertEquals(10100, pnlSnapshot.grossInvestment, 0.0001);
 		Assert.assertEquals(0.0, pnlSnapshot.realizedPnl, 0.0001);
 		Assert.assertEquals(0.0, pnlSnapshot.unrealizedPnl, 0.0001);
 
@@ -84,6 +85,7 @@ public class PnlSnapshotTest {
 		Assert.assertEquals(-200, pnlSnapshot.unrealizedPnl, 0.0001);//we dont have anything open
 		Assert.assertEquals(-200, pnlSnapshot.totalPnl, 0.0001);
 		Assert.assertEquals(10100, pnlSnapshot.netInvestment, 0.0001);
+        Assert.assertEquals(10100, pnlSnapshot.grossInvestment, 0.0001);
 
 
 		//sell 100@99
@@ -92,7 +94,10 @@ public class PnlSnapshotTest {
 		Assert.assertEquals(0, pnlSnapshot.netPosition, 0.0001);
 		Assert.assertEquals(0, pnlSnapshot.unrealizedPnl, 0.0001);//we dont have anything open
 		Assert.assertEquals(-200, pnlSnapshot.totalPnl, 0.0001);
-		Assert.assertEquals(0.0, pnlSnapshot.netInvestment, 0.0001);
+        //netInvestment nets buys (+10100) against sells (-9900)
+        Assert.assertEquals(200, pnlSnapshot.netInvestment, 0.0001);
+        //grossInvestment adds both buys and sells in positive
+        Assert.assertEquals(20000, pnlSnapshot.grossInvestment, 0.0001);
 	}
 
 	@Test public void testPnlOrderedUpdatesClosePosition() {
@@ -101,6 +106,7 @@ public class PnlSnapshotTest {
 		//buy 100@101
 		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Buy, 101, 100));
 		Assert.assertEquals(10100, pnlSnapshot.netInvestment, 0.0001);
+        Assert.assertEquals(10100, pnlSnapshot.grossInvestment, 0.0001);
 		Assert.assertEquals(0.0, pnlSnapshot.realizedPnl, 0.0001);
 		Assert.assertEquals(0.0, pnlSnapshot.unrealizedPnl, 0.0001);
 
@@ -111,6 +117,7 @@ public class PnlSnapshotTest {
 		Assert.assertEquals(-200, pnlSnapshot.unrealizedPnl, 0.0001);//we dont have anything open
 		Assert.assertEquals(-200, pnlSnapshot.totalPnl, 0.0001);
 		Assert.assertEquals(10100, pnlSnapshot.netInvestment, 0.0001);
+        Assert.assertEquals(10100, pnlSnapshot.grossInvestment, 0.0001);
 
 		//sell 100@99
 		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Sell, 99, 100));
@@ -118,7 +125,8 @@ public class PnlSnapshotTest {
 		Assert.assertEquals(0, pnlSnapshot.netPosition, 0.0001);
 		Assert.assertEquals(0, pnlSnapshot.unrealizedPnl, 0.0001);//we dont have anything open
 		Assert.assertEquals(-200, pnlSnapshot.totalPnl, 0.0001);
-		Assert.assertEquals(0.0, pnlSnapshot.netInvestment, 0.0001);
+        Assert.assertEquals(200, pnlSnapshot.netInvestment, 0.0001);
+        Assert.assertEquals(20000, pnlSnapshot.grossInvestment, 0.0001);
 	}
 
 	@Test public void testPnlOrderedUpdatesClosePositionInvert() {
@@ -126,7 +134,9 @@ public class PnlSnapshotTest {
 		pnlSnapshot.setAlgorithmInfo(algoInfo);
 		//sell 100@101
 		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Sell, 101, 100));
-		Assert.assertEquals(10100, pnlSnapshot.netInvestment, 0.0001);
+        //netInvestment discounts sells (negative here, no buys yet)
+        Assert.assertEquals(-10100, pnlSnapshot.netInvestment, 0.0001);
+        Assert.assertEquals(10100, pnlSnapshot.grossInvestment, 0.0001);
 		Assert.assertEquals(-100, pnlSnapshot.netPosition, 0.0001);
 		Assert.assertEquals(0.0, pnlSnapshot.realizedPnl, 0.0001);
 		Assert.assertEquals(0.0, pnlSnapshot.unrealizedPnl, 0.0001);
@@ -137,7 +147,8 @@ public class PnlSnapshotTest {
 		Assert.assertEquals(-100, pnlSnapshot.netPosition, 0.0001);
 		Assert.assertEquals(0, pnlSnapshot.unrealizedPnl, 0.0001);//we dont have anything open
 		Assert.assertEquals(0, pnlSnapshot.totalPnl, 0.0001);
-		Assert.assertEquals(10100, pnlSnapshot.netInvestment, 0.0001);
+        Assert.assertEquals(-10100, pnlSnapshot.netInvestment, 0.0001);
+        Assert.assertEquals(10100, pnlSnapshot.grossInvestment, 0.0001);
 
 		//sell 100@99
 		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Buy, 99, 100));
@@ -145,7 +156,8 @@ public class PnlSnapshotTest {
 		Assert.assertEquals(0, pnlSnapshot.netPosition, 0.0001);
 		Assert.assertEquals(0, pnlSnapshot.unrealizedPnl, 0.0001);//we dont have anything open
 		Assert.assertEquals(200, pnlSnapshot.totalPnl, 0.0001);
-		Assert.assertEquals(0.0, pnlSnapshot.netInvestment, 0.0001);
+        Assert.assertEquals(-200, pnlSnapshot.netInvestment, 0.0001);
+        Assert.assertEquals(20000, pnlSnapshot.grossInvestment, 0.0001);
 	}
 
 	@Test public void testPnlUpdatesOpenPosition() {
@@ -161,6 +173,7 @@ public class PnlSnapshotTest {
 		Assert.assertEquals(-200, pnlSnapshot.unrealizedPnl, 0.0001);//we dont have anything open
 		Assert.assertEquals(-200, pnlSnapshot.totalPnl, 0.0001);
 		Assert.assertEquals(10100, pnlSnapshot.netInvestment, 0.0001);
+        Assert.assertEquals(10100, pnlSnapshot.grossInvestment, 0.0001);
 
 		//sell 100@99
 		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Sell, 99, 100));
@@ -181,6 +194,7 @@ public class PnlSnapshotTest {
 		Assert.assertEquals(-200, pnlSnapshot.unrealizedPnl, 0.0001);//we dont have anything open
 		Assert.assertEquals(-200, pnlSnapshot.totalPnl, 0.0001);
 		Assert.assertEquals(10100, pnlSnapshot.netInvestment, 0.0001);
+        Assert.assertEquals(10100, pnlSnapshot.grossInvestment, 0.0001);
 
 		//sell 100@99
 		pnlSnapshot.updateExecutionReportTrade(createExecutionReport(Verb.Sell, 99, 100));

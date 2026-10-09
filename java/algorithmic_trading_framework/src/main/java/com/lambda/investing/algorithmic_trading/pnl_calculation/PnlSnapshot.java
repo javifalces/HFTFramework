@@ -43,12 +43,12 @@ public class PnlSnapshot {
     protected static boolean SAVE_ZERO_TRADES = true;//if true we are going to start saving data before trades
 
     Logger logger = LogManager.getLogger(PnlSnapshot.class);
-    public double netPosition, avgOpenPrice, netInvestment, realizedPnl, unrealizedPnl, totalPnl, totalFees, lastPriceForUnrealized, spread, realizedFees, unrealizedFees;
+    public double netPosition, avgOpenPrice, netInvestment, grossInvestment, realizedPnl, unrealizedPnl, totalPnl, totalFees, lastPriceForUnrealized, spread, realizedFees, unrealizedFees;
     public String algorithmInfo = "";
     public String instrumentPk;
     public Map<Double, Double> openPriceToVolume;
     public List<Long> historicalTimestamp;
-    public Map<Long, Double> historicalNetPosition, historicalAvgOpenPrice, historicalNetInvestment, historicalRealizedPnl, historicalUnrealizedPnl, historicalSpread, historicalTotalPnl, historicalPrice, historicalFee, historicalQuantity, historicalMidPrice, historicalAskPrice, historicalBidPrice;
+    public Map<Long, Double> historicalNetPosition, historicalAvgOpenPrice, historicalNetInvestment, historicalGrossInvestment, historicalRealizedPnl, historicalUnrealizedPnl, historicalSpread, historicalTotalPnl, historicalPrice, historicalFee, historicalQuantity, historicalMidPrice, historicalAskPrice, historicalBidPrice;
     public Map<Long, String> historicalAlgorithmInfo;
     public Map<Long, String> historicalInstrumentPk;
     public Map<Long, String> historicalClOrdId;
@@ -93,6 +93,7 @@ public class PnlSnapshot {
         historicalClOrdId = new ConcurrentHashMap<>();
         historicalAvgOpenPrice = new ConcurrentHashMap<>();
         historicalNetInvestment = new ConcurrentHashMap<>();
+        historicalGrossInvestment = new ConcurrentHashMap<>();
         historicalRealizedPnl = new ConcurrentHashMap<>();
         historicalUnrealizedPnl = new ConcurrentHashMap<>();
         historicalSpread = new ConcurrentHashMap<>();
@@ -235,6 +236,7 @@ public class PnlSnapshot {
                 historicalNetPosition.put(timestamp, netPosition);
                 historicalAvgOpenPrice.put(timestamp, avgOpenPrice);
                 historicalNetInvestment.put(timestamp, netInvestment);
+                historicalGrossInvestment.put(timestamp, grossInvestment);
                 historicalRealizedPnl.put(timestamp, realizedPnl);
                 historicalUnrealizedPnl.put(timestamp, unrealizedPnl);
 
@@ -416,8 +418,11 @@ public class PnlSnapshot {
             }
         }
 
-        //			net investment
-        netInvestment = Math.abs(newPosition * avgOpenPrice);
+        //			net investment : nets buys (added) against sells (discounted)
+        double tradeNotional = Math.abs(executionReport.getLastQuantity()) * lastPrice;
+        netInvestment += quantityWithDirection * lastPrice;
+        //			gross investment : buys and sells both added in positive
+        grossInvestment += tradeNotional;
         //net position
         netPosition = newPosition;
         algorithmInfo = executionReport.getAlgorithmInfo();
@@ -639,6 +644,7 @@ public class PnlSnapshot {
         clone.netPosition = this.netPosition;
         clone.avgOpenPrice = this.avgOpenPrice;
         clone.netInvestment = this.netInvestment;
+        clone.grossInvestment = this.grossInvestment;
         clone.realizedPnl = this.realizedPnl;
         clone.unrealizedPnl = this.unrealizedPnl;
         clone.totalPnl = this.totalPnl;

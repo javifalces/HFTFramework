@@ -1340,6 +1340,7 @@ function handleMessage(msg) {
                         totalPnl: 0,
                         totalFees: 0,
                         netInvestment: 0,
+                        grossInvestment: 0,
                         totalTrades: 0,
                         totalAggressorTrades: 0,
                         lastTimestampUpdate: msg.timestamp || Date.now()
@@ -1407,9 +1408,9 @@ function applyState(msg) {
     // Update mode banner and apply theme
     updateModeBanner(msg.backtest, msg.paperTrading);
     if (msg.backtest === true) {
-        document.documentElement.classList.remove('light-theme');
-    } else if (msg.backtest === false) {
         document.documentElement.classList.add('light-theme');
+    } else if (msg.backtest === false) {
+        document.documentElement.classList.remove('light-theme');
     }
     const s = msg.data;
     if (s) {
@@ -2036,27 +2037,33 @@ function updatePortfolio(p, algorithmInfo) {
     if (!p) return;
 
     let netInvestment;
+    let grossInvestment;
     let instruments;
 
     if (algorithmInfo) {
         // Multi-algo path: accumulate per-algo snapshots and merge instruments.
         portfolioByAlgo[algorithmInfo] = p;
         netInvestment = 0;
+        grossInvestment = 0;
         instruments = {};
         for (const ap of Object.values(portfolioByAlgo)) {
             netInvestment += +(ap.netInvestment) || 0;
+            grossInvestment += +(ap.grossInvestment) || 0;
             if (ap.instrumentPnlSnapshotMap) Object.assign(instruments, ap.instrumentPnlSnapshotMap);
         }
     } else {
         // Single-algo / STATE-restore path: use snapshot directly.
         Object.keys(portfolioByAlgo).forEach(k => delete portfolioByAlgo[k]);
         netInvestment = p.netInvestment;
+        grossInvestment = p.grossInvestment;
         instruments = p.instrumentPnlSnapshotMap || {};
     }
 
-    // Net investment is a portfolio-level field not derivable from instrument snapshots
+    // Net/gross investment are portfolio-level fields not derivable from instrument snapshots
     const iv = document.getElementById('pnl-investment');
     if (iv) iv.textContent = fmt(netInvestment);
+    const giv = document.getElementById('pnl-gross-investment');
+    if (giv) giv.textContent = fmt(grossInvestment);
 
     // Merge instrument snapshots into the latest map, then re-render cards + portfolio totals
     Object.entries(instruments).forEach(([instr, s]) => {
@@ -2071,7 +2078,7 @@ function updatePortfolio(p, algorithmInfo) {
  * instrument data, portfolio totals, and per-instrument breakdowns.
  *
  * Updates:
- * - Portfolio card totals (realizedPnl, unrealizedPnl, totalPnl, netInvestment, totalFees)
+ * - Portfolio card totals (realizedPnl, unrealizedPnl, totalPnl, netInvestment, grossInvestment, totalFees)
  * - Instrument cards with aggregated PnL data
  * - PnL chart with the new aggregated totals
  */
@@ -2088,6 +2095,7 @@ function onAggregatedPortfolioUpdate(aggregatedData, timestamp) {
 
     // Update portfolio card with direct values from the aggregated snapshot
     const netInvestment = aggregatedData.netInvestment || 0;
+    const grossInvestment = aggregatedData.grossInvestment || 0;
     const realizedPnl = aggregatedData.realizedPnl || 0;
     const unrealizedPnl = aggregatedData.unrealizedPnl || 0;
     const totalPnl = aggregatedData.totalPnl || 0;
@@ -2096,6 +2104,8 @@ function onAggregatedPortfolioUpdate(aggregatedData, timestamp) {
     // Update Portfolio card totals
     const iv = document.getElementById('pnl-investment');
     if (iv) iv.textContent = fmt(netInvestment);
+    const giv = document.getElementById('pnl-gross-investment');
+    if (giv) giv.textContent = fmt(grossInvestment);
 
     setKv('pnl-realized', realizedPnl);
     setKv('pnl-unrealized', unrealizedPnl);
@@ -3302,7 +3312,7 @@ async function checkModeAndConnect() {
             if (mode.backtest) {
                 // Backtest mode – show banner immediately, skip login
                 updateModeBanner(true, false);
-                document.documentElement.classList.remove('light-theme');
+                document.documentElement.classList.add('light-theme');
                 setToken('backtest-mode', true);
                 hideLoginOverlay();
                 connect();
@@ -3311,10 +3321,10 @@ async function checkModeAndConnect() {
             if (mode.paperTrading) {
                 // Paper-trading mode – show banner immediately before login/connect
                 updateModeBanner(false, true);
-                document.documentElement.classList.add('light-theme');
+                document.documentElement.classList.remove('light-theme');
             } else {
-                // Neither backtest nor paper trading – apply light theme for normal mode
-                document.documentElement.classList.add('light-theme');
+                // Neither backtest nor paper trading – keep dark theme for normal mode
+                document.documentElement.classList.remove('light-theme');
             }
         }
     } catch (e) {

@@ -73,7 +73,7 @@ public class MultiAlgoPortfolioAggregator {
      * <ol>
      *   <li>Creates synthetic {@link PnlSnapshot} objects for each instrument, with summed
      *       PnL fields ({@code realizedPnl}, {@code unrealizedPnl}, {@code totalPnl},
-     *       {@code netPosition}, {@code totalFees}, {@code netInvestment})</li>
+     *       {@code netPosition}, {@code totalFees}, {@code netInvestment}, {@code grossInvestment})</li>
      *   <li>Wraps these in a new {@link PortfolioSnapshot} with {@code algorithmInfo = null}
      *       (or a marker to indicate this is a cross-algorithm view)</li>
      *   <li>The portfolio-level totals are automatically computed from the per-instrument
@@ -109,6 +109,7 @@ public class MultiAlgoPortfolioAggregator {
                 agg.netPosition += s.netPosition;
                 agg.totalFees += s.totalFees;
                 agg.netInvestment += s.netInvestment;
+                agg.grossInvestment += s.grossInvestment;
                 agg.realizedFees += s.realizedFees;
                 agg.unrealizedFees += s.unrealizedFees;
 

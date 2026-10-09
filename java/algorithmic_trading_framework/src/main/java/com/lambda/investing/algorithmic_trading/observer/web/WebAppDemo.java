@@ -379,6 +379,7 @@ public class WebAppDemo {
         s.netPosition = pos;
         s.totalFees = fees;
         s.netInvestment = investment;
+        s.grossInvestment = Math.abs(investment);
         return s;
     }
 

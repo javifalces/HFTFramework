@@ -10,7 +10,7 @@ import java.util.Map;
 @Getter
 public class PortfolioSnapshot {
     protected Map<String, PnlSnapshot> instrumentPnlSnapshotMap;
-    public double netInvestment, realizedPnl, unrealizedPnl, totalPnl, totalFees, realizedFees, unrealizedFees, netPosition;
+    public double netInvestment, grossInvestment, realizedPnl, unrealizedPnl, totalPnl, totalFees, realizedFees, unrealizedFees, netPosition;
     public String algorithmInfo;
 
     @Setter
@@ -34,6 +34,7 @@ public class PortfolioSnapshot {
     private void calculatePortfolioSnapshot() {
         //calculate all doubles from instrumentPnlSnapshotMap sum them up
         netInvestment = 0;
+        grossInvestment = 0;
         realizedPnl = 0;
         unrealizedPnl = 0;
         totalPnl = 0;
@@ -44,6 +45,7 @@ public class PortfolioSnapshot {
         netPosition = 0;
         for (PnlSnapshot pnlSnapshot : instrumentPnlSnapshotMap.values()) {
             netInvestment += pnlSnapshot.netInvestment;
+            grossInvestment += pnlSnapshot.grossInvestment;
             realizedPnl += pnlSnapshot.realizedPnl;
             unrealizedPnl += pnlSnapshot.unrealizedPnl;
             totalPnl += pnlSnapshot.totalPnl;
