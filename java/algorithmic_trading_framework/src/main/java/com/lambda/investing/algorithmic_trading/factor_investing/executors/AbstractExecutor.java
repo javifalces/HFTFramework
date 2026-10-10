@@ -63,16 +63,22 @@ public abstract class AbstractExecutor implements Executor, ExecutionReportListe
     @Override
     public void setAlgorithm(Algorithm algorithm) {
         this.algorithm = algorithm;
+        //publish the execution-cost columns at 0 right away, so the GUI/dashboard/Prometheus columns exist
+        //with a sane default instead of being absent until the first depth tick or execution fill.
+        publishExecutionCostColumns();
     }
 
     /**
      * Clears the per-day captured {@link #executionOutcomes}, so aggregated custom columns
-     * ({@code timeToExecuteMsAgg}, {@code slippageCostAgg}, {@code feesCostAgg}) start fresh on new day.
+     * ({@code timeToExecuteMsMax}, {@code slippageCostAgg}, {@code feesCostAgg}) start fresh on new day.
      * Subclasses overriding this should call {@code super.reset()}.
      */
     @Override
     public void reset() {
         executionOutcomes.clear();
+        //republish immediately so the aggregated columns drop back to 0 on reset instead of staying at
+        //yesterday's values until the next depth tick or execution fill.
+        publishExecutionCostColumns();
     }
 
     /**
@@ -129,11 +135,12 @@ public abstract class AbstractExecutor implements Executor, ExecutionReportListe
      * <p>
      * On a successful fill, the resulting {@link ExecutorStatistics.ExecutionOutcome} is captured in
      * {@link #executionOutcomes} and published as both per-execution ({@code timeToExecuteMs},
-     * {@code slippageCost}, {@code feesCost}, {@code midPriceMovementCost}) and cumulative-aggregated
-     * ({@code timeToExecuteMsAgg}, {@code slippageCostAgg}, {@code feesCostAgg},
+     * {@code slippageCost}, {@code feesCost}, {@code midPriceMovementCost}) and aggregated
+     * ({@code timeToExecuteMsMax}, {@code slippageCostAgg}, {@code feesCostAgg},
      * {@code midPriceMovementCostAgg}) custom columns on the owning {@link #algorithm} (if any), so both the
      * latest fill and the running totals across all executions can be followed in live GUI/dashboard/Prometheus
-     * reporting.
+     * reporting. {@code timeToExecuteMsMax} is the max {@code timeToExecuteMs} across all captured outcomes;
+     * the other {@code *Agg} columns are cumulative sums.
      *
      * @param executionReport the terminal execution report
      */
@@ -147,32 +154,39 @@ public abstract class AbstractExecutor implements Executor, ExecutionReportListe
     }
 
     /**
-     * (Re)publishes the {@code timeToExecuteMsAgg}/{@code slippageCostAgg}/{@code feesCostAgg}/
+     * (Re)publishes the {@code timeToExecuteMsMax}/{@code slippageCostAgg}/{@code feesCostAgg}/
      * {@code midPriceMovementCostAgg}/{@code idealPnl} custom columns from the currently captured
      * {@link #executionOutcomes}.
      * <p>
-     * Called both when a new {@link ExecutorStatistics.ExecutionOutcome} is captured (so the aggregated
-     * execution-cost columns themselves move) and on every {@link #onDepthUpdate(Depth)} (so {@code idealPnl},
-     * which also depends on the live mark-to-market {@code openPnl}, doesn't stay frozen at its value from the
-     * last fill between executions while the market keeps moving).
+     * Deliberately does NOT bail out when {@link #executionOutcomes} is empty: with no outcomes captured yet
+     * (or right after {@link #reset()}), all aggregates are 0 and this still publishes that 0 baseline, so the
+     * columns exist in the GUI/dashboard/Prometheus reporting instead of being absent until the first fill.
+     * <p>
+     * Called from {@link #setAlgorithm(Algorithm)} and {@link #reset()} (to publish/reset the 0 baseline), when
+     * a new {@link ExecutorStatistics.ExecutionOutcome} is captured (so the aggregated execution-cost columns
+     * themselves move), and on every {@link #onDepthUpdate(Depth)} (so {@code idealPnl}, which also depends on
+     * the live mark-to-market {@code openPnl}, doesn't stay frozen at its value from the last fill between
+     * executions while the market keeps moving).
      */
     private void publishExecutionCostColumns() {
-        if (algorithm == null || executionOutcomes.isEmpty()) {
+        if (algorithm == null) {
             return;
         }
         String instrumentPk = instrument.getPrimaryKey();
 
-        long timeToExecuteMsAgg = 0L;
+        long timeToExecuteMsMax = 0L;
         double slippageCostAgg = 0.0;
         double feesCostAgg = 0.0;
         double midPriceMovementCostAgg = 0.0;
         for (ExecutorStatistics.ExecutionOutcome capturedOutcome : executionOutcomes) {
-            timeToExecuteMsAgg += capturedOutcome.getTimeToExecuteMs();
+            //timeToExecuteMsMax tracks the worst-case (max) execution latency across all captured outcomes,
+            //unlike the other *Agg columns which are cumulative sums of their per-execution costs.
+            timeToExecuteMsMax = Math.max(timeToExecuteMsMax, capturedOutcome.getTimeToExecuteMs());
             slippageCostAgg += capturedOutcome.getSlippageCost();
             feesCostAgg += capturedOutcome.getFeesCost();
             midPriceMovementCostAgg += capturedOutcome.getMidPriceMovementCost();
         }
-        algorithm.addCurrentCustomColumn(instrumentPk, "timeToExecuteMsAgg", (double) timeToExecuteMsAgg);
+        algorithm.addCurrentCustomColumn(instrumentPk, "timeToExecuteMsAgg", (double) timeToExecuteMsMax);
         algorithm.addCurrentCustomColumn(instrumentPk, "slippageCostAgg", slippageCostAgg);
         algorithm.addCurrentCustomColumn(instrumentPk, "feesCostAgg", feesCostAgg);
         algorithm.addCurrentCustomColumn(instrumentPk, "midPriceMovementCostAgg", midPriceMovementCostAgg);
