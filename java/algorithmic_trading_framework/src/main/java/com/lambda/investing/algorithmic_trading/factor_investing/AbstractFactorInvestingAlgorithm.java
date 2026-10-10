@@ -125,6 +125,17 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
      */
     private final Set<String> instrumentsPkWithDepthReceived = ConcurrentHashMap.newKeySet();
 
+    /**
+     * Wall-clock epoch millis of the last {@link #onWeightsUpdate(long, Map)} call that was actually
+     * processed (i.e. past the {@link #weAreReady()} gate), which in turn is the last time
+     * {@code AbstractFactorProvider#notifyFactor} was delivered and consumed. 0 until the first one.
+     * Published as a stable "lastWeightsUpdateTimestamp" custom column (see {@link #generateWeightsReport()})
+     * so the live dashboard can show the real last-processed time instead of inferring it from the
+     * arrival of the periodically re-published "weight" column (which also fires on every scheduled
+     * {@link #generateWeightsReport()} refresh, not only on actual weight updates).
+     */
+    private volatile long lastWeightsUpdateTimestamp = 0L;
+
     public AbstractFactorInvestingAlgorithm(AlgorithmConnectorConfiguration algorithmConnectorConfiguration, String algorithmInfo, Map<String, Object> parameters) {
         super(algorithmConnectorConfiguration, algorithmInfo, parameters);
         setParameters(parameters);
@@ -415,6 +426,12 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
             addCurrentCustomColumn(instrumentPk, "currentPosition", row.currentPosition);
             addCurrentCustomColumn(instrumentPk, "investment", row.investment);
             addCurrentCustomColumn(instrumentPk, "totalInvestment", totalInvestment);
+            if (lastWeightsUpdateTimestamp > 0) {
+                //value (not arrival time) is the signal: only moves forward when onWeightsUpdate actually
+                //processes a new notifyFactor call, so re-publishing it on every scheduled refresh below
+                //doesn't make the dashboard think a new weights update just happened.
+                addCurrentCustomColumn(instrumentPk, "lastWeightsUpdateTimestamp", (double) lastWeightsUpdateTimestamp);
+            }
         }
 
         weightsReport.report(timestamp, modelName, capital, totalInvestment, rowsPerInstrument);
@@ -540,6 +557,7 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
             return false;
         }
         pendingWeightsUpdate.set(null);
+        lastWeightsUpdateTimestamp = System.currentTimeMillis();
 
         //the very first onWeightsUpdate that passes weAreReady() is the initial calibration: every
         //instrument is a brand-new position, so we don't push-notify it; only later recalibrations are.

@@ -186,7 +186,7 @@ public abstract class AbstractExecutor implements Executor, ExecutionReportListe
             feesCostAgg += capturedOutcome.getFeesCost();
             midPriceMovementCostAgg += capturedOutcome.getMidPriceMovementCost();
         }
-        algorithm.addCurrentCustomColumn(instrumentPk, "timeToExecuteMsAgg", (double) timeToExecuteMsMax);
+        algorithm.addCurrentCustomColumn(instrumentPk, "timeToExecuteMsMax", (double) timeToExecuteMsMax);
         algorithm.addCurrentCustomColumn(instrumentPk, "slippageCostAgg", slippageCostAgg);
         algorithm.addCurrentCustomColumn(instrumentPk, "feesCostAgg", feesCostAgg);
         algorithm.addCurrentCustomColumn(instrumentPk, "midPriceMovementCostAgg", midPriceMovementCostAgg);
