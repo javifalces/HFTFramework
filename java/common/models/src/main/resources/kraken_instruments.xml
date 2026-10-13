@@ -325,8 +325,8 @@
         <property name="symbol" value="galaeur"></property>
         <property name="market" value="kraken"></property>
         <property name="currency" value="EUR"></property>
-        <!-- Kraken AssetPairs API (GALAEUR): tick_size=0.00001, lot_decimals=8 -->
-        <property name="priceTick" value="0.00001"></property>
+        <!-- Kraken AssetPairs API (GALAEUR): tick_size=0.000001, lot_decimals=8 -->
+        <property name="priceTick" value="0.000001"></property>
         <property name="quantityTick" value="0.00000001"></property>
 
         <property name="makerFeePct" value="0.25"></property>
