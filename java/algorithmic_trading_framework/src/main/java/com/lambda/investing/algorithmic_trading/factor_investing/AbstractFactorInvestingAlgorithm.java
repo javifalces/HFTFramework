@@ -636,8 +636,9 @@ public abstract class AbstractFactorInvestingAlgorithm extends Algorithm impleme
                         boolean orderSent = getExecutor(instrumentPk).increasePosition(getCurrentTimestamp(), verb, quantityToExecute, price);
                         output &= orderSent;
                         if (orderSent && !isInitialCalibration) {
-                            recalibrationOrders.append(Configuration.formatLog("\t- {}:{} {} quantity:{}@{}(position:{}->{})\n",
-                                    instrumentPk, weight, verb, quantityToExecute, price, currentPosition, expectedPositionRounded));
+                            recalibrationOrders.append(Configuration.formatLog(
+                                    "\t- {}: currentWeight:{} -> expectedWeight:{} | previousPosition:{} -> expectedPosition:{} => {} {} @ price:{}\n",
+                                    instrumentPk, lastWeight != null ? lastWeight : 0, weight, currentPosition, expectedPositionRounded, verb, quantityToExecute, price));
                         }
                     } catch (Exception e) {
                         String message = Configuration.formatLog("Error executing {} verb:{} quantity:{} price:{} {}", instrumentPk, verb, quantityToExecute, price, e.getMessage());
