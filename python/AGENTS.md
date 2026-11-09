@@ -8,7 +8,8 @@ Research, helper, and orchestration scripts. Python does **not** reimplement the
 drives the Java executables (via packaged JARs) and provides research, data, and reinforcement-learning
 tooling around them.
 
-Toolchain: **Python 3.10.13**, dependencies in `python/requirements.txt`, tests via `pytest`
+Toolchain: **Python 3.10** (CI selects the latest available patch release), dependencies in
+`python/requirements.txt`, tests via `pytest`
 (run from `python/`). Python orchestrates the Java JARs through environment variables
 (`LAMBDA_JAR_PATH`, `LAMBDA_ZEROMQ_JAR_PATH`, `LAMBDA_DATA_PATH`, `LAMBDA_LOGS_PATH`, etc.).
 
