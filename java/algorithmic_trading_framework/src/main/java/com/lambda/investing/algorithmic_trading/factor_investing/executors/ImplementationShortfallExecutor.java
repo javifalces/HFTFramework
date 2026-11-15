@@ -8,6 +8,7 @@ import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.ExecutionReportStatus;
 import com.lambda.investing.model.trading.OrderRequest;
 import com.lambda.investing.model.trading.Verb;
+import lombok.Getter;
 
 /**
  * Implementation Shortfall (IS) Executor.
@@ -63,6 +64,89 @@ public class ImplementationShortfallExecutor extends AbstractExecutor {
     private long totalExecutionDurationMs;
     private int modifyCount;
 
+    public static final int DEFAULT_MAX_REJECT_RETRIES = 3;
+    private int maxRejectRetries = DEFAULT_MAX_REJECT_RETRIES;
+    private int rejectRetryCount;
+    // Order id the last request modified; null when the last request was a new order
+    private String lastRequestModifiedId;
+    private boolean marketForced;
+
+    /**
+     * Limit on how aggressive the order price may get when it is modified.
+     * The cap is moved {@code ticksBeforeLimit} ticks back (less aggressive) from the reference.
+     */
+    public enum ModificationLimitMode {
+        /**
+         * Legacy behaviour: up to opposite best +/- 1 tick, market forced at deadline.
+         */
+        NONE,
+        /**
+         * Never beyond the limit price passed to increasePosition.
+         */
+        LIMIT_PRICE,
+        /**
+         * Never beyond this side's best (best bid for buy, best ask for sell).
+         */
+        BEST,
+        /**
+         * Never beyond the current midprice.
+         */
+        MID
+    }
+
+    @Getter
+    private ModificationLimitMode modificationLimitMode = ModificationLimitMode.NONE;
+    @Getter
+    private int ticksBeforeLimit = 0;
+
+    @Getter
+    private double limitPrice = Double.NaN;
+
+    public void setModificationLimit(ModificationLimitMode mode, int ticksBeforeLimit) {
+        if (mode == null) throw new IllegalArgumentException("mode must not be null");
+        if (ticksBeforeLimit < 0) throw new IllegalArgumentException("ticksBeforeLimit must be >= 0");
+        this.modificationLimitMode = mode;
+        this.ticksBeforeLimit = ticksBeforeLimit;
+    }
+
+
+    /**
+     * Most aggressive price allowed: a maximum for buys, a minimum for sells.
+     * NONE (or an invalid reference) falls back to opposite best +/- 1 tick.
+     */
+    private double getPriceBoundary() {
+        boolean buy = currentVerb == Verb.Buy;
+        double reference;
+        switch (modificationLimitMode) {
+            case LIMIT_PRICE:
+                reference = limitPrice;
+                break;
+            case BEST:
+                reference = buy ? lastDepth.getBestBid() : lastDepth.getBestAsk();
+                break;
+            case MID:
+                reference = lastDepth.getMidPrice();
+                break;
+            default:
+                reference = Double.NaN;
+        }
+        if (Double.isNaN(reference) || reference <= 0) {
+            double best = buy ? lastDepth.getBestAsk() : lastDepth.getBestBid();
+            return instrument.roundPrice(buy ? best + instrument.getPriceTick() : best - instrument.getPriceTick());
+        }
+        double offset = ticksBeforeLimit * instrument.getPriceTick();
+        return instrument.roundPrice(buy ? reference - offset : reference + offset);
+    }
+
+    public void setMaxRejectRetries(int maxRejectRetries) {
+        if (maxRejectRetries < 0) throw new IllegalArgumentException("maxRejectRetries must be >= 0");
+        this.maxRejectRetries = maxRejectRetries;
+    }
+
+    public int getMaxRejectRetries() {
+        return maxRejectRetries;
+    }
+
     private String avgExecutionTimeDescription() {
         return completedExecutions == 0 ? "n/a"
                 : String.format("%.0f ms (over %d executions)",
@@ -99,9 +183,11 @@ public class ImplementationShortfallExecutor extends AbstractExecutor {
                 lastDepth.getBestBid(), lastDepth.getBestAsk(), lastDepth.getMidPrice(),
                 totalDurationMs, timeoutIsExecutingMs, avgExecutionTimeDescription());
         modifyCount = 0;
-
-        currentVerb = verb;
+        rejectRetryCount = 0;
+        lastRequestModifiedId = null;
+        marketForced = false;
         currentQuantity = quantity;
+        limitPrice = price;
         totalFilledQuantity = 0.0;
         totalFilledValue = 0.0;
         activeClientOrderId = null;
@@ -155,14 +241,12 @@ public class ImplementationShortfallExecutor extends AbstractExecutor {
         double targetPrice;
         if (currentVerb == Verb.Buy) {
             targetPrice = decisionMidPrice + effectiveUrgency * halfSpread;
-            // Clamp: do not pay more than bestAsk + a few ticks at urgency=1
-            double maxPrice = lastDepth.getBestAsk() + instrument.getPriceTick();
-            targetPrice = Math.min(targetPrice, maxPrice);
+            // Clamp: do not pay more than the modification limit (default bestAsk + 1 tick)
+            targetPrice = Math.min(targetPrice, getPriceBoundary());
         } else {
             targetPrice = decisionMidPrice - effectiveUrgency * halfSpread;
-            // Clamp: do not sell below bestBid - a few ticks at urgency=1
-            double minPrice = lastDepth.getBestBid() - instrument.getPriceTick();
-            targetPrice = Math.max(targetPrice, minPrice);
+            // Clamp: do not sell below the modification limit (default bestBid - 1 tick)
+            targetPrice = Math.max(targetPrice, getPriceBoundary());
         }
 
         return instrument.roundPrice(targetPrice);
@@ -173,12 +257,44 @@ public class ImplementationShortfallExecutor extends AbstractExecutor {
                 timestamp, algorithmInfo, instrument, currentVerb, qty, price);
         activeClientOrderId = orderRequest.getClientOrderId();
         activeOrderPrice = price;
+        lastRequestModifiedId = null;
+        logger.info("{} {} IS new order {} {} qty={} price={}", getCurrentTime(), instrument,
+                activeClientOrderId, currentVerb, qty, price);
         this.sendOrderRequest(orderRequest);
+    }
+
+    private void retryAfterReject(ExecutionReport executionReport) {
+        long now = timeService.getCurrentTimestamp();
+        if (marketForced) {
+            rejectRetryCount++;
+            logger.warn("{} {} IS market order REJECTED: {} -> retry {}/{}", getCurrentTime(), instrument,
+                    executionReport.getRejectReason(), rejectRetryCount, maxRejectRetries);
+            sendMarketOrder(now, null);
+            return;
+        }
+        double price = computeOrderPrice(now);
+        rejectRetryCount++;
+        logger.warn("{} {} IS REJECTED: {} -> retry {}/{} qty={} price={}", getCurrentTime(), instrument,
+                executionReport.getRejectReason(), rejectRetryCount, maxRejectRetries, currentQuantity, price);
+        if (lastRequestModifiedId == null) {
+            sendOrder(now, currentQuantity, price);
+        } else {
+            String idToModify = lastRequestModifiedId;
+            OrderRequest modifyOrder = OrderRequest.modifyOrder(now, algorithmInfo, instrument,
+                    currentVerb, currentQuantity, price, idToModify);
+            logger.info("{} {} IS modifyOrder (retry) {} -> {} qty={} price={}", getCurrentTime(), instrument,
+                    idToModify, modifyOrder.getClientOrderId(), currentQuantity, price);
+            activeClientOrderId = modifyOrder.getClientOrderId();
+            activeConfirmedClientOrderId = null;
+            activeOrderPrice = price;
+            this.sendOrderRequest(modifyOrder);
+        }
     }
 
     @Override
     public boolean onExecutionReportUpdate(ExecutionReport executionReport) {
         if (!executionReport.getInstrument().equalsIgnoreCase(instrument.getPrimaryKey())) return false;
+        logExecutionReport(executionReport);
 
         String clOrId = executionReport.getClientOrderId();
         if (activeClientOrderId == null || !clOrId.equals(activeClientOrderId)) {
@@ -223,8 +339,13 @@ public class ImplementationShortfallExecutor extends AbstractExecutor {
         }
 
         if (status == ExecutionReportStatus.Rejected) {
-            logger.warn("{} {} IS REJECTED: {}", getCurrentTime(), instrument, executionReport.getRejectReason());
-            finishWithStatus(ExecutionReportStatus.Rejected);
+            if (rejectRetryCount < maxRejectRetries) {
+                retryAfterReject(executionReport);
+            } else {
+                logger.warn("{} {} IS REJECTED: {} -> max retries {} reached, giving up", getCurrentTime(),
+                        instrument, executionReport.getRejectReason(), maxRejectRetries);
+                finishWithStatus(ExecutionReportStatus.Rejected);
+            }
         }
 
         if (status == ExecutionReportStatus.Cancelled) {
@@ -239,7 +360,7 @@ public class ImplementationShortfallExecutor extends AbstractExecutor {
     @Override
     public boolean onDepthUpdate(Depth depth) {
         boolean output = super.onDepthUpdate(depth);
-        if (!isExecuting || activeClientOrderId == null) return output;
+        if (!isExecuting || activeClientOrderId == null || marketForced) return output;
 
         long now = timeService.getCurrentTimestamp();
         double newPrice = computeOrderPrice(now);
@@ -255,42 +376,43 @@ public class ImplementationShortfallExecutor extends AbstractExecutor {
                     depth.getTimestamp(), algorithmInfo, instrument,
                     currentVerb, currentQuantity, newPrice, idToModify);
 
-            logger.info("{} {} IS modifyOrder {} -> {} @{} (urgency driven)",
+            logger.info("{} {} IS modifyOrder {} -> {} qty={} @{} (urgency driven)",
                     getCurrentTime(), instrument, idToModify,
-                    modifyOrder.getClientOrderId(), newPrice);
+                    modifyOrder.getClientOrderId(), currentQuantity, newPrice);
 
             modifyCount++;
+            lastRequestModifiedId = idToModify;
             activeClientOrderId = modifyOrder.getClientOrderId();
             activeConfirmedClientOrderId = null;
             activeOrderPrice = newPrice;
             this.sendOrderRequest(modifyOrder);
         }
 
-        // Force market execution at end of window
+        // Deadline: cancel the passive order and send a real market order to guarantee execution
         long elapsed = now - executionStartTimestampMs;
         if (elapsed >= totalDurationMs && activeClientOrderId != null) {
-            double marketPrice = currentVerb == Verb.Buy
-                    ? depth.getBestAsk() + instrument.getPriceTick()
-                    : depth.getBestBid() - instrument.getPriceTick();
-            marketPrice = instrument.roundPrice(marketPrice);
-
-            String idToModify = (activeConfirmedClientOrderId != null)
+            String idToCancel = (activeConfirmedClientOrderId != null)
                     ? activeConfirmedClientOrderId : activeClientOrderId;
-
-            OrderRequest finalOrder = OrderRequest.modifyOrder(
-                    depth.getTimestamp(), algorithmInfo, instrument,
-                    currentVerb, currentQuantity, marketPrice, idToModify);
-
-            logger.info("{} {} IS deadline – forcing market execution {} @{}",
-                    getCurrentTime(), instrument, finalOrder.getClientOrderId(), marketPrice);
-
-            activeClientOrderId = finalOrder.getClientOrderId();
-            activeConfirmedClientOrderId = null;
-            activeOrderPrice = marketPrice;
-            this.sendOrderRequest(finalOrder);
+            sendMarketOrder(depth.getTimestamp(), idToCancel);
         }
 
         return output;
+    }
+
+    private void sendMarketOrder(long timestamp, String idToCancel) {
+        marketForced = true;
+        if (idToCancel != null) {
+            this.sendOrderRequest(OrderRequest.createCancel(timestamp, algorithmInfo, instrument, idToCancel));
+        }
+        OrderRequest marketOrder = OrderRequest.createMarketOrderRequest(
+                timestamp, algorithmInfo, instrument, currentVerb, currentQuantity);
+        logger.info("{} {} IS deadline – sending market order {} {} qty={} (cancelled {})",
+                getCurrentTime(), instrument, marketOrder.getClientOrderId(), currentVerb, currentQuantity, idToCancel);
+        // Cancel ERs carry another id and are ignored; fills match this market order id
+        activeClientOrderId = marketOrder.getClientOrderId();
+        activeConfirmedClientOrderId = null;
+        lastRequestModifiedId = null;
+        this.sendOrderRequest(marketOrder);
     }
 
     private void finishWithStatus(ExecutionReportStatus status) {

@@ -95,13 +95,13 @@ public class SniperExecutor extends AbstractExecutor {
         if (!executionReport.getInstrument().equalsIgnoreCase(this.instrument.getPrimaryKey())) {
             return false;
         }
+        logExecutionReport(executionReport);
 
         String clOrIdReceived = executionReport.getClientOrderId();
         if (!clOrIdReceived.equals(lastClientOrderIdSent)) {
             logger.error("{} {} {} received ER ClientOrderId: {} not the same as lastClientOrderIdSent:{}", getCurrentTime(), instrument, toString(), clOrIdReceived, lastClientOrderIdSent);
             return false;
         }
-        logger.info("{} onExecutionReportUpdate: {} ", getCurrentTime(), executionReport.toString());
 
         boolean isConfirmed = executionReport.getExecutionReportStatus() == ExecutionReportStatus.Active || executionReport.getExecutionReportStatus() == ExecutionReportStatus.PartialFilled;
         if (isConfirmed) {

@@ -11,6 +11,7 @@ import com.lambda.investing.model.market_data.Depth;
 import com.lambda.investing.model.market_data.Trade;
 import com.lambda.investing.model.messaging.Command;
 import com.lambda.investing.model.trading.ExecutionReport;
+import com.lambda.investing.model.trading.ExecutionReportStatus;
 import com.lambda.investing.model.trading.OrderRequest;
 import com.lambda.investing.model.trading.Verb;
 import com.lambda.investing.trading_engine_connector.ExecutionReportListener;
@@ -94,7 +95,23 @@ public abstract class AbstractExecutor implements Executor, ExecutionReportListe
         if (algorithm != null) {
             algorithm.registerSentOrderRequest(orderRequest);
         }
+        logger.info("[{}] {} sent {}", orderRequest.getDateCreation(), algorithmInfo, orderRequest);
         this.tradingEngineConnector.orderRequest(orderRequest);
+    }
+
+    /**
+     * Logs a received execution report; rejections ({@code Rejected}/{@code CancelRejected}) are logged as
+     * warnings including the reject reason. Subclasses call it from {@code onExecutionReportUpdate} once the
+     * report is known to belong to this executor's instrument.
+     */
+    protected void logExecutionReport(ExecutionReport executionReport) {
+        ExecutionReportStatus status = executionReport.getExecutionReportStatus();
+        if (ExecutionReportStatus.Rejected.equals(status) || ExecutionReportStatus.CancelRejected.equals(status)) {
+            logger.warn("[{}] {} received {} rejectReason='{}' {}", executionReport.getDateCreation(), algorithmInfo,
+                    status, executionReport.getRejectReason(), executionReport);
+        } else {
+            logger.info("[{}] {} received {}", executionReport.getDateCreation(), algorithmInfo, executionReport);
+        }
     }
 
     public void setTimeoutIsExecutingMs(long timeoutIsExecutingMs) {

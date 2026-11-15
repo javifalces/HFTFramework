@@ -177,6 +177,7 @@ public class POVExecutor extends AbstractExecutor {
     @Override
     public boolean onExecutionReportUpdate(ExecutionReport executionReport) {
         if (!executionReport.getInstrument().equalsIgnoreCase(instrument.getPrimaryKey())) return false;
+        logExecutionReport(executionReport);
 
         String clOrId = executionReport.getClientOrderId();
         if (activeClientOrderId == null || !clOrId.equals(activeClientOrderId)) return false;
