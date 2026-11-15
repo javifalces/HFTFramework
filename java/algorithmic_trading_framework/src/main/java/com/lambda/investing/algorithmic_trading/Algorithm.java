@@ -1934,6 +1934,9 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                 return false;
             }
 
+            // Bookkeeping failures must not skip the observer notification below, otherwise a filled
+            // order stays "live" in the web frontend forever.
+            try {
             if (latencyStatistics != null) {
                 latencyStatistics.addExecutionReportLatencyStatistics(algorithmInfo, getCurrentTimestamp(), executionReport);
             }
@@ -1942,12 +1945,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
             boolean isTrade = ExecutionReport.isTradeStatus(executionReport);
             if (isTrade) {
-                try {
-                    portfolioManager.addTrade(executionReport);//update position
-                } catch (RuntimeException e) {
-                    // must not skip the observer notification below (stale live order in the frontend)
-                    logger.error("portfolioManager.addTrade failed for {} {}", executionReport.getClientOrderId(), executionReport.getExecutionReportStatus(), e);
-                }
+                portfolioManager.addTrade(executionReport);//update position
 
                 if (slippageStatistics != null) {
                     slippageStatistics.registerPriceExecuted(executionReport.getClientOrderId(), executionReport.getPrice());
@@ -1971,6 +1969,11 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             if (algoQuotesEnabled) {
                 getQuoteManager(executionReport.getInstrument()).onExecutionReportUpdate(executionReport);
                 addStatistics(RECEIVE_STATS + " executionReport." + executionReport.getExecutionReportStatus().name() + "." + executionReport.getInstrument());
+            }
+
+            } catch (RuntimeException e) {
+                logger.error("[{}] error processing ExecutionReport {} {} (observers still notified)", algorithmInfo,
+                        executionReport.getClientOrderId(), executionReport.getExecutionReportStatus(), e);
             }
 
             algorithmNotifier.notifyObserversOnExecutionReportUpdate(executionReport);

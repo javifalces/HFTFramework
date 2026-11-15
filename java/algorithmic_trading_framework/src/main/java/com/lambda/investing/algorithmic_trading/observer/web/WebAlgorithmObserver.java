@@ -118,7 +118,7 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
     private final Deque<Map<String, Object>> positionHistory = new ConcurrentLinkedDeque<>();
     private static final int MAX_POSITION_HISTORY = 10_000;
 
-    private PortfolioSnapshot lastPortfolioSnapshot;
+    private volatile PortfolioSnapshot lastPortfolioSnapshot;
 
     /**
      * Minimum milliseconds between consecutive {@link #refreshState()} rebuilds.
@@ -138,19 +138,32 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
      * reconnect/poll) is debounced.
      */
     private static final long STATE_REFRESH_THROTTLE_MS = 200;
-    private volatile long lastStateRefreshMs = 0;
+    private final ThrottledUpdates<String, Boolean> stateThrottler =
+            new ThrottledUpdates<>(() -> STATE_REFRESH_THROTTLE_MS, v -> rebuildState());
 
     /**
      * Minimum milliseconds between DEPTH paints per instrument in the web UI (0 disables).
+     * Skipped depths are not lost: the latest one per instrument is painted when the interval elapses.
      */
     public static volatile long DEPTH_THROTTLE_MS = 200;
-    private final Map<String, Long> lastDepthPaintMs = new ConcurrentHashMap<>();
+    private final ThrottledUpdates<String, DepthUpdate> depthThrottler =
+            new ThrottledUpdates<>(() -> DEPTH_THROTTLE_MS, u -> processDepth(u.algorithmInfo(), u.depth()));
+
+    private record DepthUpdate(String algorithmInfo, Depth depth) {
+    }
 
     /**
      * Minimum milliseconds between CUSTOM_COLUMN updates per instrument+key in the web UI (0 disables).
+     * Skipped updates are not lost: the latest value per column is sent when the interval elapses.
      */
     public static volatile long CUSTOM_COLUMN_THROTTLE_MS = 250;
-    private final Map<String, Long> lastCustomColumnPaintMs = new ConcurrentHashMap<>();
+    private final ThrottledUpdates<String, CustomColumnUpdate> customColumnThrottler =
+            new ThrottledUpdates<>(() -> CUSTOM_COLUMN_THROTTLE_MS,
+                    u -> processCustomColumn(u.timestamp(), u.algorithmInfo(), u.instrumentPk(), u.key(), u.value()));
+
+    private record CustomColumnUpdate(long timestamp, String algorithmInfo, String instrumentPk, String key,
+                                      Double value) {
+    }
 
     /**
      * Overrides the minimum interval between backend PnL samples.
@@ -236,14 +249,14 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
 
     @Override
     public void onUpdateDepth(String algorithmInfo, Depth depth) {
-        if (depth != null && depth.getInstrument() != null && DEPTH_THROTTLE_MS > 0) {
-            long nowMs = System.currentTimeMillis();
-            Long last = lastDepthPaintMs.get(depth.getInstrument());
-            if (last != null && nowMs - last < DEPTH_THROTTLE_MS) {
-                return;
-            }
-            lastDepthPaintMs.put(depth.getInstrument(), nowMs);
+        if (depth != null && depth.getInstrument() != null) {
+            depthThrottler.submit(depth.getInstrument(), new DepthUpdate(algorithmInfo, depth));
+        } else {
+            processDepth(algorithmInfo, depth);
         }
+    }
+
+    private void processDepth(String algorithmInfo, Depth depth) {
         Map<String, Object> snapshot = null;
         if (depth != null && depth.getInstrument() != null) {
             snapshot = toDepthSnapshot(depth);
@@ -464,14 +477,15 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
     @Override
     public void onCustomColumns(long timestamp, String algorithmInfo, String instrumentPk, String key, Double value) {
         String columnKey = (instrumentPk != null ? instrumentPk + "." : "") + key;
-        long nowMs = System.currentTimeMillis();
-        if (CUSTOM_COLUMN_THROTTLE_MS > 0) {
-            Long last = lastCustomColumnPaintMs.get(columnKey);
-            if (last != null && nowMs - last < CUSTOM_COLUMN_THROTTLE_MS) {
-                return;
-            }
-            lastCustomColumnPaintMs.put(columnKey, nowMs);
+        if (value == null) {
+            processCustomColumn(timestamp, algorithmInfo, instrumentPk, key, null);
+            return;
         }
+        customColumnThrottler.submit(columnKey, new CustomColumnUpdate(timestamp, algorithmInfo, instrumentPk, key, value));
+    }
+
+    private void processCustomColumn(long timestamp, String algorithmInfo, String instrumentPk, String key, Double value) {
+        String columnKey = (instrumentPk != null ? instrumentPk + "." : "") + key;
         latestCustomColumns.put(columnKey, value);
         // Store custom column in per-algorithm map for STATE restore
         if (algorithmInfo != null) {
@@ -572,17 +586,10 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
      * Rebuilds the REST state snapshot from the latest known values.
      */
     private void refreshState() {
-        long now = currentTimeMs();
-        long last = lastStateRefreshMs;
-        if (now - last < STATE_REFRESH_THROTTLE_MS) {
-            // Debounced: a very recent rebuild already reflects (close to) the latest
-            // state, and the next qualifying event will trigger a fresh rebuild. This
-            // keeps refreshState() off the hot per-tick path when many instruments are
-            // streaming depth/trade updates concurrently.
-            return;
-        }
-        lastStateRefreshMs = now;
+        stateThrottler.submit("state", Boolean.TRUE);
+    }
 
+    private void rebuildState() {
         // Clean up any stale orders before building state
         cleanupStaleLiveOrders();
 
