@@ -58,6 +58,17 @@ public class ImplementationShortfallExecutor extends AbstractExecutor {
     private String activeConfirmedClientOrderId;
     private double activeOrderPrice;
 
+    // Execution duration statistics (ms)
+    private long completedExecutions;
+    private long totalExecutionDurationMs;
+    private int modifyCount;
+
+    private String avgExecutionTimeDescription() {
+        return completedExecutions == 0 ? "n/a"
+                : String.format("%.0f ms (over %d executions)",
+                (double) totalExecutionDurationMs / completedExecutions, completedExecutions);
+    }
+
     public ImplementationShortfallExecutor(TimeServiceIfc timeServiceIfc, String algorithmInfo,
                                            Instrument instrument,
                                            AlgorithmConnectorConfiguration algorithmConnectorConfiguration,
@@ -75,10 +86,19 @@ public class ImplementationShortfallExecutor extends AbstractExecutor {
     public boolean increasePosition(long timestamp, Verb verb, double quantity, double price) {
         if (isExecuting) {
             long elapsedMs = (timestamp - isExecutingSince.getTime());
-            logger.error("{} {} on {} can't increasePosition when isExecuting since {} [{}< timeout {} ms]",
-                    getCurrentTime(), this.instrument, this.algorithmInfo, isExecutingSince, elapsedMs, timeoutIsExecutingMs);
+            logger.error("{} {} on {} can't increasePosition when isExecuting since {} [elapsed {} ms < timeout {} ms] timeoutExpectedIn={} ms, deadline(totalDuration)={} ms, avgExecutionTime={}, activeOrder={} confirmed={} activePrice={} remainingQty={} filledQty={} modifies={} requested {} qty={} price={}",
+                    getCurrentTime(), this.instrument, this.algorithmInfo, isExecutingSince, elapsedMs, timeoutIsExecutingMs,
+                    Math.max(timeoutIsExecutingMs - elapsedMs, 0), totalDurationMs, avgExecutionTimeDescription(),
+                    activeClientOrderId, activeConfirmedClientOrderId, activeOrderPrice, currentQuantity,
+                    totalFilledQuantity, modifyCount, verb, quantity, price);
             return false;
         }
+
+        logger.info("{} {} on {} IS increasePosition requested {} qty={} price={} lastDepth(bid={} ask={} mid={}) totalDuration={} ms timeoutIsExecuting={} ms avgExecutionTime={}",
+                getCurrentTime(), instrument, algorithmInfo, verb, quantity, price,
+                lastDepth.getBestBid(), lastDepth.getBestAsk(), lastDepth.getMidPrice(),
+                totalDurationMs, timeoutIsExecutingMs, avgExecutionTimeDescription());
+        modifyCount = 0;
 
         currentVerb = verb;
         currentQuantity = quantity;
@@ -98,8 +118,11 @@ public class ImplementationShortfallExecutor extends AbstractExecutor {
         double initialOrderPrice = computeOrderPrice(timestamp);
         sendOrder(timestamp, quantity, initialOrderPrice);
 
-        logger.info("{} {} IS increasePosition qty={} decisionMid={} urgency={} initialOrderPrice={}",
-                getCurrentTime(), instrument, quantity, decisionMidPrice, baseUrgency, initialOrderPrice);
+        logger.info("{} {} IS increasePosition sent qty={} decisionMid={} urgency={} initialOrderPrice={} clientOrderId={} forcedMarketAt={} timeoutAt={}",
+                getCurrentTime(), instrument, quantity, decisionMidPrice, baseUrgency, initialOrderPrice,
+                activeClientOrderId,
+                new java.util.Date(timestamp + totalDurationMs),
+                new java.util.Date(isExecutingSince.getTime() + timeoutIsExecutingMs));
         return true;
     }
 
@@ -158,9 +181,16 @@ public class ImplementationShortfallExecutor extends AbstractExecutor {
         if (!executionReport.getInstrument().equalsIgnoreCase(instrument.getPrimaryKey())) return false;
 
         String clOrId = executionReport.getClientOrderId();
-        if (activeClientOrderId == null || !clOrId.equals(activeClientOrderId)) return false;
+        if (activeClientOrderId == null || !clOrId.equals(activeClientOrderId)) {
+            logger.debug("{} {} IS ignoring ER {} for {} (active={})", getCurrentTime(), instrument,
+                    executionReport.getExecutionReportStatus(), clOrId, activeClientOrderId);
+            return false;
+        }
 
         ExecutionReportStatus status = executionReport.getExecutionReportStatus();
+        logger.info("{} {} IS ER {} clOrdId={} price={} lastQty={} elapsed={} ms",
+                getCurrentTime(), instrument, status, clOrId, executionReport.getPrice(),
+                executionReport.getLastQuantity(), timeService.getCurrentTimestamp() - executionStartTimestampMs);
 
         boolean isConfirmed = status == ExecutionReportStatus.Active || status == ExecutionReportStatus.PartialFilled;
         if (isConfirmed) {
@@ -229,6 +259,7 @@ public class ImplementationShortfallExecutor extends AbstractExecutor {
                     getCurrentTime(), instrument, idToModify,
                     modifyOrder.getClientOrderId(), newPrice);
 
+            modifyCount++;
             activeClientOrderId = modifyOrder.getClientOrderId();
             activeConfirmedClientOrderId = null;
             activeOrderPrice = newPrice;
@@ -263,6 +294,14 @@ public class ImplementationShortfallExecutor extends AbstractExecutor {
     }
 
     private void finishWithStatus(ExecutionReportStatus status) {
+        long durationMs = timeService.getCurrentTimestamp() - executionStartTimestampMs;
+        if (status == ExecutionReportStatus.CompletelyFilled) {
+            completedExecutions++;
+            totalExecutionDurationMs += durationMs;
+        }
+        logger.info("{} {} IS finished status={} duration={} ms (totalDuration={} ms, timeout={} ms) filled={} modifies={} avgExecutionTime={}",
+                getCurrentTime(), instrument, status, durationMs, totalDurationMs, timeoutIsExecutingMs,
+                totalFilledQuantity, modifyCount, avgExecutionTimeDescription());
         double avgFillPrice = (totalFilledQuantity > 0) ? totalFilledValue / totalFilledQuantity : decisionMidPrice;
         ExecutionReport syntheticEr = new ExecutionReport();
         syntheticEr.setInstrument(instrument.getPrimaryKey());

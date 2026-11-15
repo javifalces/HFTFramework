@@ -198,8 +198,12 @@ public class DisruptorConnectorHelper {
     private final CopyOnWriteArrayList<ConsumerRegistration> consumers =
             new CopyOnWriteArrayList<>();
 
-    private Disruptor<DisruptorEvent> disruptor;
-    private RingBuffer<DisruptorEvent> ringBuffer;
+    private static final int MAX_RING_BUFFER_RESIZES = 3;
+    private static final long RESIZE_DRAIN_TIMEOUT_SECONDS = 10;
+
+    private volatile Disruptor<DisruptorEvent> disruptor;
+    private volatile RingBuffer<DisruptorEvent> ringBuffer;
+    private volatile int currentRingBufferSize;
 
     /**
      * Non-null only while the startup warmup drain is in progress.
@@ -238,6 +242,16 @@ public class DisruptorConnectorHelper {
             return;
         }
 
+        currentRingBufferSize = RING_BUFFER_SIZE;
+        disruptor = createDisruptor(currentRingBufferSize);
+        disruptor.handleEventsWith(this::dispatchEvent);
+        ringBuffer = disruptor.start();
+
+        logger.info("Disruptor started (consumerThread={}, ringBufferSize={}, waitStrategy=BusySpin)",
+                consumerThreadName, RING_BUFFER_SIZE);
+    }
+
+    private Disruptor<DisruptorEvent> createDisruptor(int size) {
         ThreadFactory threadFactory = r -> {
             Thread t = new Thread(r, consumerThreadName);
             t.setDaemon(true);
@@ -246,18 +260,18 @@ public class DisruptorConnectorHelper {
 
         switch (connectorProviderType) {
             case DISRUPTOR_LOW_LATENCY -> {
-                disruptor = new Disruptor<>(
+                return new Disruptor<>(
                         EVENT_FACTORY,
-                        RING_BUFFER_SIZE,
+                        size,
                         threadFactory,
                         ProducerType.SINGLE,        // ZeroMq I/O callback is single-threaded
                         new BusySpinWaitStrategy()  // lowest latency – dedicates one CPU core
                 );
             }
             case DISRUPTOR_HIGH_THROUGHPUT -> {
-                disruptor = new Disruptor<>(
+                return new Disruptor<>(
                         EVENT_FACTORY,
-                        RING_BUFFER_SIZE,
+                        size,
                         threadFactory,
                         ProducerType.MULTI,         // supports multiple producer threads if needed
                         new com.lmax.disruptor.YieldingWaitStrategy()  // good latency with less CPU than BusySpin
@@ -266,13 +280,50 @@ public class DisruptorConnectorHelper {
             default ->
                     throw new IllegalArgumentException("DisruptorConnectorHelper Unsupported ConnectorProviderType: " + connectorProviderType);
         }
+    }
 
+    /**
+     * Doubles the ring buffer size. A ring buffer cannot grow in place, so the old
+     * Disruptor is drained (bounded wait) and replaced by a new one of twice the size.
+     * Registered consumers are preserved.
+     *
+     * @param observedBuffer the ring buffer the caller found full; if it was already
+     *                       replaced by another thread, no further resize is done.
+     * @return {@code true} if a usable (new or already replaced) ring buffer is in place.
+     */
+    private synchronized boolean growRingBuffer(RingBuffer<DisruptorEvent> observedBuffer) {
+        if (ringBuffer != observedBuffer) {
+            return true;
+        }
+        final int oldSize = currentRingBufferSize;
+        final long newSizeLong = 2L * oldSize;
+        if (newSizeLong > (1 << 30)) {
+            return false;
+        }
+        final int newSize = (int) newSizeLong;
+        try {
+            Disruptor<DisruptorEvent> newDisruptor = createDisruptor(newSize);
+            newDisruptor.handleEventsWith(this::dispatchEvent);
+            RingBuffer<DisruptorEvent> newRingBuffer = newDisruptor.start();
 
-        disruptor.handleEventsWith(this::dispatchEvent);
-        ringBuffer = disruptor.start();
+            // Drain pending events first so ordering is preserved before switching.
+            final Disruptor<DisruptorEvent> oldDisruptor = disruptor;
+            try {
+                oldDisruptor.shutdown(RESIZE_DRAIN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            } catch (com.lmax.disruptor.TimeoutException te) {
+                logger.warn("[{}] Old ring buffer not fully drained in {}s while resizing; halting it",
+                        consumerThreadName, RESIZE_DRAIN_TIMEOUT_SECONDS);
+                oldDisruptor.halt();
+            }
 
-        logger.info("Disruptor started (consumerThread={}, ringBufferSize={}, waitStrategy=BusySpin)",
-                consumerThreadName, RING_BUFFER_SIZE);
+            disruptor = newDisruptor;
+            currentRingBufferSize = newSize;
+            ringBuffer = newRingBuffer;
+            return true;
+        } catch (Exception e) {
+            logger.error("[{}] Failed to grow ring buffer from {} to {}", consumerThreadName, oldSize, newSize, e);
+            return false;
+        }
     }
 
     /**
@@ -470,6 +521,17 @@ public class DisruptorConnectorHelper {
         return true;
     }
 
+    private static String contentAsString(Object content) {
+        try {
+            if (content instanceof byte[]) {
+                return new String((byte[]) content, java.nio.charset.StandardCharsets.UTF_8);
+            }
+            return String.valueOf(content);
+        } catch (Exception e) {
+            return String.valueOf(content);
+        }
+    }
+
     /**
      * Non-blocking publish to the ring buffer.
      * If the ring buffer is full, the event is dropped and an error is logged.
@@ -481,32 +543,45 @@ public class DisruptorConnectorHelper {
                               long timestampReceived,
                               TypeMessage typeMessage,
                               Object content) {
-        if (ringBuffer == null) {
+        RingBuffer<DisruptorEvent> rb = ringBuffer;
+        if (rb == null) {
             return false;
         }
 
-        try {
-            final long sequence = ringBuffer.tryNext();
+        int resizes = 0;
+        while (true) {
             try {
-                final DisruptorEvent slot = ringBuffer.get(sequence);
-                slot.configuration = configuration;
-                slot.timestampReceived = timestampReceived;
-                slot.typeMessage = typeMessage;
-                slot.content = content;
-            } finally {
-                ringBuffer.publish(sequence);
+                final long sequence = rb.tryNext();
+                try {
+                    final DisruptorEvent slot = rb.get(sequence);
+                    slot.configuration = configuration;
+                    slot.timestampReceived = timestampReceived;
+                    slot.typeMessage = typeMessage;
+                    slot.content = content;
+                } finally {
+                    rb.publish(sequence);
+                }
+                return true;
+            } catch (InsufficientCapacityException e) {
+                if (resizes < MAX_RING_BUFFER_RESIZES) {
+                    resizes++;
+                    logger.warn("[{}] RING BUFFER FULL (size={}) typeMessage={} - doubling size (resize {}/{})",
+                            consumerThreadName, rb.getBufferSize(), typeMessage, resizes, MAX_RING_BUFFER_RESIZES);
+                    if (growRingBuffer(rb)) {
+                        rb = ringBuffer;
+                        continue;
+                    }
+                }
+                // Still full after all resizes - drop the event and log
+                long remainingCapacity = rb.remainingCapacity();
+                String errorMsg = String.format(
+                        "[%s] RING BUFFER FULL! Dropped notification typeMessage=%s content=%s (remainingCapacity=%d/%d)",
+                        consumerThreadName, typeMessage, contentAsString(content), remainingCapacity, rb.getBufferSize()
+                );
+                System.err.println(errorMsg);
+                logger.error(errorMsg);
+                return false;
             }
-            return true;
-        } catch (InsufficientCapacityException e) {
-            // Buffer full - drop the event and log
-            long remainingCapacity = ringBuffer.remainingCapacity();
-            String errorMsg = String.format(
-                    "[%s] RING BUFFER FULL! Dropped notification typeMessage=%s content=%s (remainingCapacity=%d/%d)",
-                    consumerThreadName, typeMessage, content, remainingCapacity, ringBuffer.getBufferSize()
-            );
-            System.err.println(errorMsg);
-            logger.error(errorMsg);
-            return false;
         }
     }
 

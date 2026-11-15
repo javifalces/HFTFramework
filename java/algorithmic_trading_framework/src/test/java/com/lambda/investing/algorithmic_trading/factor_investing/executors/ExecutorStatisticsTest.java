@@ -1,5 +1,6 @@
 package com.lambda.investing.algorithmic_trading.factor_investing.executors;
 
+import com.lambda.investing.algorithmic_trading.factor_investing.executors.statistics.ExecutorStatistics;
 import com.lambda.investing.model.asset.Instrument;
 import com.lambda.investing.model.trading.ExecutionReport;
 import com.lambda.investing.model.trading.ExecutionReportStatus;

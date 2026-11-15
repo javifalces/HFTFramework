@@ -141,6 +141,18 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
     private volatile long lastStateRefreshMs = 0;
 
     /**
+     * Minimum milliseconds between DEPTH paints per instrument in the web UI (0 disables).
+     */
+    public static volatile long DEPTH_THROTTLE_MS = 200;
+    private final Map<String, Long> lastDepthPaintMs = new ConcurrentHashMap<>();
+
+    /**
+     * Minimum milliseconds between CUSTOM_COLUMN updates per instrument+key in the web UI (0 disables).
+     */
+    public static volatile long CUSTOM_COLUMN_THROTTLE_MS = 250;
+    private final Map<String, Long> lastCustomColumnPaintMs = new ConcurrentHashMap<>();
+
+    /**
      * Overrides the minimum interval between backend PnL samples.
      * Call before the algorithm starts producing data. Default is 10 000 ms (10 s).
      *
@@ -224,6 +236,14 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
 
     @Override
     public void onUpdateDepth(String algorithmInfo, Depth depth) {
+        if (depth != null && depth.getInstrument() != null && DEPTH_THROTTLE_MS > 0) {
+            long nowMs = System.currentTimeMillis();
+            Long last = lastDepthPaintMs.get(depth.getInstrument());
+            if (last != null && nowMs - last < DEPTH_THROTTLE_MS) {
+                return;
+            }
+            lastDepthPaintMs.put(depth.getInstrument(), nowMs);
+        }
         Map<String, Object> snapshot = null;
         if (depth != null && depth.getInstrument() != null) {
             snapshot = toDepthSnapshot(depth);
@@ -443,8 +463,16 @@ public class WebAlgorithmObserver implements AlgorithmObserver {
 
     @Override
     public void onCustomColumns(long timestamp, String algorithmInfo, String instrumentPk, String key, Double value) {
-        latestCustomColumns.put((instrumentPk != null ? instrumentPk + "." : "") + key, value);
-
+        String columnKey = (instrumentPk != null ? instrumentPk + "." : "") + key;
+        long nowMs = System.currentTimeMillis();
+        if (CUSTOM_COLUMN_THROTTLE_MS > 0) {
+            Long last = lastCustomColumnPaintMs.get(columnKey);
+            if (last != null && nowMs - last < CUSTOM_COLUMN_THROTTLE_MS) {
+                return;
+            }
+            lastCustomColumnPaintMs.put(columnKey, nowMs);
+        }
+        latestCustomColumns.put(columnKey, value);
         // Store custom column in per-algorithm map for STATE restore
         if (algorithmInfo != null) {
             customColumnsByAlgorithm.computeIfAbsent(algorithmInfo, k -> new ConcurrentHashMap<>())
