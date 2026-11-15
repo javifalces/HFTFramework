@@ -9,7 +9,7 @@ import java.util.Map;
 
 public class ExecutionReportManager {
 
-    private static int DEFAULT_CLIENT_ORDER_ID_SIZE = 20;
+    private static int DEFAULT_CLIENT_ORDER_ID_SIZE = 2000;
     private Map<String, Integer> clientOrderIdToPriority;
     //create a static map with values for each ExecutionReportStatus and value is a int
     private static Map<ExecutionReportStatus, Integer> EXECUTION_REPORT_STATUS_PRIORITY_MAP = new HashMap<ExecutionReportStatus, Integer>() {{

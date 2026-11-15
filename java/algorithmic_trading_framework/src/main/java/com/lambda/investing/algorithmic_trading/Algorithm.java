@@ -71,8 +71,10 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
 
     protected static long TIMEOUT_WAIT_DONE_SECONDS = 15;
-    protected static int DEFAULT_QUEUE_CF_TRADE = 20;
-    protected static int DEFAULT_QUEUE_HISTORICAL_ORDER_REQUEST = 20;
+    // Must exceed the largest burst of orders in flight (e.g. a portfolio rebalance sends one order per instrument):
+    // when evicted, the fill ERs of still-open orders are ignored by containsExecutionReport.
+    protected static int DEFAULT_QUEUE_CF_TRADE = 2000;
+    protected static int DEFAULT_QUEUE_HISTORICAL_ORDER_REQUEST = 2000;
     protected static int DEFAULT_QUEUE_HISTORICAL_TRADES = 5;
 
     protected Queue<String> cfTradesProcessed;
@@ -347,8 +349,9 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         algorithmObservers = new ArrayList<>();
         cfTradesProcessed = EvictingQueue.create(DEFAULT_QUEUE_CF_TRADE);
         erTradesProcessed = EvictingQueue.create(DEFAULT_QUEUE_HISTORICAL_TRADES);
-        historicalOrdersRequestSent = new AlgorithmUtils.MaxSizeHashMap<String, OrderRequest>(
-                DEFAULT_QUEUE_HISTORICAL_ORDER_REQUEST);
+        // written by sender threads (registerSentOrderRequest / sendOrderRequest) and read by the ER thread
+        historicalOrdersRequestSent = java.util.Collections.synchronizedMap(
+                new AlgorithmUtils.MaxSizeHashMap<String, OrderRequest>(DEFAULT_QUEUE_HISTORICAL_ORDER_REQUEST));
         logger.info("CONFIGURATION:\n{}", Configuration.print());
 
         if (algorithmConnectorConfiguration != null) {
@@ -1922,7 +1925,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
             // processing and observer notifications.
             if (!containsExecutionReport(executionReport)) {
                 // This ExecutionReport is not for an order sent by this algorithm instance
-                logger.debug("Ignoring ExecutionReport for order {} (orig {}) not sent by this algorithm instance", executionReport.getClientOrderId(), executionReport.getOrigClientOrderId());
+                logger.warn("Ignoring ExecutionReport {} {} for order {} (orig {}) not sent by this algorithm instance", executionReport.getExecutionReportStatus(), executionReport.getInstrument(), executionReport.getClientOrderId(), executionReport.getOrigClientOrderId());
                 return true;
             }
 
