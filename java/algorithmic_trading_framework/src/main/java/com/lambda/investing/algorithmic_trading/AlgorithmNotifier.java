@@ -227,8 +227,16 @@ public class AlgorithmNotifier {
             }
             case EXECUTION_REPORT -> {
                 ExecutionReport executionReport = (ExecutionReport) wrapper.payload;
+                // An observer throwing on a fill must not prevent the remaining observers (e.g. the web
+                // frontend) from receiving it, otherwise a CompletelyFilled order stays "live" in the UI.
                 for (AlgorithmObserver obs : observers) {
-                    obs.onExecutionReportUpdate(info, executionReport);
+                    try {
+                        obs.onExecutionReportUpdate(info, executionReport);
+                    } catch (Exception e) {
+                        logger.error("[{}] observer {} failed on ExecutionReport {} {}", info,
+                                obs.getClass().getSimpleName(), executionReport.getClientOrderId(),
+                                executionReport.getExecutionReportStatus(), e);
+                    }
                 }
             }
         }

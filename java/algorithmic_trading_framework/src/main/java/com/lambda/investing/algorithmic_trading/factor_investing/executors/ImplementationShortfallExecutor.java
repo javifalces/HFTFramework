@@ -186,6 +186,7 @@ public class ImplementationShortfallExecutor extends AbstractExecutor {
         rejectRetryCount = 0;
         lastRequestModifiedId = null;
         marketForced = false;
+        currentVerb = verb;
         currentQuantity = quantity;
         limitPrice = price;
         totalFilledQuantity = 0.0;

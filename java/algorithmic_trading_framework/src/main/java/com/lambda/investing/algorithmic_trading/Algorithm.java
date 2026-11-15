@@ -1942,7 +1942,12 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
 
             boolean isTrade = ExecutionReport.isTradeStatus(executionReport);
             if (isTrade) {
-                portfolioManager.addTrade(executionReport);//update position
+                try {
+                    portfolioManager.addTrade(executionReport);//update position
+                } catch (RuntimeException e) {
+                    // must not skip the observer notification below (stale live order in the frontend)
+                    logger.error("portfolioManager.addTrade failed for {} {}", executionReport.getClientOrderId(), executionReport.getExecutionReportStatus(), e);
+                }
 
                 if (slippageStatistics != null) {
                     slippageStatistics.registerPriceExecuted(executionReport.getClientOrderId(), executionReport.getPrice());
