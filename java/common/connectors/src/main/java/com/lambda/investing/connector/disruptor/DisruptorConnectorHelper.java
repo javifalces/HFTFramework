@@ -291,7 +291,19 @@ public class DisruptorConnectorHelper {
      *                       replaced by another thread, no further resize is done.
      * @return {@code true} if a usable (new or already replaced) ring buffer is in place.
      */
-    private synchronized boolean growRingBuffer(RingBuffer<DisruptorEvent> observedBuffer) {
+    private final java.util.concurrent.locks.ReentrantReadWriteLock resizeLock =
+            new java.util.concurrent.locks.ReentrantReadWriteLock();
+
+    private boolean growRingBuffer(RingBuffer<DisruptorEvent> observedBuffer) {
+        resizeLock.writeLock().lock();
+        try {
+            return growRingBufferLocked(observedBuffer);
+        } finally {
+            resizeLock.writeLock().unlock();
+        }
+    }
+
+    private synchronized boolean growRingBufferLocked(RingBuffer<DisruptorEvent> observedBuffer) {
         if (ringBuffer != observedBuffer) {
             return true;
         }
@@ -508,15 +520,21 @@ public class DisruptorConnectorHelper {
         if (ringBuffer == null) {
             return false;
         }
-        final long sequence = ringBuffer.next();
+        resizeLock.readLock().lock();
         try {
-            final DisruptorEvent slot = ringBuffer.get(sequence);
-            slot.configuration = configuration;
-            slot.timestampReceived = timestampReceived;
-            slot.typeMessage = typeMessage;
-            slot.content = content;
+            final RingBuffer<DisruptorEvent> rb = ringBuffer;
+            final long sequence = rb.next();
+            try {
+                final DisruptorEvent slot = rb.get(sequence);
+                slot.configuration = configuration;
+                slot.timestampReceived = timestampReceived;
+                slot.typeMessage = typeMessage;
+                slot.content = content;
+            } finally {
+                rb.publish(sequence);
+            }
         } finally {
-            ringBuffer.publish(sequence);
+            resizeLock.readLock().unlock();
         }
         return true;
     }
@@ -529,6 +547,35 @@ public class DisruptorConnectorHelper {
             return String.valueOf(content);
         } catch (Exception e) {
             return String.valueOf(content);
+        }
+    }
+
+    /**
+     * Publishes under the resize read lock so no event lands in an old ring buffer after it was
+     * drained (which would silently lose it). Returns {@code null} on success, or the full buffer.
+     */
+    private RingBuffer<DisruptorEvent> tryPublishLocked(ConnectorConfiguration configuration,
+                                                        long timestampReceived,
+                                                        TypeMessage typeMessage,
+                                                        Object content) {
+        resizeLock.readLock().lock();
+        final RingBuffer<DisruptorEvent> rb = ringBuffer;
+        try {
+            final long sequence = rb.tryNext();
+            try {
+                final DisruptorEvent slot = rb.get(sequence);
+                slot.configuration = configuration;
+                slot.timestampReceived = timestampReceived;
+                slot.typeMessage = typeMessage;
+                slot.content = content;
+            } finally {
+                rb.publish(sequence);
+            }
+            return null;
+        } catch (InsufficientCapacityException e) {
+            return rb;
+        } finally {
+            resizeLock.readLock().unlock();
         }
     }
 
@@ -550,38 +597,27 @@ public class DisruptorConnectorHelper {
 
         int resizes = 0;
         while (true) {
-            try {
-                final long sequence = rb.tryNext();
-                try {
-                    final DisruptorEvent slot = rb.get(sequence);
-                    slot.configuration = configuration;
-                    slot.timestampReceived = timestampReceived;
-                    slot.typeMessage = typeMessage;
-                    slot.content = content;
-                } finally {
-                    rb.publish(sequence);
-                }
+            rb = tryPublishLocked(configuration, timestampReceived, typeMessage, content);
+            if (rb == null) {
                 return true;
-            } catch (InsufficientCapacityException e) {
-                if (resizes < MAX_RING_BUFFER_RESIZES) {
-                    resizes++;
-                    logger.warn("[{}] RING BUFFER FULL (size={}) typeMessage={} - doubling size (resize {}/{})",
-                            consumerThreadName, rb.getBufferSize(), typeMessage, resizes, MAX_RING_BUFFER_RESIZES);
-                    if (growRingBuffer(rb)) {
-                        rb = ringBuffer;
-                        continue;
-                    }
-                }
-                // Still full after all resizes - drop the event and log
-                long remainingCapacity = rb.remainingCapacity();
-                String errorMsg = String.format(
-                        "[%s] RING BUFFER FULL! Dropped notification typeMessage=%s content=%s (remainingCapacity=%d/%d)",
-                        consumerThreadName, typeMessage, contentAsString(content), remainingCapacity, rb.getBufferSize()
-                );
-                System.err.println(errorMsg);
-                logger.error(errorMsg);
-                return false;
             }
+            if (resizes < MAX_RING_BUFFER_RESIZES) {
+                resizes++;
+                logger.warn("[{}] RING BUFFER FULL (size={}) typeMessage={} - doubling size (resize {}/{})",
+                        consumerThreadName, rb.getBufferSize(), typeMessage, resizes, MAX_RING_BUFFER_RESIZES);
+                if (growRingBuffer(rb)) {
+                    continue;
+                }
+            }
+            // Still full after all resizes - drop the event and log
+            long remainingCapacity = rb.remainingCapacity();
+            String errorMsg = String.format(
+                    "[%s] RING BUFFER FULL! Dropped notification typeMessage=%s content=%s (remainingCapacity=%d/%d)",
+                    consumerThreadName, typeMessage, contentAsString(content), remainingCapacity, rb.getBufferSize()
+            );
+            System.err.println(errorMsg);
+            logger.error(errorMsg);
+            return false;
         }
     }
 
