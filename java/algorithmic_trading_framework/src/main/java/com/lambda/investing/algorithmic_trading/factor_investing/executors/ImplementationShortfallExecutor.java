@@ -41,6 +41,7 @@ import lombok.Getter;
 public class ImplementationShortfallExecutor extends AbstractExecutor {
 
     // Configuration
+    private static final long SAFETY_MARGIN_MS = 30_000;
     private final long totalDurationMs;
     private final double baseUrgency; // [0, 1]
 
@@ -164,6 +165,16 @@ public class ImplementationShortfallExecutor extends AbstractExecutor {
         if (totalDurationMs <= 0) throw new IllegalArgumentException("totalDurationMs must be positive");
         this.totalDurationMs = totalDurationMs;
         this.baseUrgency = baseUrgency;
+        setTimeoutIsExecutingMs(this.timeoutIsExecutingMs);
+    }
+
+    /**
+     * The safety timeout must outlive the execution window plus a margin for the forced market order;
+     * otherwise it cancels the order at timeout and the remaining quantity is never executed.
+     */
+    @Override
+    public void setTimeoutIsExecutingMs(long timeoutIsExecutingMs) {
+        super.setTimeoutIsExecutingMs(Math.max(timeoutIsExecutingMs, totalDurationMs + SAFETY_MARGIN_MS));
     }
 
     @Override
