@@ -34,6 +34,8 @@ public class SniperExecutor extends AbstractExecutor {
         super(timeServiceIfc, algorithmInfo, instrument, tradingEngineConnector);
         this.timeStepMs = timeStepMs;
         this.steps = steps;
+        // The safety timeout must outlive the whole stepping window
+        setTimeoutIsExecutingMs(Math.max(this.timeoutIsExecutingMs, timeStepMs * steps + 30_000L));
     }
 
     @Override

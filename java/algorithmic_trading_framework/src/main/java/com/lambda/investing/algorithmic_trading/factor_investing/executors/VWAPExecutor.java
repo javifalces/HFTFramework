@@ -68,6 +68,15 @@ public class VWAPExecutor extends AbstractExecutor {
         this.totalDurationMs = totalDurationMs;
         this.participationRate = participationRate;
         this.minChildOrderQty = (minChildOrderQty > 0) ? minChildOrderQty : instrument.getQuantityTick();
+        setTimeoutIsExecutingMs(this.timeoutIsExecutingMs);
+    }
+
+    /**
+     * The safety timeout must outlive the execution window, otherwise it cancels before the window ends.
+     */
+    @Override
+    public void setTimeoutIsExecutingMs(long timeoutIsExecutingMs) {
+        super.setTimeoutIsExecutingMs(Math.max(timeoutIsExecutingMs, totalDurationMs + 30_000L));
     }
 
     @Override

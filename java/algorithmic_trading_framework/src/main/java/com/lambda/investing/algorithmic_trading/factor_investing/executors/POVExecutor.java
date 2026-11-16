@@ -92,6 +92,8 @@ public class POVExecutor extends AbstractExecutor {
         this.participationRate = participationRate;
         this.minChildOrderQty = (minChildOrderQty > 0) ? minChildOrderQty : instrument.getQuantityTick();
         this.maxParticipationRate = (maxParticipationRate > 0) ? maxParticipationRate : participationRate;
+        // POV has no time window: the safety timeout is its only bound, so make it more generous
+        setTimeoutIsExecutingMs(Math.max(this.timeoutIsExecutingMs, 300_000L));
     }
 
     @Override
