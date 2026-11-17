@@ -289,6 +289,11 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     private CandleFromTickUpdater candleFromTickUpdater;
     public static final Object EXECUTION_REPORT_LOCK = new Object();
     protected Set<Instrument> instruments = new HashSet<>();
+    /**
+     * Orders still in flight are tracked here because {@link #historicalOrdersRequestSent} is bounded and, with
+     * many modifies, evicts orders that are still alive; their fill ER would then be ignored as "not mine".
+     */
+    private final java.util.Set<String> liveClientOrderIds = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
 
     public AlgorithmGui getAlgorithmGui(ChartTheme theme) {
@@ -489,6 +494,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         requestOrders.put(orderRequest.getClientOrderId(), orderRequest);
         setAllRequestOrders(instrument, requestOrders);
         historicalOrdersRequestSent.put(orderRequest.getClientOrderId(), orderRequest);
+        liveClientOrderIds.add(orderRequest.getClientOrderId());
     }
 
     public void register(AlgorithmObserver algorithmObserver) {
@@ -1485,6 +1491,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         //		}
 
         historicalOrdersRequestSent.put(orderRequest.getClientOrderId(), orderRequest);
+        liveClientOrderIds.add(orderRequest.getClientOrderId());
         if (latencyStatistics != null) {
             try {
                 String keyStatistic = Configuration.formatLog("{} {}", orderRequest.getOrderRequestAction().name(), orderRequest.getOrderType().name());
@@ -1873,9 +1880,8 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
     public boolean containsInstrumentOrder(String instrumentPk, String clientOrderId) {
 
         // Check if this algorithm instance sent the order (either the original or a modification)
-        boolean isMyOrder = historicalOrdersRequestSent.containsKey(clientOrderId);
-
-        // Also check in per-instrument tracking
+        boolean isMyOrder = historicalOrdersRequestSent.containsKey(clientOrderId)
+                || (clientOrderId != null && liveClientOrderIds.contains(clientOrderId));
         if (!isMyOrder && instrumentToManager != null) {
             try {
                 InstrumentAlgorithmManager instrumentAlgorithmManager = getInstrumentManager(instrumentPk);
@@ -1887,6 +1893,24 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
         }
 
         return isMyOrder;
+    }
+
+
+    private void releaseLiveOrderIds(ExecutionReport executionReport) {
+        String orig = executionReport.getOrigClientOrderId();
+        ExecutionReportStatus status = executionReport.getExecutionReportStatus();
+        if (status == ExecutionReportStatus.Rejected || status == ExecutionReportStatus.CancelRejected) {
+            // A rejected replace/cancel leaves the original order alive; only the request id dies
+            liveClientOrderIds.remove(executionReport.getClientOrderId());
+        } else if (ExecutionReport.isRemovedStatus(executionReport)) {
+            liveClientOrderIds.remove(executionReport.getClientOrderId());
+            if (orig != null) {
+                liveClientOrderIds.remove(orig);
+            }
+        } else if (ExecutionReport.isLiveStatus(executionReport) && orig != null) {
+            //the modification replaced the original order
+            liveClientOrderIds.remove(orig);
+        }
     }
 
     private boolean containsExecutionReport(ExecutionReport executionReport) {
@@ -1929,6 +1953,7 @@ public abstract class Algorithm extends AlgorithmParameters implements MarketDat
                 return true;
             }
 
+            releaseLiveOrderIds(executionReport);
             executionReport.setTimestampStrategy(System.currentTimeMillis());
 
             boolean hasPriority = executionReportManager.isNewStatus(executionReport);
